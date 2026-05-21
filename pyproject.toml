@@ -1,0 +1,20 @@
+[project]
+name = "mib-tesis-ai-disclosure"
+version = "0.1.0"
+description = "SEC Corporate AI Disclosure NLP Pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.0.0",
+    "polars>=0.20.0",
+    "pyarrow>=14.0.0",
+    "sec-edgar-downloader>=5.0.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.0.0",
+    "requests>=2.31.0",
+    "pydantic>=2.5.0",
+    "duckdb>=0.10.0",
+    "tqdm>=4.66.0",
+    "pyyaml>=6.0",
+    "streamlit>=1.57.0",
+]

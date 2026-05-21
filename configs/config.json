@@ -1,0 +1,87 @@
+{
+  "sec": {
+    "user_agent": "German Oviedo german.oviedo.b@gmail.com"
+  },
+  "pipeline": {
+    "start_year": 2021,
+    "end_year": 2025,
+    "form_types": [
+      "10-K"
+    ],
+    "tickers": [
+      "AAPL",
+      "ADBE",
+      "AMD",
+      "AMZN",
+      "CRM",
+      "CSCO",
+      "GOOGL",
+      "IBM",
+      "INTC",
+      "INTU",
+      "META",
+      "MSFT",
+      "NFLX",
+      "NVDA",
+      "ORCL",
+      "PANW",
+      "PLTR",
+      "QCOM",
+      "SNOW",
+      "TSLA",
+      "LMT",
+      "RTX",
+      "BA",
+      "NOC",
+      "GD",
+      "LHX",
+      "HWM",
+      "TDG",
+      "GE",
+      "HON",
+      "MMM",
+      "CAT",
+      "DE",
+      "ITW"
+    ]
+  },
+  "paths": {
+    "raw_submissions": "data/raw/sec_submissions",
+    "raw_html": "data/raw/filings_html",
+    "interim_manifests": "data/interim/manifests",
+    "interim_batches": "data/interim/batches",
+    "interim_sections": "data/interim/sections",
+    "candidate_chunks": "data/interim/candidate_chunks"
+  },
+  "prefiltering": {
+    "ai_keywords": [
+      "ai",
+      "artificial intelligence",
+      "generative ai",
+      "gen ai",
+      "machine learning",
+      "large language model",
+      "llm",
+      "deep learning",
+      "natural language processing",
+      "predictive analytics",
+      "algorithmic",
+      "automation",
+      "computer vision",
+      "neural network",
+      "openai",
+      "anthropic",
+      "claude",
+      "deepseek",
+      "chatgpt",
+      "copilot",
+      "gemini"
+    ],
+    "false_positives": [
+      "adobe illustrator",
+      "appreciation",
+      "said",
+      "paid"
+    ]
+  }
+}
