@@ -40,6 +40,31 @@ A [Makefile](file:///Users/goviedb/Development/mib_tesis_ai_disclosure/Makefile)
   make run-pipeline
   ```
   Runs the prefiltering and candidate chunking scripts sequentially.
+* **Run Rule-Based Scoring (Script 07)**:
+  ```bash
+  make run-rules
+  ```
+  Applies deterministic pattern-matching regex rules to raw candidate chunks (outputting to `ai_disclosure_rules.parquet`).
+* **Run LLM Extraction (Script 08)**:
+  ```bash
+  make run-llm ARGS="--max-jobs 20 --concurrency 1 --delay 2.0"
+  ```
+  Runs semantic LLM classification using an async worker pool (outputting to `ai_disclosure_mentions.parquet`). Pass custom flags in `ARGS`.
+* **Run Combined Scoring (Script 09)**:
+  ```bash
+  make run-scoring
+  ```
+  Combines deterministic rule flags and LLM classifications to compute composite risk, governance, specificity, and promotional scores (saved in `ai_scored_chunks.parquet`).
+* **Build Firm-Year Panel Dataset (Script 10)**:
+  ```bash
+  make run-features
+  ```
+  Aggregates the scored chunks into a unified firm-year panel dataset (`firm_year_features.parquet`).
+* **Run Full Pipeline**:
+  ```bash
+  make run-full-pipeline
+  ```
+  Executes all pipeline steps sequentially from prefiltering through feature building.
 
 ---
 
