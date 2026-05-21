@@ -4,6 +4,7 @@ import time
 import json
 import asyncio
 import argparse
+from enum import Enum
 import pandas as pd
 from pathlib import Path
 from dotenv import load_dotenv
@@ -19,6 +20,49 @@ except ImportError:
 
 # Load environment variables from .env file
 load_dotenv()
+
+class AmountKind(str, Enum):
+    CapEx = "CapEx"
+    OpEx = "OpEx"
+    Revenue = "Revenue"
+    Investment = "Investment"
+    R_D = "R&D"
+    Other = "Other"
+
+class EntityType(str, Enum):
+    Partner = "Partner"
+    Competitor = "Competitor"
+    Vendor = "Vendor"
+    Customer = "Customer"
+    RegulatoryBody = "RegulatoryBody"
+    CloudProvider = "CloudProvider"
+    Other = "Other"
+
+class SentimentKind(str, Enum):
+    Positive = "Positive"
+    Negative = "Negative"
+    Neutral = "Neutral"
+    Mixed = "Mixed"
+
+class AmountExtraction(BaseModel):
+    value: str = Field(
+        description="The raw string/text representing the financial amount as written (e.g. '$10 million', '500,000 dollars', '€50k')."
+    )
+    numeric_value: float | None = Field(
+        default=None,
+        description="The parsed numeric value of the amount, normalized to a float (e.g. 10000000.0 for $10M). Null if it cannot be determined."
+    )
+    kind: AmountKind = Field(
+        description="The kind of financial amount (CapEx, OpEx, Revenue, Investment, R&D, Other)."
+    )
+
+class EntityExtraction(BaseModel):
+    name: str = Field(
+        description="The name of the entity (e.g. 'NVIDIA', 'OpenAI', 'Microsoft', 'SEC')."
+    )
+    type: EntityType = Field(
+        description="The type of entity (Partner, Competitor, Vendor, Customer, RegulatoryBody, CloudProvider, Other)."
+    )
 
 class AIDisclosureAnalysis(BaseModel):
     is_ai_related: bool = Field(
@@ -50,6 +94,17 @@ class AIDisclosureAnalysis(BaseModel):
     )
     is_financial_impact: bool = Field(
         description="True if discussing financial metrics related to AI (e.g. revenues generated, capital expenditure/CapEx, R&D costs, budgets)."
+    )
+    amounts: list[AmountExtraction] = Field(
+        default_factory=list,
+        description="List of specific financial amounts (monetary figures) mentioned in the text related to AI activities."
+    )
+    entities: list[EntityExtraction] = Field(
+        default_factory=list,
+        description="List of specific organizations, partners, competitors, vendors, or regulatory bodies mentioned in the context of AI."
+    )
+    sentiment: SentimentKind = Field(
+        description="The sentiment of the text chunk regarding AI adoption, deployment, or risks (Positive, Negative, Neutral, Mixed)."
     )
     rationale_short: str = Field(
         description="A short (1-2 sentences) explanation of the classification decisions."
@@ -294,10 +349,15 @@ async def main_async(limit=None, concurrency=1, delay=1.0):
     agent = Agent(
         model, 
         output_type=AIDisclosureAnalysis,
+        retries=3,
         system_prompt=(
             "You are an expert NLP classifier analyzing corporate disclosures in SEC filings.\n"
-            "Your task is to analyze the provided chunk of text and determine which of the semantic flags are present.\n"
-            "Set the boolean fields accurately based on the text. Keep the rationale short (maximum 2 sentences)."
+            "Your task is to analyze the provided chunk of text and:\n"
+            "1. Determine which of the semantic boolean flags are present.\n"
+            "2. Extract any specific financial amounts mentioned related to AI (e.g., Capex, research costs, investments, etc.) and parse their numeric values.\n"
+            "3. Extract specific entities (partners, competitors, vendors, customers, regulatory bodies, cloud providers) mentioned in the context of AI.\n"
+            "4. Determine the overall sentiment (Positive, Negative, Neutral, Mixed) of the text regarding AI adoption, deployment, or risks.\n"
+            "Set all fields accurately based on the text. Keep the rationale short (maximum 2 sentences)."
         )
     )
     

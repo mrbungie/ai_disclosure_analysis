@@ -109,6 +109,40 @@ class TestBowFeatures(unittest.TestCase):
         self.assertTrue(run_bow_extraction("developing self-driving technology for autonomous vehicles")["has_safety_critical"])
         self.assertTrue(run_bow_extraction("securing content licensing agreements with publishers")["has_data_licensing"])
 
+    def test_competitor_academic_opensource(self):
+        self.assertTrue(run_bow_extraction("Our competitors are investing heavily in competing technologies.")["has_competitor_mention"])
+        self.assertTrue(run_bow_extraction("We are collaborating with academic research institutes and university scientists.")["has_academic_research"])
+        self.assertTrue(run_bow_extraction("We publish our weights under open source licenses on GitHub.")["has_open_source"])
+
+    def test_sentiment_features(self):
+        # High positive sentiment
+        pos_features = run_bow_extraction("AI adoption brings huge productivity benefits, improved quality, and growth opportunities.")
+        self.assertGreater(pos_features["count_positive_words"], 0)
+        self.assertEqual(pos_features["count_negative_words"], 0)
+        self.assertGreater(pos_features["ratio_positive_words"], 0.0)
+        self.assertEqual(pos_features["ratio_negative_words"], 0.0)
+        self.assertEqual(pos_features["bow_sentiment_score"], 1.0)
+
+        # High negative sentiment
+        neg_features = run_bow_extraction("There are risks of system failure, data breaches, and litigation costs.")
+        self.assertEqual(neg_features["count_positive_words"], 0)
+        self.assertGreater(neg_features["count_negative_words"], 0)
+        self.assertEqual(neg_features["ratio_positive_words"], 0.0)
+        self.assertGreater(neg_features["ratio_negative_words"], 0.0)
+        self.assertEqual(neg_features["bow_sentiment_score"], -1.0)
+
+        # Mixed sentiment
+        mixed_features = run_bow_extraction("While AI offers opportunities, it also introduces substantial risks.")
+        self.assertGreater(mixed_features["count_positive_words"], 0)
+        self.assertGreater(mixed_features["count_negative_words"], 0)
+        self.assertTrue(-1.0 < mixed_features["bow_sentiment_score"] < 1.0)
+
+        # Neutral sentiment
+        neutral_features = run_bow_extraction("We use technology in our operations.")
+        self.assertEqual(neutral_features["count_positive_words"], 0)
+        self.assertEqual(neutral_features["count_negative_words"], 0)
+        self.assertEqual(neutral_features["bow_sentiment_score"], 0.0)
+
     def test_counts_ratios_formulas(self):
         text = "This revolutionary next-generation AI system uses NVIDIA GPUs for training on datasets."
         features = run_bow_extraction(text)

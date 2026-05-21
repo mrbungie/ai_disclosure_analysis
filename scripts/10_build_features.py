@@ -51,7 +51,7 @@ def main():
             "chunk_id", "accession_number", "ticker", "filing_date", "section_name", 
             "chunk_text", "final_specificity", "final_governance_score", "final_risk_score", 
             "final_promotional_score", "has_ai_disclosure", "is_substantive", "is_promotional", 
-            "is_risk_related", "is_governance_related"
+            "is_risk_related", "is_governance_related", "bow_sentiment_score", "sentiment"
         ])
         
     # Extract year from filing_manifest to build complete panel backbone
@@ -65,6 +65,15 @@ def main():
     if len(scored_chunks_df) > 0:
         scored_chunks_df["year"] = pd.to_datetime(scored_chunks_df["filing_date"]).dt.year
         
+        # Map sentiment strings to numeric values
+        sentiment_map = {"Positive": 1, "Neutral": 0, "Negative": -1, "Mixed": 0}
+        sentiment_col = scored_chunks_df["sentiment"] if "sentiment" in scored_chunks_df.columns else pd.Series("Neutral", index=scored_chunks_df.index)
+        scored_chunks_df["llm_sentiment_numeric"] = sentiment_col.map(sentiment_map).fillna(0)
+        
+        # Ensure bow_sentiment_score exists
+        bow_sent_col = scored_chunks_df["bow_sentiment_score"] if "bow_sentiment_score" in scored_chunks_df.columns else pd.Series(0.0, index=scored_chunks_df.index)
+        scored_chunks_df["bow_sentiment_score_filled"] = bow_sent_col.fillna(0.0)
+        
         # Group by ticker, year
         grouped = scored_chunks_df.groupby(["ticker", "year"])
         
@@ -77,6 +86,10 @@ def main():
             "avg_risk_score": grouped["final_risk_score"].mean(),
             "avg_governance_score": grouped["final_governance_score"].mean(),
             
+            # Sentiment averages
+            "avg_bow_sentiment": grouped["bow_sentiment_score_filled"].mean(),
+            "avg_llm_sentiment": grouped["llm_sentiment_numeric"].mean(),
+            
             # Shares
             "share_promotional": grouped.apply(lambda g: float(g["is_promotional"].mean())),
             "share_substantive": grouped.apply(lambda g: float(g["is_substantive"].mean())),
@@ -87,6 +100,7 @@ def main():
         aggregates = pd.DataFrame(columns=[
             "ticker", "year", "ai_mentions_count", "avg_specificity", "avg_operational_grounding",
             "avg_promotional_score", "avg_risk_score", "avg_governance_score",
+            "avg_bow_sentiment", "avg_llm_sentiment",
             "share_promotional", "share_substantive", "share_governance", "share_risk"
         ])
         
@@ -97,6 +111,7 @@ def main():
     fill_cols = [
         "ai_mentions_count", "avg_specificity", "avg_operational_grounding",
         "avg_promotional_score", "avg_risk_score", "avg_governance_score",
+        "avg_bow_sentiment", "avg_llm_sentiment",
         "share_promotional", "share_substantive", "share_governance", "share_risk"
     ]
     for col in fill_cols:
@@ -119,8 +134,9 @@ def main():
     cols = [
         "ticker", "year", "industry_group", "ai_mentions_count", "avg_specificity", 
         "avg_operational_grounding", "avg_promotional_score", "avg_risk_score", 
-        "avg_governance_score", "share_promotional", "share_substantive", 
-        "share_governance", "share_risk", "post_sec_2024", "post_deepseek"
+        "avg_governance_score", "avg_bow_sentiment", "avg_llm_sentiment",
+        "share_promotional", "share_substantive", "share_governance", "share_risk",
+        "post_sec_2024", "post_deepseek"
     ]
     panel_df = panel_df[cols]
     

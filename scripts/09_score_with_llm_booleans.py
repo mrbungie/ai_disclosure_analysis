@@ -1,6 +1,7 @@
 import os
 import json
 import pandas as pd
+import numpy as np
 from pathlib import Path
 
 try:
@@ -56,7 +57,8 @@ def main():
         mentions_df = pd.DataFrame(columns=[
             "chunk_id", "is_ai_related", "is_substantive", "is_promotional",
             "is_risk_related", "is_governance_related", "mentions_copilot", "mentions_cloud",
-            "mentions_vendor", "mentions_training", "is_financial_impact", "rationale_short"
+            "mentions_vendor", "mentions_training", "is_financial_impact", "rationale_short",
+            "amounts", "entities", "sentiment"
         ])
     else:
         mentions_df = pd.read_parquet(mentions_path)
@@ -190,6 +192,23 @@ def main():
     merged_df["is_risk_related"] = is_risk_related
     merged_df["is_governance_related"] = is_governance_related
     merged_df["is_ai_related"] = is_ai_related
+
+    # Fill NaN/None for amounts and entities with None, and sentiment with "Neutral"
+    if "amounts" in merged_df.columns:
+        merged_df["amounts"] = merged_df["amounts"].apply(lambda x: list(x) if isinstance(x, (list, np.ndarray)) else None)
+    else:
+        merged_df["amounts"] = None
+
+    if "entities" in merged_df.columns:
+        merged_df["entities"] = merged_df["entities"].apply(lambda x: list(x) if isinstance(x, (list, np.ndarray)) else None)
+    else:
+        merged_df["entities"] = None
+
+    if "sentiment" in merged_df.columns:
+        # Convert float NaN (from LEFT JOIN) to "Neutral"
+        merged_df["sentiment"] = merged_df["sentiment"].apply(lambda x: x if isinstance(x, str) and pd.notna(x) else "Neutral")
+    else:
+        merged_df["sentiment"] = "Neutral"
     
     # Select columns to output in ai_scored_chunks.parquet
     # We want to preserve metadata, computed scores, filled LLM components, and all BoW features
@@ -211,7 +230,10 @@ def main():
         "is_promotional",
         "is_risk_related",
         "is_governance_related",
-        "is_ai_related"
+        "is_ai_related",
+        "amounts",
+        "entities",
+        "sentiment"
     ] + bow_cols
     
     # Deduplicate out_cols to avoid any potential duplicates (e.g. if a column is in both lists)

@@ -23,7 +23,9 @@ VAGUE_WORDS = [
     "unlock", "unlocking", "unlocked", "innovative", "innovation",
     "accelerate", "accelerating", "accelerated", "ecosystem", "seamless",
     "strategic wave", "breakthrough", "world-class", "pioneer", "pioneering",
-    "reimagine", "reimagining", "reimagined"
+    "reimagine", "reimagining", "reimagined", "paradigm shift", "disrupt",
+    "disruptive", "disrupting", "unprecedented", "game-changer", "game-changing",
+    "groundbreaking", "state-of-the-art"
 ]
 
 SPECIFIC_WORDS = [
@@ -32,12 +34,33 @@ SPECIFIC_WORDS = [
     "pre-training", "pre-trained", "parameter", "parameters", "compliance", "regulations",
     "regulation", "eu ai act", "gdpr", "ccpa", "cybersecurity", "breach", "breaches",
     "copyright", "copyrights", "patent", "patents", "board oversight", "audit committee",
-    "fiduciary", "ethics committee", "responsible ai", "ethical ai"
+    "fiduciary", "ethics committee", "responsible ai", "ethical ai",
+    "h200", "b200", "mi300x", "inflection", "llama-3", "gpt-4o", "claude-3", "gemini-1.5",
+    "rlhf", "dpo", "inference", "quantization", "tensor", "retrieval-augmented generation",
+    "rag", "vector database", "embedding", "embeddings", "neural engine", "tensor core"
 ]
 
 AI_WORDS = [
     "ai", "artificial intelligence", "generative ai", "gen ai", "machine learning",
     "large language model", "llm", "llms", "deep learning", "neural network", "neural networks"
+]
+
+POSITIVE_WORDS = [
+    "growth", "growth-driving", "efficiency", "productivity", "benefit", "benefits",
+    "advantage", "advantages", "accelerate", "accelerates", "accelerated", "improve",
+    "improves", "improved", "improving", "success", "successful", "opportunity",
+    "opportunities", "innovate", "innovating", "innovation", "optimize", "optimizing",
+    "optimized", "strengthen", "strengthening", "strengthened", "outperform",
+    "outperforming", "enhance", "enhancing", "enhanced", "value-creation", "competitiveness"
+]
+
+NEGATIVE_WORDS = [
+    "risk", "risks", "threat", "threats", "adversely", "harm", "harms", "harmed",
+    "decline", "declining", "declined", "breach", "breaches", "expense", "expenses",
+    "costly", "expensive", "loss", "losses", "challenge", "challenges", "penalty",
+    "penalties", "litigation", "lawsuit", "lawsuits", "liability", "liabilities",
+    "disruption", "disruptions", "failure", "failures", "failed", "failing",
+    "uncertain", "uncertainty", "uncertainties"
 ]
 
 def run_bow_extraction(text):
@@ -125,11 +148,11 @@ def run_bow_extraction(text):
 
     # 6. Newly identified dimensions
     workforce_talent_pat = re.compile(
-        r"\btalent\b|\brecruiting\b|\bworkforce\b|\bheadcount\b|\bhiring\b|\bskills?\b|\bemployees?\b|\blabor\b",
+        r"\btalent\b|\brecruiting\b|\bworkforce\b|\bheadcount\b|\bhiring\b|\bskills?\b|\bemployees?\b|\blabor\b|\bengineers\b|\bscientists\b|\bphd\b|\bdevelopers\b",
         re.IGNORECASE
     )
     partnership_pat = re.compile(
-        r"\bstrategic\s+alliance\b|\bpartnership\b|\bjoint\s+venture\b|\bcollaboration\b",
+        r"\bstrategic\s+alliance\b|\bpartnership\b|\bjoint\s+venture\b|\bcollaboration\b|\bconsortium\b|\bcollaboration\s+agreement\b|\balliance\b",
         re.IGNORECASE
     )
     customer_facing_pat = re.compile(
@@ -142,6 +165,20 @@ def run_bow_extraction(text):
     )
     data_licensing_pat = re.compile(
         r"\bcontent\s+licensing\b|\blicensing\s+agreements?\b|\bpublisher\s+agreements?\b|\bscraping\b|\bfair\s+use\b|\bintellectual\s+property\s+claims\b",
+        re.IGNORECASE
+    )
+
+    # 7. Additional requested dimensions
+    competitor_pat = re.compile(
+        r"\bcompetitors?\b|\bcompetition\b|\bcompeting\b|\bcompete\b|\brival(?:s|ry)?\b|\bmarket\s+share\b",
+        re.IGNORECASE
+    )
+    academic_pat = re.compile(
+        r"\bacadem(?:ic|ia)\b|\buniversity\b|\buniversities\b|\bresearch\s+paper\b|\bscientific\b|\bstudy\b|\bstudies\b",
+        re.IGNORECASE
+    )
+    open_source_pat = re.compile(
+        r"\bopen\s+source\b|\bopen-source\b|\bhugging\s*face\b|\bopen\s+weights?\b|\bgithub\b|\bgit\b",
         re.IGNORECASE
     )
 
@@ -178,10 +215,12 @@ def run_bow_extraction(text):
         "has_customer_facing": bool(customer_facing_pat.search(text)),
         "has_safety_critical": bool(safety_critical_pat.search(text)),
         "has_data_licensing": bool(data_licensing_pat.search(text)),
+        "has_competitor_mention": bool(competitor_pat.search(text)),
+        "has_academic_research": bool(academic_pat.search(text)),
+        "has_open_source": bool(open_source_pat.search(text)),
     }
 
     # --- PHASE 2: Counts (Integer Features) ---
-    # Total Words (whitespace split)
     words = text.split()
     count_total_words = len(words)
     
@@ -189,16 +228,22 @@ def run_bow_extraction(text):
     vague_regex = re.compile(r"\b(" + "|".join(VAGUE_WORDS) + r")\b", re.IGNORECASE)
     specific_regex = re.compile(r"\b(" + "|".join(SPECIFIC_WORDS) + r")\b", re.IGNORECASE)
     ai_regex = re.compile(r"\b(" + "|".join(AI_WORDS) + r")\b", re.IGNORECASE)
+    pos_regex = re.compile(r"\b(" + "|".join(POSITIVE_WORDS) + r")\b", re.IGNORECASE)
+    neg_regex = re.compile(r"\b(" + "|".join(NEGATIVE_WORDS) + r")\b", re.IGNORECASE)
     
     count_vague_words = len(vague_regex.findall(text))
     count_specific_words = len(specific_regex.findall(text))
     count_ai_mentions = len(ai_regex.findall(text))
+    count_positive_words = len(pos_regex.findall(text))
+    count_negative_words = len(neg_regex.findall(text))
 
     counts = {
         "count_total_words": count_total_words,
         "count_vague_words": count_vague_words,
         "count_specific_words": count_specific_words,
         "count_ai_mentions": count_ai_mentions,
+        "count_positive_words": count_positive_words,
+        "count_negative_words": count_negative_words,
     }
 
     # --- PHASE 3: Ratios (Float Features) ---
@@ -207,6 +252,8 @@ def run_bow_extraction(text):
         "ratio_vague_words": count_vague_words / denom,
         "ratio_specific_words": count_specific_words / denom,
         "ratio_ai_mentions": count_ai_mentions / denom,
+        "ratio_positive_words": count_positive_words / denom,
+        "ratio_negative_words": count_negative_words / denom,
     }
 
     # --- PHASE 4: Formulas / Scores ---
@@ -215,6 +262,10 @@ def run_bow_extraction(text):
     
     # Specificity density score
     specificity_score = (count_specific_words - count_vague_words) / denom
+    
+    # Bag of Words sentiment score (-1 to 1)
+    pos_neg_sum = count_positive_words + count_negative_words
+    bow_sentiment_score = (count_positive_words - count_negative_words) / max(pos_neg_sum, 1) if pos_neg_sum > 0 else 0.0
     
     # Total distinct risks mentioned
     total_risk_indicators_count = int(
@@ -238,6 +289,7 @@ def run_bow_extraction(text):
     formulas = {
         "vagueness_ratio": vagueness_ratio,
         "specificity_score": specificity_score,
+        "bow_sentiment_score": bow_sentiment_score,
         "total_risk_indicators_count": total_risk_indicators_count,
         "total_governance_indicators_count": total_governance_indicators_count,
     }
