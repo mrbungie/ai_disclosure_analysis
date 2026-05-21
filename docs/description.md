@@ -657,3 +657,35 @@ Once you have `ai_candidate_chunks.parquet`, the thesis becomes much easier beca
 **Practical outputs:**
 
 Framework applicable to investor relations, boards, compliance teams, and future "X-washing" analysis.
+
+---
+
+# 14. Observability, Logging, and Testing Infrastructure
+
+## 14.1 Centralized Structured Logging System
+The data pipeline implements a centralized logger to record execution telemetry at each pipeline stage.
+
+* **Module**: [pipeline_logger.py](file:///Users/goviedb/Development/mib_tesis_ai_disclosure/scripts/pipeline_logger.py)
+* **Log File**: `data/interim/manifests/pipeline_log.jsonl` (JSON Lines format)
+* **Attributes**: `timestamp`, `pipeline_step`, `level`, `message`, `ticker`, `cik`, `accession_number`, `duration_seconds`, `details`.
+* **DuckDB Integration**: The JSONL format is directly queryable via DuckDB's native JSON reader, e.g.:
+  ```sql
+  SELECT pipeline_step, level, COUNT(*) 
+  FROM read_json_auto('data/interim/manifests/pipeline_log.jsonl') 
+  GROUP BY 1, 2;
+  ```
+
+## 14.2 Unit Testing and Automation
+A comprehensive test suite verifies regex and section boundaries, preventing regression as extraction rules evolve.
+
+* **Test Suite**: [test_extraction_regex.py](file:///Users/goviedb/Development/mib_tesis_ai_disclosure/tests/test_extraction_regex.py) (uses Python `unittest` library).
+* **Automation**: [Makefile](file:///Users/goviedb/Development/mib_tesis_ai_disclosure/Makefile) handles automation tasks (`make test`, `make install-deps`, `make run-pipeline`).
+* **Covered Scenarios**:
+  * SEC standard Item headers matching.
+  * Pipe-wrapped Markdown table formats.
+  * Honeywell plaintext styling fallbacks.
+  * Bounds extraction and character length filtering (> 1000 chars filter).
+
+## 14.3 Streamlit Diagnostics Workspace
+The Streamlit app in [app.py](file:///Users/goviedb/Development/mib_tesis_ai_disclosure/app.py) exposes a central logging tab that parses logs and exposes an **Interactive SQL Console** using DuckDB, enabling real-time ad-hoc querying against runtime execution events.
+
