@@ -4,6 +4,11 @@ import requests
 import pandas as pd
 from pathlib import Path
 
+try:
+    import pipeline_logger
+except ImportError:
+    from scripts import pipeline_logger
+
 def main():
     # Load configuration
     config_path = Path("configs/config.json")
@@ -17,39 +22,79 @@ def main():
     
     headers = {"User-Agent": user_agent}
     
-    print("Fetching CIK mapping from SEC...")
-    url = "https://www.sec.gov/files/company_tickers.json"
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        sec_data = response.json()
-    except Exception as e:
-        print(f"Error fetching from SEC: {e}")
-        # Fallback list for the MVP in case SEC is down or blocks request
-        print("Using static fallback for tickers...")
-        sec_data = {
-            "0": {"cik_str": 789019, "ticker": "MSFT", "title": "MICROSOFT CORP"},
-            "1": {"cik_str": 1045810, "ticker": "NVDA", "title": "NVIDIA CORP"},
-            "2": {"cik_str": 320193, "ticker": "AAPL", "title": "APPLE INC"},
-            "3": {"cik_str": 1652044, "ticker": "GOOGL", "title": "Alphabet Inc."},
-            "4": {"cik_str": 1318605, "ticker": "TSLA", "title": "TESLA, INC."},
-            "5": {"cik_str": 1018724, "ticker": "AMZN", "title": "AMAZON COM INC"},
-            "6": {"cik_str": 1326801, "ticker": "META", "title": "Meta Platforms, Inc."},
-            "7": {"cik_str": 1108524, "ticker": "CRM", "title": "Salesforce, Inc."},
-            "8": {"cik_str": 796343, "ticker": "ADBE", "title": "ADOBE INC."},
-            "9": {"cik_str": 93410, "ticker": "CSCO", "title": "CISCO SYSTEMS, INC."},
-            "10": {"cik_str": 1065280, "ticker": "NFLX", "title": "NETFLIX INC"},
-            "11": {"cik_str": 939211, "ticker": "ORCL", "title": "ORACLE CORP"},
-            "12": {"cik_str": 858877, "ticker": "CSCO", "title": "CISCO SYSTEMS INC"},
-            "13": {"cik_str": 2487, "ticker": "AMD", "title": "ADVANCED MICRO DEVICES INC"},
-            "14": {"cik_str": 804328, "ticker": "QCOM", "title": "QUALCOMM INC/DE"},
-            "15": {"cik_str": 311094, "ticker": "INTU", "title": "INTUIT INC"},
-            "16": {"cik_str": 50863, "ticker": "INTC", "title": "INTEL CORP"},
-            "17": {"cik_str": 51143, "ticker": "IBM", "title": "INTERNATIONAL BUSINESS MACHINES CORP"},
-            "18": {"cik_str": 1640147, "ticker": "SNOW", "title": "Snowflake Inc."},
-            "19": {"cik_str": 1321655, "ticker": "PLTR", "title": "Palantir Technologies Inc."},
-            "20": {"cik_str": 1577552, "ticker": "PANW", "title": "Palo Alto Networks Inc."}
-        }
+    pipeline_logger.log_event(
+        pipeline_step="universe_build",
+        level="INFO",
+        message=f"Starting firm universe build for {len(tickers)} configured tickers"
+    )
+    
+    cache_path = Path("data/sec_company_tickers.json")
+    sec_data = None
+    if cache_path.exists():
+        try:
+            with open(cache_path, "r") as f:
+                sec_data = json.load(f)
+            pipeline_logger.log_event(
+                pipeline_step="universe_build",
+                level="INFO",
+                message=f"Loaded SEC CIK mappings from local cache: {cache_path}"
+            )
+        except Exception as e:
+            pipeline_logger.log_event(
+                pipeline_step="universe_build",
+                level="WARNING",
+                message=f"Error loading SEC CIK mappings cache: {e}"
+            )
+            
+    if sec_data is None:
+        url = "https://www.sec.gov/files/company_tickers.json"
+        pipeline_logger.log_event(
+            pipeline_step="universe_build",
+            level="INFO",
+            message=f"Fetching CIK mappings from SEC EDGAR: {url}"
+        )
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            sec_data = response.json()
+            # Cache the file
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(cache_path, "w") as f:
+                json.dump(sec_data, f)
+            pipeline_logger.log_event(
+                pipeline_step="universe_build",
+                level="SUCCESS",
+                message=f"Successfully downloaded and cached CIK mapping to {cache_path}"
+            )
+        except Exception as e:
+            pipeline_logger.log_event(
+                pipeline_step="universe_build",
+                level="WARNING",
+                message=f"Error fetching CIK mapping from SEC: {e}. Using fallback map."
+            )
+            # Fallback list for the MVP in case SEC is down or blocks request
+            sec_data = {
+                "0": {"cik_str": 320193, "ticker": "AAPL", "title": "APPLE INC"},
+                "1": {"cik_str": 796343, "ticker": "ADBE", "title": "ADOBE INC."},
+                "2": {"cik_str": 2487, "ticker": "AMD", "title": "ADVANCED MICRO DEVICES INC"},
+                "3": {"cik_str": 1018724, "ticker": "AMZN", "title": "AMAZON COM INC"},
+                "4": {"cik_str": 1108524, "ticker": "CRM", "title": "Salesforce, Inc."},
+                "5": {"cik_str": 858877, "ticker": "CSCO", "title": "CISCO SYSTEMS INC"},
+                "6": {"cik_str": 1652044, "ticker": "GOOGL", "title": "Alphabet Inc."},
+                "7": {"cik_str": 51143, "ticker": "IBM", "title": "INTERNATIONAL BUSINESS MACHINES CORP"},
+                "8": {"cik_str": 50863, "ticker": "INTC", "title": "INTEL CORP"},
+                "9": {"cik_str": 311094, "ticker": "INTU", "title": "INTUIT INC"},
+                "10": {"cik_str": 1326801, "ticker": "META", "title": "Meta Platforms, Inc."},
+                "11": {"cik_str": 789019, "ticker": "MSFT", "title": "MICROSOFT CORP"},
+                "12": {"cik_str": 1065280, "ticker": "NFLX", "title": "NETFLIX INC"},
+                "13": {"cik_str": 1045810, "ticker": "NVDA", "title": "NVIDIA CORP"},
+                "14": {"cik_str": 939211, "ticker": "ORCL", "title": "ORACLE CORP"},
+                "15": {"cik_str": 1577552, "ticker": "PANW", "title": "Palo Alto Networks Inc."},
+                "16": {"cik_str": 1321655, "ticker": "PLTR", "title": "Palantir Technologies Inc."},
+                "17": {"cik_str": 804328, "ticker": "QCOM", "title": "QUALCOMM INC/DE"},
+                "18": {"cik_str": 1640147, "ticker": "SNOW", "title": "Snowflake Inc."},
+                "19": {"cik_str": 1318605, "ticker": "TSLA", "title": "TESLA, INC."}
+            }
     
     # Parse SEC data
     sec_lookup = {}
@@ -61,6 +106,7 @@ def main():
         
     # Build universe
     universe_data = []
+    missing_tickers = []
     for ticker in tickers:
         ticker_upper = ticker.upper()
         if ticker_upper in sec_lookup:
@@ -73,14 +119,30 @@ def main():
                 "industry_group": "Technology/Software"
             })
         else:
-            print(f"Warning: Ticker {ticker} not found in SEC lookup.")
+            missing_tickers.append(ticker_upper)
+            pipeline_logger.log_event(
+                pipeline_step="universe_build",
+                level="WARNING",
+                message=f"Ticker {ticker_upper} not found in SEC CIK registry",
+                ticker=ticker_upper
+            )
             
     df = pd.DataFrame(universe_data)
     
     # Save to parquet
     output_file = output_dir / "firm_universe.parquet"
     df.to_parquet(output_file, index=False)
-    print(f"Successfully wrote {len(df)} firms to {output_file}")
+    
+    pipeline_logger.log_event(
+        pipeline_step="universe_build",
+        level="SUCCESS",
+        message=f"Successfully built firm universe with {len(df)} companies (missing: {len(missing_tickers)})",
+        details={
+            "company_count": len(df),
+            "missing_count": len(missing_tickers),
+            "output_file": str(output_file)
+        }
+    )
 
 if __name__ == "__main__":
     main()

@@ -4,15 +4,30 @@ import pandas as pd
 from pathlib import Path
 from datetime import datetime
 
+try:
+    import pipeline_logger
+except ImportError:
+    from scripts import pipeline_logger
+
 def main():
     # Load configuration
     config_path = Path("configs/config.json")
     with open(config_path, "r") as f:
         config = json.load(f)
         
+    pipeline_logger.log_event(
+        pipeline_step="batch_selection",
+        level="INFO",
+        message="Starting batch selection for download..."
+    )
+        
     manifest_path = Path(config["paths"]["interim_manifests"]) / "filing_manifest.parquet"
     if not manifest_path.exists():
-        print(f"Error: Manifest file not found at {manifest_path}. Run 01_build_filing_manifest.py first.")
+        pipeline_logger.log_event(
+            pipeline_step="batch_selection",
+            level="ERROR",
+            message=f"Manifest file not found at {manifest_path}. Run 01_build_filing_manifest.py first."
+        )
         return
         
     df = pd.read_parquet(manifest_path)
@@ -44,9 +59,18 @@ def main():
             
     if selected_count > 0:
         df.to_parquet(manifest_path, index=False)
-        print(f"Successfully selected {selected_count} filings for download in batch '{batch_id}'")
+        pipeline_logger.log_event(
+            pipeline_step="batch_selection",
+            level="SUCCESS",
+            message=f"Successfully selected {selected_count} filings for download in batch '{batch_id}'",
+            details={"selected_count": selected_count, "batch_id": batch_id}
+        )
     else:
-        print("No new pending filings matched the batch criteria (2022-2025).")
+        pipeline_logger.log_event(
+            pipeline_step="batch_selection",
+            level="INFO",
+            message="No new pending filings matched the batch criteria (2022-2025)."
+        )
 
 if __name__ == "__main__":
     main()

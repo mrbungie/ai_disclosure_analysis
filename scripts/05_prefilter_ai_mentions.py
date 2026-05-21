@@ -6,6 +6,11 @@ from pathlib import Path
 from tqdm import tqdm
 from datetime import datetime
 
+try:
+    import pipeline_logger
+except ImportError:
+    from scripts import pipeline_logger
+
 def build_keyword_regex(keywords):
     # Escape keywords and join with OR, wrapping in word boundaries
     patterns = []
@@ -27,23 +32,33 @@ def main():
     sections_path = Path(config["paths"]["interim_sections"]) / "filing_sections.parquet"
     
     if not manifest_path.exists() or not sections_path.exists():
-        print("Error: Required inputs (manifest or sections parquet) are missing.")
+        pipeline_logger.log_event(
+            pipeline_step="prefilter",
+            level="ERROR",
+            message=f"Required inputs missing. manifest_exists={manifest_path.exists()}, sections_exists={sections_path.exists()}"
+        )
         return
         
     manifest_df = pd.read_parquet(manifest_path)
     sections_df = pd.read_parquet(sections_path)
     
-    # We only process filings that have been parsed successfully
-    parsed_filings = manifest_df[manifest_df["parse_status"] == "completed"]
+    # We only process filings that have been parsed successfully and have pending prefilter status
+    parsed_filings = manifest_df[(manifest_df["parse_status"] == "completed") & (manifest_df["prefilter_status"] == "pending")]
     
     if len(parsed_filings) == 0:
-        print("No parsed filings available to prefilter.")
+        pipeline_logger.log_event(
+            pipeline_step="prefilter",
+            level="INFO",
+            message="No pending parsed filings available to prefilter."
+        )
         return
         
-    print("Compiling regex patterns...")
+    pipeline_logger.log_event(
+        pipeline_step="prefilter",
+        level="INFO",
+        message=f"Compiling regex patterns & starting prefiltering on {len(parsed_filings)} filings..."
+    )
     ai_regex = build_keyword_regex(keywords)
-    
-    print(f"Prefiltering {len(parsed_filings)} filings for AI mentions...")
     
     matched_filings = 0
     skipped_filings = 0
@@ -79,7 +94,12 @@ def main():
         manifest_df.at[idx, "updated_at"] = datetime.now()
         
     manifest_df.to_parquet(manifest_path, index=False)
-    print(f"Prefiltering completed. Matched: {matched_filings}, Skipped: {skipped_filings}")
+    pipeline_logger.log_event(
+        pipeline_step="prefilter",
+        level="SUCCESS",
+        message=f"Prefiltering completed. Matched: {matched_filings}, Skipped: {skipped_filings}",
+        details={"matched_count": matched_filings, "skipped_count": skipped_filings}
+    )
 
 if __name__ == "__main__":
     main()

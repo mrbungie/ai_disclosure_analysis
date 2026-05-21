@@ -15,5 +15,6 @@ dependencies = [
     "pydantic>=2.5.0",
     "duckdb>=0.10.0",
     "tqdm>=4.66.0",
-    "pyyaml>=6.0"
+    "pyyaml>=6.0",
+    "streamlit>=1.57.0",
 ]

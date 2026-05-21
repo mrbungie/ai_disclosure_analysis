@@ -1,25 +1,36 @@
 import os
 import json
 import re
+import warnings
 import pandas as pd
 from pathlib import Path
+from bs4 import XMLParsedAsHTMLWarning
 from bs4 import BeautifulSoup
+from markdownify import markdownify as md
 from tqdm import tqdm
 from datetime import datetime
 
-# Regex patterns for section start and end
+try:
+    import pipeline_logger
+except ImportError:
+    from scripts import pipeline_logger
+
+# Suppress BS4 XML parsing warnings
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+
+# Space-tolerant and Markdown-tolerant regex patterns for section starts and ends
 PATTERNS = {
     "Item 1": {
-        "start": r"^\s*Item\s+1\.?\s+(?:Business|BUSINESS)\b",
-        "end": r"^\s*Item\s+1A\.?\s+(?:Risk|RISK)\s+(?:Factors|FACTORS)\b"
+        "start": r"^\s*(?:[|#*_\s-]*)\s*(?:Item\s+1\.?\s*(?:[|#*_\s-]*)\s*(?:Business|BUSINESS)|ABOUT\s+HONEYWELL)\b",
+        "end": r"^\s*(?:[|#*_\s-]*)\s*(?:Item\s+1A\.?\s*(?:[|#*_\s-]*)\s*(?:Risk|RISK)\s*(?:[|#*_\s-]*)\s*(?:Factors|FACTORS)|RISK\s+FACTORS)\b"
     },
     "Item 1A": {
-        "start": r"^\s*Item\s+1A\.?\s+(?:Risk|RISK)\s+(?:Factors|FACTORS)\b",
-        "end": r"^\s*Item\s+1B\b|^\s*Item\s+2\b"
+        "start": r"^\s*(?:[|#*_\s-]*)\s*(?:Item\s+1A\.?\s*(?:[|#*_\s-]*)\s*(?:Risk|RISK)\s*(?:[|#*_\s-]*)\s*(?:Factors|FACTORS)|RISK\s+FACTORS)\b",
+        "end": r"^\s*(?:[|#*_\s-]*)\s*(?:Item\s+1B\b|Item\s+2\b|UNRESOLVED\s+STAFF\s+COMMENTS\b|PROPERTIES\b)"
     },
     "Item 7": {
-        "start": r"^\s*Item\s+7\.?\s+(?:Management|MANAGEMENT)\b",
-        "end": r"^\s*Item\s+7A\b|^\s*Item\s+8\b"
+        "start": r"^\s*(?:[|#*_\s-]*)\s*(?:Item\s+7\.?\s*(?:[|#*_\s-]*)\s*(?:Management|MANAGEMENT)|MANAGEMENT[’']S\s+DISCUSSION\s+AND\s+ANALYSIS)\b",
+        "end": r"^\s*(?:[|#*_\s-]*)\s*(?:Item\s+7A\b|Item\s+8\b|QUANTITATIVE\s+AND\s+QUALITATIVE\b|FINANCIAL\s+STATEMENTS\b)"
     }
 }
 
@@ -27,18 +38,11 @@ def clean_html_to_lines(html_path):
     with open(html_path, "r", encoding="utf-8", errors="ignore") as f:
         html_content = f.read()
         
-    soup = BeautifulSoup(html_content, "lxml")
-    for script in soup(["script", "style"]):
-        script.decompose()
-        
-    # Append newlines to block tags to preserve layout
-    for block in soup.find_all(['p', 'div', 'tr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'br']):
-        block.append('\n')
-        
-    text = soup.get_text()
+    # Convert HTML structure to Markdown, stripping scripts and styling blocks
+    markdown_text = md(html_content, heading_style="ATX", strip=['script', 'style'])
     
     # Split into clean lines
-    lines = [line.strip() for line in text.split('\n')]
+    lines = [line.strip() for line in markdown_text.split('\n')]
     cleaned_lines = [line for line in lines if line]
     return cleaned_lines
 
@@ -76,29 +80,49 @@ def main():
     sections_path.parent.mkdir(parents=True, exist_ok=True)
     
     if not manifest_path.exists():
-        print(f"Error: Manifest file not found at {manifest_path}. Run download script first.")
+        pipeline_logger.log_event(
+            pipeline_step="extract_sections",
+            level="ERROR",
+            message=f"Manifest file not found at {manifest_path}. Run download script first."
+        )
         return
         
     df = pd.read_parquet(manifest_path)
     
-    # Process completed downloads that haven't been parsed yet
+    # Load existing sections if they exist
+    existing_sections_df = None
+    if sections_path.exists():
+        try:
+            existing_sections_df = pd.read_parquet(sections_path)
+            pipeline_logger.log_event(
+                pipeline_step="extract_sections",
+                level="INFO",
+                message=f"Loaded {len(existing_sections_df)} existing parsed sections."
+            )
+        except Exception as e:
+            pipeline_logger.log_event(
+                pipeline_step="extract_sections",
+                level="WARNING",
+                message=f"Could not load existing sections parquet: {e}"
+            )
+            
     pending_parse = df[(df["download_status"] == "completed") & (df["parse_status"] == "pending")]
     
     if len(pending_parse) == 0:
-        print("No pending filings to parse.")
+        pipeline_logger.log_event(
+            pipeline_step="extract_sections",
+            level="INFO",
+            message="No pending filings to parse."
+        )
         return
         
-    # Load existing sections if file exists
-    if sections_path.exists():
-        existing_sections = pd.read_parquet(sections_path)
-        # Identify accession numbers we are processing to remove duplicates
-        acc_to_remove = pending_parse["accession_number"].tolist()
-        existing_sections = existing_sections[~existing_sections["accession_number"].isin(acc_to_remove)]
-        sections_list = existing_sections.to_dict("records")
-    else:
-        sections_list = []
+    sections_list = []
         
-    print(f"Extracting sections from {len(pending_parse)} filings...")
+    pipeline_logger.log_event(
+        pipeline_step="extract_sections",
+        level="INFO",
+        message=f"Extracting narrative sections as Markdown from {len(pending_parse)} filings..."
+    )
     
     for idx, row in tqdm(pending_parse.iterrows(), total=len(pending_parse)):
         html_path = Path(row["local_path"])
@@ -109,11 +133,22 @@ def main():
         if not html_path.exists():
             df.at[idx, "parse_status"] = "failed: raw file missing"
             df.at[idx, "updated_at"] = datetime.now()
+            df.to_parquet(manifest_path, index=False)
+            pipeline_logger.log_event(
+                pipeline_step="extract_sections",
+                level="ERROR",
+                message=f"Raw filing html file missing at {html_path}",
+                ticker=ticker,
+                cik=row.get("cik"),
+                accession_number=acc_num
+            )
             continue
             
         try:
             lines = clean_html_to_lines(html_path)
             extracted_any = False
+            extracted_count = 0
+            extracted_details = {}
             
             for sec_name, pat in PATTERNS.items():
                 sec_text = extract_section(lines, pat["start"], pat["end"])
@@ -131,24 +166,77 @@ def main():
                         "word_count": word_count
                     })
                     extracted_any = True
+                    extracted_count += 1
+                    extracted_details[sec_name] = {"char_len": char_len, "word_count": word_count}
                     
             if extracted_any:
                 df.at[idx, "parse_status"] = "completed"
+                pipeline_logger.log_event(
+                    pipeline_step="extract_sections",
+                    level="SUCCESS",
+                    message=f"Successfully extracted {extracted_count} sections",
+                    ticker=ticker,
+                    cik=row.get("cik"),
+                    accession_number=acc_num,
+                    details=extracted_details
+                )
             else:
                 df.at[idx, "parse_status"] = "failed: no sections extracted"
+                pipeline_logger.log_event(
+                    pipeline_step="extract_sections",
+                    level="WARNING",
+                    message="No sections (Item 1, 1A, 7) extracted from filing",
+                    ticker=ticker,
+                    cik=row.get("cik"),
+                    accession_number=acc_num
+                )
                 
             df.at[idx, "updated_at"] = datetime.now()
             
         except Exception as e:
             df.at[idx, "parse_status"] = f"failed: {str(e)}"
             df.at[idx, "updated_at"] = datetime.now()
+            pipeline_logger.log_event(
+                pipeline_step="extract_sections",
+                level="ERROR",
+                message=f"Exception extracting sections: {e}",
+                ticker=ticker,
+                cik=row.get("cik"),
+                accession_number=acc_num,
+                details={"error": str(e)}
+            )
             
-        # Incremental save of manifest and sections
+        # Incremental save of manifest to keep progress
         df.to_parquet(manifest_path, index=False)
-        if sections_list:
-            pd.DataFrame(sections_list).to_parquet(sections_path, index=False)
+        
+    if sections_list:
+        new_sections_df = pd.DataFrame(sections_list)
+        if existing_sections_df is not None:
+            # Drop any existing sections for the accession numbers we just processed
+            processed_acc_nums = new_sections_df["accession_number"].unique()
+            existing_sections_df = existing_sections_df[~existing_sections_df["accession_number"].isin(processed_acc_nums)]
+            combined_df = pd.concat([existing_sections_df, new_sections_df], ignore_index=True)
+            pipeline_logger.log_event(
+                pipeline_step="extract_sections",
+                level="INFO",
+                message=f"Combined existing and new sections. Total sections: {len(combined_df)}"
+            )
+        else:
+            combined_df = new_sections_df
+            pipeline_logger.log_event(
+                pipeline_step="extract_sections",
+                level="INFO",
+                message=f"Created new sections table with {len(combined_df)} sections."
+            )
             
-    print(f"Finished section extraction. Extracted sections saved to {sections_path}")
+        combined_df.to_parquet(sections_path, index=False)
+            
+    pipeline_logger.log_event(
+        pipeline_step="extract_sections",
+        level="SUCCESS",
+        message=f"Finished section extraction. Extracted sections saved to {sections_path}",
+        details={"sections_count": len(combined_df) if 'combined_df' in locals() else 0}
+    )
 
 if __name__ == "__main__":
     main()

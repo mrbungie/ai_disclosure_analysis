@@ -6,6 +6,11 @@ import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
 
+try:
+    import pipeline_logger
+except ImportError:
+    from scripts import pipeline_logger
+
 # Keyword family mapping
 KEYWORD_FAMILIES = {
     "generative ai": "GenAI",
@@ -56,17 +61,50 @@ def main():
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
     if not manifest_path.exists() or not sections_path.exists():
-        print("Error: Required inputs (manifest or sections parquet) are missing.")
+        pipeline_logger.log_event(
+            pipeline_step="chunking",
+            level="ERROR",
+            message=f"Required inputs missing. manifest_exists={manifest_path.exists()}, sections_exists={sections_path.exists()}"
+        )
         return
         
     manifest_df = pd.read_parquet(manifest_path)
     sections_df = pd.read_parquet(sections_path)
     
+    # Load existing candidate chunks if they exist
+    existing_chunks_df = None
+    if output_path.exists():
+        try:
+            existing_chunks_df = pd.read_parquet(output_path)
+            pipeline_logger.log_event(
+                pipeline_step="chunking",
+                level="INFO",
+                message=f"Loaded {len(existing_chunks_df)} existing candidate chunks."
+            )
+        except Exception as e:
+            pipeline_logger.log_event(
+                pipeline_step="chunking",
+                level="WARNING",
+                message=f"Could not load existing chunks parquet: {e}"
+            )
+            
     # We only process filings that have been matched in the prefilter stage
     matched_filings = manifest_df[manifest_df["prefilter_status"] == "matched"]
     
-    if len(matched_filings) == 0:
-        print("No prefiltered filings found matching the AI keywords.")
+    # Identify which accession numbers have already been chunked
+    chunked_accessions = set()
+    if existing_chunks_df is not None:
+        chunked_accessions = set(existing_chunks_df["accession_number"].unique())
+        
+    # Filter to only filings that are not yet chunked
+    pending_chunking = matched_filings[~matched_filings["accession_number"].isin(chunked_accessions)]
+    
+    if len(pending_chunking) == 0:
+        pipeline_logger.log_event(
+            pipeline_step="chunking",
+            level="INFO",
+            message="No pending prefiltered filings to chunk."
+        )
         return
         
     print("Compiling regex patterns...")
@@ -76,9 +114,13 @@ def main():
     
     chunks_list = []
     
-    print(f"Creating candidate chunks for {len(matched_filings)} filings...")
+    pipeline_logger.log_event(
+        pipeline_step="chunking",
+        level="INFO",
+        message=f"Creating candidate chunks for {len(pending_chunking)} filings..."
+    )
     
-    for _, row in tqdm(matched_filings.iterrows(), total=len(matched_filings)):
+    for _, row in tqdm(pending_chunking.iterrows(), total=len(pending_chunking)):
         acc_num = row["accession_number"]
         ticker = row["ticker"]
         filing_date = row["filing_date"]
@@ -150,11 +192,38 @@ def main():
                 })
                 
     if chunks_list:
-        chunks_df = pd.DataFrame(chunks_list)
-        chunks_df.to_parquet(output_path, index=False)
-        print(f"Successfully saved {len(chunks_df)} chunks ({chunks_df['text_hash'].nunique()} unique text hashes) to {output_path}")
+        new_chunks_df = pd.DataFrame(chunks_list)
+        if existing_chunks_df is not None:
+            # Drop any existing chunks for the accession numbers we just processed
+            processed_acc_nums = new_chunks_df["accession_number"].unique()
+            existing_chunks_df = existing_chunks_df[~existing_chunks_df["accession_number"].isin(processed_acc_nums)]
+            combined_df = pd.concat([existing_chunks_df, new_chunks_df], ignore_index=True)
+            pipeline_logger.log_event(
+                pipeline_step="chunking",
+                level="INFO",
+                message=f"Combined existing and new chunks. Total chunks: {len(combined_df)}"
+            )
+        else:
+            combined_df = new_chunks_df
+            pipeline_logger.log_event(
+                pipeline_step="chunking",
+                level="INFO",
+                message=f"Created new chunks table with {len(combined_df)} chunks."
+            )
+            
+        combined_df.to_parquet(output_path, index=False)
+        pipeline_logger.log_event(
+            pipeline_step="chunking",
+            level="SUCCESS",
+            message=f"Successfully saved {len(new_chunks_df)} new chunks. Total candidate chunks: {len(combined_df)} at {output_path}",
+            details={"new_chunks_count": len(new_chunks_df), "total_chunks_count": len(combined_df)}
+        )
     else:
-        print("No chunks created.")
+        pipeline_logger.log_event(
+            pipeline_step="chunking",
+            level="INFO",
+            message="No new chunks created."
+        )
 
 if __name__ == "__main__":
     main()
