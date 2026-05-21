@@ -32,9 +32,9 @@ def main():
         
     df = pd.read_parquet(manifest_path)
     
-    # Define batch selection parameters for MVP (10-Ks between 2022 and 2025)
-    start_year = 2022
-    end_year = 2025
+    # Define batch selection parameters from config (defaulting if not present)
+    start_year = config["pipeline"].get("start_year", 2022)
+    end_year = config["pipeline"].get("end_year", 2025)
     batch_id = f"batch_{start_year}_{end_year}"
     
     selected_count = 0
