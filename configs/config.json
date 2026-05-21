@@ -1,0 +1,63 @@
+{
+  "sec": {
+    "user_agent": "German Oviedo german.oviedo.b@gmail.com"
+  },
+  "pipeline": {
+    "start_year": 2021,
+    "end_year": 2025,
+    "form_types": ["10-K"],
+    "tickers": [
+      "MSFT",
+      "ADBE",
+      "CRM",
+      "NVDA",
+      "ORCL",
+      "NFLX",
+      "CSCO",
+      "INTU",
+      "AMD",
+      "QCOM",
+      "AMZN",
+      "GOOGL",
+      "META",
+      "AAPL",
+      "TSLA",
+      "INTC",
+      "IBM",
+      "SNOW",
+      "PLTR",
+      "PANW"
+    ]
+  },
+  "paths": {
+    "raw_submissions": "data/raw/sec_submissions",
+    "raw_html": "data/raw/filings_html",
+    "interim_manifests": "data/interim/manifests",
+    "interim_batches": "data/interim/batches",
+    "interim_sections": "data/interim/sections",
+    "candidate_chunks": "data/interim/candidate_chunks"
+  },
+  "prefiltering": {
+    "ai_keywords": [
+      "artificial intelligence",
+      "generative ai",
+      "gen ai",
+      "machine learning",
+      "large language model",
+      "llm",
+      "deep learning",
+      "natural language processing",
+      "predictive analytics",
+      "algorithmic",
+      "automation",
+      "computer vision",
+      "neural network"
+    ],
+    "false_positives": [
+      "adobe illustrator",
+      "appreciation",
+      "said",
+      "paid"
+    ]
+  }
+}
