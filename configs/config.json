@@ -55,6 +55,7 @@
   },
   "prefiltering": {
     "ai_keywords": [
+      "ai",
       "artificial intelligence",
       "generative ai",
       "gen ai",
@@ -67,7 +68,14 @@
       "algorithmic",
       "automation",
       "computer vision",
-      "neural network"
+      "neural network",
+      "openai",
+      "anthropic",
+      "claude",
+      "deepseek",
+      "chatgpt",
+      "copilot",
+      "gemini"
     ],
     "false_positives": [
       "adobe illustrator",

@@ -94,10 +94,10 @@ AI Mention Prefiltering
     ↓
 Candidate Chunking
     ↓
-    ├── 07_score_with_rules.py (hard text rules: phrases/words/patterns, no LLM)
+    ├── 07_extract_bow_features.py (bag-of-words / presence feature extraction, no LLM)
     └── 08_run_llm_classifier.py (direct prompt on chunk with pydantic_ai, outputs booleans)
     ↓
-09_score_with_llm_booleans.py (aggregates LLM booleans + hard rules for further feature engineering)
+09_score_with_llm_booleans.py (aggregates LLM booleans + BoW features for further feature engineering)
     ↓
 10_build_features.py (generates the final panel parquet for analysis)
     ↓
@@ -140,7 +140,7 @@ ai_disclosure_project/
 │   ├── 04_extract_sections.py
 │   ├── 05_prefilter_ai_mentions.py
 │   ├── 06_chunk_candidates.py
-│   ├── 07_score_with_rules.py
+│   ├── 07_extract_bow_features.py
 │   ├── 08_run_llm_classifier.py
 │   ├── 09_score_with_llm_booleans.py
 │   ├── 10_build_features.py
@@ -231,24 +231,57 @@ Only text that survives prefiltering.
 | rule_score | float |
 | text_hash | string |
 
-## 6.5 Hard Rule Outputs
+## 6.5 Bag-of-Words and Presence Features
 
-Deterministic binary flags extracted from text patterns (no LLM usage).
+Deterministic binary flags, word counts, and ratio/formula features extracted from text patterns (no LLM usage).
 
-**File:** `ai_disclosure_rules.parquet`
+**File:** `ai_disclosure_bow_features.parquet`
 
 | Column | Type | Description |
 |---|---|---|
 | chunk_id | string | Unique identifier for candidate chunk |
 | has_board_oversight | bool | true if matching board oversight keywords |
 | has_audit_committee | bool | true if matching audit committee keywords |
+| has_ethics_policy | bool | true if matching ethics/responsible AI policies |
+| has_compliance | bool | true if matching compliance or internal controls |
+| has_risk_factor | bool | true if matching risk language |
+| has_regulatory_risk | bool | true if matching regulatory risk indicators |
+| has_cyber_privacy_risk | bool | true if matching privacy/cybersecurity risk |
+| has_ethics_bias_risk | bool | true if matching model bias or toxicity risk |
+| has_ip_copyright_risk | bool | true if matching copyright/patent infringement risk |
+| has_supply_infra_risk | bool | true if matching supply or energy constraint risk |
 | has_vendor_nvidia | bool | true if Nvidia is mentioned |
 | has_vendor_openai | bool | true if OpenAI is mentioned |
 | has_vendor_microsoft | bool | true if Microsoft is mentioned |
 | has_vendor_google | bool | true if Google is mentioned |
 | has_vendor_deepseek | bool | true if DeepSeek is mentioned |
+| has_vendor_amazon | bool | true if Amazon is mentioned |
+| has_vendor_meta | bool | true if Meta is mentioned |
+| has_vendor_anthropic | bool | true if Anthropic is mentioned |
+| has_vendor_amd | bool | true if AMD is mentioned |
 | has_metric_percentage | bool | true if percentage signs/figures are present |
 | has_metric_dollar | bool | true if dollar signs/amounts are present |
+| has_specific_product | bool | true if specific AI product is mentioned |
+| has_deployment_verb | bool | true if deployment verb is mentioned |
+| has_model_training | bool | true if model training is mentioned |
+| has_compute_infra | bool | true if compute infrastructure is mentioned |
+| has_proprietary_data | bool | true if proprietary data is mentioned |
+| has_workforce_talent | bool | true if talent/hiring is mentioned |
+| has_partnership | bool | true if partnerships/alliances are mentioned |
+| has_customer_facing | bool | true if customer facing agents are mentioned |
+| has_safety_critical | bool | true if safety critical systems are mentioned |
+| has_data_licensing | bool | true if data licensing/scraping is mentioned |
+| count_total_words | int | total words count |
+| count_vague_words | int | count of vague/marketing words |
+| count_specific_words | int | count of specific/technical words |
+| count_ai_mentions | int | count of AI mentions |
+| ratio_vague_words | float | count_vague_words / count_total_words |
+| ratio_specific_words | float | count_specific_words / count_total_words |
+| ratio_ai_mentions | float | count_ai_mentions / count_total_words |
+| vagueness_ratio | float | ratio of vague to specific words |
+| specificity_score | float | specificity density score |
+| total_risk_indicators_count | int | count of distinct risk indicators |
+| total_governance_indicators_count | int | count of distinct governance indicators |
 
 ## 6.6 LLM Classification Outputs
 
@@ -461,18 +494,17 @@ Advantages:
 - minimizes tokens
 - avoids irrelevant filing content
 
-## 7.8 `07_score_with_rules.py` — Rule-Based Tagger (Hard Rules)
+## 7.8 `07_extract_bow_features.py` — Bag-of-Words and Presence Feature Extractor
 
-**Purpose**: Apply deterministic pattern-matching heuristics on the raw chunk text *before* and *independently* of any LLM calls. Chunks do NOT go to the LLM during this step.
+**Purpose**: Apply deterministic pattern-matching heuristics, word counts, and ratios on the raw chunk text *before* and *independently* of any LLM calls. Chunks do NOT go to the LLM during this step.
 
-**Phrase & Pattern Existence (Super Important)**:
-This script relies heavily on high-performance regex and exact phrase matching to search for specific topics. Rather than querying the LLM for simple keyword detection, we extract features deterministically:
-* **Specific Phrases**: e.g., *"board oversight"*, *"audit committee"*, *"data security policy"*, *"risk assessment"*.
-* **Specific Vendors/Models**: e.g., *Microsoft, OpenAI, ChatGPT, Nvidia, Google, Claude, Gemini, DeepSeek*.
-* **Numeric Metrics**: Presence of dollar amounts, percentages, or budget/financial figures.
-* **Deployment Verbs**: *deployed, integrated, launched, rolling out, implemented*.
+**Phased Feature Extraction**:
+1. **Phase 1: Boolean / Presences**: Identifies if specific phrases, vendors, metrics, deployment verbs, or operational concepts exist in the text.
+2. **Phase 2: Counts**: Computes total word counts, vague words, specific/technical words, and AI mentions.
+3. **Phase 3: Ratios**: Normalizes word counts by calculating ratios (e.g., ratio of vague words to total words).
+4. **Phase 4: Formulas / Scores**: Computes vagueness ratio, specificity score, and total distinct risk and governance indicators.
 
-These rules produce queryable boolean columns in `ai_disclosure_rules.parquet`.
+These features are written to `ai_disclosure_bow_features.parquet`.
 
 ## 7.9 `08_run_llm_classifier.py` — LLM Extractor
 
@@ -488,13 +520,13 @@ The script itself manages its own backlog dynamically:
 
 ## 7.10 `09_score_with_llm_booleans.py` — Combined Scoring
 
-**Purpose**: Aggregate and engineer downstream features by combining the outputs of the hard rules (`07_score_with_rules.py`) and the LLM booleans (`08_run_llm_classifier.py`).
+**Purpose**: Aggregate and engineer downstream features by combining the outputs of the Bag-of-Words features (`07_extract_bow_features.py`) and the LLM booleans (`08_run_llm_classifier.py`).
 
 **Responsibilities**:
-- Read `ai_disclosure_rules.parquet` and `ai_disclosure_mentions.parquet` and join them on `chunk_id`.
-- Implement logical combinations (e.g. if `is_ai_related` from LLM is True AND `has_phrase_board_oversight` from hard rules is True, then label as high-level governance).
+- Read `ai_disclosure_bow_features.parquet` and `ai_disclosure_mentions.parquet` and join them on `chunk_id`.
+- Implement logical combinations (e.g. if `is_ai_related` from LLM is True AND `has_board_oversight` from BoW is True, then label as high-level governance).
 - Compute composite specificity, risk, governance, and promotional scores.
-- Output the combined labeled chunks to `ai_scored_chunks.parquet`.
+- Output the combined labeled chunks to `ai_scored_chunks.parquet`, retaining all extracted BoW features.
 
 ## 7.11 `10_build_features.py` — Feature Builder
 

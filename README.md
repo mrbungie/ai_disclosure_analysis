@@ -40,11 +40,11 @@ A [Makefile](file:///Users/goviedb/Development/mib_tesis_ai_disclosure/Makefile)
   make run-pipeline
   ```
   Runs the prefiltering and candidate chunking scripts sequentially.
-* **Run Rule-Based Scoring (Script 07)**:
+* **Run Bag-of-Words Feature Extraction (Script 07)**:
   ```bash
-  make run-rules
+  make run-bow
   ```
-  Applies deterministic pattern-matching regex rules to raw candidate chunks (outputting to `ai_disclosure_rules.parquet`).
+  Applies multi-phase deterministic pattern matching, word counts, and ratio/formula calculations to candidate chunks (outputting to `ai_disclosure_bow_features.parquet`).
 * **Run LLM Extraction (Script 08)**:
   ```bash
   make run-llm ARGS="--max-jobs 20 --concurrency 1 --delay 2.0"
