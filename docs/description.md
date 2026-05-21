@@ -94,9 +94,9 @@ AI Mention Prefiltering
     ↓
 Candidate Chunking
     ↓
-Rule-Based Scoring
+LLM Structured Classification (pydantic_ai boolean outputs)
     ↓
-Cheap LLM Classification
+Rule-Based Feature Extraction (existence heuristics on text & LLM output)
     ↓
 Feature Aggregation
     ↓
@@ -139,12 +139,11 @@ ai_disclosure_project/
 │   ├── 04_extract_sections.py
 │   ├── 05_prefilter_ai_mentions.py
 │   ├── 06_chunk_candidates.py
-│   ├── 07_score_with_rules.py
-│   ├── 08_run_cheap_llm_classifier.py
-│   ├── 09_validate_llm_outputs.py
-│   ├── 10_build_features.py
-│   ├── 11_cluster_archetypes.py
-│   └── 12_event_study_panel.py
+│   ├── 07_run_llm_classifier.py
+│   ├── 08_score_with_rules.py
+│   ├── 09_build_features.py
+│   ├── 10_cluster_archetypes.py
+│   └── 11_event_study_panel.py
 │
 ├── prompts/
 ├── configs/
@@ -232,25 +231,24 @@ Only text that survives prefiltering.
 
 ## 6.5 LLM Classification Outputs
 
-LLM/rule-labeled chunks.
+Structured binary flags extracted via LLMs using `pydantic_ai`. Every output is represented by boolean columns, making the classification directly queryable with SQL/DuckDB.
 
 **File:** `ai_disclosure_mentions.parquet`
 
-| Column | Type |
-|---|---|
-| chunk_id | string |
-| is_ai_related | bool |
-| is_substantive | bool |
-| is_promotional | bool |
-| is_risk_related | bool |
-| is_governance_related | bool |
-| specificity_score | int |
-| operational_grounding | int |
-| promotional_score | int |
-| governance_score | int |
-| risk_score | int |
-| confidence | float |
-| rationale_short | string |
+| Column | Type | Description |
+|---|---|---|
+| chunk_id | string | Unique identifier for candidate chunk |
+| is_ai_related | bool | true if text relates to artificial intelligence / machine learning |
+| is_substantive | bool | true if the mention has concrete details vs boilerplate |
+| is_promotional | bool | true if it focuses on generic/marketing marketing claims |
+| is_risk_related | bool | true if discussing risk factors or potential issues |
+| is_governance_related | bool | true if mentioning policies, board, or oversight committees |
+| mentions_copilot | bool | true if specifically mentioning Copilot, assistant tools |
+| mentions_cloud | bool | true if mentioning cloud computing providers or infra |
+| mentions_vendor | bool | true if mentioning third-party vendors or external models |
+| mentions_training | bool | true if mentioning model training or dataset curation |
+| is_financial_impact | bool | true if discussing revenues, costs, or financial returns of AI |
+| rationale_short | string | Short rationale explaining the classification decision |
 
 ## 6.6 Firm-Year Features
 
@@ -427,64 +425,42 @@ Advantages:
 - minimizes tokens
 - avoids irrelevant filing content
 
-## 7.8 `07_score_with_rules.py` — Rule-Based Scoring
+## 7.8 `07_run_llm_classifier.py` — LLM Classification
 
-**Purpose:** Avoid unnecessary LLM calls. Only send ambiguous/high-value chunks to the LLM.
+**Purpose**: Execute structured semantic classification using LLM models via `pydantic_ai`. Chunks are passed directly to the LLM from chunking, returning a JSON output containing a large set of boolean flags.
 
-**Specificity signals (positive):**
+**Tooling & Schema**: Powered by `pydantic_ai` to enforce structured JSON outputs mapping to a rich set of boolean fields (see schema in [Section 6.5](#65-llm-classification-outputs)). This ensures all LLM classifications are stored as strongly-typed boolean columns in Parquet, making them directly queryable with SQL/DuckDB.
 
-- Named products or platforms
-- Dollar amounts
-- Customer segment references
-- Named business process
-- Named model/vendor
-- Deployment verbs: *implemented, deployed, integrated, launched*
+**Fault Tolerance, Job Queueing & Resumability**: 
+There is no separate validation/retry script (such as a separate validation stage `09`). Instead:
+1. The classification script itself manages its own backlog dynamically.
+2. On execution, it queries the database/Parquet file to identify candidate chunks that do not yet have LLM classification outputs. These are treated as outstanding jobs.
+3. If an API call fails, JSON parsing fails, or the script is interrupted, the pipeline logs the error/telemetry and proceeds.
+4. The classifier can be run iteratively (e.g., in a loop or scheduled cron) until the number of pending rows converges to exactly 0.
 
-**Promotional signals:**
+## 7.9 `08_score_with_rules.py` — Rule-Based Feature Extraction
 
-- Words like *transform, revolutionize, leading, cutting-edge, unlock, next-generation*
-- No concrete use case nearby
+**Purpose**: Apply deterministic pattern-matching heuristics subsequently over both the raw chunk text and the structured LLM classification results to extract secondary features.
 
-**Governance/risk signals:**
+**Pseudo-Parallel Execution Option**:
+While the primary pipeline executes rules *subsequently* to the LLM (taking advantage of both raw text and LLM classification booleans), the design supports a *pseudo-parallel* execution mode:
+* Some simple rules (e.g. existence of specific phrases or words) can run directly on raw candidate chunks, bypassing the LLM step entirely and feeding directly into downstream feature aggregation (`09`) and clustering (`10`).
+* Other rules run subsequently on chunks that have been processed by the LLM.
 
-- Words like *board, oversight, policy, controls, privacy, cybersecurity, model risk*
+**Phrase & Pattern Existence (Super Important)**:
+This script relies heavily on high-performance regex and exact phrase matching to search for specific topics. Rather than querying the LLM for simple keyword detection, we extract features deterministically:
+* **Specific Phrases**: e.g., *"board oversight"*, *"audit committee"*, *"data security policy"*, *"risk assessment"*.
+* **Specific Vendors/Models**: e.g., *Microsoft, OpenAI, ChatGPT, Nvidia, Google, Claude, Gemini, DeepSeek*.
+* **Numeric Metrics**: Presence of dollar amounts, percentages, or budget/financial figures.
+* **Deployment Verbs**: *deployed, integrated, launched, rolling out, implemented*.
 
-## 7.9 `08_run_cheap_llm_classifier.py` — LLM Classification
+These rules produce additional queryable boolean columns in a parallel table (`ai_disclosure_rules.parquet` or combined manifest) that enrich the queryable dataset.
 
-Use a cheap model for structured classification. Use cheap models first; escalate only uncertain cases.
-
-Prompt should return only JSON:
-
-```json
-{
-  "is_ai_related": true,
-  "disclosure_type": "operational | promotional | risk | governance | financial | unclear",
-  "specificity_score": 1,
-  "operational_grounding": 1,
-  "promotional_score": 1,
-  "risk_score": 1,
-  "governance_score": 1,
-  "confidence": 0.82,
-  "rationale_short": "Mentions AI-enabled customer support but gives no implementation details."
-}
-```
-
-## 7.10 `09_validate_llm_outputs.py` — Validation Layer
-
-Responsibilities:
-
-- Schema validation
-- Malformed JSON detection
-- Retry invalid outputs
-- Manual sample auditing
-
-Recommended: manual labeling benchmark of **100–200 chunks**, comparing LLM labels vs. your own to calculate agreement.
-
-## 7.11 `10_build_features.py` — Feature Builder
+## 7.10 `09_build_features.py` — Feature Builder
 
 Transforms chunk-level outputs into firm-quarter, firm-year, and industry-level feature vectors.
 
-## 7.12 `11_cluster_archetypes.py` — Clustering Pipeline
+## 7.11 `10_cluster_archetypes.py` — Clustering Pipeline
 
 | Task | Methods |
 |---|---|
@@ -500,7 +476,7 @@ Expected archetypes:
 - Infrastructure-heavy AI firms
 - Speculative AI narrators
 
-## 7.13 `12_event_study_panel.py` — Panel / Event Study Pipeline
+## 7.12 `11_event_study_panel.py` — Panel / Event Study Pipeline
 
 Supports:
 
@@ -549,11 +525,10 @@ Cache everything using `hash(chunk_text)` as `text_hash` — never classify the 
 
 ## 8.4 Multi-Stage Inference
 
-**Stage 1 — Rules only:** Is this probably AI-related?
-
-**Stage 2 — Cheap LLM:** Classify dimensions.
-
-**Stage 3 — Better model:** Only for uncertain/low-confidence cases.
+**Stage 1 — Prefiltered Candidates**: Filter paragraphs using the broad `05_prefilter_ai_mentions.py` regex checks.
+**Stage 2 — Structured LLM (`pydantic_ai`)**: Query a cheap LLM to extract boolean semantic flags for each chunk. If parsing fails, the job remains pending in the database to be retried on subsequent pipeline iterations.
+**Stage 3 — Heuristics & Pattern Matching (`08_score_with_rules.py`)**: Run deterministic regex rules and phrase-existence checks (specific vendors, board phrases, numeric indicators) directly over raw text and LLM JSON outputs to enrich the feature space.
+**Stage 4 — Eventually Consistent Resolution**: Iterate classification runs until remaining jobs for LLM labeling drop to 0.
 
 ---
 
