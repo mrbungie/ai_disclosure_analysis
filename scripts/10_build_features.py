@@ -2,7 +2,11 @@ import os
 import json
 import pandas as pd
 import numpy as np
+import warnings
 from pathlib import Path
+
+# Suppress PerformanceWarning due to working with highly wide DataFrames
+warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
 try:
     import pipeline_logger
@@ -54,91 +58,165 @@ def main():
             "is_risk_related", "is_governance_related", "bow_sentiment_score", "sentiment"
         ])
         
-    # Extract year from filing_manifest to build complete panel backbone
-    manifest_df["year"] = pd.to_datetime(manifest_df["filing_date"]).dt.year
+    import duckdb
+    con = duckdb.connect()
     
-    # Keep unique firm-years from manifest
-    firm_years = manifest_df[["ticker", "year"]].drop_duplicates().copy()
-    
-    # Calculate chunk-level aggregates per firm-year
-    # Convert dates and extract year in scored chunks
-    if len(scored_chunks_df) > 0:
-        scored_chunks_df["year"] = pd.to_datetime(scored_chunks_df["filing_date"]).dt.year
+    # Check if scored chunks exist
+    if scored_chunks_path.exists() and os.path.getsize(scored_chunks_path) > 0:
+        # Get all has_ columns dynamically
+        cols_info = con.execute(f"DESCRIBE SELECT * FROM read_parquet('{scored_chunks_path}')").df()
+        has_cols = [row['column_name'] for idx, row in cols_info.iterrows() if row['column_name'].startswith('has_') and row['column_name'] != 'has_ai_disclosure']
         
-        # Map sentiment strings to numeric values
-        sentiment_map = {"Positive": 1, "Neutral": 0, "Negative": -1, "Mixed": 0}
-        sentiment_col = scored_chunks_df["sentiment"] if "sentiment" in scored_chunks_df.columns else pd.Series("Neutral", index=scored_chunks_df.index)
-        scored_chunks_df["llm_sentiment_numeric"] = sentiment_col.map(sentiment_map).fillna(0)
-        
-        # Ensure bow_sentiment_score exists
-        bow_sent_col = scored_chunks_df["bow_sentiment_score"] if "bow_sentiment_score" in scored_chunks_df.columns else pd.Series(0.0, index=scored_chunks_df.index)
-        scored_chunks_df["bow_sentiment_score_filled"] = bow_sent_col.fillna(0.0)
-        
-        # Group by ticker, year
-        grouped = scored_chunks_df.groupby(["ticker", "year"])
-        
-        # Aggregations
-        aggregates = pd.DataFrame({
-            "ai_mentions_count": grouped.apply(lambda g: int(g["has_ai_disclosure"].sum())),
-            "avg_specificity": grouped["final_specificity"].mean(),
-            "avg_operational_grounding": grouped["is_substantive"].mean().astype(float),
-            "avg_promotional_score": grouped["final_promotional_score"].mean(),
-            "avg_risk_score": grouped["final_risk_score"].mean(),
-            "avg_governance_score": grouped["final_governance_score"].mean(),
+        # Build SQL parts for has_ cols
+        inner_selects = []
+        outer_selects = []
+        for col in has_cols:
+            share_name = f"share_{col[4:]}"
+            inner_selects.append(f"AVG(CASE WHEN {col} THEN 1.0 ELSE 0.0 END) as {share_name}")
+            outer_selects.append(f"COALESCE(c.{share_name}, 0.0) as {share_name}")
             
-            # Sentiment averages
-            "avg_bow_sentiment": grouped["bow_sentiment_score_filled"].mean(),
-            "avg_llm_sentiment": grouped["llm_sentiment_numeric"].mean(),
+        inner_select_str = ",\n        " + ",\n        ".join(inner_selects) if inner_selects else ""
+        outer_select_str = ",\n    " + ",\n    ".join(outer_selects) if outer_selects else ""
+        
+        # SQL Query to build complete panel backbone and aggregate scored chunks
+        sql_query = f"""
+        WITH backbone AS (
+            SELECT DISTINCT 
+                ticker,
+                year(CAST(filing_date AS DATE)) as year
+            FROM read_parquet('{manifest_path}')
+        ),
+        chunk_aggregates AS (
+            SELECT
+                ticker,
+                year(CAST(filing_date AS DATE)) as year,
+                SUM(CASE WHEN has_ai_disclosure THEN 1 ELSE 0 END) as ai_mentions_count,
+                AVG(final_specificity) as avg_specificity,
+                AVG(CASE WHEN is_substantive THEN 1.0 ELSE 0.0 END) as avg_operational_grounding,
+                AVG(CASE WHEN is_substantive THEN 1.0 ELSE 0.0 END) as share_substantive,
+                AVG(final_promotional_score) as avg_promotional_score,
+                AVG(final_risk_score) as avg_risk_score,
+                AVG(final_governance_score) as avg_governance_score,
+                AVG(COALESCE(bow_sentiment_score, 0.0)) as avg_bow_sentiment,
+                AVG(CASE sentiment WHEN 'Positive' THEN 1.0 WHEN 'Negative' THEN -1.0 ELSE 0.0 END) as avg_llm_sentiment,
+                AVG(CASE WHEN is_promotional THEN 1.0 ELSE 0.0 END) as share_promotional,
+                AVG(CASE WHEN is_governance_related THEN 1.0 ELSE 0.0 END) as share_governance,
+                AVG(CASE WHEN is_risk_related THEN 1.0 ELSE 0.0 END) as share_risk,
+                
+                -- LLM-derived aggregates
+                AVG(CASE WHEN llm_is_ai_related THEN 1.0 ELSE 0.0 END) as share_llm_is_ai_related,
+                AVG(CASE WHEN llm_is_substantive THEN 1.0 ELSE 0.0 END) as share_llm_is_substantive,
+                AVG(CASE WHEN llm_is_promotional THEN 1.0 ELSE 0.0 END) as share_llm_is_promotional,
+                AVG(CASE WHEN llm_is_risk_related THEN 1.0 ELSE 0.0 END) as share_llm_is_risk_related,
+                AVG(CASE WHEN llm_is_governance_related THEN 1.0 ELSE 0.0 END) as share_llm_is_governance,
+                AVG(CASE WHEN llm_is_financial_impact THEN 1.0 ELSE 0.0 END) as share_llm_is_financial_impact,
+                AVG(CASE WHEN llm_mentions_training THEN 1.0 ELSE 0.0 END) as share_llm_mentions_training,
+                AVG(CASE WHEN llm_mentions_vendor THEN 1.0 ELSE 0.0 END) as share_llm_mentions_vendor,
+                AVG(CASE WHEN llm_mentions_cloud THEN 1.0 ELSE 0.0 END) as share_llm_mentions_cloud,
+                AVG(CASE WHEN llm_mentions_copilot THEN 1.0 ELSE 0.0 END) as share_llm_mentions_copilot,
+                
+                -- Section location aggregates
+                AVG(CASE WHEN section_name = 'Item 1' THEN 1.0 ELSE 0.0 END) as sec_pct_business,
+                AVG(CASE WHEN section_name = 'Item 7' THEN 1.0 ELSE 0.0 END) as sec_pct_mda,
+                AVG(CASE WHEN section_name = 'Item 1A' THEN 1.0 ELSE 0.0 END) as sec_pct_risk_factors,
+                AVG(CASE WHEN section_name NOT IN ('Item 1', 'Item 1A', 'Item 7') THEN 1.0 ELSE 0.0 END) as sec_pct_other,
+                
+                -- Use case diversity
+                AVG(count_ai_use_case_types) as avg_count_ai_use_case_types,
+
+                -- Ratio features not captured by has_* scan
+                AVG(COALESCE(ratio_vague_words, 0.0)) as avg_ratio_vague_words,
+                AVG(COALESCE(ratio_forward_to_realized, 0.5)) as avg_ratio_forward_to_realized
+                {inner_select_str}
+            FROM read_parquet('{scored_chunks_path}')
+            WHERE has_ai_disclosure = true
+            GROUP BY ticker, year
+        )
+        SELECT
+            b.ticker,
+            b.year,
+            COALESCE(u.industry_group, 'Unclassified') as industry_group,
+            CAST(COALESCE(c.ai_mentions_count, 0) AS INTEGER) as ai_mentions_count,
+            COALESCE(c.avg_specificity, 0.0) as avg_specificity,
+            COALESCE(c.avg_operational_grounding, 0.0) as avg_operational_grounding,
+            COALESCE(c.share_substantive, 0.0) as share_substantive,
+            COALESCE(c.avg_promotional_score, 0.0) as avg_promotional_score,
+            COALESCE(c.avg_risk_score, 0.0) as avg_risk_score,
+            COALESCE(c.avg_governance_score, 0.0) as avg_governance_score,
+            COALESCE(c.avg_bow_sentiment, 0.0) as avg_bow_sentiment,
+            COALESCE(c.avg_llm_sentiment, 0.0) as avg_llm_sentiment,
+            COALESCE(c.share_promotional, 0.0) as share_promotional,
+            COALESCE(c.share_governance, 0.0) as share_governance,
+            COALESCE(c.share_risk, 0.0) as share_risk,
             
-            # Shares
-            "share_promotional": grouped.apply(lambda g: float(g["is_promotional"].mean())),
-            "share_substantive": grouped.apply(lambda g: float(g["is_substantive"].mean())),
-            "share_governance": grouped.apply(lambda g: float(g["is_governance_related"].mean())),
-            "share_risk": grouped.apply(lambda g: float(g["is_risk_related"].mean()))
-        }).reset_index()
+            -- LLM aggregates coalesced
+            COALESCE(c.share_llm_is_ai_related, 0.0) as share_llm_is_ai_related,
+            COALESCE(c.share_llm_is_substantive, 0.0) as share_llm_is_substantive,
+            COALESCE(c.share_llm_is_promotional, 0.0) as share_llm_is_promotional,
+            COALESCE(c.share_llm_is_risk_related, 0.0) as share_llm_is_risk_related,
+            COALESCE(c.share_llm_is_governance, 0.0) as share_llm_is_governance,
+            COALESCE(c.share_llm_is_financial_impact, 0.0) as share_llm_is_financial_impact,
+            COALESCE(c.share_llm_mentions_training, 0.0) as share_llm_mentions_training,
+            COALESCE(c.share_llm_mentions_vendor, 0.0) as share_llm_mentions_vendor,
+            COALESCE(c.share_llm_mentions_cloud, 0.0) as share_llm_mentions_cloud,
+            COALESCE(c.share_llm_mentions_copilot, 0.0) as share_llm_mentions_copilot,
+            
+            -- Section location aggregates coalesced
+            COALESCE(c.sec_pct_business, 0.0) as sec_pct_business,
+            COALESCE(c.sec_pct_mda, 0.0) as sec_pct_mda,
+            COALESCE(c.sec_pct_risk_factors, 0.0) as sec_pct_risk_factors,
+            COALESCE(c.sec_pct_other, 0.0) as sec_pct_other,
+            
+            -- Use case diversity coalesced
+            COALESCE(c.avg_count_ai_use_case_types, 0.0) as avg_count_ai_use_case_types,
+
+            -- Ratio features
+            COALESCE(c.avg_ratio_vague_words, 0.0) as avg_ratio_vague_words,
+            COALESCE(c.avg_ratio_forward_to_realized, 0.5) as avg_ratio_forward_to_realized
+            {outer_select_str},
+            (b.year >= 2024) as post_sec_2024,
+            (b.year >= 2025) as post_deepseek
+        FROM backbone b
+        LEFT JOIN chunk_aggregates c ON b.ticker = c.ticker AND b.year = c.year
+        LEFT JOIN read_parquet('{universe_path}') u ON b.ticker = u.ticker
+        ORDER BY b.ticker, b.year;
+        """
+        
+        print("Aggregating scored chunks per firm-year via DuckDB SQL...")
+        panel_df = con.execute(sql_query).df()
     else:
-        aggregates = pd.DataFrame(columns=[
-            "ticker", "year", "ai_mentions_count", "avg_specificity", "avg_operational_grounding",
-            "avg_promotional_score", "avg_risk_score", "avg_governance_score",
-            "avg_bow_sentiment", "avg_llm_sentiment",
-            "share_promotional", "share_substantive", "share_governance", "share_risk"
-        ])
+        print("Warning: ai_scored_chunks.parquet not found or empty. Creating empty features panel.")
+        manifest_df["year"] = pd.to_datetime(manifest_df["filing_date"]).dt.year
+        firm_years = manifest_df[["ticker", "year"]].drop_duplicates().copy()
+        panel_df = firm_years.merge(universe_df[["ticker", "industry_group"]], on="ticker", how="left")
+        panel_df["industry_group"] = panel_df["industry_group"].fillna("Unclassified")
         
-    # Merge panel backbone with aggregates
-    panel_df = firm_years.merge(aggregates, on=["ticker", "year"], how="left")
+        metrics = [
+            "ai_mentions_count", "avg_specificity", "avg_operational_grounding", "share_substantive",
+            "avg_promotional_score", "avg_risk_score", "avg_governance_score", "avg_bow_sentiment",
+            "avg_llm_sentiment", "share_promotional", "share_governance", "share_risk",
+            "share_llm_is_ai_related", "share_llm_is_substantive", "share_llm_is_promotional",
+            "share_llm_is_risk_related", "share_llm_is_governance", "share_llm_is_financial_impact",
+            "share_llm_mentions_training", "share_llm_mentions_vendor", "share_llm_mentions_cloud",
+            "share_llm_mentions_copilot", "sec_pct_business", "sec_pct_mda", "sec_pct_risk_factors",
+            "sec_pct_other", "avg_count_ai_use_case_types",
+            "share_financial_quantification", "share_ai_use_case_specific", "share_competitor_ai_mention",
+            "share_deepseek_impact", "share_ai_model_name"
+        ]
+        for met in metrics:
+            panel_df[met] = 0 if met == "ai_mentions_count" else 0.0
+            
+        panel_df["post_sec_2024"] = panel_df["year"] >= 2024
+        panel_df["post_deepseek"] = panel_df["year"] >= 2025
+
+    # Ensure correct column ordering dynamically
+    base_cols = ["ticker", "year", "industry_group", "ai_mentions_count"]
+    flags = ["post_sec_2024", "post_deepseek"]
+    metric_cols = [c for c in panel_df.columns if c not in base_cols + flags]
+    metric_cols.sort()
     
-    # Fill NaN values for firms/years that had no candidate chunks (which means 0 mentions, 0 scores)
-    fill_cols = [
-        "ai_mentions_count", "avg_specificity", "avg_operational_grounding",
-        "avg_promotional_score", "avg_risk_score", "avg_governance_score",
-        "avg_bow_sentiment", "avg_llm_sentiment",
-        "share_promotional", "share_substantive", "share_governance", "share_risk"
-    ]
-    for col in fill_cols:
-        panel_df[col] = panel_df[col].fillna(0)
-        
-    # Cast ai_mentions_count to integer
-    panel_df["ai_mentions_count"] = panel_df["ai_mentions_count"].astype(int)
-    
-    # Merge with firm universe to get industry group
-    panel_df = panel_df.merge(universe_df[["ticker", "industry_group"]], on="ticker", how="left")
-    
-    # If a ticker is not in universe, set to Unclassified
-    panel_df["industry_group"] = panel_df["industry_group"].fillna("Unclassified")
-    
-    # Compute event-study and time flags
-    panel_df["post_sec_2024"] = panel_df["year"] >= 2024
-    panel_df["post_deepseek"] = panel_df["year"] >= 2025
-    
-    # Ensure correct column ordering
-    cols = [
-        "ticker", "year", "industry_group", "ai_mentions_count", "avg_specificity", 
-        "avg_operational_grounding", "avg_promotional_score", "avg_risk_score", 
-        "avg_governance_score", "avg_bow_sentiment", "avg_llm_sentiment",
-        "share_promotional", "share_substantive", "share_governance", "share_risk",
-        "post_sec_2024", "post_deepseek"
-    ]
-    panel_df = panel_df[cols]
+    cols = base_cols + metric_cols + flags
+    panel_df = panel_df[cols].copy()
     
     # Save output
     output_path.parent.mkdir(parents=True, exist_ok=True)
