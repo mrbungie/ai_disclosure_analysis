@@ -1,0 +1,12 @@
+Pipeline Validation Report
+==================================================
+Validation set: 167 chunks
+
+Binary dimensions (LLM as ground truth):
+  is_ai_related                   F1=0.860  P=0.754  R=1.000  Acc=0.754
+  is_substantive                  F1=0.617  P=0.556  R=0.694  Acc=0.814
+  is_promotional                  F1=0.566  P=0.627  R=0.516  Acc=0.707
+  is_risk_related                 F1=0.683  P=0.641  R=0.732  Acc=0.772
+  is_governance_related           F1=0.500  P=1.000  R=0.333  Acc=0.988
+
+Specificity score:  Spearman ρ = 0.399  (p = 0.0000)
