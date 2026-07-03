@@ -378,6 +378,19 @@ For each dimension with both a BoW and LLM proxy, compute chunk-level agreement:
 
 Report κ per dimension. κ < 0.4 means BoW proxy is unreliable for that dimension.
 
+**Known issue — D5 Governance recall:** the independent LLM-judge validation
+(`val_01`/`val_02`, n=167) found `is_governance_related` recall = 0.333 — the
+pipeline's combined BoW+LLM proxy misses roughly 2 of every 3 governance
+mentions the judge flags. Since D5 Governance Maturity and the AI Washing
+Index's Hype Score are exactly the two constructs this dimension most affects,
+`scripts/14_governance_sensitivity.py` reruns the programmatic archetype
+classifier with D5 built from the BoW proxy alone vs. the LLM-only signal
+alone (both already present in `firm_year_features.parquet`, no reclassification
+needed) and reports what share of firm-years change archetype. Run this before
+finalizing cluster assignments or the DiD; if churn is material, either improve
+the governance LLM prompt/recall or report both variants explicitly rather than
+picking one silently.
+
 ### Hand-labelling ground truth
 Label ~150 chunks (25 per archetype post-clustering) on three axes: substantive / promotional / risk.
 Two raters minimum. Compute inter-rater agreement, then precision/recall for both BoW and LLM.
@@ -387,6 +400,27 @@ This justifies the dimension definitions and is standard in content-analysis the
 - Vary k from 3 to 8; report silhouette score and cluster coherence
 - Vary random seed (n=10); report % of firm-year observations with stable archetype assignment
 - Run with BoW-only vs LLM-augmented features; report how many firms change archetype
+- **Threshold justification (programmatic clustering):** the rule-based archetype
+  cutoffs in `scripts/11_cluster_archetypes.py` (`THRESHOLDS`) were set by hand
+  against the empirical dimension distribution — this is the most objectable
+  design choice in the clustering step. `report_threshold_justification()`
+  reports each cutoff's empirical percentile rank (e.g. "D5 >= 0.10 is the Nth
+  percentile of D5 across 658 firm-years") and `run_threshold_sensitivity()`
+  reruns the classifier with every threshold shifted ±10% relative, reporting
+  the share of firm-years that change archetype. Both write to
+  `reports/cluster_threshold_justification.txt` and should be cited directly in
+  the methodology chapter rather than presenting the cutoffs as given.
+
+### DiD power check
+Before running any DiD, `scripts/12_event_study_panel.py::run_power_check()`
+reports distinct-firm counts for each treatment cell actually used in a DiD
+spec (including interactions, e.g. `high_promotional_pre2024 × tech_sector`),
+flagging any cell below `MIN_CELL_FIRMS` (15). With 115 firms across 54 SIC
+groups, industry × year × treatment cells shrink fast — a single-flag
+treatment count can look adequate while the interacted cell used in the actual
+regression is underpowered. See `reports/did_power_check.txt`; simplify the
+treatment definition (drop the interaction) or merge event windows for any
+flagged spec before reporting DiD results from it.
 
 ### SEC 2024 placebo test
 Run the pre/post analysis with a placebo cutoff (e.g., 2022 or 2023).

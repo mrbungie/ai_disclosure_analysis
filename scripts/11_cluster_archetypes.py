@@ -39,6 +39,119 @@ NEW_CLUSTER_NAMES = {
     4: 'Operational Application Adopters'
 }
 
+# Programmatic (rule-based) archetype thresholds.
+#
+# These cutoffs were set by hand against the min-max scaled [0, 1] dimension
+# scores, calibrated by inspecting the empirical distribution of each
+# dimension until the resulting archetype counts matched the qualitative
+# read of a sample of filings (i.e. threshold-setting was iterative and
+# researcher-judged, not derived from an external benchmark or theory alone).
+# This is the single most objectable design choice in the clustering step,
+# so two things are done to make it defensible rather than asserted:
+#   1. `report_threshold_justification()` below reports where each cutoff
+#      falls in the empirical percentile distribution of its dimension, so
+#      "D5 Governance >= 0.10" can be stated as "the Nth percentile of D5
+#      across the panel" rather than a bare magic number.
+#   2. `run_threshold_sensitivity()` reruns the classifier with every
+#      threshold shifted +/-10% (relative) and reports what share of
+#      firm-years change archetype, so the thesis can show cluster
+#      assignments are not a knife-edge artifact of the exact cutoff chosen.
+# Both outputs are written to reports/cluster_threshold_justification.txt
+# and should be cited directly in the methodology chapter.
+THRESHOLDS = {
+    'd5_governance_min':        0.10,   # Governance & Compliance-Focused gate
+    'd1_intensity_min':         0.35,   # Full-Stack AI Pioneers: intensity gate
+    'd3_technical_min':         0.08,   # Full-Stack AI Pioneers: technical OR-branch
+    'd2_operational_min':       0.15,   # Full-Stack AI Pioneers: operational OR-branch
+    'd9_substantive_min_fsp':   0.30,   # Full-Stack AI Pioneers: substantive-section gate
+    'd9_substantive_min_oaa':   0.50,   # Operational Application Adopters gate
+}
+
+def classify_row(row, thresholds):
+    """Programmatic (rule-based) archetype assignment. See THRESHOLDS for cutoff provenance."""
+    # 1. Non-AI Disclosers
+    if row['ai_mentions_count'] == 0:
+        return 0  # 'Non-AI Disclosers'
+
+    # 2. Governance & Compliance-Focused
+    if row['D5 Governance'] >= thresholds['d5_governance_min']:
+        return 1  # 'Governance & Compliance-Focused'
+
+    # 3. Full-Stack AI Pioneers
+    if (row['D1 AI Intensity'] >= thresholds['d1_intensity_min']
+            and (row['D3 Technical'] >= thresholds['d3_technical_min']
+                 or row['D2 Operational'] >= thresholds['d2_operational_min'])
+            and row['D9 Substantive-section'] >= thresholds['d9_substantive_min_fsp']):
+        return 3  # 'Full-Stack AI Pioneers'
+
+    # 4. Operational Application Adopters
+    if row['D9 Substantive-section'] >= thresholds['d9_substantive_min_oaa']:
+        return 4  # 'Operational Application Adopters'
+
+    # 5. Boilerplate Risk-Warners
+    return 2  # 'Boilerplate Risk-Warners'
+
+
+def report_threshold_justification(dims, thresholds, out_path=Path("reports/cluster_threshold_justification.txt")):
+    """
+    Translate each hand-set threshold into its empirical percentile within the
+    panel's dimension distribution, so cutoffs can be cited as "the Nth
+    percentile of D5 across 658 firm-years" rather than bare magic numbers.
+    """
+    dim_lookup = {
+        'd5_governance_min':      'D5 Governance',
+        'd1_intensity_min':       'D1 AI Intensity',
+        'd3_technical_min':       'D3 Technical',
+        'd2_operational_min':     'D2 Operational',
+        'd9_substantive_min_fsp': 'D9 Substantive-section',
+        'd9_substantive_min_oaa': 'D9 Substantive-section',
+    }
+    lines = [
+        "Cluster Threshold Justification",
+        "=" * 50,
+        f"Panel size: {len(dims)} firm-years",
+        "",
+        "Each rule-based cutoff below is reported as its percentile rank in the",
+        "empirical (min-max scaled) distribution of the dimension it gates on.",
+        "",
+    ]
+    for key, cutoff in thresholds.items():
+        dim_col = dim_lookup[key]
+        pct = float((dims[dim_col] <= cutoff).mean() * 100)
+        lines.append(f"  {key:26s} = {cutoff:.2f}  →  {dim_col}: {pct:5.1f}th percentile")
+
+    summary = "\n".join(lines)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(summary)
+    print(f"\n{summary}\n")
+    print(f"Threshold justification written to {out_path}")
+
+
+def run_threshold_sensitivity(df_for_rules, thresholds, shifts=(-0.10, 0.10),
+                               out_path=Path("reports/cluster_threshold_justification.txt")):
+    """
+    Recompute archetype assignment with every threshold shifted +/- `shifts`
+    (relative) and report what share of firm-years change archetype. A large
+    share flipping under a small perturbation would mean cluster assignments
+    are a knife-edge artifact of the exact cutoffs chosen, rather than a
+    stable read of the underlying disclosure pattern.
+    """
+    baseline = df_for_rules.apply(lambda row: classify_row(row, thresholds), axis=1)
+
+    lines = ["", "Threshold Sensitivity (relative shift in all cutoffs)", "=" * 50]
+    for shift in shifts:
+        shifted = {k: v * (1 + shift) for k, v in thresholds.items()}
+        relabeled = df_for_rules.apply(lambda row: classify_row(row, shifted), axis=1)
+        pct_changed = float((baseline != relabeled).mean() * 100)
+        lines.append(f"  {shift:+.0%} shift: {pct_changed:5.1f}% of firm-years change archetype")
+
+    summary = "\n".join(lines)
+    with open(out_path, "a") as f:
+        f.write(summary + "\n")
+    print(summary)
+    print(f"Sensitivity results appended to {out_path}")
+
+
 def load_config():
     config_path = Path("configs/config.json")
     if not config_path.exists():
@@ -163,35 +276,17 @@ def main():
     result = df[['ticker', 'year', 'industry_group', 'post_sec_2024', 'post_deepseek']].copy()
 
     if args.method == "programmatic":
-        # Implement programmatic rule-based classification
-        def classify_row(row):
-            # 1. Non-AI Disclosers
-            if row['ai_mentions_count'] == 0:
-                return 0 # 'Non-AI Disclosers'
-            
-            # 2. Governance & Compliance-Focused
-            if row['D5 Governance'] >= 0.10:
-                return 1 # 'Governance & Compliance-Focused'
-            
-            # 3. Full-Stack AI Pioneers
-            if row['D1 AI Intensity'] >= 0.35 and (row['D3 Technical'] >= 0.08 or row['D2 Operational'] >= 0.15) and row['D9 Substantive-section'] >= 0.30:
-                return 3 # 'Full-Stack AI Pioneers'
-            
-            # 4. Operational Application Adopters
-            if row['D9 Substantive-section'] >= 0.50:
-                return 4 # 'Operational Application Adopters'
-            
-            # 5. Boilerplate Risk-Warners
-            return 2 # 'Boilerplate Risk-Warners'
-
         # Combine df metadata and dimensions to run classification
         df_for_rules = result.copy()
         df_for_rules['ai_mentions_count'] = df['ai_mentions_count']
         for col in dims.columns:
             df_for_rules[col] = dims[col]
 
-        result['cluster'] = df_for_rules.apply(classify_row, axis=1)
+        result['cluster'] = df_for_rules.apply(lambda row: classify_row(row, THRESHOLDS), axis=1)
         result['cluster_name'] = result['cluster'].map(NEW_CLUSTER_NAMES)
+
+        report_threshold_justification(dims, THRESHOLDS)
+        run_threshold_sensitivity(df_for_rules, THRESHOLDS)
     else:
         # Unsupervised Ward clustering
         Z = linkage(X, method='ward')

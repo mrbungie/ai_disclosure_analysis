@@ -34,8 +34,6 @@ dependencies = [
     "nltk>=3.9.4",
     "factor-analyzer>=0.5.1",
     "scikit-learn>=1.7.2",
-    "anthropic>=0.104.0",
-    "claude-code-sdk>=0.0.25",
 ]
 
 [dependency-groups]

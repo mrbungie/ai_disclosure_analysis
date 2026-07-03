@@ -59,6 +59,10 @@ run-validate-compare:
 
 run-validate: run-validate-sample run-validate-compare
 
+run-governance-sensitivity:
+	@echo "Checking D5 Governance sensitivity: BoW-only vs LLM-only (script 14)..."
+	.venv/bin/python scripts/14_governance_sensitivity.py
+
 help:
 	@echo "Available Makefile commands:"
 	@echo "  make test               Run the test suite using unittest"
@@ -75,5 +79,6 @@ help:
 	@echo "  make run-validate-sample  Sample + LLM-label validation chunks (val_01). Pass ARGS='--n 200'."
 	@echo "  make run-validate-compare Compare pipeline vs LLM labels (val_02)"
 	@echo "  make run-validate         Run full validation: sample → label → compare"
+	@echo "  make run-governance-sensitivity  Check D5 archetype stability: BoW-only vs LLM-only (script 14)"
 
 

@@ -42,9 +42,10 @@ SEC EDGAR
   → 09 Combine BoW + LLM (LEFT JOIN, proxies)(ai_scored_chunks.parquet)
   → 10 Build firm-year panel                 (firm_year_features.parquet)
   → 11 Cluster into archetypes                (firm_year_clusters.parquet)
-  → 12 Build event-study / DiD panel          (event_study_panel.parquet)
+  → 12 Build event-study / DiD panel          (event_study_panel.parquet, did_power_check.txt)
   → 13 Factor analysis (validate D1–D9)       (factor_loadings.csv, factor scores)
-  → val_01 / val_02 Sample, hand/LLM-label, and validate pipeline scores
+  → 14 D5 Governance sensitivity check        (governance_sensitivity.txt)
+  → val_01 / val_02 Sample, LLM-judge-label, and validate pipeline scores
 ```
 
 ### 1. Collection and chunking (scripts 00–06)
@@ -85,8 +86,12 @@ D2–D9 feed the clustering feature vector (D1 is excluded — volume dominates 
 
 GMM (BIC-selected k) and HDBSCAN are also fit for schema compatibility/robustness comparison, and a 2D UMAP projection is stored for visualization. Output: `firm_year_clusters.parquet`.
 
+**Threshold provenance.** The programmatic cutoffs (`THRESHOLDS` in the script) were set by hand against the empirical dimension distribution, which is the most objectable design choice in the clustering step. The script therefore also writes `reports/cluster_threshold_justification.txt`, reporting (1) each cutoff's empirical percentile rank within its dimension (e.g. "D5 ≥ 0.10 is the Nth percentile of D5 across 658 firm-years") and (2) a sensitivity check that shifts every threshold ±10% and reports the share of firm-years that change archetype — evidence that the archetypes aren't a knife-edge artifact of the exact cutoffs chosen.
+
 ### 6. Event-study / panel construction (script 12)
 Firm-year features are merged with cluster assignments and enriched with event indicators/windows for three shocks — **ChatGPT release** (2022), **SEC AI-washing guidance** (2024), **DeepSeek emergence** (2025) — plus pre/post flags, event-relative year, firm fixed-effect IDs, and treatment-group flags defined from **2023 pre-period baselines** (high promotional tone, high technical specificity, high defensive framing, tech-sector membership) to avoid post-treatment contamination. Output: `event_study_panel.parquet`, ready for DiD where a treatment/control split is defensible.
+
+**DiD power check.** With 115 firms across 54 SIC groups, industry × year × treatment cells shrink fast, and a single-flag treatment count can look adequate while the interacted cell actually used in a DiD spec (e.g. `high_promotional_pre2024 × tech_sector`) is underpowered. The script reports distinct-firm counts for every treatment cell used in the planned DiD specs (including interactions) to `reports/did_power_check.txt`, flagging any cell below 15 firms — run this and check for warnings before reporting DiD results.
 
 ### 7. Exploratory factor analysis (script 13)
 An empirical check on the hand-built D1–D9 constructs: BoW features are filtered by prevalence (1–99%), tested for factorability (Bartlett's sphericity, KMO), and the number of latent factors is selected via Horn's parallel analysis (100 random-data iterations, actual vs. random eigenvalues). A varimax-rotated maximum-likelihood factor model is then fit, producing loadings, scree plots, a loadings heatmap, and chunk/firm-year factor scores — used to assess whether the researcher-defined dimensions correspond to the data's actual latent structure.
@@ -103,7 +108,7 @@ AWI_norm (bounded)    = Hype / (|Hype| + |Substance| + ε)  ∈ (−1, 1)
 z-scores are computed **within industry_group × year cells**, not across the full panel, so the 2022–2024 AI hype wave itself is not mistaken for washing.
 
 ### 9. Validation (val_01 / val_02)
-Because BoW proxies and LLM labels are both fallible, a third, independent check is layered on top: a stratified sample of ~150–170 chunks (by year × section-group × substantiveness) is labeled by an LLM judge (Claude, via the Agent SDK) acting as approximate ground truth, then compared against the pipeline's own BoW/LLM-combined scores. Current results (`reports/validation_summary.txt`, n=167):
+Because BoW proxies and LLM labels are both fallible, a third, independent check is layered on top: a stratified sample of ~150–170 chunks (by year × section-group × substantiveness) is labeled by an independent LLM judge — a `pydantic_ai` Agent against an OpenAI-compatible endpoint, configured via its own `LLM_JUDGE_*` env vars so the judge model is not the same one used for the pipeline's own classification (script 08's `NVIDIA_*` model) — acting as approximate ground truth, then compared against the pipeline's own BoW/LLM-combined scores. Current results (`reports/validation_summary.txt`, n=167):
 
 | Dimension | F1 | Precision | Recall | Accuracy |
 |---|---|---|---|---|
@@ -114,6 +119,8 @@ Because BoW proxies and LLM labels are both fallible, a third, independent check
 | is_governance_related | 0.500 | 1.000 | 0.333 | 0.988 |
 
 Specificity score vs. LLM-judged specificity: Spearman ρ = 0.399 (p < 0.001). These figures quantify where the deterministic/LLM pipeline proxies are reliable (AI relevance, risk) and where they are noisier (governance recall, promotional tone) — a required input for treating downstream washing claims as findings rather than assertions.
+
+**Governance recall follow-up (script 14).** Recall = 0.333 on `is_governance_related` is a concern precisely because D5 Governance Maturity and the AI Washing Index's Hype Score are the two constructs most exposed to it. `scripts/14_governance_sensitivity.py` reruns the programmatic archetype classifier with D5 built from the BoW proxy alone vs. the LLM-only signal alone (both already present in `firm_year_features.parquet`), reporting the share of firm-years that change archetype and any shift in "Governance & Compliance-Focused" cluster size (`reports/governance_sensitivity.txt`). Run this before finalizing archetypes or the DiD; if churn is material, either improve the governance LLM prompt/recall or report both variants explicitly.
 
 ---
 
@@ -151,7 +158,12 @@ make run-bow                                        # script 07: BoW feature ext
 make run-llm ARGS="--max-jobs 20 --concurrency 1 --delay 2.0"   # script 08: LLM classification
 make run-scoring ARGS="--bow-only"                  # script 09: combined/deterministic scoring
 make run-features                                   # script 10: firm-year panel
-make run-full-pipeline                              # 05 → 10 end to end
+make run-clustering                                 # script 11: programmatic archetypes
+make run-event-study                                # script 12: DiD panel + power check
+make run-factor-analysis                            # script 13: exploratory factor analysis
+make run-governance-sensitivity                     # script 14: D5 BoW-only vs LLM-only sensitivity
+make run-validate ARGS="--n 150"                    # val_01 + val_02: LLM-judge validation
+make run-full-pipeline                              # 05 → 11 end to end
 ```
 
 ## Logging & Diagnostics
