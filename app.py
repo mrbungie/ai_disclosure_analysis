@@ -177,11 +177,12 @@ manifest_path = Path(config["paths"]["interim_manifests"]) / "filing_manifest.pa
 chunks_path = Path(config["paths"]["candidate_chunks"]) / "ai_candidate_chunks.parquet"
 
 # Main Application Tabs
-tab_config, tab_universe, tab1, tab2, tab_logs, tab3 = st.tabs([
+tab_config, tab_universe, tab1, tab2, tab_post, tab_logs, tab3 = st.tabs([
     "⚙️ Configuration",
     "🏢 Universe Management",
     "📂 Discovery & Manifests",
     "🧩 Candidate Chunks",
+    "🔬 Post-Pipeline",
     "📋 Pipeline Logs",
     "📘 Project Architecture"
 ])
@@ -785,6 +786,83 @@ with tab1:
                     st.balloons()
                     st.success("Pipeline ran successfully end-to-end! Chunks are ready in the next tab.")
                     st.rerun()
+
+            # Dangling filings repair
+            st.markdown("---")
+            st.subheader("🔧 Repair Dangling Filings")
+            st.write("Filings that were downloaded but never fully processed through section extraction, prefiltering, or chunking.")
+
+            chunked_accessions: set = set()
+            if chunks_path.exists():
+                try:
+                    chunked_accessions = set(pd.read_parquet(chunks_path)["accession_number"].unique())
+                except Exception:
+                    pass
+
+            dangling_downloaded = manifest_df[
+                (manifest_df["download_status"] == "completed") &
+                (manifest_df["parse_status"] == "pending")
+            ]
+            dangling_parsed = manifest_df[
+                (manifest_df["download_status"] == "completed") &
+                (manifest_df["parse_status"] == "completed") &
+                (manifest_df["prefilter_status"] == "pending")
+            ]
+            # Only "matched" filings should ever produce chunks; "no_matches" are correctly unchunked
+            dangling_prefiltered = manifest_df[
+                (manifest_df["prefilter_status"] == "matched") &
+                (~manifest_df["accession_number"].isin(chunked_accessions))
+            ]
+
+            dang_col1, dang_col2, dang_col3 = st.columns(3)
+            with dang_col1:
+                st.metric("Downloaded, not parsed", len(dangling_downloaded), help="Need steps 04 → 05 → 06")
+            with dang_col2:
+                st.metric("Parsed, not prefiltered", len(dangling_parsed), help="Need steps 05 → 06")
+            with dang_col3:
+                st.metric("Prefiltered, not chunked", len(dangling_prefiltered), help="Need step 06")
+
+            total_dangling = len(dangling_downloaded) + len(dangling_parsed) + len(dangling_prefiltered)
+
+            if total_dangling == 0:
+                st.success("No dangling filings — all downloaded filings are fully chunked.")
+            else:
+                st.warning(f"**{total_dangling}** filings are stuck at an intermediate stage.")
+
+                repair_col1, repair_col2, repair_col3 = st.columns(3)
+                with repair_col1:
+                    if st.button("▶️ Run Extract + Prefilter + Chunk", type="primary", use_container_width=True,
+                                 disabled=(len(dangling_downloaded) == 0), key="repair_04_06"):
+                        for script, desc in [
+                            ("04_extract_sections.py", "Extracting sections..."),
+                            ("05_prefilter_ai_mentions.py", "Prefiltering..."),
+                            ("06_chunk_candidates.py", "Chunking..."),
+                        ]:
+                            ok, _ = run_script(script)
+                            if not ok:
+                                st.error(f"Stopped at {script}")
+                                break
+                        else:
+                            st.rerun()
+                with repair_col2:
+                    if st.button("▶️ Run Prefilter + Chunk", use_container_width=True,
+                                 disabled=(len(dangling_parsed) == 0), key="repair_05_06"):
+                        for script, desc in [
+                            ("05_prefilter_ai_mentions.py", "Prefiltering..."),
+                            ("06_chunk_candidates.py", "Chunking..."),
+                        ]:
+                            ok, _ = run_script(script)
+                            if not ok:
+                                st.error(f"Stopped at {script}")
+                                break
+                        else:
+                            st.rerun()
+                with repair_col3:
+                    if st.button("▶️ Run Chunk Only", use_container_width=True,
+                                 disabled=(len(dangling_prefiltered) == 0), key="repair_06"):
+                        run_script("06_chunk_candidates.py")
+                        st.rerun()
+
         else:
             st.info("💡 Click 'Force-Discover SEC Filings' to pull the list of matching reports from the SEC index.")
 
@@ -832,6 +910,154 @@ with tab2:
                 st.markdown(f"**Firm**: `{row['ticker']}` | **Filing Date**: `{row['filing_date']}` | **Section**: `{row['section_name']}` | **Families**: `{row['keyword_family']}` (Keywords: {row['ai_keyword_count']})")
                 st.text_area(f"Chunk ID: {row['chunk_id']}", value=row["chunk_text"], height=120, disabled=True, key=f"chunk_{idx}")
                 st.markdown("---")
+
+with tab_post:
+    st.subheader("🔬 Post-Pipeline: Feature Extraction & Scoring")
+    st.markdown("Run the downstream feature engineering steps on the candidate chunks already extracted by the pipeline.")
+
+    # Output file paths
+    bow_path = Path(config["paths"]["candidate_chunks"]) / "ai_disclosure_bow_features.parquet"
+    mentions_path = Path(config["paths"]["candidate_chunks"]) / "ai_disclosure_mentions.parquet"
+    scored_path = Path(config["paths"]["candidate_chunks"]) / "ai_scored_chunks.parquet"
+    features_path = Path("data/processed/features/firm_year_features.parquet")
+
+    chunks_exist = chunks_path.exists()
+    if not chunks_exist:
+        st.warning("⚠️ No candidate chunks found. Complete the upstream pipeline (Tab 1) first.")
+    else:
+        chunks_count = len(pd.read_parquet(chunks_path))
+        st.info(f"Candidate chunks available: **{chunks_count}** rows in `ai_candidate_chunks.parquet`")
+
+    st.markdown("---")
+
+    # LLM toggle — default to skip
+    st.markdown("### ⚙️ LLM Settings")
+    skip_llm = st.toggle(
+        "Skip LLM classifier (BoW-only mode)",
+        value=True,
+        help="When enabled, step 08 is skipped and step 09 uses deterministic BoW proxies instead of LLM boolean flags. Recommended for cost-free baseline runs.",
+        key="post_skip_llm"
+    )
+    if skip_llm:
+        st.caption("LLM step will be skipped. Step 09 will run with `--bow-only`.")
+    else:
+        st.caption("LLM step **will run** and may consume API tokens. Make sure your API key is set.")
+
+    st.markdown("---")
+    st.markdown("### 📋 Step Status & Individual Controls")
+
+    # Status helper
+    def file_status(path):
+        if path.exists():
+            import os
+            mtime = datetime.fromtimestamp(os.path.getmtime(path))
+            try:
+                row_count = len(pd.read_parquet(path))
+                return f"✅ {row_count:,} rows — last updated {mtime.strftime('%Y-%m-%d %H:%M')}"
+            except Exception:
+                return f"✅ exists — last updated {mtime.strftime('%Y-%m-%d %H:%M')}"
+        return "⬜ Not generated yet"
+
+    steps_info = [
+        {
+            "num": "07",
+            "label": "BoW Feature Extraction",
+            "script": "07_extract_bow_features.py",
+            "args": [],
+            "desc": "Deterministic pattern-matching features (no LLM). Produces `ai_disclosure_bow_features.parquet`.",
+            "output_path": bow_path,
+            "skippable": False,
+        },
+        {
+            "num": "08",
+            "label": "LLM Classifier",
+            "script": "08_run_llm_classifier.py",
+            "args": [],
+            "desc": "Structured LLM classification via `pydantic_ai`. Produces `ai_disclosure_mentions.parquet`.",
+            "output_path": mentions_path,
+            "skippable": True,
+        },
+        {
+            "num": "09",
+            "label": "Combined Scoring",
+            "script": "09_score_with_llm_booleans.py",
+            "args": [],
+            "desc": "Combines BoW + LLM flags into scored chunks. Produces `ai_scored_chunks.parquet`.",
+            "output_path": scored_path,
+            "skippable": False,
+        },
+        {
+            "num": "10",
+            "label": "Feature Builder",
+            "script": "10_build_features.py",
+            "args": [],
+            "desc": "Aggregates chunk-level features into firm-year panel. Produces `firm_year_features.parquet`.",
+            "output_path": features_path,
+            "skippable": False,
+        },
+    ]
+
+    for step in steps_info:
+        is_skipped: bool = bool(step["skippable"]) and skip_llm
+        col_info, col_btn = st.columns([3, 1])
+        with col_info:
+            label = f"**Step {step['num']}: {step['label']}**"
+            if is_skipped:
+                label += " *(skipped — LLM disabled)*"
+            st.markdown(label)
+            st.caption(step["desc"])
+            st.caption(file_status(step["output_path"]))
+        with col_btn:
+            btn_disabled: bool = (not chunks_exist) or is_skipped
+            btn_label = "⏭️ Skipped" if is_skipped else f"▶️ Run Step {step['num']}"
+            if st.button(btn_label, key=f"run_step_{step['num']}", use_container_width=True, disabled=btn_disabled):
+                step_args: list[str] = []
+                if str(step["num"]) == "09" and skip_llm:
+                    step_args.append("--bow-only")
+                run_script(str(step["script"]), step_args if step_args else None)
+                st.rerun()
+        st.markdown("---")
+
+    # Run All button
+    st.markdown("### 🚀 Run All Steps")
+    run_all_label = "🚀 Run All (BoW-only, skip LLM)" if skip_llm else "🚀 Run All (including LLM)"
+    if st.button(run_all_label, type="primary", use_container_width=True, disabled=not chunks_exist, key="run_all_post"):
+        success_all = True
+        for step in steps_info:
+            if bool(step["skippable"]) and skip_llm:
+                st.info(f"Skipping Step {step['num']}: {step['label']} (LLM disabled)")
+                continue
+            step_args2: list[str] = []
+            if str(step["num"]) == "09" and skip_llm:
+                step_args2.append("--bow-only")
+            st.info(f"Running Step {step['num']}: {step['label']}...")
+            success, _ = run_script(str(step["script"]), step_args2 if step_args2 else None)
+            if not success:
+                success_all = False
+                st.error(f"Stopped at Step {step['num']}: {step['label']}")
+                break
+        if success_all:
+            st.balloons()
+            st.success("All post-pipeline steps completed! `firm_year_features.parquet` is ready for clustering.")
+            st.rerun()
+
+    # Output preview
+    if features_path.exists():
+        st.markdown("---")
+        st.markdown("### 📊 Firm-Year Features Preview")
+        try:
+            fyf_df = pd.read_parquet(features_path)
+            col_m1, col_m2, col_m3 = st.columns(3)
+            with col_m1:
+                st.metric("Firm-Year Observations", len(fyf_df))
+            with col_m2:
+                st.metric("Unique Firms", fyf_df["ticker"].nunique() if "ticker" in fyf_df.columns else "—")
+            with col_m3:
+                st.metric("Years Covered", fyf_df["year"].nunique() if "year" in fyf_df.columns else "—")
+            with st.expander("View firm_year_features.parquet"):
+                st.dataframe(fyf_df, use_container_width=True, hide_index=True)
+        except Exception as e:
+            st.error(f"Error loading features: {e}")
 
 with tab_logs:
     st.subheader("📋 Centralized Pipeline Logs & Diagnostics")

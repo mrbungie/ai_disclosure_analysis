@@ -52,9 +52,13 @@ A [Makefile](file:///Users/goviedb/Development/mib_tesis_ai_disclosure/Makefile)
   Runs semantic LLM classification using an async worker pool (outputting to `ai_disclosure_mentions.parquet`). Pass custom flags in `ARGS`.
 * **Run Combined Scoring (Script 09)**:
   ```bash
-  make run-scoring
+  make run-scoring ARGS="--bow-only"
   ```
   Combines deterministic rule flags and LLM classifications to compute composite risk, governance, specificity, and promotional scores (saved in `ai_scored_chunks.parquet`).
+  
+  **Design Notes**:
+  - **LEFT JOIN Design**: It uses a `LEFT JOIN` mapping starting from the candidate chunks and BoW features. This ensures that **100% of candidate chunks are preserved** in the panel analysis, falling back to proxies if LLM results are missing.
+  - **Optional LLM Mode (`--bow-only`)**: Pass `ARGS="--bow-only"` to force the pipeline to score all chunks using deterministic Bag-of-Words proxies. This ensures **data homogeneity** across years and resolves temporal trend discrepancies caused by incomplete LLM classifications.
 * **Build Firm-Year Panel Dataset (Script 10)**:
   ```bash
   make run-features

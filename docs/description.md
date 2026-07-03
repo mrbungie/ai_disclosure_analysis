@@ -522,11 +522,19 @@ The script itself manages its own backlog dynamically:
 
 **Purpose**: Aggregate and engineer downstream features by combining the outputs of the Bag-of-Words features (`07_extract_bow_features.py`) and the LLM booleans (`08_run_llm_classifier.py`).
 
-**Responsibilities**:
-- Read `ai_disclosure_bow_features.parquet` and `ai_disclosure_mentions.parquet` and join them on `chunk_id`.
-- Implement logical combinations (e.g. if `is_ai_related` from LLM is True AND `has_board_oversight` from BoW is True, then label as high-level governance).
-- Compute composite specificity, risk, governance, and promotional scores.
-- Output the combined labeled chunks to `ai_scored_chunks.parquet`, retaining all extracted BoW features.
+**Key Architectural Features**:
+- **LEFT JOIN Design**: The script reads the candidate chunks and BoW features as the primary table and performs a `LEFT JOIN` with the LLM classifications (`ai_disclosure_mentions.parquet`) on `chunk_id`. This guarantees that we **never lose any candidate chunks** from the final panel, regardless of whether they have been classified by the LLM.
+- **Optional LLM Mode (`--bow-only`)**: The LLM step can be completely bypassed by passing the `--bow-only` command-line flag. This is useful for:
+  - Establishing a cost-free, deterministic baseline.
+  - Ensuring **data homogeneity** across the panel by applying the exact same scoring rules to all filings.
+  - Eliminating temporal anomalies (e.g. the 2023 dip in the index) caused by uneven LLM classifications across years.
+- **Deterministic Proxies & Fallback**: If LLM classifications are missing (either due to incomplete API runs or because `--bow-only` is active), the pipeline dynamically falls back to regex-based Bag-of-Words proxies for all key indicators:
+  - `is_substantive` fallback to `substantive_proxy` (mentions policies, compliance, training, compute infra, proprietary data, or products).
+  - `is_governance_related` fallback to `is_governance_related_proxy` (board oversight, audit committee, ethics policy, compliance).
+  - `is_risk_related` fallback to `is_risk_related_proxy` (general risk factor, cyber, regulatory, ethics/bias, IP, supply).
+  - `is_promotional` fallback to `is_promotional_proxy` (deployment verbs, specific products).
+- **Composite Scoring**: Computes final specificity, risk, governance, and promotional scores (bounded 0 to 3) based on the combined (or proxied) boolean features.
+- **Output**: Saves the combined labeled chunks to `ai_scored_chunks.parquet`, preserving all raw and normalized BoW features.
 
 ## 7.11 `10_build_features.py` — Feature Builder
 
