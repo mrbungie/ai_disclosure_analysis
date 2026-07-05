@@ -369,6 +369,18 @@ has_placebo_deepseek_mention     # DeepSeek + risk/impact language (Ch. 7 valida
 
 **Required for a defensible thesis — without this, washing claims are assertions, not findings.**
 
+### Variant scope of `val_01`/`val_02`
+
+`val_01_sample_and_label.py` and `val_02_validate.py` only validate the
+**rule_based** variant (`--variant rule_based`, also the config default).
+Passing `--variant llm_full` is rejected with an explicit error: using an
+LLM-judge to validate the same categories that another LLM (`llm_full`'s
+script 08 classifier) already assigned is circular — the judge and the thing
+being judged would share the same failure modes. `llm_full` has no validation
+of this type available by design, not by omission. See
+`docs/plans/variant_selection_infrastructure.md` for the full rule_based /
+llm_full variant selection design.
+
 ### BoW vs LLM agreement (Cohen's κ)
 For each dimension with both a BoW and LLM proxy, compute chunk-level agreement:
 - D2 Operational: `has_deployment_verb` vs `is_substantive`

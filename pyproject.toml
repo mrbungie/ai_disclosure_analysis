@@ -33,7 +33,9 @@ dependencies = [
     "umap-learn>=0.5.12",
     "nltk>=3.9.4",
     "factor-analyzer>=0.5.1",
-    "scikit-learn>=1.7.2",
+    # factor-analyzer 0.5.1 (latest on PyPI) calls check_array(force_all_finite=...),
+    # a kwarg sklearn removed in 1.8 — cap below that until factor-analyzer releases a fix.
+    "scikit-learn>=1.7.2,<1.8",
 ]
 
 [dependency-groups]

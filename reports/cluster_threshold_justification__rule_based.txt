@@ -1,0 +1,17 @@
+Cluster Threshold Justification
+==================================================
+Panel size: 658 firm-years
+
+Each rule-based cutoff below is reported as its percentile rank in the
+empirical (min-max scaled) distribution of the dimension it gates on.
+
+  d5_governance_min          = 0.10  →  D5 Governance:  77.8th percentile
+  d1_intensity_min           = 0.35  →  D1 AI Intensity:  65.5th percentile
+  d3_technical_min           = 0.08  →  D3 Technical:  51.4th percentile
+  d2_operational_min         = 0.15  →  D2 Operational:  57.9th percentile
+  d9_substantive_min_fsp     = 0.30  →  D9 Substantive-section:  66.9th percentile
+  d9_substantive_min_oaa     = 0.50  →  D9 Substantive-section:  80.9th percentile
+Threshold Sensitivity (relative shift in all cutoffs)
+==================================================
+  -10% shift:   4.4% of firm-years change archetype
+  +10% shift:   6.1% of firm-years change archetype

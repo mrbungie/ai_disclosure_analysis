@@ -1,0 +1,12 @@
+DiD Power Check
+==================================================
+Panel: 115 firms, 658 firm-years
+Minimum firms per cell (MIN_CELL_FIRMS): 15
+
+sec_2024 DiD [high_promotional_pre2024]: 114 firms, 656 firm-years — ok
+sec_2024 DiD (tech-interacted) [high_promotional_pre2024 x tech_sector]: 32 firms, 177 firm-years — ok
+deepseek DiD [high_defensive_pre2025]: 114 firms, 656 firm-years — ok
+deepseek DiD (tech-interacted) [high_defensive_pre2025 x tech_sector]: 32 firms, 177 firm-years — ok
+technical x tech-sector [high_technical_pre2024 x tech_sector]: 32 firms, 177 firm-years — ok
+
+All checked DiD cells meet the minimum firm-count threshold.

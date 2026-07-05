@@ -30,8 +30,10 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 try:
     import pipeline_logger
+    import variant_utils
 except ImportError:
     from scripts import pipeline_logger
+    from scripts import variant_utils
 
 SEED = 42
 np.random.seed(SEED)
@@ -66,19 +68,30 @@ def select_features(df: pd.DataFrame) -> pd.DataFrame:
     # Drop near-zero-variance: keep only 1% < mean < 99%
     means = df.mean()
     mask = (means > 0.01) & (means < 0.99)
-    kept = df.loc[:, mask]
+    kept = df.loc[:, mask].dropna(axis=1)
+    n_dropped_prevalence = len(df.columns) - len(kept.columns)
 
-    n_dropped = len(df.columns) - len(kept.columns)
+    # Drop near-perfectly collinear columns (|r| > 0.995). Many has_word_X
+    # variants (transform/transforming/transformed, revolutionize/
+    # revolutionizing, ...) always co-occur within a chunk, which makes the
+    # correlation matrix singular and crashes FactorAnalyzer's SMC step.
+    corr = kept.corr().abs()
+    upper = corr.where(np.triu(np.ones(corr.shape, dtype=bool), k=1))
+    collinear_dropped = [c for c in upper.columns if (upper[c] > 0.995).any()]
+    if collinear_dropped:
+        kept = kept.drop(columns=collinear_dropped)
+
     pipeline_logger.log_event(
         pipeline_step="factor_analysis",
         level="INFO",
         message=(
-            f"Feature selection: kept {len(kept.columns)} / {len(df.columns)} "
-            f"columns ({n_dropped} dropped by prevalence filter)."
+            f"Feature selection: kept {len(kept.columns)} / {len(df.columns)} columns "
+            f"({n_dropped_prevalence} dropped by prevalence filter, "
+            f"{len(collinear_dropped)} dropped as near-duplicate/collinear |r|>0.995)."
         ),
     )
-    print(f"  Features kept after prevalence filter: {len(kept.columns)}")
-    return kept.dropna(axis=1)
+    print(f"  Features kept after prevalence + collinearity filter: {len(kept.columns)}")
+    return kept
 
 
 # ---------------------------------------------------------------------------
@@ -331,14 +344,23 @@ def main() -> None:
         metavar="N",
         help="Override the number of factors (default: determined via parallel analysis).",
     )
+    variant_utils.add_variant_arg(parser)
     args = parser.parse_args()
 
     config = load_config()
+    variant = variant_utils.resolve_variant(args.variant, config)
+    output_root = config.get("variants", {}).get("output_root", "data/processed")
+
+    # Note: this script runs on ai_disclosure_bow_features.parquet, which is
+    # shared across variants (deterministic, not variant-dependent). The
+    # loadings are therefore mathematically identical between rule_based and
+    # llm_full — --variant only determines which ai_scored_chunks__{variant}.parquet
+    # metadata is joined in, and which variant's output folder is written to.
     candidate_chunks_dir = Path(config["paths"]["candidate_chunks"])
     bow_path = candidate_chunks_dir / "ai_disclosure_bow_features.parquet"
-    scored_path = candidate_chunks_dir / "ai_scored_chunks.parquet"
+    scored_path = variant_utils.variant_path(variant, "ai_scored_chunks", "parquet", output_root=output_root)
 
-    factors_dir = Path("data/processed/factors")
+    factors_dir = variant_utils.variant_dir(variant, output_root=output_root) / "factors"
     reports_dir = Path("reports")
 
     # ------------------------------------------------------------------
@@ -348,6 +370,7 @@ def main() -> None:
         pipeline_step="factor_analysis",
         level="INFO",
         message="Loading BoW features and scored chunks metadata...",
+        details={"variant": variant},
     )
     print("Loading BoW features...")
 
@@ -357,6 +380,7 @@ def main() -> None:
             pipeline_step="factor_analysis",
             level="ERROR",
             message=f"BoW features file not found: {bow_path}",
+            details={"variant": variant},
         )
         return
 
@@ -414,27 +438,28 @@ def main() -> None:
         pipeline_step="factor_analysis",
         level="INFO",
         message=f"Saving factor outputs (n_factors={n_factors})...",
+        details={"variant": variant},
     )
 
     loadings_df = save_loadings(
         loadings, feature_names, n_factors,
-        factors_dir / "factor_loadings.csv",
+        factors_dir / f"factor_loadings__{variant}.csv",
     )
 
     save_factor_scores(
         fa, X, scored_df, n_factors,
-        factors_dir / "chunk_factor_scores.parquet",
-        factors_dir / "firm_year_factor_scores.parquet",
+        factors_dir / f"chunk_factor_scores__{variant}.parquet",
+        factors_dir / f"firm_year_factor_scores__{variant}.parquet",
     )
 
     plot_scree(
         actual_eigs, mean_rand_eigs, n_factors,
-        reports_dir / "factor_scree.png",
+        reports_dir / f"factor_scree__{variant}.png",
     )
 
     plot_loadings_heatmap(
         loadings_df, n_factors,
-        reports_dir / "factor_loadings_heatmap.png",
+        reports_dir / f"factor_loadings_heatmap__{variant}.png",
     )
 
     pipeline_logger.log_event(
@@ -444,6 +469,7 @@ def main() -> None:
             f"Factor analysis complete. n_factors={n_factors}. "
             f"Outputs written to {factors_dir} and {reports_dir}."
         ),
+        details={"variant": variant},
     )
     print("\nDone.")
 

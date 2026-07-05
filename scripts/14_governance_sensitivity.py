@@ -34,8 +34,10 @@ from sklearn.preprocessing import MinMaxScaler
 
 try:
     import pipeline_logger
+    import variant_utils
 except ImportError:
     from scripts import pipeline_logger
+    from scripts import variant_utils
 
 # Must stay in sync with scripts/11_cluster_archetypes.py — duplicated here
 # rather than imported because numbered script filenames aren't importable
@@ -111,8 +113,24 @@ def classify_row(row, thresholds):
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="D5 Governance sensitivity check: BoW-only vs LLM-only"
+    )
+    variant_utils.add_variant_arg(parser)
+    args = parser.parse_args()
+
     config = load_config()
-    features_path = Path("data/processed/features/firm_year_features.parquet")
+    variant = variant_utils.resolve_variant(args.variant, config)
+    output_root = config.get("variants", {}).get("output_root", "data/processed")
+
+    # Note: share_llm_is_governance (the pure-LLM D5 signal) only carries real
+    # signal when the panel was built from a run where script 08's LLM
+    # classifier covered the corpus. Under rule_based, script 09 never merges
+    # the LLM mentions, so share_llm_is_governance is ~0 for every firm-year
+    # and this comparison degenerates to "BoW vs ~empty". Run with
+    # --variant llm_full for a comparison where both sources carry signal.
+    features_path = variant_utils.variant_path(variant, "firm_year_features", "parquet", output_root=output_root)
     reports_dir = Path("reports")
     reports_dir.mkdir(exist_ok=True)
 
@@ -189,7 +207,7 @@ def main():
         )
 
     summary = "\n".join(lines)
-    out_path = reports_dir / "governance_sensitivity.txt"
+    out_path = reports_dir / f"governance_sensitivity__{variant}.txt"
     out_path.write_text(summary)
     print(summary)
     print(f"\nSaved → {out_path}")
@@ -199,6 +217,7 @@ def main():
         level="WARNING" if pct_changed >= 10.0 else "INFO",
         message=f"Governance sensitivity check: {pct_changed:.1f}% of firm-years change archetype "
                 f"between BoW-only and LLM-only D5.",
+        details={"variant": variant},
     )
 
 
