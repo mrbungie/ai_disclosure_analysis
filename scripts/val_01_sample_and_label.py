@@ -1,9 +1,12 @@
 """
 val_01_sample_and_label.py — Sample chunks and label them via an independent LLM judge
 
-Draws a stratified sample of ~150 chunks from ai_scored_chunks.parquet and classifies
-each using a pydantic_ai Agent against an OpenAI-compatible endpoint. Labels are saved
-to data/processed/validation/llm_labeled_sample.parquet.
+Draws a stratified sample of ~150 chunks from ai_scored_chunks__{variant}.parquet
+and classifies each using a pydantic_ai Agent against an OpenAI-compatible endpoint.
+Labels are saved to data/processed/variant_{variant}/validation/llm_labeled_sample__{variant}.parquet.
+
+Only supports --variant rule_based (validating llm_full with another LLM judge
+would be circular). See variant_utils.require_variant.
 
 The judge model is configured independently from the main pipeline classifier
 (script 08) via its own environment variables, so the same model isn't grading its
@@ -19,11 +22,12 @@ the full feature space rather than being dominated by any single stratum.
 Supports resuming: chunks already in the output file are skipped.
 
 Usage:
-    uv run python scripts/val_01_sample_and_label.py [--n 150] [--seed 42] [--concurrency 1] [--delay 1.0]
+    uv run python scripts/val_01_sample_and_label.py --variant rule_based [--n 150] [--seed 42] [--concurrency 1] [--delay 1.0]
 """
 
 import argparse
 import asyncio
+import json
 import os
 from enum import Enum
 from pathlib import Path
@@ -37,8 +41,10 @@ from pydantic_ai.providers.openai import OpenAIProvider
 
 try:
     import pipeline_logger
+    import variant_utils
 except ImportError:
     from scripts import pipeline_logger
+    from scripts import variant_utils
 
 load_dotenv()
 
@@ -150,10 +156,15 @@ def stratified_sample(df: pd.DataFrame, n: int, seed: int) -> pd.DataFrame:
     n_strata = df["_stratum"].nunique()
     per_stratum = max(1, n // n_strata)
 
-    sampled = (
+    # pandas >=3.0 drops the grouping column from apply()'s result by default
+    # (include_groups=False); recover the sampled rows via their original
+    # index instead of relying on the grouping column surviving the apply.
+    sampled_idx = (
         df.groupby("_stratum", group_keys=False)
-        .apply(lambda g: g.sample(min(len(g), per_stratum), random_state=seed))
+        .apply(lambda g: g.sample(min(len(g), per_stratum), random_state=seed), include_groups=False)
+        .index
     )
+    sampled = df.loc[sampled_idx]
 
     if len(sampled) < n:
         remaining = df[~df["chunk_id"].isin(sampled["chunk_id"])]
@@ -165,21 +176,77 @@ def stratified_sample(df: pd.DataFrame, n: int, seed: int) -> pd.DataFrame:
     return result.drop(columns=["_section_g", "_subst_g", "_stratum"])
 
 
+def load_config() -> dict:
+    with open("configs/config.json") as f:
+        return json.load(f)
+
+
+# Pipeline dimensions to guarantee positive-class coverage for. is_ai_related
+# is excluded — it's ~100% prevalent by construction (these are AI candidate
+# chunks), so it never needs a top-up.
+DIMENSIONS_TO_COVER = ["is_substantive", "is_promotional", "is_risk_related", "is_governance_related"]
+MIN_POSITIVES_PER_DIM = 40
+
+
+def ensure_dimension_coverage(
+    df: pd.DataFrame, sample: pd.DataFrame, dims: list[str], min_positives: int, seed: int
+) -> pd.DataFrame:
+    """Top up `sample` so each dimension in `dims` has at least `min_positives`
+    pipeline-flagged positive chunks.
+
+    A single stratified draw over year x section x is_substantive can leave a
+    rare dimension (e.g. governance at ~1.4% prevalence pipeline-wide) with too
+    few true positives to estimate recall on, even at a few hundred chunks.
+    Rather than special-casing one dimension, check every binary dimension and
+    force in whatever's missing, so validation coverage isn't blind to
+    whichever rule happens to be rarest.
+    """
+    sample = sample.copy()
+    topups = []
+    covered_ids = set(sample["chunk_id"])
+    for dim in dims:
+        if dim not in df.columns:
+            continue
+        have = int(sample[dim].astype(bool).sum()) if dim in sample.columns else 0
+        need = min_positives - have
+        if need <= 0:
+            continue
+        pool = df[df[dim].astype(bool) & ~df["chunk_id"].isin(covered_ids)]
+        extra = pool.sample(min(need, len(pool)), random_state=seed).copy()
+        if len(extra) == 0:
+            continue
+        extra["stratum"] = f"{dim}_topup"
+        topups.append(extra)
+        covered_ids |= set(extra["chunk_id"])
+        print(f"  +{len(extra)} forced positive chunks for '{dim}' (had {have}/{min_positives})")
+
+    if topups:
+        sample = pd.concat([sample] + topups, ignore_index=True)
+    return sample
+
+
 async def run(args: argparse.Namespace) -> None:
-    scored_path = Path("data/interim/candidate_chunks/ai_scored_chunks.parquet")
-    out_dir = Path("data/processed/validation")
+    config = load_config()
+    variant = variant_utils.resolve_variant(args.variant, config)
+    variant_utils.require_variant(variant, allowed=("rule_based",), script_name="val_01")
+    output_root = config.get("variants", {}).get("output_root", "data/processed")
+
+    scored_path = variant_utils.variant_path(variant, "ai_scored_chunks", "parquet", output_root=output_root)
+    out_dir = variant_utils.variant_dir(variant, output_root=output_root) / "validation"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / "llm_labeled_sample.parquet"
+    out_path = out_dir / f"llm_labeled_sample__{variant}.parquet"
 
     if not scored_path.exists():
         print(f"Error: {scored_path} not found. Run scripts 07–09 first.")
         return
 
-    load_cols = ["chunk_id", "ticker", "filing_date", "section_name", "chunk_text", "is_substantive"]
+    load_cols = ["chunk_id", "ticker", "filing_date", "section_name", "chunk_text",
+                 "is_substantive"] + [d for d in DIMENSIONS_TO_COVER if d != "is_substantive"]
     df = pd.read_parquet(scored_path, columns=load_cols)
     print(f"Loaded {len(df)} scored chunks.")
 
     sample = stratified_sample(df, args.n, args.seed)
+    sample = ensure_dimension_coverage(df, sample, DIMENSIONS_TO_COVER, MIN_POSITIVES_PER_DIM, args.seed)
     print(f"Sample: {len(sample)} chunks across {sample['stratum'].nunique()} strata.")
 
     if out_path.exists():
@@ -245,6 +312,7 @@ async def run(args: argparse.Namespace) -> None:
         pipeline_step="validation_labeling",
         level="SUCCESS",
         message=f"Labeled {len(records)} chunks. Saved to {out_path}",
+        details={"variant": variant},
     )
     print(f"\nDone. {len(records)} labeled chunks → {out_path}")
 
@@ -255,6 +323,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--concurrency", type=int, default=1, help="Number of concurrent judge requests")
     parser.add_argument("--delay", type=float, default=1.0, help="Delay in seconds after each request")
+    variant_utils.add_variant_arg(parser)
     args = parser.parse_args()
     asyncio.run(run(args))
 

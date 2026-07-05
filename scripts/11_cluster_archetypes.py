@@ -12,8 +12,10 @@ import umap
 
 try:
     import pipeline_logger
+    import variant_utils
 except ImportError:
     from scripts import pipeline_logger
+    from scripts import variant_utils
 
 SEED = 42
 np.random.seed(SEED)
@@ -56,7 +58,7 @@ NEW_CLUSTER_NAMES = {
 #      threshold shifted +/-10% (relative) and reports what share of
 #      firm-years change archetype, so the thesis can show cluster
 #      assignments are not a knife-edge artifact of the exact cutoff chosen.
-# Both outputs are written to reports/cluster_threshold_justification.txt
+# Both outputs are written to reports/cluster_threshold_justification__{variant}.txt
 # and should be cited directly in the methodology chapter.
 THRESHOLDS = {
     'd5_governance_min':        0.10,   # Governance & Compliance-Focused gate
@@ -92,7 +94,7 @@ def classify_row(row, thresholds):
     return 2  # 'Boilerplate Risk-Warners'
 
 
-def report_threshold_justification(dims, thresholds, out_path=Path("reports/cluster_threshold_justification.txt")):
+def report_threshold_justification(dims, thresholds, out_path):
     """
     Translate each hand-set threshold into its empirical percentile within the
     panel's dimension distribution, so cutoffs can be cited as "the Nth
@@ -127,8 +129,7 @@ def report_threshold_justification(dims, thresholds, out_path=Path("reports/clus
     print(f"Threshold justification written to {out_path}")
 
 
-def run_threshold_sensitivity(df_for_rules, thresholds, shifts=(-0.10, 0.10),
-                               out_path=Path("reports/cluster_threshold_justification.txt")):
+def run_threshold_sensitivity(df_for_rules, thresholds, out_path, shifts=(-0.10, 0.10)):
     """
     Recompute archetype assignment with every threshold shifted +/- `shifts`
     (relative) and report what share of firm-years change archetype. A large
@@ -175,17 +176,23 @@ def main():
     parser = argparse.ArgumentParser(description="AI Disclosure Archetypes Clustering")
     parser.add_argument("--method", type=str, choices=["programmatic", "unsupervised"], default="programmatic",
                         help="Clustering method to use (default: programmatic)")
+    variant_utils.add_variant_arg(parser)
     args = parser.parse_args()
 
     config = load_config()
-    features_path = Path("data/processed/features/firm_year_features.parquet")
-    output_path = Path("data/processed/clusters/firm_year_clusters.parquet")
+    variant = variant_utils.resolve_variant(args.variant, config)
+    output_root = config.get("variants", {}).get("output_root", "data/processed")
+
+    features_path = variant_utils.variant_path(variant, "firm_year_features", "parquet", output_root=output_root)
+    output_path = variant_utils.variant_path(variant, "firm_year_clusters", "parquet", subdir="clusters", output_root=output_root)
+    threshold_report_path = Path(f"reports/cluster_threshold_justification__{variant}.txt")
 
     if not features_path.exists():
         pipeline_logger.log_event(
             pipeline_step="cluster_archetypes",
             level="ERROR",
-            message=f"Features file not found at {features_path}"
+            message=f"Features file not found at {features_path}",
+            details={"variant": variant}
         )
         print(f"Error: Features file not found at {features_path}")
         return
@@ -193,7 +200,8 @@ def main():
     pipeline_logger.log_event(
         pipeline_step="cluster_archetypes",
         level="INFO",
-        message=f"Loading features and computing dimensions for method: {args.method}"
+        message=f"Loading features and computing dimensions for method: {args.method}",
+        details={"variant": variant}
     )
 
     df = pd.read_parquet(features_path)
@@ -285,8 +293,8 @@ def main():
         result['cluster'] = df_for_rules.apply(lambda row: classify_row(row, THRESHOLDS), axis=1)
         result['cluster_name'] = result['cluster'].map(NEW_CLUSTER_NAMES)
 
-        report_threshold_justification(dims, THRESHOLDS)
-        run_threshold_sensitivity(df_for_rules, THRESHOLDS)
+        report_threshold_justification(dims, THRESHOLDS, out_path=threshold_report_path)
+        run_threshold_sensitivity(df_for_rules, THRESHOLDS, out_path=threshold_report_path)
     else:
         # Unsupervised Ward clustering
         Z = linkage(X, method='ward')
@@ -312,7 +320,8 @@ def main():
     pipeline_logger.log_event(
         pipeline_step="cluster_archetypes",
         level="SUCCESS",
-        message=f"Clustering complete. Method: {args.method}. Saved {len(result)} rows to {output_path}."
+        message=f"Clustering complete. Method: {args.method}. Saved {len(result)} rows to {output_path}.",
+        details={"variant": variant}
     )
     print(f"Success: Saved {len(result)} rows to {output_path}")
     print("\nCluster counts:")
