@@ -10,6 +10,9 @@ from pathlib import Path
 from datetime import datetime
 import hashlib
 
+sys.path.insert(0, str(Path(__file__).parent / "scripts"))
+import variant_utils
+
 # Page layout and aesthetics
 st.set_page_config(
     page_title="SEC AI Disclosure Pipeline",
@@ -109,6 +112,11 @@ def load_config():
             "interim_sections": "data/interim/sections",
             "candidate_chunks": "data/interim/candidate_chunks"
         },
+        "variants": {
+            "active": "rule_based",
+            "choices": ["rule_based", "llm_full"],
+            "output_root": "data/processed"
+        },
         "prefiltering": {
             "ai_keywords": ["artificial intelligence", "generative ai", "gen ai", "machine learning", "large language model", "llm", "deep learning", "natural language processing", "predictive analytics", "algorithmic", "automation", "computer vision", "neural network"],
             "false_positives": ["adobe illustrator", "appreciation", "said", "paid"]
@@ -170,6 +178,32 @@ st.sidebar.metric("Active Universe Size", f"{active_universe_size} Firms")
 st.sidebar.metric("Filing Scope Years", date_scope)
 st.sidebar.metric("Target Form Types", form_types_str)
 st.sidebar.metric("Submissions Cache Count", f"{cache_count} CIKs")
+
+# Sidebar: Active Variant selector — the single source of truth for which
+# classification variant (rule_based / llm_full) the dashboard reads/writes.
+# Persists to configs/config.json immediately on change, shared with console
+# scripts run via --variant (or their own config default).
+st.sidebar.markdown("---")
+st.sidebar.subheader("🔀 Active Variant")
+config.setdefault("variants", {"active": "rule_based", "choices": list(variant_utils.VALID_VARIANTS), "output_root": "data/processed"})
+variant_choices = config["variants"].get("choices", list(variant_utils.VALID_VARIANTS))
+current_variant = config["variants"].get("active", "rule_based")
+selected_variant = st.sidebar.radio(
+    "Classification variant",
+    options=variant_choices,
+    index=variant_choices.index(current_variant) if current_variant in variant_choices else 0,
+    help="rule_based = deterministic BoW proxies only (today's --bow-only run). "
+         "llm_full = LLM classifier over the full corpus, no proxy fallback. "
+         "Changing this immediately updates configs/config.json and is shared with console scripts.",
+    key="active_variant_radio",
+)
+if selected_variant != current_variant:
+    config["variants"]["active"] = selected_variant
+    save_config(config)
+    st.sidebar.toast(f"Active variant set to {selected_variant}!", icon="🔀")
+    st.rerun()
+active_variant = config["variants"]["active"]
+output_root = config["variants"].get("output_root", "data/processed")
 
 # Load Manifests and Chunks for visual layout
 universe_path = Path(config["paths"]["interim_manifests"]) / "firm_universe.parquet"
@@ -868,7 +902,10 @@ with tab1:
 
 with tab2:
     st.subheader("🧩 Candidate Chunks Explorer")
-    
+    st.info("ℹ️ `ai_candidate_chunks.parquet` is shared across variants (produced upstream of the "
+            "rule_based/llm_full split at script 09) — the active variant selector in the sidebar "
+            "does not filter this tab.")
+
     if not chunks_path.exists():
         st.info("💡 Candidate chunks dataset (`ai_candidate_chunks.parquet`) has not been generated yet. Complete the pipeline in Tab 1 first.")
     else:
@@ -913,35 +950,51 @@ with tab2:
 
 with tab_post:
     st.subheader("🔬 Post-Pipeline: Feature Extraction & Scoring")
+    st.markdown(f"🔀 Variant: **{active_variant}**")
     st.markdown("Run the downstream feature engineering steps on the candidate chunks already extracted by the pipeline.")
 
-    # Output file paths
+    # Output file paths. bow_path / mentions_path are shared across variants
+    # (scripts 07/08 do not branch on variant); scored_path / features_path
+    # are variant-scoped from script 09 onward.
     bow_path = Path(config["paths"]["candidate_chunks"]) / "ai_disclosure_bow_features.parquet"
     mentions_path = Path(config["paths"]["candidate_chunks"]) / "ai_disclosure_mentions.parquet"
-    scored_path = Path(config["paths"]["candidate_chunks"]) / "ai_scored_chunks.parquet"
-    features_path = Path("data/processed/features/firm_year_features.parquet")
+    scored_path = variant_utils.variant_path(active_variant, "ai_scored_chunks", "parquet", output_root=output_root)
+    features_path = variant_utils.variant_path(active_variant, "firm_year_features", "parquet", output_root=output_root)
 
     chunks_exist = chunks_path.exists()
     if not chunks_exist:
         st.warning("⚠️ No candidate chunks found. Complete the upstream pipeline (Tab 1) first.")
     else:
         chunks_count = len(pd.read_parquet(chunks_path))
-        st.info(f"Candidate chunks available: **{chunks_count}** rows in `ai_candidate_chunks.parquet`")
+        st.info(f"Candidate chunks available: **{chunks_count}** rows in `ai_candidate_chunks.parquet` (shared across variants)")
 
     st.markdown("---")
 
-    # LLM toggle — default to skip
+    # LLM toggle — derived from the active variant, not independently settable.
+    # rule_based always skips the LLM merge (today's --bow-only behavior);
+    # llm_full always requires it, with no proxy fallback (script 09's llm_full branch).
     st.markdown("### ⚙️ LLM Settings")
-    skip_llm = st.toggle(
+    skip_llm = (active_variant == "rule_based")
+    st.toggle(
         "Skip LLM classifier (BoW-only mode)",
-        value=True,
-        help="When enabled, step 08 is skipped and step 09 uses deterministic BoW proxies instead of LLM boolean flags. Recommended for cost-free baseline runs.",
-        key="post_skip_llm"
+        value=skip_llm,
+        disabled=True,
+        help=(
+            "Locked by the active variant (sidebar). rule_based always runs BoW-only "
+            "(no LLM merge, no proxy dependency on script 08). llm_full always requires "
+            "the LLM classifier output, with no fallback to the BoW proxy."
+        ),
+        key="post_skip_llm_display"
     )
+    mentions_ok = mentions_path.exists() and len(pd.read_parquet(mentions_path)) > 0 if mentions_path.exists() else False
     if skip_llm:
-        st.caption("LLM step will be skipped. Step 09 will run with `--bow-only`.")
+        st.caption("rule_based variant: LLM step will be skipped. Step 09 runs the rule_based branch (BoW proxies only).")
     else:
-        st.caption("LLM step **will run** and may consume API tokens. Make sure your API key is set.")
+        st.caption("llm_full variant: LLM step **will run** and may consume API tokens. Step 09 requires "
+                   "`ai_disclosure_mentions.parquet` to have coverage — no proxy fallback.")
+        if not mentions_ok:
+            st.warning("⚠️ `ai_disclosure_mentions.parquet` is missing or empty. Run Step 08 (LLM Classifier) "
+                       "before Step 09 can produce llm_full output.")
 
     st.markdown("---")
     st.markdown("### 📋 Step Status & Individual Controls")
@@ -997,8 +1050,15 @@ with tab_post:
         },
     ]
 
+    # Steps that read/write variant-scoped output (09 onward) always get
+    # --variant {active_variant}. Steps 07/08 operate on shared upstream data
+    # and do not take the flag. No step here fires automatically — every run
+    # still requires an explicit click.
+    variant_aware_steps = {"09", "10"}
+
     for step in steps_info:
         is_skipped: bool = bool(step["skippable"]) and skip_llm
+        needs_mentions = (str(step["num"]) == "09") and (not skip_llm) and (not mentions_ok)
         col_info, col_btn = st.columns([3, 1])
         with col_info:
             label = f"**Step {step['num']}: {step['label']}**"
@@ -1007,29 +1067,32 @@ with tab_post:
             st.markdown(label)
             st.caption(step["desc"])
             st.caption(file_status(step["output_path"]))
+            if needs_mentions:
+                st.caption("⛔ blocked: llm_full variant requires ai_disclosure_mentions.parquet coverage (run Step 08 first)")
         with col_btn:
-            btn_disabled: bool = (not chunks_exist) or is_skipped
+            btn_disabled: bool = (not chunks_exist) or is_skipped or needs_mentions
             btn_label = "⏭️ Skipped" if is_skipped else f"▶️ Run Step {step['num']}"
             if st.button(btn_label, key=f"run_step_{step['num']}", use_container_width=True, disabled=btn_disabled):
                 step_args: list[str] = []
-                if str(step["num"]) == "09" and skip_llm:
-                    step_args.append("--bow-only")
+                if str(step["num"]) in variant_aware_steps:
+                    step_args += ["--variant", active_variant]
                 run_script(str(step["script"]), step_args if step_args else None)
                 st.rerun()
         st.markdown("---")
 
     # Run All button
     st.markdown("### 🚀 Run All Steps")
-    run_all_label = "🚀 Run All (BoW-only, skip LLM)" if skip_llm else "🚀 Run All (including LLM)"
-    if st.button(run_all_label, type="primary", use_container_width=True, disabled=not chunks_exist, key="run_all_post"):
+    run_all_label = f"🚀 Run All ({active_variant})"
+    run_all_disabled = (not chunks_exist) or ((not skip_llm) and (not mentions_ok))
+    if st.button(run_all_label, type="primary", use_container_width=True, disabled=run_all_disabled, key="run_all_post"):
         success_all = True
         for step in steps_info:
             if bool(step["skippable"]) and skip_llm:
                 st.info(f"Skipping Step {step['num']}: {step['label']} (LLM disabled)")
                 continue
             step_args2: list[str] = []
-            if str(step["num"]) == "09" and skip_llm:
-                step_args2.append("--bow-only")
+            if str(step["num"]) in variant_aware_steps:
+                step_args2 += ["--variant", active_variant]
             st.info(f"Running Step {step['num']}: {step['label']}...")
             success, _ = run_script(str(step["script"]), step_args2 if step_args2 else None)
             if not success:
@@ -1038,7 +1101,7 @@ with tab_post:
                 break
         if success_all:
             st.balloons()
-            st.success("All post-pipeline steps completed! `firm_year_features.parquet` is ready for clustering.")
+            st.success(f"All post-pipeline steps completed for variant '{active_variant}'! `firm_year_features__{active_variant}.parquet` is ready for clustering.")
             st.rerun()
 
     # Output preview
@@ -1054,13 +1117,14 @@ with tab_post:
                 st.metric("Unique Firms", fyf_df["ticker"].nunique() if "ticker" in fyf_df.columns else "—")
             with col_m3:
                 st.metric("Years Covered", fyf_df["year"].nunique() if "year" in fyf_df.columns else "—")
-            with st.expander("View firm_year_features.parquet"):
+            with st.expander(f"View firm_year_features__{active_variant}.parquet"):
                 st.dataframe(fyf_df, use_container_width=True, hide_index=True)
         except Exception as e:
             st.error(f"Error loading features: {e}")
 
 with tab_logs:
     st.subheader("📋 Centralized Pipeline Logs & Diagnostics")
+    st.markdown(f"🔀 Variant: **{active_variant}**")
     st.markdown("Explore and query the pipeline logs. Logs are stored in JSONL format, allowing SQL queries directly via DuckDB.")
     
     log_file = Path(config["paths"]["interim_manifests"]) / "pipeline_log.jsonl"
@@ -1089,9 +1153,16 @@ with tab_logs:
                 err_count = len(log_df[log_df["level"] == "ERROR"]) if "level" in log_df.columns else 0
                 st.metric("Errors", err_count)
                 
+            # Extract variant from the details column (written by variant-aware scripts)
+            def _extract_variant(details):
+                if isinstance(details, dict):
+                    return details.get("variant")
+                return None
+            log_df["variant"] = log_df["details"].apply(_extract_variant) if "details" in log_df.columns else None
+
             # Filters
             st.markdown("### 🔍 Search & Filter Logs")
-            fl_col1, fl_col2, fl_col3 = st.columns([1, 1, 2])
+            fl_col1, fl_col2, fl_col3, fl_col4 = st.columns([1, 1, 1, 2])
             with fl_col1:
                 levels = sorted(log_df["level"].unique()) if "level" in log_df.columns else []
                 selected_levels = st.multiselect("Log Level", levels, default=[])
@@ -1099,17 +1170,22 @@ with tab_logs:
                 steps = sorted(log_df["pipeline_step"].unique()) if "pipeline_step" in log_df.columns else []
                 selected_steps = st.multiselect("Pipeline Step", steps, default=[])
             with fl_col3:
+                variants_seen = sorted(v for v in log_df["variant"].unique() if v) if "variant" in log_df.columns else []
+                selected_variants = st.multiselect("Variant", variants_seen, default=[])
+            with fl_col4:
                 search_text = st.text_input("Search Messages", "")
-                
+
             # Apply filters
             filtered_logs = log_df
             if selected_levels:
                 filtered_logs = filtered_logs[filtered_logs["level"].isin(selected_levels)]
             if selected_steps:
                 filtered_logs = filtered_logs[filtered_logs["pipeline_step"].isin(selected_steps)]
+            if selected_variants:
+                filtered_logs = filtered_logs[filtered_logs["variant"].isin(selected_variants)]
             if search_text:
                 filtered_logs = filtered_logs[
-                    filtered_logs["message"].astype(str).str.contains(search_text, case=False, na=False) | 
+                    filtered_logs["message"].astype(str).str.contains(search_text, case=False, na=False) |
                     filtered_logs["ticker"].astype(str).str.contains(search_text, case=False, na=False)
                 ]
                 

@@ -10,8 +10,10 @@ warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
 try:
     import pipeline_logger
+    import variant_utils
 except ImportError:
     from scripts import pipeline_logger
+    from scripts import variant_utils
 
 def load_config():
     config_path = Path("configs/config.json")
@@ -19,27 +21,36 @@ def load_config():
         return json.load(f)
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Build firm-year feature panel from scored chunks")
+    variant_utils.add_variant_arg(parser)
+    args = parser.parse_args()
+
     config = load_config()
-    
+    variant = variant_utils.resolve_variant(args.variant, config)
+    output_root = config.get("variants", {}).get("output_root", "data/processed")
+
     universe_path = Path(config["paths"]["interim_manifests"]) / "firm_universe.parquet"
     manifest_path = Path(config["paths"]["interim_manifests"]) / "filing_manifest.parquet"
-    scored_chunks_path = Path(config["paths"]["candidate_chunks"]) / "ai_scored_chunks.parquet"
-    output_path = Path("data/processed/features/firm_year_features.parquet")
-    
+    scored_chunks_path = variant_utils.variant_path(variant, "ai_scored_chunks", "parquet", output_root=output_root)
+    output_path = variant_utils.variant_path(variant, "firm_year_features", "parquet", output_root=output_root)
+
     # Check if files exist
     if not universe_path.exists() or not manifest_path.exists():
         pipeline_logger.log_event(
             pipeline_step="build_features",
             level="ERROR",
-            message=f"Missing metadata files. universe={universe_path.exists()}, manifest={manifest_path.exists()}"
+            message=f"Missing metadata files. universe={universe_path.exists()}, manifest={manifest_path.exists()}",
+            details={"variant": variant}
         )
         print("Error: Missing universe or manifest files.")
         return
-        
+
     pipeline_logger.log_event(
         pipeline_step="build_features",
         level="INFO",
-        message="Loading firm universe, filing manifest, and scored chunks..."
+        message="Loading firm universe, filing manifest, and scored chunks...",
+        details={"variant": variant}
     )
     
     universe_df = pd.read_parquet(universe_path)
@@ -225,7 +236,8 @@ def main():
     pipeline_logger.log_event(
         pipeline_step="build_features",
         level="SUCCESS",
-        message=f"Panel feature dataset built successfully. Saved {len(panel_df)} firm-year observations to {output_path}."
+        message=f"Panel feature dataset built successfully. Saved {len(panel_df)} firm-year observations to {output_path}.",
+        details={"variant": variant}
     )
     print(f"Success: Saved {len(panel_df)} firm-year observations to {output_path}")
 

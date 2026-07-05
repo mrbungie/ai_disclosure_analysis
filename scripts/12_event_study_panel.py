@@ -1,12 +1,12 @@
 """
 12_event_study_panel.py — Event study / DiD panel builder
 
-Produces `data/processed/panels/event_study_panel.parquet` with:
+Produces `data/processed/variant_{variant}/panels/event_study_panel__{variant}.parquet` with:
 - Firm-year observations enriched with event indicators and treatment flags
 - Pre/post windows for ChatGPT (2022), SEC guidance (2024), DeepSeek (2025)
 - Treatment group indicators based on 2023 baseline disclosure style
 
-Also runs a power check (`reports/did_power_check.txt`): with 115 firms across
+Also runs a power check (`reports/did_power_check__{variant}.txt`): with 115 firms across
 54 SIC industry groups, industry x year x treatment cells used in a DiD design
 get small fast. Single-flag treatment counts can look adequate while the actual
 regression cells (e.g. treatment x tech-sector x pre/post) are underpowered.
@@ -25,8 +25,10 @@ from pathlib import Path
 
 try:
     import pipeline_logger
+    import variant_utils
 except ImportError:
     from scripts import pipeline_logger
+    from scripts import variant_utils
 
 
 def load_config():
@@ -66,13 +68,16 @@ DID_CELL_SPECS = {
 }
 
 
-def build_panel(features_path, clusters_path, output_path):
+def build_panel(features_path, clusters_path, output_path, variant, power_check_path):
     features = pd.read_parquet(features_path)
     clusters = pd.read_parquet(clusters_path)
 
-    # Merge cluster assignments
+    # Merge cluster assignments + D1-D9 dimension scores (needed by TREATMENT_DEFS,
+    # e.g. "D3 Technical" / "D8 Defensive" — dropping these silently produced NaN
+    # treatment flags and skipped DiD specs).
+    dim_cols = [c for c in clusters.columns if c.startswith("D") and c[1].isdigit()]
     df = features.merge(
-        clusters[["ticker", "year", "cluster", "cluster_name"]],
+        clusters[["ticker", "year", "cluster", "cluster_name"] + dim_cols],
         on=["ticker", "year"], how="left"
     )
 
@@ -86,8 +91,6 @@ def build_panel(features_path, clusters_path, output_path):
     # Assign based on 2023 (pre-SEC) baseline to avoid contamination
     base_year = 2023
     base = df[df["year"] == base_year].copy()
-
-    dim_cols = [c for c in clusters.columns if c.startswith("D") and c[1].isdigit()]
 
     for flag, (col, rule, _) in TREATMENT_DEFS.items():
         if rule == "high":
@@ -117,7 +120,8 @@ def build_panel(features_path, clusters_path, output_path):
     pipeline_logger.log_event(
         pipeline_step="event_study_panel",
         level="SUCCESS",
-        message=f"Event study panel saved: {len(df)} rows, {len(df.columns)} cols → {output_path}"
+        message=f"Event study panel saved: {len(df)} rows, {len(df.columns)} cols → {output_path}",
+        details={"variant": variant}
     )
     print(f"Saved {len(df)} firm-year observations to {output_path}")
     print(f"Columns: {len(df.columns)}")
@@ -135,12 +139,12 @@ def build_panel(features_path, clusters_path, output_path):
             n_firms = df[df[flag] == 1]["ticker"].nunique()
             print(f"  {flag}: {n} firm-years  ({n_firms} firms)")
 
-    run_power_check(df)
+    run_power_check(df, variant, out_path=power_check_path)
 
     return df
 
 
-def run_power_check(df: pd.DataFrame, out_path: Path = Path("reports/did_power_check.txt")) -> None:
+def run_power_check(df: pd.DataFrame, variant: str, out_path: Path) -> None:
     """
     Report distinct-firm counts for each DiD treatment cell before the DiD is run.
 
@@ -204,21 +208,31 @@ def run_power_check(df: pd.DataFrame, out_path: Path = Path("reports/did_power_c
             f"DiD power check: {len(underpowered)} underpowered cell(s) "
             f"out of {len(DID_CELL_SPECS)} specs checked."
         ),
+        details={"variant": variant}
     )
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Build event study / DiD panel")
+    variant_utils.add_variant_arg(parser)
+    args = parser.parse_args()
+
     config = load_config()
-    features_path = Path("data/processed/features/firm_year_features.parquet")
-    clusters_path = Path("data/processed/clusters/firm_year_clusters.parquet")
-    output_path   = Path("data/processed/panels/event_study_panel.parquet")
+    variant = variant_utils.resolve_variant(args.variant, config)
+    output_root = config.get("variants", {}).get("output_root", "data/processed")
+
+    features_path = variant_utils.variant_path(variant, "firm_year_features", "parquet", output_root=output_root)
+    clusters_path = variant_utils.variant_path(variant, "firm_year_clusters", "parquet", subdir="clusters", output_root=output_root)
+    output_path   = variant_utils.variant_path(variant, "event_study_panel", "parquet", subdir="panels", output_root=output_root)
+    power_check_path = Path(f"reports/did_power_check__{variant}.txt")
 
     for p in [features_path, clusters_path]:
         if not p.exists():
             print(f"Error: missing {p}. Run pipeline scripts first.")
             return
 
-    build_panel(features_path, clusters_path, output_path)
+    build_panel(features_path, clusters_path, output_path, variant, power_check_path)
 
 
 if __name__ == "__main__":

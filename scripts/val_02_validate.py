@@ -5,15 +5,20 @@ Treats LLM labels (from val_01) as ground truth and computes precision, recall,
 F1, and accuracy for each binary pipeline dimension, plus Spearman ρ for the
 continuous specificity score.
 
+Only supports --variant rule_based (validating llm_full with another LLM
+judge would be circular). See variant_utils.require_variant.
+
 Outputs:
-  - data/processed/validation/validation_report.csv  — per-dimension metrics
-  - reports/validation_confusion.png                 — confusion matrices grid
-  - reports/validation_summary.txt                   — human-readable summary
+  - data/processed/variant_rule_based/validation/validation_report__rule_based.csv  — per-dimension metrics
+  - reports/validation_confusion__rule_based.png     — confusion matrices grid
+  - reports/validation_summary__rule_based.txt       — human-readable summary
 
 Usage:
-    uv run python scripts/val_02_validate.py
+    uv run python scripts/val_02_validate.py --variant rule_based
 """
 
+import argparse
+import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -25,8 +30,10 @@ from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_
 
 try:
     import pipeline_logger
+    import variant_utils
 except ImportError:
     from scripts import pipeline_logger
+    from scripts import variant_utils
 
 
 BINARY_DIMS = [
@@ -71,10 +78,27 @@ def evaluate_binary(y_true: np.ndarray, y_pred: np.ndarray, name: str) -> dict:
     }
 
 
+def load_config() -> dict:
+    with open("configs/config.json") as f:
+        return json.load(f)
+
+
 def main():
-    labeled_path = Path("data/processed/validation/llm_labeled_sample.parquet")
-    scored_path  = Path("data/interim/candidate_chunks/ai_scored_chunks.parquet")
-    out_dir      = Path("data/processed/validation")
+    parser = argparse.ArgumentParser(
+        description="Evaluate pipeline scores against LLM ground-truth labels"
+    )
+    variant_utils.add_variant_arg(parser)
+    args = parser.parse_args()
+
+    config = load_config()
+    variant = variant_utils.resolve_variant(args.variant, config)
+    variant_utils.require_variant(variant, allowed=("rule_based",), script_name="val_02")
+    output_root = config.get("variants", {}).get("output_root", "data/processed")
+
+    validation_dir = variant_utils.variant_dir(variant, output_root=output_root) / "validation"
+    labeled_path = validation_dir / f"llm_labeled_sample__{variant}.parquet"
+    scored_path  = variant_utils.variant_path(variant, "ai_scored_chunks", "parquet", output_root=output_root)
+    out_dir      = validation_dir
     reports_dir  = Path("reports")
     reports_dir.mkdir(exist_ok=True)
 
@@ -88,6 +112,14 @@ def main():
     labels = pd.read_parquet(labeled_path)
     pipe_cols = ["chunk_id"] + BINARY_DIMS + ["final_specificity"]
     scored = pd.read_parquet(scored_path, columns=pipe_cols)
+
+    # chunk_id is a content hash (sha256(chunk_text)[:16]) with no ticker/section/
+    # filing component, so verbatim-repeated boilerplate (e.g. the same paragraph
+    # in both Item 1A and Item 7 of one filing) shares an id across multiple rows.
+    # Dedupe both sides on chunk_id before merging, otherwise one labeled chunk
+    # fans out into N identical evaluation rows and silently over-weights it.
+    labels = labels.drop_duplicates(subset="chunk_id")
+    scored = scored.drop_duplicates(subset="chunk_id")
 
     df = labels.merge(scored, on="chunk_id", how="inner")
     print(f"Validation set: {len(df)} chunks (of {len(labels)} labeled)\n")
@@ -142,8 +174,8 @@ def main():
 
     # --- Save CSV report ---
     report_df = pd.DataFrame(records)
-    report_df.to_csv(out_dir / "validation_report.csv", index=False)
-    print(f"\nReport → {out_dir}/validation_report.csv")
+    report_df.to_csv(out_dir / f"validation_report__{variant}.csv", index=False)
+    print(f"\nReport → {out_dir}/validation_report__{variant}.csv")
 
     # --- Confusion matrix plot ---
     n_dims = len(cm_data)
@@ -168,7 +200,7 @@ def main():
             fontsize=11,
         )
         fig.tight_layout()
-        out_png = reports_dir / "validation_confusion.png"
+        out_png = reports_dir / f"validation_confusion__{variant}.png"
         fig.savefig(out_png, dpi=150, bbox_inches="tight")
         plt.close(fig)
         print(f"Confusion matrices → {out_png}")
@@ -197,7 +229,7 @@ def main():
         ]
 
     summary_text = "\n".join(summary_lines)
-    summary_path = reports_dir / "validation_summary.txt"
+    summary_path = reports_dir / f"validation_summary__{variant}.txt"
     summary_path.write_text(summary_text)
     print(f"Summary → {summary_path}")
     print("\n" + summary_text)
@@ -206,6 +238,7 @@ def main():
         pipeline_step="validation_compare",
         level="SUCCESS",
         message=f"Validation complete. {len(df)} chunks, {len(binary_rows)} binary dims evaluated.",
+        details={"variant": variant},
     )
 
 

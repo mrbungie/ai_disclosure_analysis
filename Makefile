@@ -33,21 +33,21 @@ run-scoring:
 
 run-features:
 	@echo "Building firm-year panel dataset..."
-	.venv/bin/python scripts/10_build_features.py
+	.venv/bin/python scripts/10_build_features.py $(ARGS)
 
 run-clustering:
 	@echo "Running programmatic behavioral clustering..."
-	.venv/bin/python scripts/11_cluster_archetypes.py --method programmatic
+	.venv/bin/python scripts/11_cluster_archetypes.py --method programmatic $(ARGS)
 
 run-full-pipeline: run-pipeline run-bow run-llm run-scoring run-features run-clustering
 
 run-factor-analysis:
 	@echo "Running Factor Analysis on BoW features (script 13)..."
-	.venv/bin/python scripts/13_factor_analysis.py
+	.venv/bin/python scripts/13_factor_analysis.py $(ARGS)
 
 run-event-study:
 	@echo "Building event study panel (script 12)..."
-	.venv/bin/python scripts/12_event_study_panel.py
+	.venv/bin/python scripts/12_event_study_panel.py $(ARGS)
 
 run-validate-sample:
 	@echo "Sampling and LLM-labeling validation chunks (val_01)..."
@@ -55,13 +55,13 @@ run-validate-sample:
 
 run-validate-compare:
 	@echo "Comparing pipeline vs LLM labels (val_02)..."
-	.venv/bin/python scripts/val_02_validate.py
+	.venv/bin/python scripts/val_02_validate.py $(ARGS)
 
 run-validate: run-validate-sample run-validate-compare
 
 run-governance-sensitivity:
 	@echo "Checking D5 Governance sensitivity: BoW-only vs LLM-only (script 14)..."
-	.venv/bin/python scripts/14_governance_sensitivity.py
+	.venv/bin/python scripts/14_governance_sensitivity.py $(ARGS)
 
 help:
 	@echo "Available Makefile commands:"
@@ -70,15 +70,15 @@ help:
 	@echo "  make run-pipeline       Run the prefilter and chunking scripts"
 	@echo "  make run-bow            Run the Bag-of-Words feature extraction script (07)"
 	@echo "  make run-llm            Run the LLM classification script (08). Pass ARGS='--limit N' to limit."
-	@echo "  make run-scoring        Run the combined scoring script (09)"
-	@echo "  make run-features       Run the feature builder script (10)"
-	@echo "  make run-clustering     Run the programmatic clustering script (11)"
+	@echo "  make run-scoring        Run the combined scoring script (09). Pass ARGS='--variant rule_based|llm_full'."
+	@echo "  make run-features       Run the feature builder script (10). Pass ARGS='--variant rule_based|llm_full'."
+	@echo "  make run-clustering     Run the programmatic clustering script (11). Pass ARGS='--variant rule_based|llm_full'."
 	@echo "  make run-full-pipeline  Run the entire pipeline from prefiltering to clustering"
-	@echo "  make run-factor-analysis  Run Factor Analysis on BoW features (script 13)"
-	@echo "  make run-event-study      Build the event study panel (script 12)"
-	@echo "  make run-validate-sample  Sample + LLM-label validation chunks (val_01). Pass ARGS='--n 200'."
-	@echo "  make run-validate-compare Compare pipeline vs LLM labels (val_02)"
+	@echo "  make run-factor-analysis  Run Factor Analysis on BoW features (script 13). Pass ARGS='--variant rule_based|llm_full'."
+	@echo "  make run-event-study      Build the event study panel (script 12). Pass ARGS='--variant rule_based|llm_full'."
+	@echo "  make run-validate-sample  Sample + LLM-label validation chunks (val_01). Pass ARGS='--n 200 --variant rule_based' (rule_based only)."
+	@echo "  make run-validate-compare Compare pipeline vs LLM labels (val_02). rule_based only."
 	@echo "  make run-validate         Run full validation: sample → label → compare"
-	@echo "  make run-governance-sensitivity  Check D5 archetype stability: BoW-only vs LLM-only (script 14)"
+	@echo "  make run-governance-sensitivity  Check D5 archetype stability: BoW-only vs LLM-only (script 14). Pass ARGS='--variant llm_full' (most informative)."
 
 
