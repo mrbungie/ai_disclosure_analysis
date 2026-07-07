@@ -1,0 +1,41 @@
+{
+  "target_f1": 0.85,
+  "variance_penalty": 1.0,
+  "min_delta": 0.005,
+  "n_folds": 5,
+  "rounds": [
+    {
+      "iteration": 0,
+      "keywords_before": [
+        "ai",
+        "artificial intelligence",
+        "generative ai",
+        "gen ai",
+        "machine learning",
+        "large language model",
+        "llm",
+        "deep learning",
+        "natural language processing",
+        "predictive analytics",
+        "algorithmic",
+        "automation",
+        "computer vision",
+        "neural network",
+        "openai",
+        "anthropic",
+        "claude",
+        "deepseek",
+        "chatgpt",
+        "copilot",
+        "gemini",
+        "aip",
+        "aiops"
+      ],
+      "n_candidates_evaluated": 0,
+      "candidates": [],
+      "chosen": null,
+      "baseline_mean_f1": 0.9232972733901527,
+      "baseline_std_f1": 0.01905341052297067
+    }
+  ]
+}
