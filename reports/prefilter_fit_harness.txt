@@ -3,6 +3,7 @@ Prefilter keyword fit — DEV search (spent, not the final number)
 Dev set: 479 paragraphs, 5-fold CV, target F1 >= 0.85
 Candidates evaluated across all iterations: 0
 Target reached: True
+Full per-round candidate trace: reports/prefilter_fit_search_trace.json
 
 Search history:
   [baseline] mean F1=0.923, std=0.019

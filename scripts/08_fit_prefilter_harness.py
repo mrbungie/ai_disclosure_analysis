@@ -46,6 +46,7 @@ DEV_PATH = Path("data/interim/prefilter_fit/dev_split.parquet")
 HOLDOUT_PATH = Path("data/interim/prefilter_fit/holdout_split.parquet")
 FIT_REPORT_PATH = Path("reports/prefilter_fit_harness.txt")
 HOLDOUT_REPORT_PATH = Path("reports/prefilter_fit_holdout_eval.txt")
+SEARCH_TRACE_PATH = Path("reports/prefilter_fit_search_trace.json")
 CONFIG_PATH = Path("configs/config.json")
 
 STOPWORDS = {
@@ -172,7 +173,13 @@ def mine_candidates(dev: pd.DataFrame, keywords: list[str], false_positives: lis
 
 def greedy_search(dev: pd.DataFrame, base_keywords: list[str], false_positives: list[str],
                    folds: list[tuple[np.ndarray, np.ndarray]], target_f1: float,
-                   max_iterations: int, variance_penalty: float, min_delta: float) -> dict:
+                   max_iterations: int, variance_penalty: float, min_delta: float,
+                   trace_path: Path) -> dict:
+    """Greedy forward-selection search. Every round's FULL candidate evaluation
+    (not just the winner) is appended to `trace` and flushed to `trace_path`
+    after each iteration — the actual "how did the search get here" record,
+    not just the final report's prose summary. If the process is killed
+    mid-run, the trace file still shows every round completed so far."""
     y = dev["llm_is_ai_related"].to_numpy()
     texts = dev["paragraph_text"]
     keywords = list(base_keywords)
@@ -182,8 +189,20 @@ def greedy_search(dev: pd.DataFrame, base_keywords: list[str], false_positives: 
         scores = [f1_score(y[test_idx], pred[test_idx]) for _, test_idx in folds]
         return float(np.mean(scores)), float(np.std(scores))
 
+    def flush_trace() -> None:
+        trace_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(trace_path, "w") as f:
+            json.dump({"target_f1": target_f1, "variance_penalty": variance_penalty,
+                       "min_delta": min_delta, "n_folds": len(folds), "rounds": trace}, f, indent=2)
+
     baseline_mean, baseline_std = cv_score(keywords)
     history = [{"iteration": 0, "action": "baseline", "keyword": None, "mean_f1": baseline_mean, "std_f1": baseline_std}]
+    trace: list[dict] = [{
+        "iteration": 0, "keywords_before": list(base_keywords), "n_candidates_evaluated": 0,
+        "candidates": [], "chosen": None,
+        "baseline_mean_f1": baseline_mean, "baseline_std_f1": baseline_std,
+    }]
+    flush_trace()
     print(f"Baseline (current config keywords): CV mean F1={baseline_mean:.3f}, std={baseline_std:.3f}")
 
     if baseline_mean >= target_f1:
@@ -198,25 +217,41 @@ def greedy_search(dev: pd.DataFrame, base_keywords: list[str], false_positives: 
         candidates = [c for c in candidates if c not in keywords]
         if not candidates:
             print(f"[iter {iteration}] No more candidates to try. Stopping.")
+            trace.append({"iteration": iteration, "keywords_before": list(keywords), "n_candidates_evaluated": 0,
+                          "candidates": [], "chosen": None, "stop_reason": "no_candidates_mined"})
+            flush_trace()
             break
 
+        round_candidates = []
         best_candidate, best_mean, best_std, best_penalized = None, current_mean, current_std, current_mean - variance_penalty * current_std
         for cand in candidates:
             n_tried += 1
             mean_f1, std_f1 = cv_score(keywords + [cand])
             penalized = mean_f1 - variance_penalty * std_f1
+            round_candidates.append({"keyword": cand, "mean_f1": mean_f1, "std_f1": std_f1, "penalized": penalized})
             if penalized > best_penalized + min_delta:
                 best_candidate, best_mean, best_std, best_penalized = cand, mean_f1, std_f1, penalized
+
+        # Full round trace (every candidate tried, sorted best-first) — not just the winner.
+        round_candidates.sort(key=lambda r: r["penalized"], reverse=True)
 
         if best_candidate is None:
             print(f"[iter {iteration}] No candidate improved the penalized CV score by >= {min_delta}. Stopping "
                   f"(tried {len(candidates)} candidates this round).")
+            trace.append({"iteration": iteration, "keywords_before": list(keywords),
+                          "n_candidates_evaluated": len(candidates), "candidates": round_candidates,
+                          "chosen": None, "stop_reason": "no_candidate_improved"})
+            flush_trace()
             break
 
         keywords.append(best_candidate)
         current_mean, current_std = best_mean, best_std
         history.append({"iteration": iteration, "action": "add", "keyword": best_candidate,
                          "mean_f1": best_mean, "std_f1": best_std})
+        trace.append({"iteration": iteration, "keywords_before": list(keywords[:-1]),
+                      "n_candidates_evaluated": len(candidates), "candidates": round_candidates,
+                      "chosen": best_candidate, "chosen_mean_f1": best_mean, "chosen_std_f1": best_std})
+        flush_trace()
         print(f"[iter {iteration}] +'{best_candidate}' -> CV mean F1={best_mean:.3f}, std={best_std:.3f} "
               f"({len(candidates)} candidates evaluated this round)")
 
@@ -268,7 +303,8 @@ def main() -> None:
     folds = stratified_kfold(dev["llm_is_ai_related"].to_numpy(), args.folds, args.seed)
 
     result = greedy_search(dev, base_keywords, false_positives, folds,
-                            args.target_f1, args.max_iterations, args.variance_penalty, args.min_delta)
+                            args.target_f1, args.max_iterations, args.variance_penalty, args.min_delta,
+                            SEARCH_TRACE_PATH)
 
     lines = []
     lines.append("Prefilter keyword fit — DEV search (spent, not the final number)")
@@ -276,6 +312,7 @@ def main() -> None:
     lines.append(f"Dev set: {len(dev)} paragraphs, {args.folds}-fold CV, target F1 >= {args.target_f1}")
     lines.append(f"Candidates evaluated across all iterations: {result['n_candidates_tried']}")
     lines.append(f"Target reached: {result['hit_target']}")
+    lines.append(f"Full per-round candidate trace: {SEARCH_TRACE_PATH}")
     lines.append("")
     lines.append("Search history:")
     for h in result["history"]:
