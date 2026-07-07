@@ -1,18 +1,18 @@
 D5 Governance Sensitivity: BoW-only vs LLM-only
 ============================================================
 Panel: 658 firm-years
-Firm-years with changed archetype: 146 (22.2%)
+Firm-years with changed archetype: 145 (22.0%)
 
 Archetype cross-tab (rows=BoW-only D5, cols=LLM-only D5):
 LLM-only D5                       Boilerplate Risk-Warners  Full-Stack AI Pioneers  Non-AI Disclosers  Operational Application Adopters
 BoW-only D5                                                                                                                            
 Boilerplate Risk-Warners                               127                       0                  0                                 0
-Full-Stack AI Pioneers                                   0                     100                  0                                 0
-Governance & Compliance-Focused                         85                      46                  0                                15
+Full-Stack AI Pioneers                                   0                     101                  0                                 0
+Governance & Compliance-Focused                         85                      45                  0                                15
 Non-AI Disclosers                                        0                       0                231                                 0
 Operational Application Adopters                         0                       0                  0                                54
 
-'Governance & Compliance-Focused' membership: 146 firm-years (BoW-only D5) vs 0 firm-years (LLM-only D5)
+'Governance & Compliance-Focused' membership: 145 firm-years (BoW-only D5) vs 0 firm-years (LLM-only D5)
 Relative difference in cluster size: 100.0%
 
 WARNING: >=10% of firm-years change archetype depending on which governance signal (BoW proxy vs LLM) is used. The AI Washing narrative should not rely on a single governance source without reporting this sensitivity explicitly, or improving the governance LLM prompt/recall before finalizing cluster assignments.

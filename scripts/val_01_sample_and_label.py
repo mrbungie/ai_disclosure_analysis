@@ -37,6 +37,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.profiles.openai import OpenAIModelProfile
 from pydantic_ai.providers.openai import OpenAIProvider
 
 try:
@@ -102,7 +103,11 @@ def build_agent() -> Agent:
     model_name = os.environ.get("LLM_JUDGE_MODEL", "gpt-4o-mini")
 
     provider = OpenAIProvider(base_url=base_url, api_key=api_key)
-    model = OpenAIChatModel(model_name, provider=provider)
+    # Many NIM-hosted OpenAI-"compatible" models 400 on OpenAI's strict tool-definition
+    # mode (extra_forbidden on tools.0.function.strict) — disable it so the judge isn't
+    # locked to the handful of models that happen to support it.
+    profile = OpenAIModelProfile(openai_supports_strict_tool_definition=False)
+    model = OpenAIChatModel(model_name, provider=provider, profile=profile)
     return Agent(
         model,
         output_type=ValidationLabel,

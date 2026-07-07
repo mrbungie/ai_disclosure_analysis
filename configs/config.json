@@ -168,7 +168,9 @@
       "deepseek",
       "chatgpt",
       "copilot",
-      "gemini"
+      "gemini",
+      "aip",
+      "aiops"
     ],
     "false_positives": [
       "adobe illustrator",

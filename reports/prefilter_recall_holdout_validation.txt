@@ -1,0 +1,33 @@
+Prefilter/chunking recall — LOCKED HOLDOUT (post-fix keyword list: default + aip/aiops)
+==============================================================================
+
+This is the single-look holdout number. The 1,468-paragraph search-pool sample
+(prefilter_recall_validation.txt) is what surfaced the aip/aiops fix and must not
+be cited as the recall estimate — this file is the clean one.
+
+Precision on candidate chunks (from 236-chunk judged sample): 0.822
+Covered (in-window) paragraphs: 14,815 — TP basis, NOT the chunk count
+  (each chunk merges ~3.5 raw paragraphs on average; using the chunk
+  count as TP would understate it relative to FN, which is naturally in paragraph units)
+Estimated true positives among 14,815 covered paragraphs: 12,178
+
+Stratum: no_matches_filing
+  Sampled: 284 paragraphs (30 industries)
+  Judge-positive (is_ai_related): 0/284 = 0.0% (95% Wilson CI: 0.0%-1.3%)
+  Population (paragraphs): 180,357
+  Estimated false negatives: 0 (CI: 0-2,407)
+
+Stratum: excluded_within_matched
+  Sampled: 250 paragraphs (55 industries)
+  Judge-positive (is_ai_related): 1/250 = 0.4% (95% Wilson CI: 0.1%-2.2%)
+  Population (paragraphs): 618,089
+  Estimated false negatives: 2,472 (CI: 437-13,787)
+
+  [positive] SNOW (Services-Prepackaged Software): The excerpt explicitly mentions ML (machine learning) use cases in the context of workload recommendations, indicating direct engagement with AI/ML technology.
+
+Estimated overall is_ai_related recall (post-fix, holdout-based): 0.831
+  (TP~=12,178, FN~=2,472)
+
+Rule: if this number disappoints, do not re-run this script or re-examine this
+holdout. A disappointing result here should be reported as-is; further keyword-list
+changes require a third, never-seen batch, sampled and judged fresh.

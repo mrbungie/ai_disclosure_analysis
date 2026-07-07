@@ -1,0 +1,88 @@
+Boolean/threshold search harness — SEARCH POOL ONLY (not the final number)
+==============================================================================
+Search pool size: 361 chunks
+CV folds: 5 (stratified per dimension), variance penalty: 1.0
+
+Dimension: is_substantive  (prevalence 57.9%, n=361)
+  Candidates evaluated: 55 singles (1 dropped as degenerate/constant) + 315 pairs = 370 total
+  Always-predict-True baseline: mean F1=0.733 (exploits prevalence alone — any winner must clear this to mean anything)
+  Production formula CV: mean F1=0.643, std=0.046
+  Winner: has_word_ai OR has_classical_ml_mention
+    mean F1=0.738, std=0.022, penalized score=0.716
+  Top 10 candidates (by penalized score):
+    0.716  (mean=0.738, std=0.022)  has_word_ai OR has_classical_ml_mention
+    0.715  (mean=0.720, std=0.005)  NOT has_classical_ml_operational
+    0.708  (mean=0.717, std=0.010)  NOT has_named_deployment
+    0.707  (mean=0.728, std=0.021)  NOT has_ai_quantified_claim
+    0.706  (mean=0.721, std=0.015)  NOT has_open_source
+    0.702  (mean=0.723, std=0.021)  has_word_ai OR has_realized_language
+    0.700  (mean=0.720, std=0.020)  NOT has_proprietary_data
+    0.695  (mean=0.711, std=0.015)  NOT has_ai_acquisition
+    0.695  (mean=0.709, std=0.013)  NOT has_academic_research
+    0.687  (mean=0.712, std=0.025)  has_word_ai OR has_deployment_verb
+
+Dimension: is_promotional  (prevalence 11.1%, n=361)
+  Candidates evaluated: 39 singles (0 dropped as degenerate/constant) + 315 pairs = 354 total
+  Always-predict-True baseline: mean F1=0.200 (exploits prevalence alone — any winner must clear this to mean anything)
+  Production formula CV: mean F1=0.374, std=0.097
+  Winner: vague_gt_negative OR has_word_leadership
+    mean F1=0.368, std=0.061, penalized score=0.307
+  Top 10 candidates (by penalized score):
+    0.307  (mean=0.368, std=0.061)  vague_gt_negative OR has_word_leadership
+    0.302  (mean=0.378, std=0.076)  vague_gt_negative OR has_word_transform
+    0.302  (mean=0.378, std=0.076)  vague_gt_negative OR has_word_transforming
+    0.289  (mean=0.358, std=0.068)  vague_gt_negative AND NOT has_word_leader
+    0.286  (mean=0.367, std=0.081)  vague_gt_negative AND NOT has_metrics
+    0.278  (mean=0.354, std=0.076)  vague_gt_negative AND NOT has_word_empower
+    0.278  (mean=0.354, std=0.076)  vague_gt_negative AND NOT has_word_empowering
+    0.278  (mean=0.374, std=0.097)  PRODUCTION[is_promotional]
+    0.273  (mean=0.356, std=0.083)  vague_gt_negative OR has_specific_product
+    0.270  (mean=0.360, std=0.090)  vague_gt_negative AND sentiment_nonneg
+
+Dimension: is_risk_related  (prevalence 45.4%, n=361)
+  Candidates evaluated: 25 singles (0 dropped as degenerate/constant) + 198 pairs = 223 total
+  Always-predict-True baseline: mean F1=0.625 (exploits prevalence alone — any winner must clear this to mean anything)
+  Production formula CV: mean F1=0.791, std=0.028
+  Winner: PRODUCTION[is_risk_related]
+    mean F1=0.791, std=0.028, penalized score=0.763
+  Top 10 candidates (by penalized score):
+    0.763  (mean=0.791, std=0.028)  PRODUCTION[is_risk_related]
+    0.738  (mean=0.778, std=0.040)  has_regulatory_risk OR has_risk_factor
+    0.721  (mean=0.745, std=0.023)  has_cyber_privacy_risk OR has_competitor_mention
+    0.720  (mean=0.756, std=0.036)  has_cyber_privacy_risk OR has_risk_factor
+    0.708  (mean=0.734, std=0.025)  has_cyber_privacy_risk OR has_ip_copyright_risk
+    0.699  (mean=0.748, std=0.049)  has_cyber_privacy_risk OR has_regulatory_risk
+    0.692  (mean=0.747, std=0.055)  has_regulatory_risk OR has_ip_copyright_risk
+    0.691  (mean=0.705, std=0.015)  has_cyber_privacy_risk OR has_ai_hedge
+    0.687  (mean=0.709, std=0.022)  has_cyber_privacy_risk OR has_ethics_bias_risk
+    0.685  (mean=0.747, std=0.062)  has_regulatory_risk OR has_competitor_mention
+
+Dimension: is_governance_related  (prevalence 14.7%, n=361)
+  Candidates evaluated: 17 singles (0 dropped as degenerate/constant) + 84 pairs = 101 total
+  Always-predict-True baseline: mean F1=0.256 (exploits prevalence alone — any winner must clear this to mean anything)
+  Production formula CV: mean F1=0.445, std=0.074
+  Winner: has_ethics_policy OR has_board_oversight
+    mean F1=0.492, std=0.087, penalized score=0.405
+  Top 10 candidates (by penalized score):
+    0.405  (mean=0.492, std=0.087)  has_ethics_policy OR has_board_oversight
+    0.371  (mean=0.445, std=0.074)  PRODUCTION[is_governance_related]
+    0.368  (mean=0.454, std=0.086)  has_ethics_policy OR has_eu_regulation
+    0.341  (mean=0.448, std=0.107)  has_ethics_policy OR has_us_regulation
+    0.339  (mean=0.423, std=0.084)  has_ethics_policy
+    0.339  (mean=0.423, std=0.084)  has_ethics_policy AND NOT has_audit_committee
+    0.337  (mean=0.426, std=0.089)  has_ethics_policy OR has_audit_committee
+    0.335  (mean=0.392, std=0.057)  has_compliance OR has_board_oversight
+    0.332  (mean=0.420, std=0.088)  has_ethics_policy OR has_compliance
+    0.308  (mean=0.335, std=0.027)  has_word_ai OR has_board_oversight
+
+Total candidate formulas evaluated across all 4 dimensions: 1048
+
+Frozen formulas (winner per dimension, by CV mean F1 minus variance penalty):
+  is_substantive: has_word_ai OR has_classical_ml_mention
+  is_promotional: vague_gt_negative OR has_word_leadership
+  is_risk_related: PRODUCTION[is_risk_related]
+  is_governance_related: has_ethics_policy OR has_board_oversight
+
+These are frozen now. val_07_holdout_eval.py evaluates them on the disjoint holdout ONCE.
+If the winner is just PRODUCTION[dimension], the existing script 09 formula survives CV
+and no code change is needed for that dimension.
