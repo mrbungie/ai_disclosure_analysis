@@ -1,0 +1,10 @@
+Prefilter keyword fit — DEV search (spent, not the final number)
+======================================================================
+Dev set: 479 paragraphs, 5-fold CV, target F1 >= 0.85
+Candidates evaluated across all iterations: 0
+Target reached: True
+
+Search history:
+  [baseline] mean F1=0.923, std=0.019
+
+Final keyword list (23 terms): ['ai', 'artificial intelligence', 'generative ai', 'gen ai', 'machine learning', 'large language model', 'llm', 'deep learning', 'natural language processing', 'predictive analytics', 'algorithmic', 'automation', 'computer vision', 'neural network', 'openai', 'anthropic', 'claude', 'deepseek', 'chatgpt', 'copilot', 'gemini', 'aip', 'aiops']
