@@ -6,36 +6,12 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "pandas>=2.0.0",
-    "polars>=0.20.0",
     "pyarrow>=14.0.0",
-    "sec-edgar-downloader>=5.0.0",
     "beautifulsoup4>=4.12.0",
     "lxml>=5.0.0",
     "requests>=2.31.0",
-    "pydantic>=2.5.0",
-    "duckdb>=0.10.0",
     "tqdm>=4.66.0",
-    "pyyaml>=6.0",
-    "streamlit>=1.57.0",
-    "pydantic-ai>=0.0.18",
-    "python-dotenv>=1.0.0",
-    "matplotlib>=3.5.0",
-    "seaborn>=0.12.0",
-    "statsmodels>=0.14.0",
-    "scipy>=1.10.0",
-    "nbformat>=5.0.0",
-    "nbconvert>=7.0.0",
-    "ipykernel>=6.0.0",
-    "jupyterlab>=4.0.0",
-    "notebook>=7.0.0",
     "markdownify>=0.11.0",
-    "hdbscan>=0.8.43",
-    "umap-learn>=0.5.12",
-    "nltk>=3.9.4",
-    "factor-analyzer>=0.5.1",
-    # factor-analyzer 0.5.1 (latest on PyPI) calls check_array(force_all_finite=...),
-    # a kwarg sklearn removed in 1.8 — cap below that until factor-analyzer releases a fix.
-    "scikit-learn>=1.7.2,<1.8",
 ]
 
 [dependency-groups]

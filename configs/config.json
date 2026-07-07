@@ -141,11 +141,6 @@
     "interim_sections": "data/interim/sections",
     "candidate_chunks": "data/interim/candidate_chunks"
   },
-  "variants": {
-    "active": "rule_based",
-    "choices": ["rule_based", "llm_full"],
-    "output_root": "data/processed"
-  },
   "prefiltering": {
     "ai_keywords": [
       "ai",
