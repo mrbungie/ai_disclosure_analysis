@@ -15,18 +15,42 @@ loop** searches over harness candidates: it evaluates them on a search set,
 keeps the full record of every candidate tried (code, scores, traces — not
 compressed summaries), and reports held-out performance once.
 
-This thesis keeps the structure and inverts one role. Here the harness
-*replaces* the LLM at corpus scale: keyword regexes and boolean formulas —
-fully interpretable, exactly replicable, and auditable line by line, which
-suits an economics/finance measurement exercise better than a black-box
-classifier. The LLM sits in the **outer loop as the judge** producing the
-reward signal the search optimizes against. The objective has the same form
-as the paper's:
+This thesis instantiates the same three-level architecture, with the roles
+mapped to the measurement problem:
 
-    H* = argmax_H  E[ r(H, x) ]
+- **Level 0 — the artifact (the harness being optimized).** Deterministic
+  keyword regexes and boolean formulas. Deliberately "dumb": fully
+  interpretable, exactly replicable, auditable line by line — which suits an
+  economics/finance measurement exercise better than a black-box classifier.
+  This is what runs at corpus scale.
+- **Level 1 — the optimization cycle (the paper's Evaluate + inner loop).**
+  The pydantic-ai judging + search machinery (scripts 07–12,
+  `harness_fit.py`): an LLM judge produces the reward signal, a search
+  procedure optimizes the level-0 artifact within a fixed candidate space,
+  every candidate's evaluation is flushed to a search trace, and a locked
+  holdout is looked at once. The objective has the same form as the paper's:
 
-where `H` is a harness artifact (a keyword list; a boolean formula), `x` is a
-unit of filing text, and `r` is agreement (F1) with the LLM judge's label.
+      H* = argmax_H  E[ r(H, x) ]
+
+  where `H` is a level-0 artifact, `x` a unit of filing text, and `r`
+  agreement (F1) with the LLM judge's label.
+- **Level 2 — the agentic proposer (the paper's core contribution).** A
+  coding agent (Claude Code) with filesystem access to the full history —
+  search traces, fit/holdout/self-check reports, the cycle code itself, and
+  the git log of prior iterations. As in the paper, the proposer inspects
+  prior candidates and execution traces, diagnoses failure modes, and edits
+  **the level-1 code** (not just level-0 parameters): reweighting a biased
+  sampling design, replacing a leaky scoring convention, adding a synthetic
+  self-check, widening the atom space when a dimension plateaus. Each
+  proposer iteration is a commit; the commit history plus the design
+  documents in `docs/` are the proposer's trace.
+
+**Proposer discipline** (what separates an agentic proposer with full history
+from a researcher torturing the data): the proposer's edits are validated
+against dev and the synthetic self-check only, never against holdout labels;
+each cycle's holdout is spent only after that cycle's code is frozen, and a
+spent holdout forces a fresh labeled batch before the next proposer
+iteration can be scored.
 
 ## The optimization cycle
 
