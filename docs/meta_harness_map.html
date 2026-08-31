@@ -1,0 +1,259 @@
+<title>Meta-Harness Map</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #f7f6f2;
+    --surface: #fffefb;
+    --ink: #26282b;
+    --muted: #6b6f74;
+    --line: #d8d6cf;
+    --c1: #0e7c86;      /* cycle 1 — detection keywords */
+    --c1-soft: #e3f0f1;
+    --c2: #b35217;      /* cycle 2 — classification keywords */
+    --c2-soft: #f6e9de;
+    --warn: #8a6d1f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1d1f22;
+      --surface: #26292d;
+      --ink: #e8e6e1;
+      --muted: #a3a7ab;
+      --line: #43474c;
+      --c1: #4cc2cc;
+      --c1-soft: #1e3a3d;
+      --c2: #e8925a;
+      --c2-soft: #43301f;
+      --warn: #d4b45a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1d1f22;
+    --surface: #26292d;
+    --ink: #e8e6e1;
+    --muted: #a3a7ab;
+    --line: #43474c;
+    --c1: #4cc2cc;
+    --c1-soft: #1e3a3d;
+    --c2: #e8925a;
+    --c2-soft: #43301f;
+    --warn: #d4b45a;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.55;
+    font-size: 15px;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 40px 24px 64px; }
+  header { margin-bottom: 28px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 6px;
+  }
+  h1 {
+    font-family: "Source Serif 4", Georgia, serif;
+    font-size: 34px; font-weight: 700; margin: 0 0 10px; text-wrap: balance;
+  }
+  header p { max-width: 68ch; color: var(--muted); margin: 0; }
+  header p strong { color: var(--ink); font-weight: 600; }
+  code {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.88em;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 3px; padding: 0 4px;
+  }
+  section { margin-top: 36px; }
+  h2 {
+    font-family: "Source Serif 4", Georgia, serif;
+    font-size: 21px; font-weight: 600; margin: 0 0 4px;
+  }
+  .sub { color: var(--muted); font-size: 13.5px; margin: 0 0 16px; max-width: 78ch; }
+  figure {
+    margin: 0; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 20px 16px 8px; overflow-x: auto;
+  }
+  figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  figcaption {
+    font-size: 13px; color: var(--muted);
+    padding: 10px 8px 8px; border-top: 1px solid var(--line); margin-top: 14px;
+    max-width: none;
+  }
+  .legend { display: flex; gap: 24px; flex-wrap: wrap; margin: 14px 2px 0; font-size: 13.5px; }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .swatch { width: 22px; height: 12px; border-radius: 2px; display: inline-block; }
+  .status {
+    margin-top: 28px; border-left: 3px solid var(--warn);
+    background: var(--surface); border-radius: 0 6px 6px 0;
+    padding: 12px 16px; font-size: 14px; max-width: 84ch;
+  }
+  .status b { color: var(--warn); }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">thesis · pipeline methodology</p>
+    <h1>Two Harnesses, One Optimization Cycle</h1>
+    <p>The extraction pipeline contains two rule-based <strong>harnesses</strong> — keyword machinery that
+    stands in for an LLM at corpus scale. Each is fit by the <strong>same optimization cycle</strong>
+    (sample → LLM judge → dev-only search → freeze → single holdout look → write back), instantiated
+    once per harness. This is the meta-harness framing: the cycle is the reusable object; the harnesses
+    are its two application sites.</p>
+  </header>
+
+  <section>
+    <h2>The optimization cycle (generic)</h2>
+    <p class="sub">One pass = one labeled batch. Dev is spent freely by the search; the holdout is
+    read exactly once, and a disappointing result forces a fresh batch — never a re-roll.</p>
+    <figure>
+      <svg viewBox="0 0 980 150" role="img" aria-label="Generic harness-optimization cycle: sample corpus, LLM judge labels, dev search with CV, freeze artifact, single holdout evaluation, write back into harness config; a return arrow shows the next cycle starts from a fresh sample.">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+        <g fill="none" stroke="currentColor" stroke-width="1.3">
+          <rect x="14"  y="40" width="130" height="52" rx="5"/>
+          <rect x="182" y="40" width="130" height="52" rx="5"/>
+          <rect x="350" y="40" width="160" height="52" rx="5"/>
+          <rect x="548" y="40" width="120" height="52" rx="5"/>
+          <rect x="706" y="40" width="120" height="52" rx="5"/>
+          <rect x="864" y="40" width="102" height="52" rx="5"/>
+        </g>
+        <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor" text-anchor="middle">
+          <text x="79" y="62">stratified</text><text x="79" y="78">sample</text>
+          <text x="247" y="62">LLM judge</text><text x="247" y="78">labels</text>
+          <text x="430" y="62">greedy search on dev</text><text x="430" y="78">k-fold CV + trace</text>
+          <text x="608" y="62">freeze</text><text x="608" y="78">artifact</text>
+          <text x="766" y="62">holdout eval</text><text x="766" y="78">(single look)</text>
+          <text x="915" y="62">write to</text><text x="915" y="78">config</text>
+        </g>
+        <g stroke="currentColor" stroke-width="1.3" marker-end="url(#arr)">
+          <line x1="144" y1="66" x2="178" y2="66"/>
+          <line x1="312" y1="66" x2="346" y2="66"/>
+          <line x1="510" y1="66" x2="544" y2="66"/>
+          <line x1="668" y1="66" x2="702" y2="66"/>
+          <line x1="826" y1="66" x2="860" y2="66"/>
+        </g>
+        <path d="M 915 92 L 915 122 L 79 122 L 79 96" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="4 4" marker-end="url(#arr)"/>
+        <text x="497" y="137" font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="currentColor" opacity="0.65" text-anchor="middle">next cycle requires a fresh labeled batch — the spent holdout is never reused</text>
+        <text x="430" y="30" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.65" text-anchor="middle">candidates mined from dev false negatives</text>
+      </svg>
+      <figcaption>The cycle that fits a harness. Both instantiations below run this exact loop; only the unit of text, the label schema, and the searched artifact differ.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Where the cycle attaches to the pipeline</h2>
+    <p class="sub">The corpus pipeline runs left to right. Each colored loop is one instantiation of the
+    cycle above, pulling samples out of the pipeline and writing a frozen keyword artifact back into it.</p>
+    <figure>
+      <svg viewBox="0 0 980 430" role="img" aria-label="Pipeline from SEC EDGAR through section extraction, AI prefilter, chunking, bag-of-words features, and boolean classification, with two optimization loops attached: cycle 1 fits the ai_keywords used by the prefilter (scripts 07 and 08); cycle 2 fits the boolean classification formulas for four disclosure dimensions and is currently stripped from the branch.">
+        <defs>
+          <marker id="arrM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+          <marker id="arrC1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--c1)"/>
+          </marker>
+          <marker id="arrC2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--c2)"/>
+          </marker>
+        </defs>
+
+        <!-- ===== main pipeline spine (y=190..250) ===== -->
+        <g fill="none" stroke="currentColor" stroke-width="1.3">
+          <rect x="10"  y="190" width="92"  height="60" rx="5"/>
+          <rect x="136" y="190" width="118" height="60" rx="5"/>
+          <rect x="288" y="190" width="118" height="60" rx="5"/>
+          <rect x="588" y="190" width="108" height="60" rx="5"/>
+        </g>
+        <!-- harness boxes: thicker, tinted -->
+        <rect x="440" y="190" width="114" height="60" rx="5" fill="var(--c1-soft)" stroke="var(--c1)" stroke-width="2"/>
+        <rect x="730" y="190" width="118" height="60" rx="5" fill="var(--c2-soft)" stroke="var(--c2)" stroke-width="2" stroke-dasharray="5 4"/>
+        <rect x="882" y="190" width="88" height="60" rx="5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="5 4"/>
+
+        <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor" text-anchor="middle">
+          <text x="56"  y="215">SEC</text><text x="56" y="231">EDGAR</text>
+          <text x="195" y="211">universe +</text><text x="195" y="227">download</text>
+          <text x="347" y="211">extract</text><text x="347" y="227">sections</text>
+          <text x="497" y="211" font-weight="600">AI prefilter</text><text x="497" y="227">+ chunking</text>
+          <text x="642" y="211">candidate</text><text x="642" y="227">chunks</text>
+          <text x="789" y="211" font-weight="600">boolean</text><text x="789" y="227">classifier</text>
+          <text x="926" y="211">tagged</text><text x="926" y="227">panel</text>
+        </g>
+        <g font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.6" text-anchor="middle">
+          <text x="195" y="243">00–03</text>
+          <text x="347" y="243">04</text>
+          <text x="497" y="243">05–06</text>
+          <text x="789" y="243">ex-09</text>
+        </g>
+        <g stroke="currentColor" stroke-width="1.3" marker-end="url(#arrM)">
+          <line x1="102" y1="220" x2="132" y2="220"/>
+          <line x1="254" y1="220" x2="284" y2="220"/>
+          <line x1="406" y1="220" x2="436" y2="220"/>
+          <line x1="554" y1="220" x2="584" y2="220"/>
+          <line x1="696" y1="220" x2="726" y2="220"/>
+          <line x1="848" y1="220" x2="878" y2="220"/>
+        </g>
+        <text x="676" y="180" font-family="IBM Plex Sans, sans-serif" font-size="10.5" fill="currentColor" opacity="0.6" text-anchor="middle">BoW features</text>
+
+        <!-- ===== cycle 1 loop (above, teal) ===== -->
+        <g fill="none" stroke="var(--c1)" stroke-width="1.5">
+          <rect x="300" y="52" width="152" height="52" rx="5"/>
+          <rect x="500" y="52" width="204" height="52" rx="5"/>
+        </g>
+        <g font-family="IBM Plex Sans, sans-serif" font-size="12" fill="var(--c1)" text-anchor="middle">
+          <text x="376" y="73">sample + judge</text>
+          <text x="376" y="89" font-family="IBM Plex Mono, monospace" font-size="10.5">07</text>
+          <text x="602" y="73">keyword search + holdout</text>
+          <text x="602" y="89" font-family="IBM Plex Mono, monospace" font-size="10.5">08</text>
+        </g>
+        <!-- paragraphs out of 04→05 edge up into sampling -->
+        <path d="M 347 186 L 347 130 L 376 130 L 376 108" fill="none" stroke="var(--c1)" stroke-width="1.5" marker-end="url(#arrC1)"/>
+        <text x="332" y="152" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--c1)" text-anchor="end">all paragraphs</text>
+        <line x1="452" y1="78" x2="496" y2="78" stroke="var(--c1)" stroke-width="1.5" marker-end="url(#arrC1)"/>
+        <!-- frozen keywords back into prefilter -->
+        <path d="M 602 108 L 602 148 L 497 148 L 497 186" fill="none" stroke="var(--c1)" stroke-width="1.5" marker-end="url(#arrC1)"/>
+        <text x="612" y="140" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--c1)">ai_keywords → config.json</text>
+        <text x="300" y="36" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="var(--c1)">CYCLE 1 · detection keywords — “is this text AI-related?”</text>
+
+        <!-- ===== cycle 2 loop (below, rust) ===== -->
+        <g fill="none" stroke="var(--c2)" stroke-width="1.5">
+          <rect x="470" y="318" width="152" height="52" rx="5"/>
+          <rect x="670" y="318" width="230" height="52" rx="5"/>
+        </g>
+        <g font-family="IBM Plex Sans, sans-serif" font-size="12" fill="var(--c2)" text-anchor="middle">
+          <text x="546" y="339">sample + judge</text>
+          <text x="546" y="355" font-family="IBM Plex Mono, monospace" font-size="10.5">ex-val_01/04</text>
+          <text x="785" y="339">boolean formula search + holdout</text>
+          <text x="785" y="355" font-family="IBM Plex Mono, monospace" font-size="10.5">ex-val_06/07</text>
+        </g>
+        <!-- chunks down into sampling -->
+        <path d="M 642 254 L 642 290 L 546 290 L 546 314" fill="none" stroke="var(--c2)" stroke-width="1.5" marker-end="url(#arrC2)"/>
+        <text x="630" y="282" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--c2)" text-anchor="end">AI chunks</text>
+        <line x1="622" y1="344" x2="666" y2="344" stroke="var(--c2)" stroke-width="1.5" marker-end="url(#arrC2)"/>
+        <!-- frozen formulas back into classifier -->
+        <path d="M 900 344 L 928 344 L 928 288 L 789 288 L 789 254" fill="none" stroke="var(--c2)" stroke-width="1.5" marker-end="url(#arrC2)"/>
+        <text x="920" y="278" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--c2)" text-anchor="end">frozen formulas / keywords per dimension</text>
+        <text x="470" y="398" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="var(--c2)">CYCLE 2 · classification keywords — “what does the AI text say?”</text>
+        <text x="470" y="416" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--c2)" opacity="0.85">4 dimensions: substantive · promotional · risk · governance — stripped in 9e6138c, to be rebuilt as a cycle-2 harness fit</text>
+      </svg>
+      <figcaption>Solid boxes exist on the current <code>refactoring</code> branch; dashed boxes (boolean classifier, tagged panel) were stripped in commit <code>9e6138c</code> and return under the cycle-2 framing. Each loop leaves the pipeline at its sampling point and re-enters it by freezing a keyword artifact into config.</figcaption>
+    </figure>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--c1)"></span>Cycle 1 — fits <code>ai_keywords</code> (scripts 07–08, live)</span>
+      <span><span class="swatch" style="background: var(--c2)"></span>Cycle 2 — fits per-dimension classification formulas (to rebuild)</span>
+      <span><span class="swatch" style="border: 1.5px dashed var(--muted); background: transparent"></span>dashed — not on this branch yet</span>
+    </div>
+  </section>
+
+  <div class="status">
+    <b>Status:</b> Cycle 1 is implemented and has run once (holdout F1 = 0.960, baseline keywords already
+    met target). Cycle 2's predecessor (the <code>val_06</code> boolean search harness over BoW feature
+    atoms) was removed when the branch was stripped down; the plan is to reintroduce it rebuilt on the
+    shared cycle template rather than as the old ad-hoc validation suite.
+  </div>
+</div>
