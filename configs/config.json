@@ -133,129 +133,239 @@
       "ZS"
     ],
     "ticker_groups": {
-      "initial_universe": [
-        "AAPL",
-        "ABBV",
-        "ADBE",
-        "ADI",
-        "ADSK",
+      "Air Courier Services": [
+        "FDX"
+      ],
+      "Aircraft": [
+        "BA"
+      ],
+      "Aircraft Engines & Engine Parts": [
+        "HON",
+        "RTX"
+      ],
+      "Aircraft Parts & Auxiliary Equipment, NEC": [
+        "TDG"
+      ],
+      "Beverages": [
+        "KO",
+        "PEP"
+      ],
+      "Biological Products, (No Diagnostic Substances)": [
+        "AMGN",
+        "BIIB",
+        "GILD",
+        "MRNA"
+      ],
+      "Cable & Other Pay Television Services": [
+        "CHTR",
+        "CMCSA"
+      ],
+      "Computer & office Equipment": [
+        "IBM"
+      ],
+      "Computer Communications Equipment": [
+        "CSCO"
+      ],
+      "Computer Peripheral Equipment, NEC": [
+        "PANW"
+      ],
+      "Construction Machinery & Equip": [
+        "CAT"
+      ],
+      "Crude Petroleum & Natural Gas": [
+        "EOG"
+      ],
+      "Electric & Other Services Combined": [
+        "DUK"
+      ],
+      "Electric Services": [
         "AEP",
+        "NEE",
+        "SO"
+      ],
+      "Electronic & Other Electrical Equipment (No Computer Equip)": [
+        "GE"
+      ],
+      "Electronic Computers": [
+        "AAPL"
+      ],
+      "Farm Machinery & Equipment": [
+        "DE"
+      ],
+      "Finance Services": [
+        "AXP"
+      ],
+      "Gas & Other Services Combined": [
+        "SRE"
+      ],
+      "General Industrial Machinery & Equipment": [
+        "ITW"
+      ],
+      "Guided Missiles & Space Vehicles & Parts": [
+        "LMT"
+      ],
+      "Measuring & Controlling Devices, NEC": [
+        "TMO"
+      ],
+      "Motor Vehicles & Passenger Car Bodies": [
+        "F",
+        "GM",
+        "HMC",
+        "RIVN",
+        "TM",
+        "TSLA"
+      ],
+      "National Commercial Banks": [
+        "BAC",
+        "C",
+        "COF",
+        "JPM",
+        "WFC"
+      ],
+      "Oil & Gas Field Services, NEC": [
+        "SLB"
+      ],
+      "Optical Instruments & Lenses": [
+        "KLAC"
+      ],
+      "Orthopedic, Prosthetic & Surgical Appliances & Supplies": [
+        "ISRG"
+      ],
+      "Perfumes, Cosmetics & Other Toilet Preparations": [
+        "CL",
+        "EL"
+      ],
+      "Petroleum Refining": [
+        "COP",
+        "CVX",
+        "MPC",
+        "PSX",
+        "XOM"
+      ],
+      "Pharmaceutical Preparations": [
+        "ABBV",
+        "BMY",
+        "JNJ",
+        "LLY",
+        "MRK",
+        "PFE",
+        "REGN",
+        "VRTX"
+      ],
+      "Radio & Tv Broadcasting & Communications Equipment": [
+        "QCOM"
+      ],
+      "Radiotelephone Communications": [
+        "TMUS"
+      ],
+      "Railroads, Line-Haul Operating": [
+        "CSX",
+        "UNP"
+      ],
+      "Retail-Catalog & Mail-Order Houses": [
+        "AMZN"
+      ],
+      "Retail-Eating  Places": [
+        "MCD"
+      ],
+      "Retail-Eating & Drinking Places": [
+        "SBUX"
+      ],
+      "Retail-Lumber & Other Building Materials Dealers": [
+        "HD",
+        "LOW"
+      ],
+      "Retail-Variety Stores": [
+        "COST",
+        "TGT",
+        "WMT"
+      ],
+      "Rolling Drawing & Extruding of  Nonferrous Metals": [
+        "HWM"
+      ],
+      "Rubber & Plastics Footwear": [
+        "NKE"
+      ],
+      "Search, Detection, Navigation, Guidance, Aeronautical Sys": [
+        "LHX",
+        "NOC"
+      ],
+      "Security Brokers, Dealers & Flotation Companies": [
+        "BLK",
+        "GS",
+        "MS"
+      ],
+      "Semiconductors & Related Devices": [
+        "ADI",
         "AMAT",
         "AMD",
-        "AMGN",
-        "AMZN",
-        "ASML",
         "AVGO",
-        "AXP",
-        "BA",
-        "BAC",
-        "BIIB",
-        "BLK",
-        "BMY",
-        "C",
-        "CAT",
-        "CHTR",
-        "CL",
-        "CMCSA",
-        "COF",
-        "COP",
-        "COST",
+        "INTC",
+        "MRVL",
+        "MU",
+        "NVDA",
+        "TSM",
+        "TXN"
+      ],
+      "Services-Business Services, NEC": [
+        "MA",
+        "MSCI",
+        "PYPL",
+        "V"
+      ],
+      "Services-Computer Processing & Data Preparation": [
+        "WDAY"
+      ],
+      "Services-Computer Programming Services": [
+        "ZS"
+      ],
+      "Services-Computer Programming, Data Processing, Etc.": [
+        "GOOGL",
+        "META"
+      ],
+      "Services-Prepackaged Software": [
+        "ADBE",
+        "ADSK",
         "CRM",
         "CRWD",
-        "CSCO",
-        "CSX",
-        "CVX",
         "DDOG",
-        "DE",
-        "DFS",
-        "DUK",
-        "EL",
-        "EOG",
-        "F",
-        "FDX",
-        "GD",
-        "GE",
-        "GILD",
-        "GM",
-        "GOOGL",
-        "GS",
-        "HD",
-        "HMC",
-        "HON",
-        "HWM",
-        "IBM",
-        "INTC",
         "INTU",
-        "ISRG",
-        "ITW",
-        "JNJ",
-        "JPM",
-        "KLAC",
-        "KO",
-        "LHX",
-        "LLY",
-        "LMT",
-        "LOW",
-        "LRCX",
-        "MA",
-        "MCD",
-        "META",
-        "MMM",
-        "MPC",
-        "MRK",
-        "MRNA",
-        "MRVL",
-        "MS",
-        "MSCI",
         "MSFT",
-        "MU",
-        "NEE",
         "NET",
-        "NFLX",
-        "NKE",
-        "NOC",
         "NOW",
-        "NVDA",
         "OKTA",
         "ORCL",
-        "PANW",
-        "PEP",
-        "PFE",
-        "PG",
         "PLTR",
-        "PSX",
-        "PYPL",
-        "QCOM",
-        "REGN",
-        "RIVN",
-        "RTX",
-        "SBUX",
-        "SLB",
         "SNOW",
-        "SO",
-        "SQ",
-        "SRE",
+        "TEAM"
+      ],
+      "Services-Video Tape Rental": [
+        "NFLX"
+      ],
+      "Ship & Boat Building & Repairing": [
+        "GD"
+      ],
+      "Soap, Detergents, Cleang Preparations, Perfumes, Cosmetics": [
+        "PG",
+        "UL"
+      ],
+      "Special Industry Machinery, NEC": [
+        "ASML",
+        "LRCX"
+      ],
+      "Surgical & Medical Instruments & Apparatus": [
+        "MMM"
+      ],
+      "Telephone Communications (No Radiotelephone)": [
         "T",
-        "TDG",
-        "TEAM",
-        "TGT",
-        "TM",
-        "TMO",
-        "TMUS",
-        "TSLA",
-        "TSM",
-        "TXN",
-        "UL",
-        "UNP",
-        "UPS",
-        "V",
-        "VRTX",
-        "VZ",
-        "WDAY",
-        "WFC",
-        "WMT",
-        "XOM",
-        "ZS"
+        "VZ"
+      ],
+      "Trucking & Courier Services (No Air)": [
+        "UPS"
+      ],
+      "ungrouped": [
+        "DFS",
+        "SQ"
       ]
     }
   },

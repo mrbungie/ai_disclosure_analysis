@@ -3,8 +3,10 @@ tui_tickers.py — Minimal TUI to view the firm universe and add ticker groups.
 
 The config gains `pipeline.ticker_groups` ({group name: [tickers]}) as the
 source of truth; `pipeline.tickers` is kept in sync as the sorted, deduped
-union so scripts 00-03 keep working unchanged. On first run the existing flat
-list is seeded into a group called "initial_universe".
+union so scripts 00-03 keep working unchanged. On first run the groups are
+seeded from the PRE-NAMED industry groups in firm_universe.parquet
+(`industry_group`, the SIC names built by script 00); tickers not yet in the
+universe land in "ungrouped" until `make build-universe` runs again.
 
 After changing groups: make collect-data (00-04 are resumable — only new
 tickers/filings are fetched).
@@ -32,10 +34,28 @@ def save_config(config: dict) -> None:
 
 
 def ensure_groups(config: dict) -> dict[str, list[str]]:
-    """Seed ticker_groups from the flat list on first run."""
+    """Seed ticker_groups from the pre-named industry groups (SIC names in
+    firm_universe.parquet). Runs on first use, and replaces a legacy
+    'initial_universe' blob seed. Tickers not (yet) in the universe parquet
+    go to 'ungrouped'."""
     pipeline = config["pipeline"]
-    if "ticker_groups" not in pipeline:
-        pipeline["ticker_groups"] = {"initial_universe": sorted(pipeline.get("tickers", []))}
+    groups = pipeline.get("ticker_groups")
+    if groups and set(groups) != {"initial_universe"}:
+        return groups
+
+    flat = sorted(pipeline.get("tickers", []))
+    industries = industry_map()
+    if not industries:
+        print("  NOTE: firm_universe.parquet not found — run `make build-universe` to "
+              "seed groups from the pre-named industries. Using 'ungrouped' for now.")
+        pipeline["ticker_groups"] = {"ungrouped": flat}
+        return pipeline["ticker_groups"]
+
+    seeded: dict[str, list[str]] = {}
+    for t in flat:
+        seeded.setdefault(industries.get(t, "ungrouped"), []).append(t)
+    pipeline["ticker_groups"] = {name: sorted(members) for name, members in sorted(seeded.items())}
+    print(f"  Seeded {len(pipeline['ticker_groups'])} group(s) from firm_universe industry names.")
     return pipeline["ticker_groups"]
 
 
