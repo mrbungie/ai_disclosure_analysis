@@ -1,136 +1,114 @@
 ---
 name: meta-harness-opt
 description: >
-  Run ONE meta-harness optimization iteration as the agentic proposer (level 2)
-  for one of the two harnesses: "detection" (ai_keywords, scripts 07-08) or
-  "classification" (tagging atom pools/formulas, scripts 09-12). Use when the
-  user asks to optimize, improve, iterate, or run an opt cycle on a harness,
-  the prefilter keywords, or the tag formulas. Only one optimization may run
-  at a time, enforced via a lock file. Args: detection | classification.
+  Run ONE meta-harness optimization iteration as the agentic proposer for one
+  of the two tasks: "detection" (pre-classification of AI text,
+  harnesses/detection/) or "classification" (dimension tagging of AI text,
+  harnesses/classification/). The proposer reads prior candidates' code,
+  scores, and traces, writes a NEW candidate program, and evaluates it on the
+  search split. Use when the user asks to optimize, improve, iterate, or run
+  an opt cycle on a harness. Only one optimization at a time (lock file).
+  Args: detection | classification.
 ---
 
 # Meta-harness optimization iteration (agentic proposer)
 
-You are acting as the **level-2 proposer** from `docs/meta_harness_methodology.md`:
-the coding agent that reads the full history (traces, reports, journals, git
-log) and improves one harness — its level-0 state in `configs/config.json`
-and/or its level-1 cycle code — one journaled iteration at a time.
+You are the proposer from the Meta-Harness pattern (docs/meta_harness_methodology.md):
+a coding agent with filesystem access to every prior candidate's source code,
+scores, and per-instance traces. One iteration = inspect history → write one
+new candidate program → evaluate it on the search split → journal → commit.
 
-**Argument (required):** `detection` or `classification`. If the user didn't
-specify which harness, ask before doing anything else.
+**Argument (required):** `detection` or `classification`. If unspecified, ask.
 
-## 0. Journals and lock live INSIDE this skill (gitignored, local-only)
+The two tasks (fixed contracts; everything inside a candidate is yours to design):
+- `detection`: `classify(text) -> bool` — is this filing text AI-related?
+  Keywords, patterns, staging — candidate-internal.
+- `classification`: `classify(text) -> dict` with the six dimension bools
+  (substantive, promotional, risk, governance, use-case, quantified) —
+  defined on detection's positives.
 
-This skill owns its audit trail at `.claude/skills/meta-harness-opt/journals/`:
-`harness1_detection.md`, `harness2_classification.md`, and the lock file
-`OPT_LOCK`. The directory is gitignored — journals are a local working trail;
-what IS committed is the state they explain (state files, code, reports) and
-the commit messages. If a journal file is missing (fresh clone), bootstrap it
-before iterating: create the file with the standard header below, then write
-an entry `000 — initial state observed (reconstructed)` describing the
-CURRENT state of that harness's `configs/harness_*.json`.
+## 0. Journals and lock (this directory, gitignored)
 
-Standard journal header (fill in the harness name/state file):
+Audit trail at `.claude/skills/meta-harness-opt/journals/`: one journal per
+task (`detection.md`, `classification.md`) plus the lock `OPT_LOCK`.
+- Lock: if `OPT_LOCK` exists, REFUSE and report its contents — one
+  optimization at a time; the user must finish or explicitly abandon it.
+  Otherwise create it (`<task> <ISO timestamp>`) first and delete it last.
+- Missing journal (fresh clone): create it with the standard header
+  (purpose, append-only rule, "committed evidence lives in harnesses/ and
+  the [meta-opt/*] commits") and an entry `000 — initial state observed
+  (reconstructed)` describing the task's current ACTIVE candidate.
 
-```markdown
-# Journal — Harness <N>: <name> (`configs/harness_<x>.json`)
-
-Change log of this harness's state (level 0) and of the cycle code that fits
-it (level 1). One entry per meta-optimization iteration, appended by the
-proposer (.claude/skills/meta-harness-opt/). Never edit or delete past
-entries — this journal is part of the method's audit trail
-(docs/meta_harness_methodology.md). Local and gitignored: the committed
-evidence lives in reports/, the search traces, and the [meta-opt/*] commits.
-
-Entry template:
-```
-
-Entry template (also used for every later entry):
+Journal entry template (append-only, one per iteration):
 
 ```
 ## NNN — YYYY-MM-DD — <one-line summary>
-- State before: ...
-- Evidence read: ...
-- Change: ...
-- Validation: <dev / self-check only — NEVER holdout before freeze>
-- Holdout: <untouched | spent this iteration: result>
+- Candidates before: <ACTIVE + best-on-search>
+- Evidence read: <traces/scores/code inspected; what the errors showed>
+- New candidate: <name — what it changes and why>
+- Search result: <reward raw/weighted vs predecessor, per-label deltas that matter>
+- Test split: <untouched | spent this iteration: result>
 - Commit: <hash>
 ```
 
-**Acquire the lock (one optimization at a time):**
-- Lock file: `.claude/skills/meta-harness-opt/journals/OPT_LOCK`.
-- If it exists: REFUSE to proceed. Report its contents (which harness, when)
-  and stop — tell the user to finish or explicitly abandon that iteration
-  first (abandoning = they ask you to delete the lock).
-- If not: create it with one line — `<harness> <ISO timestamp> <session>` —
-  before touching anything else. Delete it as the last step of this skill,
-  including on failure paths you control.
+## 1. Read the history (before proposing)
 
-## 1. Read the state (before proposing anything)
+All under `harnesses/<task>/`:
+1. `ACTIVE` — the frozen candidate; every `<candidate>/` dir: `harness.py`
+   (source), `notes.md` (prior proposer rationale), `eval_search.json`
+   (scores), `trace_search.parquet` (per-instance predictions vs labels,
+   `wrong` column). Grep and read the ACTUAL misclassified texts — that is
+   the point of the filesystem: diagnose WHY, not just how much.
+2. `scripts/eval_harness.py --leaderboard --task <task>` for the standings.
+3. `git log --oneline -15` for recent iterations; the journal for the story.
+4. The eval set exists? (`data/interim/eval/eval_set.parquet`). If not, stop:
+   the user must run build_eval_set (--label costs money — never run it
+   without their go-ahead in this conversation).
 
-Read, in this order:
-1. The harness's journal in `.claude/skills/meta-harness-opt/journals/` —
-   the full history of what has been tried and why.
-2. The current level-0 state in its own gitignored file:
-   `configs/harness_detection.json` (ai_keywords + false_positives) or
-   `configs/harness_tagging.json` (atom_pools + frozen formulas). Missing
-   file = harness_fit bootstraps the minimal seed on next load.
-3. The latest evidence: `reports/prefilter_fit_*` or `reports/tag_fit_*`
-   (dev report, search trace JSON, self-check report). For weak spots, read
-   the actual misclassified texts from the dev split parquet
-   (`data/interim/{prefilter_fit,tag_fit}/dev_split.parquet`), not just scores.
-4. `git log --oneline -15` for recent proposer iterations.
+## 2. Iron rules
 
-## 2. The iron rules (proposer discipline)
-
-- **NEVER read, evaluate against, or reason from holdout labels or a holdout
-  report produced this iteration.** All iteration happens against dev and the
-  self-check, using the `--dev-only` flags. The holdout look happens at most
-  once, at the END, only when you and the user agree the state is frozen.
-- If the cycle's holdout is already spent (`reports/*_holdout_eval.txt`
-  exists), a freeze this iteration requires a FRESH labeled batch first (07
-  or 10) — never re-use the spent holdout.
-- One iteration = one coherent change with measurable dev evidence, one
-  journal entry, one commit. Do not batch unrelated changes.
-- Labeling costs money (LLM judge): never run `--label` steps without the
-  user's go-ahead in this conversation.
+- **NEVER run `--split test`, read a test trace, or reason from test rows'
+  labels during iteration.** All iteration is search-split only
+  (`eval_harness.py` default). The test look happens once, at freeze, with
+  explicit user agreement.
+- One iteration = ONE new candidate directory with a coherent idea, its
+  evaluation, one journal entry, one commit. Never edit a previously
+  evaluated candidate's harness.py — copy to a new numbered candidate
+  (`NNN_shortname`) and change that; history stays immutable.
+- A candidate is one self-contained stdlib-only harness.py. Deleted legacy
+  machinery (keyword miners, atom libraries — see git history around
+  9e6138c and the pre-redesign scripts 05-12) is yours to crib patterns
+  from, inside the candidate file.
+- Propose from evidence AND domain knowledge: read the false
+  negatives/positives in the trace, then write the patterns yourself. You
+  are the search operator — there is no other miner.
 
 ## 3. Run ONE iteration
 
-For **detection**:
-1. Baseline: `.venv/bin/python scripts/08_fit_prefilter_harness.py --dev-only`
-   (and `--self-check` if the search code changed since last run).
-2. Diagnose from the dev report + `reports/prefilter_fit_search_trace.json` +
-   false negatives/positives in the dev split.
-3. Propose ONE change: accept the search's keyword additions, adjust the
-   level-1 code (mining, scoring, sampling), or conclude a fresh 07 batch is
-   needed. Re-run `--dev-only` to measure it.
+1. Pick the diagnosis from the traces (e.g. detection misses paragraphs
+   mentioning ChatGPT/LLMs without the word "AI"; classification confuses
+   promotional with substantive on realized-language sentences).
+2. `mkdir harnesses/<task>/NNN_shortname/`, write `harness.py` (start from a
+   copy of the best candidate) and `notes.md` (the rationale — what you saw,
+   what you changed, what you expect).
+3. `uv run python scripts/eval_harness.py --task <task> --candidate NNN_shortname`
+   — repeat read→edit within THIS candidate only until its idea is cleanly
+   expressed (avoid overfitting spirals: if you are tweaking thresholds to
+   chase the search score, stop and journal that).
+4. Compare against the leaderboard; the weighted reward is the number that
+   matters.
 
-For **classification**:
-1. Ensure atoms exist (`scripts/09_extract_keyword_atoms.py` ran after any
-   re-chunk) and a labeled batch exists (else stop and tell the user to run
-   10 with their judge key).
-2. Baseline: `.venv/bin/python scripts/11_fit_tag_harness.py --dev-only`.
-3. Diagnose per dimension against the always-True baseline in the dev report
-   and the trace. For weak dimensions, read misclassified chunk texts.
-4. Propose ONE change: add atoms from the reference menu
-   (`tag_harness_defs.DIMENSION_FEATURE_POOLS`) into that dimension's
-   `atom_pools` in configs/harness_tagging.json, or write a NEW atom regex in script 09 (it's code —
-   keep it auditable and add it to the menu too), justified by the texts you
-   read. Re-run `--dev-only` to measure the delta.
+**Freezing** (only with explicit user agreement, when iterations plateau):
+`eval_harness.py --task <task> --candidate <best> --split test` — one look,
+auto-promotes to ACTIVE, spends the test split for this task+batch. Report
+the result as-is, favorable or not. A spent test split means the next freeze
+needs a fresh labeled eval set. After a detection freeze, re-run
+`scripts/apply_harness.py` (and note that build_eval_set stratification
+shifts with the new ACTIVE).
 
-Freezing (either harness): only with explicit user agreement, on a fresh
-holdout, by running the fit script WITHOUT `--dev-only`. Report the holdout
-result as-is, favorable or not.
+## 4. Close
 
-## 4. Close the iteration
-
-1. Append a journal entry using the journal's template (state before,
-   evidence read, change, dev validation numbers, holdout status, commit).
-   Never rewrite past entries.
-2. Commit everything from this iteration with message prefix
-   `[meta-opt/detection]` or `[meta-opt/classification]`, and put the commit
-   hash into the journal entry (amend or note "(this commit)").
-3. Delete `.claude/skills/meta-harness-opt/journals/OPT_LOCK`.
-4. Report to the user: what changed, dev delta, what the next iteration
-   should probably look at.
+1. Append the journal entry. 2. Commit everything (`[meta-opt/<task>] ...`
+   + Co-Authored-By trailer for your model) and push if the session has been
+   pushing. 3. Delete `OPT_LOCK`. 4. Report: diagnosis, new candidate, search
+   deltas, what the next iteration should look at.

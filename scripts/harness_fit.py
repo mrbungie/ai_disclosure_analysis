@@ -42,66 +42,43 @@ import numpy as np
 import pandas as pd
 
 # ---------------------------------------------------------------------------
-# Harness state files — one per harness, gitignored (local level-0 state)
+# Harness candidates — two tasks, one pattern (harnesses/<task>/<name>/harness.py)
 # ---------------------------------------------------------------------------
-# Each harness's optimizable state lives in its own JSON under configs/,
-# OUTSIDE configs/config.json (which holds only human-edited pipeline config)
-# and outside git (the journals + commit messages document its evolution; the
-# holdout reports carry the numbers). Missing files bootstrap to the minimal
-# seed, so a fresh clone starts at the documented initial state.
+# Task 1 "detection":      classify(text) -> bool            (is_ai_related)
+# Task 2 "classification": classify(text) -> dict[6 bools]   (dimension tags,
+#                          defined on task 1's positives)
+# Each candidate is one self-contained stdlib-only file the proposer can
+# rewrite freely; harnesses/<task>/ACTIVE names the frozen candidate.
 
-DETECTION_STATE_PATH = Path("configs/harness_detection.json")
-TAGGING_STATE_PATH = Path("configs/harness_tagging.json")
+HARNESSES_DIR = Path("harnesses")
 
-DETECTION_SEED = {
-    "ai_keywords": ["ai", "artificial intelligence", "machine learning"],
-    "false_positives": [],
+TASK_LABELS = {
+    "detection": ["is_ai_related"],
+    "classification": ["is_substantive", "is_promotional", "is_risk_related",
+                       "is_governance_related", "is_use_case_specific", "is_quantified"],
 }
-
-TAGGING_SEED = {
-    "atom_pools": {
-        "is_substantive": ["has_ai_own_use", "has_deployment_verb"],
-        "is_promotional": ["has_word_transform", "has_word_leader"],
-        "is_risk_related": ["has_risk_factor"],
-        "is_governance_related": ["has_board_oversight", "has_compliance"],
-        "is_use_case_specific": ["has_ai_use_case_specific"],
-        "is_quantified": ["has_metric_percentage", "has_metric_dollar"],
-    },
-    "formulas": {},
-}
+LABEL_FIELDS = TASK_LABELS["detection"] + TASK_LABELS["classification"]
 
 
-def _load_state(path: Path, seed: dict) -> dict:
+def load_candidate(task: str, name: str):
+    """Import classify() from harnesses/<task>/<name>/harness.py."""
+    import importlib.util
+    path = HARNESSES_DIR / task / name / "harness.py"
     if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(seed, f, indent=2)
-            f.write("\n")
-        print(f"Bootstrapped {path} to the minimal seed state.")
-    with open(path) as f:
-        return json.load(f)
+        raise FileNotFoundError(f"no candidate at {path}")
+    spec = importlib.util.spec_from_file_location(f"harness_{task}_{name}", path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.classify
 
 
-def load_detection_state() -> dict:
-    """Harness 1 state: ai_keywords + false_positives (seeds if missing)."""
-    return _load_state(DETECTION_STATE_PATH, DETECTION_SEED)
+def active_candidate(task: str) -> str:
+    return (HARNESSES_DIR / task / "ACTIVE").read_text().strip()
 
 
-def save_detection_state(state: dict) -> None:
-    with open(DETECTION_STATE_PATH, "w") as f:
-        json.dump(state, f, indent=2)
-        f.write("\n")
-
-
-def load_tagging_state() -> dict:
-    """Harness 2 state: atom_pools + frozen formulas (seeds if missing)."""
-    return _load_state(TAGGING_STATE_PATH, TAGGING_SEED)
-
-
-def save_tagging_state(state: dict) -> None:
-    with open(TAGGING_STATE_PATH, "w") as f:
-        json.dump(state, f, indent=2)
-        f.write("\n")
+def set_active_candidate(task: str, name: str) -> None:
+    (HARNESSES_DIR / task / "ACTIVE").write_text(name + "\n")
 
 
 # ---------------------------------------------------------------------------

@@ -2,172 +2,107 @@
 
 How this pipeline's measurement layer is built and validated, written for the
 thesis methodology chapter. Companion documents:
-[meta_harness_plan.md](meta_harness_plan.md) (the engineering plan),
+[meta_harness_plan.md](meta_harness_plan.md) (original engineering plan),
 [meta_harness_map.html](meta_harness_map.html) (system diagram),
-[design_assessment_2026-08-31.md](design_assessment_2026-08-31.md) (design review).
+[design_assessment_2026-08-31.md](design_assessment_2026-08-31.md) (design review),
+[universe_expansion_plan.md](universe_expansion_plan.md) (sampling frame).
 
-## The framing
+## The pattern
 
-The methodology adapts the structure of *Meta-Harness: End-to-End Optimization
-of Model Harnesses* (`docs/arXiv-2603.28052v1/`). In that paper, a **harness**
-is the deterministic code around a frozen language model, and an **outer
-loop** searches over harness candidates: it evaluates them on a search set,
-keeps the full record of every candidate tried (code, scores, traces — not
-compressed summaries), and reports held-out performance once.
+The methodology instantiates the structure of *Meta-Harness: End-to-End
+Optimization of Model Harnesses* (`docs/arXiv-2603.28052v1/`): a **harness**
+is a self-contained program performing a task; an **agentic proposer** with
+filesystem access to every prior candidate's source code, scores, and
+execution traces proposes new candidates; each candidate is evaluated on a
+**search set** (spent freely) and the final one on a held-out **test set**
+(looked at once). The objective is the paper's:
 
-This thesis instantiates the same three-level architecture, with the roles
-mapped to the measurement problem:
+    H* = argmax_H  E[ r(H, x) ]
 
-- **Level 0 — the artifact (the harness being optimized).** Deterministic
-  keyword regexes and boolean formulas. Deliberately "dumb": fully
-  interpretable, exactly replicable, auditable line by line — which suits an
-  economics/finance measurement exercise better than a black-box classifier.
-  This is what runs at corpus scale.
-- **Level 1 — the optimization cycle (the paper's Evaluate + inner loop).**
-  The pydantic-ai judging + search machinery (scripts 07–12,
-  `harness_fit.py`): an LLM judge produces the reward signal, a search
-  procedure optimizes the level-0 artifact within a fixed candidate space,
-  every candidate's evaluation is flushed to a search trace, and a locked
-  holdout is looked at once. The objective has the same form as the paper's:
+Two tasks in this pipeline follow the pattern, each with its own harness:
 
-      H* = argmax_H  E[ r(H, x) ]
+1. **Detection** — pre-classification of filing text:
+   `classify(text) -> bool` (is this AI-related at all?).
+2. **Classification** — dimension tagging of AI text:
+   `classify(text) -> {substantive, promotional, risk, governance,
+   use-case-specific, quantified}` — defined on task 1's positives.
 
-  where `H` is a level-0 artifact, `x` a unit of filing text, and `r`
-  agreement (F1) with the LLM judge's label.
-- **Level 2 — the agentic proposer (the paper's core contribution).** A
-  coding agent (Claude Code) with filesystem access to the full history —
-  search traces, fit/holdout/self-check reports, the cycle code itself, and
-  the git log of prior iterations. As in the paper, the proposer inspects
-  prior candidates and execution traces, diagnoses failure modes, and edits
-  **the level-1 code** (not just level-0 parameters): reweighting a biased
-  sampling design, replacing a leaky scoring convention, adding a synthetic
-  self-check, widening the atom space when a dimension plateaus. Each
-  proposer iteration is a commit; the commit history plus the design
-  documents in `docs/` are the proposer's trace.
+At corpus scale the two frozen harnesses compose exactly in that order
+(`scripts/apply_harness.py`): detection pre-classifies every paragraph;
+classification tags the ones that pass. Both are deterministic keyword/regex
+programs — interpretable, exactly replicable, auditable line by line, which
+suits an economics/finance measurement exercise better than a black-box
+classifier.
 
-**Proposer discipline** (what separates an agentic proposer with full history
-from a researcher torturing the data): the proposer's edits are validated
-against dev and the synthetic self-check only, never against holdout labels;
-each cycle's holdout is spent only after that cycle's code is frozen, and a
-spent holdout forces a fresh labeled batch before the next proposer
-iteration can be scored.
+## The pieces
 
-## The optimization cycle
+- **Candidates** (`harnesses/<task>/<candidate>/harness.py`): one
+  self-contained stdlib-only file per candidate. Keywords, patterns, staging
+  — everything is internal to the candidate; the fixed part is only the
+  task contract above. Candidates are immutable once evaluated: a new idea
+  is a new numbered directory with a `notes.md` stating the proposer's
+  rationale. `harnesses/<task>/ACTIVE` names the frozen candidate. Both
+  tasks start from a deliberately minimal `000_seed` (detection: three
+  keywords; classification: one obvious pattern per dimension) — the floor
+  every later candidate is measured against, so the growth trajectory is
+  itself a documented result.
 
-One reusable cycle (implemented once, in `scripts/harness_fit.py`) fits every
-harness:
+- **Reward** (`scripts/build_eval_set.py`): one labeled evaluation set
+  serves both tasks — paragraphs sampled from the whole corpus, stratified
+  by the ACTIVE detection candidate's own prediction (half predicted
+  positive, half negative, industry-proportional within each), each row
+  carrying its inverse sampling probability (`sampling_weight`). All seven
+  labels per row come from an LLM labeler in one call, over the full text.
+  The **search/test split is fixed at sampling time** and stored in the
+  data; nobody re-splits.
 
-1. **Stratified sample** of the relevant text population, with each row's
-   inverse sampling probability (`sampling_weight`) recorded at draw time.
-2. **LLM judge labels** the sample (full text, no truncation). The judge is a
-   different model family from anything the harness approximates.
-3. **Dev-only search** over harness candidates, scored by a
-   **fold-stability-penalized** dev F1 (mean across stratified folds minus a
-   variance penalty). This is deliberately *not* called cross-validation:
-   nothing is trained per fold and candidates are proposed from all of dev,
-   so the dev score is optimistic by construction. Every candidate evaluated
-   in every round is flushed to a JSON **search trace** — the cycle's
-   equivalent of the paper's filesystem of prior candidates.
-4. **Freeze** the winning artifact.
-5. **Single holdout look**: the frozen artifact is evaluated once on a
-   disjoint holdout; the report file then locks — re-running the fit against
-   the same holdout is refused in code. A disappointing holdout stands as
-   reported; improving further requires a fresh labeled batch.
-6. **Gated state write**: the artifact enters its harness-state file
-   (`configs/harness_detection.json` / `configs/harness_tagging.json` —
-   gitignored, per-harness, auto-seeded on first use) only if
-   the holdout supports it (cycle 1: not underperforming the incumbent
-   baseline; cycle 2: beating the always-True prevalence exploit).
+- **Evaluate(H, X)** (`scripts/eval_harness.py`): runs a candidate on the
+  eval rows of its task (detection: all rows; classification: the
+  AI-labeled rows) and writes to the candidate's directory its scores
+  (per-label P/R/F1 and (macro-)F1 reward, raw AND weighted) plus a
+  per-instance trace — predictions vs labels with a `wrong` column. Raw
+  scores the balanced sample as drawn and is optimistic by design; the
+  weighted number is the honest population estimate.
 
-### Instantiation 1 — detection ("is this text AI-related?")
+- **The proposer** (the `meta-harness-opt` skill — a coding agent): reads
+  the leaderboards, the prior candidates' code, and the actual misclassified
+  texts in the traces; writes ONE new candidate per iteration; evaluates it
+  on the search split; appends a journal entry; commits. One optimization at
+  a time (lock file). The journals
+  (`.claude/skills/meta-harness-opt/journals/`, local) plus the committed
+  candidates and `[meta-opt/*]` commit history are the proposer's trace.
 
-Scripts 07–08 fit `ai_keywords`, the regex list scripts 05–06 use to flag AI
-paragraphs and cut candidate chunks. Sampling is half from the currently
-flagged stratum (precision), half from the currently excluded stratum
-(recall), industry-proportional within each; candidates are 1–2-gram tokens
-mined from dev false negatives and added greedily. The search machinery is
-itself validated by a synthetic **self-check** (`08 --self-check`): drop
-known keywords, confirm the search recovers their F1 — run on dev only, so
-nothing is spent.
-
-### Instantiation 2 — classification ("what does the AI text say?")
-
-Scripts 09–12 fit one boolean formula per disclosure dimension over ~345
-keyword/regex **atoms** extracted per chunk (09). The six dimensions answer
-the proposal's facets directly: **substantive, promotional, risk-related,
-governance-related, use-case-specific, quantified**. The candidate space per
-dimension is bounded and fully enumerated — single atoms, negations, and
-AND/OR/AND-NOT pairs of the top-15 singles — so the trace contains every
-candidate's score with no path dependence. The pre-strip production formulas
-are kept in the candidate set as baselines: the search either beats them on
-the merits or confirms them. Frozen winners are applied to the corpus by 12.
-
-## Initial state, journals, and the proposer's operating mode
-
-Both harnesses start from a **deliberately minimal seed** (set 2026-08-31,
-archived previous states in git and in each journal's entry 000):
-
-- Detection: `ai_keywords = ["ai", "artificial intelligence", "machine learning"]`,
-  no false-positive exclusions.
-- Classification: frozen `formulas = {}` and one-to-two obvious atoms per
-  dimension in `atom_pools` (`configs/harness_tagging.json`); the ~345-atom extractor (09) and the
-  per-dimension reference library (`tag_harness_defs.DIMENSION_FEATURE_POOLS`)
-  exist only as the proposer's *menu*.
-
-Nothing enters a harness except through a journaled optimization iteration,
-so the growth trajectory from seed to final state — which atoms/keywords were
-added, on what evidence, with what dev delta — is itself a documented result
-of the thesis rather than a tuned artifact of mixed provenance.
-
-**Journals** (`.claude/skills/meta-harness-opt/journals/harness1_detection.md`,
-`.claude/skills/meta-harness-opt/journals/harness2_classification.md`): append-only change logs, one
-entry per iteration (state before, evidence read, change, dev validation,
-holdout status, commit). Together with the git history they are the
-proposer's trace.
-
-**Proposer operating mode**: the `meta-harness-opt` skill
-(`.claude/skills/meta-harness-opt/`) runs ONE iteration for ONE harness at a
-time (a lock file, `.claude/skills/meta-harness-opt/journals/OPT_LOCK`, serializes optimizations). All
-iteration uses the fit scripts' `--dev-only` mode — dev search and report
-with no holdout look and no config write — plus the synthetic self-check;
-the holdout is looked at only when the state is frozen, and a spent holdout
-forces a fresh labeled batch.
+- **The freeze**: `eval_harness --split test` — one look per task per
+  labeled batch, guarded in code (`TEST_LOOK` records the eval set's
+  fingerprint). It promotes the candidate to ACTIVE and reports the result
+  as-is, favorable or not. A spent test split forces a fresh labeled batch
+  before the next freeze.
 
 ## The measurement-error chain
 
-Every link between "what a human would say" and "what the corpus numbers say"
-is measured, and each estimate names its link:
+    human  <-- Cohen's kappa -->  reward labels  <-- test F1 -->  harness  -->  corpus
+          (agreement_check.py)                   (eval_harness)          (apply_harness, deterministic)
 
-    human  <-- Cohen's kappa -->  LLM judge  <-- holdout F1 -->  keyword harness  -->  corpus measurement
-           (agreement_check.py)              (08 / 11 reports)                     (05-06 / 12)
-
-- **Human ↔ judge**: the labeling scripts (07/10) automatically export a
-  balanced, hand-labelable Excel subsample the moment a labeling run
-  finishes (judge labels on a separate sheet so they can't anchor the
-  rater), and the fit scripts (08/11) automatically score it — raw agreement
-  and Cohen's kappa land in the holdout report, or an explicit UNVALIDATED
-  warning if the workbook isn't filled in yet. Kappa is the reported number;
-  raw agreement on the deliberately balanced draw is descriptive only.
-  (`scripts/agreement_check.py` remains as the manual CLI for the same flow.)
-- **Judge ↔ harness**: the single-look holdout F1, reported **raw** (on the
-  sample as drawn) and **inverse-probability weighted** (population
-  estimate) side by side. The weighted number matters wherever the sampling
-  design oversampled a stratum — cycle 1's 50/50 candidate/excluded draw
-  overstates raw recall by design, and the weights undo exactly that.
-- **Harness → corpus**: deterministic, zero additional error — this is the
-  point of a keyword harness. Anyone with the config can reproduce every tag.
+- **Human ↔ reward labels**: labeling auto-exports a balanced audit workbook
+  (stored labels on a separate sheet so they can't anchor the rater);
+  `agreement_check.py` scores raw agreement and Cohen's kappa per label.
+  Kappa is the reported number; the freeze output carries it or an explicit
+  UNVALIDATED warning.
+- **Harness ↔ reward labels**: the single-look test F1 per task, raw and
+  weighted side by side.
+- **Harness → corpus**: deterministic, zero additional error — anyone with
+  the candidate file reproduces every classification. In the corpus output,
+  dimension tags on non-AI paragraphs are `NA`, not `False`: "not evaluated"
+  stays distinguishable from "evaluated negative".
 
 ## Honest-reporting rules (limitations section, pre-committed)
 
-- The dev search score is optimistic and is never cited as a result; only
-  holdout numbers are.
-- Holdouts are spent after one look. Search traces record how much "search
-  until it works" happened, making the multiplicity explicit rather than
-  hidden.
-- The judge is one LLM, not ground truth; kappa against a human is the bound
-  on what "judge agreement" can mean. Weak kappa on a dimension weakens every
-  downstream number on that dimension — that propagation is acknowledged, not
-  patched.
-- A dimension whose fitted formula cannot beat the always-True baseline on
-  holdout is dropped from the corpus tagging (11 refuses to freeze it), not
-  quietly shipped.
+- Search-split scores are never cited as results; only test-split numbers
+  are, and only their weighted variants as population claims.
+- Test splits are spent after one look; candidate directories record every
+  evaluation, making the amount of "search until it works" explicit.
+- The LLM labeler is not ground truth; kappa against a human bounds what
+  "reward agreement" can mean, and weak kappa on a dimension weakens every
+  downstream number on that dimension — acknowledged, not patched.
+- Candidates are immutable and the ACTIVE pointers are the only state:
+  every corpus number is traceable to two named candidate files.

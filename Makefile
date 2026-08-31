@@ -1,4 +1,4 @@
-.PHONY: test install-deps tickers-tui build-universe build-manifest select-batch download-filings extract-sections collect-data run-pipeline fit-prefilter-sample fit-prefilter-label fit-prefilter-harness fit-prefilter-selfcheck extract-atoms fit-tags-sample fit-tags-label fit-tags-harness tag-chunks agreement-make agreement-score format help
+.PHONY: test install-deps tickers-tui build-universe build-manifest select-batch download-filings extract-sections collect-data collect-market eval-sample eval-label eval-harness leaderboard apply-harness agreement-make agreement-score format help
 
 # Default target
 all: test
@@ -47,88 +47,57 @@ collect-market:
 tickers-tui:
 	@.venv/bin/python scripts/tui_tickers.py
 
-# Run pipeline validation scripts on pending filings
-run-pipeline:
-	@echo "Running pipeline prefiltering and chunking..."
-	.venv/bin/python scripts/05_prefilter_ai_mentions.py
-	.venv/bin/python scripts/06_chunk_candidates.py
+# ---- The two harnesses (candidate programs under harnesses/<task>/) ----
+# detection:      classify(text) -> bool          (pre-classification of AI text)
+# classification: classify(text) -> 6 dim bools   (tags on detection's positives)
+# One shared labeled eval set rewards both; iteration happens via the
+# /meta-harness-opt skill (the proposer); freezes via --split test.
 
-# ---- Cycle 1: detection keywords (07-08) ----
+eval-sample:
+	@echo "Sampling eval-set paragraphs, stratified by the ACTIVE detection candidate..."
+	.venv/bin/python scripts/build_eval_set.py --sample $(ARGS)
 
-fit-prefilter-sample:
-	@echo "Sampling paragraphs for the prefilter fit cycle (script 07)..."
-	.venv/bin/python scripts/07_sample_and_label_prefilter.py --sample $(ARGS)
+eval-label:
+	@echo "Obtaining reward labels for the eval set ($$, uses LLM_JUDGE_* env)..."
+	.venv/bin/python scripts/build_eval_set.py --label $(ARGS)
 
-fit-prefilter-label:
-	@echo "LLM-labeling the prefilter fit sample (script 07)..."
-	.venv/bin/python scripts/07_sample_and_label_prefilter.py --label $(ARGS)
+eval-harness:
+	@echo "Evaluate(H, X): scoring a candidate on the search split..."
+	.venv/bin/python scripts/eval_harness.py $(ARGS)
 
-fit-prefilter-harness:
-	@echo "Fitting ai_keywords on dev, single holdout look (script 08)..."
-	.venv/bin/python scripts/08_fit_prefilter_harness.py $(ARGS)
+leaderboard:
+	@.venv/bin/python scripts/eval_harness.py --leaderboard
 
-fit-prefilter-selfcheck:
-	@echo "Self-checking the keyword search machinery (script 08, dev only)..."
-	.venv/bin/python scripts/08_fit_prefilter_harness.py --self-check $(ARGS)
+apply-harness:
+	@echo "Applying the frozen (ACTIVE) candidates to the whole corpus..."
+	.venv/bin/python scripts/apply_harness.py $(ARGS)
 
-# ---- Cycle 2: classification formulas (09-12) ----
-
-extract-atoms:
-	@echo "Extracting keyword atoms per candidate chunk (script 09)..."
-	.venv/bin/python scripts/09_extract_keyword_atoms.py
-
-fit-tags-sample:
-	@echo "Sampling chunks for the tag fit cycle (script 10)..."
-	.venv/bin/python scripts/10_sample_and_label_tags.py --sample $(ARGS)
-
-fit-tags-label:
-	@echo "LLM-labeling the tag fit sample on 6 dimensions (script 10)..."
-	.venv/bin/python scripts/10_sample_and_label_tags.py --label $(ARGS)
-
-fit-tags-harness:
-	@echo "Fitting boolean tag formulas on dev, single holdout look (script 11)..."
-	.venv/bin/python scripts/11_fit_tag_harness.py $(ARGS)
-
-tag-chunks:
-	@echo "Tagging the corpus with the frozen formulas (script 12)..."
-	.venv/bin/python scripts/12_tag_chunks.py
-
-# ---- Judge validation (human anchor) ----
+# ---- Reward-label audit (human anchor) ----
 
 agreement-make:
-	@echo "Exporting the agreement workbook to hand-label (CYCLE=prefilter|tags)..."
-	.venv/bin/python scripts/agreement_check.py --cycle $(or $(CYCLE),prefilter) --make $(ARGS)
+	@echo "Exporting the reward-label audit workbook to hand-label..."
+	.venv/bin/python scripts/agreement_check.py --cycle eval --make $(ARGS)
 
 agreement-score:
-	@echo "Scoring the filled-in agreement workbook (CYCLE=prefilter|tags)..."
-	.venv/bin/python scripts/agreement_check.py --cycle $(or $(CYCLE),prefilter) --score
+	@echo "Scoring the filled-in audit workbook (Cohen's kappa)..."
+	.venv/bin/python scripts/agreement_check.py --cycle eval --score
 
 help:
 	@echo "Available Makefile commands:"
-	@echo "  make test                     Run the test suite using unittest"
-	@echo "  make install-deps             Install pytest in the virtual environment using uv"
+	@echo "  make test                     Run the test suite"
+	@echo "  make install-deps             Install pytest via uv"
 	@echo ""
-	@echo "  Data collection (00-04; what to download = pipeline.{tickers,start_year,end_year,form_types} in config):"
-	@echo "  make tickers-tui              Simple TUI: aggregated sectors over SIC groups (view/create), add tickers"
-	@echo "  make collect-data             Run 00->04 in order (or each: build-universe, build-manifest,"
-	@echo "                                select-batch, download-filings, extract-sections)"
-	@echo "  make collect-market           Snapshot prices (one parquet per ticker) + Fama-French factors (13)"
+	@echo "  Data collection (00-04; what to download = configs/universe.csv + pipeline.{start_year,end_year}):"
+	@echo "  make tickers-tui              TUI: sectors over SIC groups, per-company overrides, add tickers"
+	@echo "  make collect-data             Run 00->04 in order (resumable)"
+	@echo "  make collect-market           Snapshot prices (per-ticker parquet) + Fama-French factors (13)"
 	@echo ""
-	@echo "  make run-pipeline             Run the prefilter and chunking scripts (05-06)"
+	@echo "  Harness optimization (two tasks: detection, classification):"
+	@echo "  make eval-sample              Draw eval-set paragraphs (free). ARGS='--n 800'"
+	@echo "  make eval-label               Reward-label them ($$, LLM) + auto-export audit workbook"
+	@echo "  make eval-harness ARGS='--task detection --candidate 001_x'   Score a candidate (search split)"
+	@echo "  make leaderboard              Standings per task"
+	@echo "  make apply-harness            Run the frozen ACTIVE candidates over the corpus"
+	@echo "  /meta-harness-opt <task>      (in Claude Code) one proposer iteration; freeze = --split test"
 	@echo ""
-	@echo "  Cycle 1 — detection keywords:"
-	@echo "  make fit-prefilter-sample     Sample paragraphs (07). Pass ARGS='--n 800'."
-	@echo "  make fit-prefilter-label      LLM-label the sample (07). Pass ARGS='--concurrency 3'."
-	@echo "  make fit-prefilter-harness    Fit ai_keywords, one holdout look (08). Pass ARGS='--target-f1 0.85'."
-	@echo "  make fit-prefilter-selfcheck  Validate the search machinery synthetically (08, spends nothing)."
-	@echo ""
-	@echo "  Cycle 2 — classification formulas:"
-	@echo "  make extract-atoms            Extract keyword atoms per chunk (09)"
-	@echo "  make fit-tags-sample          Sample chunks (10). Pass ARGS='--n 400'."
-	@echo "  make fit-tags-label           LLM-label the sample on 6 dimensions (10)"
-	@echo "  make fit-tags-harness         Fit boolean formulas, one holdout look (11)"
-	@echo "  make tag-chunks               Apply frozen formulas to the corpus (12)"
-	@echo ""
-	@echo "  Judge validation:"
-	@echo "  make agreement-make CYCLE=prefilter|tags   Export the hand-labeling workbook"
-	@echo "  make agreement-score CYCLE=prefilter|tags  Score it (Cohen's kappa)"
+	@echo "  make agreement-make / agreement-score    Human audit of the reward labels (kappa)"

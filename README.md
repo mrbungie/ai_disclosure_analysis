@@ -10,7 +10,7 @@ Data collection and preprocessing pipeline for a research project analyzing how 
 
 - **115 US-listed firms** (of 120 in the initial universe; 5 excluded for incomplete filing histories) spanning **55 SIC industry groups**, covering both AI-intensive sectors (software, semiconductors) and traditional industrials, energy, healthcare, and finance.
 - **Annual 10-K filings, fiscal years 2021–2026** (2026 is a partial year, filings submitted through May 2026), yielding **658 firm-year observations**.
-- **AI-related candidate chunks** are extracted by the current state of the detection harness, so their count evolves with it (3,564 under the initial seed keywords; see `.claude/skills/meta-harness-opt/journals/harness1_detection.md` for the state history).
+- **AI-related text** is identified by the current ACTIVE detection candidate, so counts evolve with the harness state (see `.claude/skills/meta-harness-opt/journals/`).
 - Scope limitations: 10-K only (no 8-K/10-Q/proxy/earnings-call text), US-listed firms only.
 
 ---
@@ -26,56 +26,62 @@ SEC EDGAR
   → 02 Select download batch
   → 03 Download filings                     (filings_html/)
   → 04 Extract sections (Business/Risk/MD&A) (filing_sections.parquet)
-  → 05 Prefilter AI mentions (keyword/regex) (manifest updated)
-  → 06 Chunk candidates                      (ai_candidate_chunks.parquet)
 
-  Cycle 1 — detection keywords ("is this text AI-related?"):
-  → 07 Sample + LLM-judge label                       (data/interim/prefilter_fit/)
-  → 08 Fit ai_keywords on dev, single holdout look    (harness_detection.json)
+  The two harnesses (candidate programs, harnesses/<task>/<candidate>/harness.py):
+    detection       classify(text) -> bool           "is this text AI-related?"
+    classification  classify(text) -> 6 dim booleans "what does the AI text say?"
 
-  Cycle 2 — classification formulas ("what does the AI text say?"):
-  → 09 Extract keyword atoms per chunk                (keyword_atom_features.parquet)
-  → 10 Sample + LLM-judge label on 6 dimensions       (data/interim/tag_fit/)
-  → 11 Fit boolean formulas on dev, single holdout look (harness_tagging.json)
-  → 12 Tag the corpus with the frozen formulas        (data/processed/tagged_chunks.parquet)
+  → build_eval_set   sample paragraphs + reward-label them (one labeled set
+                     serves both tasks; fixed search/test split; weights)
+  → eval_harness     Evaluate(H, X): score a candidate on the search split,
+                     log scores + per-instance traces to its directory
+  → /meta-harness-opt <task>   the proposer: reads all prior candidates'
+                     code/scores/traces, writes a NEW candidate, evaluates it
+  → eval_harness --split test  ONE look per task per batch = the freeze
+                     (promotes the candidate to harnesses/<task>/ACTIVE)
+  → apply_harness    frozen detection pre-classifies every corpus paragraph;
+                     frozen classification tags the positives
+                     -> data/processed/classified_paragraphs.parquet
 ```
 
-Both cycles are instantiations of one shared harness-optimization loop
-(`scripts/harness_fit.py`) — sample → LLM judge → dev-only search → freeze →
-single holdout look → gated config write — the meta-harness framing described
-in `docs/meta_harness_methodology.md` (diagram: `docs/meta_harness_map.html`).
-`scripts/agreement_check.py` anchors the judge itself to a human rater
-(Cohen's kappa on a hand-labeled Excel subsample per cycle).
+This is the meta-harness pattern (docs/meta_harness_methodology.md): each
+task's harness is a self-contained program searched by an agentic proposer
+with filesystem access to every prior candidate's source, scores, and
+per-instance traces. The search split is spent freely; the test split is
+looked at once per labeled batch and then locked. Reward labels come from an
+LLM labeler and are human-audited (Cohen's kappa). Both harnesses start from
+deliberately minimal `000_seed` candidates and grow only through journaled
+proposer iterations (`.claude/skills/meta-harness-opt/journals/`).
 
-Both harnesses start from a deliberately minimal seed and grow only through
-journaled optimization iterations (`.claude/skills/meta-harness-opt/journals/harness1_detection.md`,
-`.claude/skills/meta-harness-opt/journals/harness2_classification.md` — append-only, one entry per
-iteration). Iterations are run by the `meta-harness-opt` skill
-(`.claude/skills/meta-harness-opt/`), one harness at a time (lock file),
-always in the fit scripts' `--dev-only` mode until a state is frozen against
-a fresh holdout.
+### Collection (scripts 00–04)
+Firm universe and filing manifest are built from SEC EDGAR (universe defined
+in `configs/universe.csv`; sectors via config sector_groups + per-company
+overrides, resolved by `scripts/sector_map.py`); only 10-Ks are downloaded
+and cached by accession number. Business, Risk Factors, and MD&A sections
+are extracted with header-parsing rules.
 
-### Collection and chunking (scripts 00–06)
-Firm universe and filing manifest are built from SEC EDGAR; only 10-Ks are downloaded and cached locally by accession number. Business, Risk Factors, and MD&A sections are extracted with header-parsing rules (with fallbacks for non-standard filing typography). This is also where filings are classified as AI-related or not: a keyword/regex prefilter (`ai_keywords` in `configs/harness_detection.json` — the detection harness's journaled state, plus false-positive exclusions) flags candidate paragraphs at the filing level (script 05) and the paragraph level (script 06), which are then chunked with surrounding context (previous + matched + next paragraph, deduplicated by hash) to keep only ~1–5% of the token volume of the original filings.
+### The harnesses (harnesses/, scripts/build_eval_set.py + eval_harness.py)
+Each candidate is ONE self-contained stdlib-only `harness.py` — keywords,
+patterns, staging are internal to the candidate, so the whole program is
+auditable and the proposer can rewrite any part. `eval_harness.py` scores a
+candidate against the labeled eval set: detection on all rows
+(`is_ai_related`), classification on the AI-labeled rows (six dimensions:
+substantive, promotional, risk, governance, use-case-specific, quantified);
+reward = (macro-)F1, reported raw (sample as drawn — optimistic by design)
+and inverse-probability weighted (the honest population estimate, via each
+row's `sampling_weight`). Scores and full per-instance traces land in the
+candidate's directory — the filesystem history the proposer greps. The
+search/test split is fixed when the eval set is sampled; `--split test` is
+refused after its one use until a fresh batch is labeled.
 
-### Cycle 1 — prefilter keyword fit (scripts 07–08)
-The keyword list isn't hand-tuned once and left alone — it's fit through a repeatable cycle, not ad hoc inspection:
-
-1. **07 (`--sample`)** draws a sample across the *entire* paragraph universe, half from paragraphs the current prefilter already flags (`in_candidate_window=True`, for precision) and half from paragraphs it currently excludes (for recall / new-keyword candidates), industry-proportional within each stratum. The 50/50 stratum draw deliberately oversamples the (small) flagged stratum, so every row records its `sampling_weight` — 08 reports inverse-probability-weighted (population) metrics next to the raw ones, which would otherwise overstate recall/F1.
-2. **07 (`--label`)** gets an independent LLM judge's `is_ai_related` label for each sampled paragraph, on the **full text** (`LLM_JUDGE_*` env vars — a different model family from any classifier used elsewhere, so the judge isn't grading a close relative of itself).
-3. **08** splits the labeled sample into a dev set and a holdout, stratified by label. On dev, a greedy search mines candidate keywords from dev's false negatives (LLM says AI-related, current regex misses it) and adds whichever candidate most improves the **fold-stability score** (mean F1 across stratified folds minus a std penalty, so a keyword that only helps one lucky fold doesn't get accepted), repeating until a target F1 is hit, no candidate helps anymore, or an iteration budget runs out. The fold machinery is deliberately *not* called cross-validation — nothing is trained per fold and candidates are mined from all of dev, so the dev score is optimistic by construction; the holdout is the honest number. **Every round's full candidate evaluation** (not just the winner) is written to `reports/prefilter_fit_search_trace.json` after each iteration, so the search's actual trajectory is inspectable and the run survives an interruption without losing progress already made. The frozen keyword list is then evaluated **once** on the untouched holdout (`reports/prefilter_fit_holdout_eval.txt`) — that report refuses to be regenerated against the same holdout; improving further requires sampling a fresh batch from 07.
-4. `configs/harness_detection.json`'s `ai_keywords` is only overwritten after the dev search converges (never mid-run) **and** the fitted list doesn't underperform the baseline on holdout; only re-running scripts 05–06 actually applies a changed list to the corpus.
-5. The search machinery itself is validated by `08 --self-check`: drop known keywords, confirm the search recovers their F1 — dev only, nothing spent (`reports/prefilter_fit_selfcheck.txt`).
-
-### Cycle 2 — chunk classification fit (scripts 09–12)
-The same cycle, instantiated for "what does the AI text say?": **09** extracts ~345 boolean keyword/regex atoms per candidate chunk; **10** samples chunks (industry-proportional, weights recorded) and has the LLM judge label all six dimensions — substantive, promotional, risk-related, governance-related, use-case-specific, quantified; **11** enumerates boolean formulas over each dimension's atom pool (singles, negations, AND/OR/AND-NOT pairs of the top singles; the pre-strip production formulas ride along as baseline candidates), scores them with the same fold-stability penalty on dev, takes one holdout look, and freezes into `configs/harness_tagging.json` only the winners that beat the always-True prevalence baseline on holdout (`reports/tag_fit_*`); **12** applies the frozen formulas to every chunk → `data/processed/tagged_chunks.parquet`.
-
-### Judge validation (human anchor)
-Fully wired into the cycle — no separate step to remember: finishing a labeling run (07/10 `--label`) **automatically exports** a balanced Excel workbook of to-be-validated rows (`reports/agreement_{prefilter,tags}.xlsx`; the judge's answers sit on a separate sheet so they can't anchor you), and the fit scripts (08/11) **automatically score it** into the holdout report — Cohen's kappa per label if you filled it in, an explicit `UNVALIDATED` warning if you haven't. `scripts/agreement_check.py --cycle {prefilter,tags} --make/--score` remains as the manual CLI for the same flow. The measurement-error chain the thesis reports is: human ↔ judge (kappa) → judge ↔ harness (holdout F1) → harness → corpus (deterministic).
-
-**Keyword list provenance.** The list starts from the minimal seed `["ai", "artificial intelligence", "machine learning"]` (no false-positive exclusions) and grows ONLY through journaled optimization iterations — every addition, its evidence, and its dev delta are recorded in `.claude/skills/meta-harness-opt/journals/harness1_detection.md`. No result from any pre-reset state is carried forward; the corpus artifacts on disk are regenerated from the current seed.
-
----
+### Reward labels (human anchor)
+`build_eval_set --label` obtains all seven labels per sampled paragraph from
+an LLM labeler (`LLM_JUDGE_*` env vars, full text) and auto-exports a
+balanced audit workbook (`reports/agreement_eval.xlsx`; stored labels on a
+separate sheet so they can't anchor you). `make agreement-score` computes
+Cohen's kappa; the freeze output includes it or an explicit UNVALIDATED
+warning. The chain the thesis reports: human ↔ reward labels (kappa) →
+harness ↔ reward labels (test F1) → corpus (deterministic).
 
 ## How to run
 
@@ -135,65 +141,45 @@ layout with `source='crsp'` upgrades the data with no code changes — that is
 also the path to returns for delisted firms (e.g. DFS, acquired 2025; SQ,
 renamed XYZ), whose EDGAR filings still flow through the text pipeline.
 
-### 2. Build the corpus from the current harness state
+### 2. Build the eval set (one labeled batch serves both tasks)
 
 ```bash
-make run-pipeline     # 05 prefilter + 06 chunking (uses ai_keywords from config)
-make extract-atoms    # 09 keyword atoms per chunk (cycle 2's search space)
+make eval-sample                # draw paragraphs (free; stratified by ACTIVE detection)
+make eval-label                 # reward labels ($, needs .env) -> auto-exports reports/agreement_eval.xlsx
+# hand-label the workbook's 'label_me' sheet (instructions inside)
 ```
 
-Re-run these whenever a harness freeze changes `configs/harness_*.json`.
+### 3. Optimize the harnesses (the proposer loop)
 
-### 3. Cycle 1 — fit the detection keywords
+```
+/meta-harness-opt detection         # in Claude Code — one iteration: read traces,
+/meta-harness-opt classification    # write a new candidate, score it on search
+```
+
+Search-split evaluations are free and repeatable
+(`make eval-harness ARGS='--task detection --candidate 001_x'`,
+`make leaderboard`).
+
+### 4. Freeze and apply
 
 ```bash
-make fit-prefilter-sample                 # draw paragraphs (stratified, weights recorded)
-make fit-prefilter-label                  # LLM judge labels them ($, needs .env)
-                                          #   -> auto-exports reports/agreement_prefilter.xlsx
-# hand-label the 'label_me' sheet of that workbook (instructions inside)
-make fit-prefilter-selfcheck              # sanity: search recovers dropped keywords (free)
-make fit-prefilter-harness ARGS='--dev-only'   # iterate freely: dev search only
-make fit-prefilter-harness                # FINAL: single holdout look + gated config write
-                                          #   (holdout report includes your kappa, or UNVALIDATED)
-make run-pipeline                         # apply the frozen list to the corpus
+make eval-harness ARGS='--task detection --candidate <best> --split test'   # THE one look; promotes to ACTIVE
+make eval-harness ARGS='--task classification --candidate <best> --split test'
+make apply-harness              # frozen candidates -> data/processed/classified_paragraphs.parquet
 ```
 
-### 4. Cycle 2 — fit the classification formulas
-
-```bash
-make fit-tags-sample                      # draw chunks (weights recorded)
-make fit-tags-label                       # LLM judge labels 6 dimensions ($, needs .env)
-                                          #   -> auto-exports reports/agreement_tags.xlsx
-# hand-label its 'label_me' sheet
-make fit-tags-harness ARGS='--dev-only'   # iterate freely: dev search only
-make fit-tags-harness                     # FINAL: single holdout look + gated config write
-make tag-chunks                           # 12: apply frozen formulas -> data/processed/tagged_chunks.parquet
-```
-
-### 5. Meta-optimization (the agentic proposer)
-
-Harness improvements (new keywords beyond what the greedy search finds, new
-atoms in a dimension's pool, cycle-code changes) go through the
-**`meta-harness-opt` skill** inside Claude Code — one iteration, one harness
-at a time:
-
-```
-/meta-harness-opt detection          # or: classification
-```
-
-The skill reads the journals, traces and reports, proposes ONE change,
-validates it with `--dev-only` (never the holdout), appends a journal entry,
-and commits. Its journals and lock live in
-`.claude/skills/meta-harness-opt/journals/` (gitignored — the local audit
-trail; the committed history is the config/code/reports each entry points
-to). A second optimization while one is open is refused via `OPT_LOCK`.
+A spent test split means the next freeze needs a fresh `eval-sample` +
+`eval-label` batch.
 
 ### Rules of the road
 
-- `--dev-only` is always safe to re-run; a run WITHOUT it spends that batch's
-  holdout permanently — the next improvement needs a fresh `--sample`+`--label`.
-- Harness state lives in `configs/harness_detection.json` / `configs/harness_tagging.json` — gitignored, seeded automatically on first use, and never edited by hand: it changes only
-  through a fit script's gated write, journaled by the skill.
+- Search-split evaluation is always safe to re-run; `--split test` spends
+  that task's one look for the batch — the next freeze needs a fresh labeled
+  eval set.
+- Never edit an evaluated candidate's `harness.py`: new idea = new candidate
+  directory. History is immutable; `harnesses/<task>/ACTIVE` is the freeze.
+- The proposer (skill) is the only search operator — one optimization at a
+  time (`OPT_LOCK`).
 - `make test` runs the unit tests; `make help` lists every target.
 
 ## Logging & Diagnostics

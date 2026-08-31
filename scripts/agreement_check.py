@@ -1,19 +1,17 @@
 """
-agreement_check.py — Human validation of the LLM judge (both cycles).
+agreement_check.py — Human audit of the reward labels.
 
-The judge is the outer-loop reward signal for every harness fit, so its own
-validity needs a human anchor: this exports a stratified subsample of
-judge-labeled rows to an Excel workbook for hand-labeling (the judge's answers
-live on a separate sheet so they can't anchor the rater), then scores raw
-agreement and Cohen's kappa once filled in. The measurement-error chain the
-thesis reports is: human <-> judge (kappa, here) -> judge <-> harness (F1,
-scripts 08/11) -> corpus measurement.
+The eval set's labels are the reward function the harness search optimizes
+against, so their validity needs a human anchor: this exports a balanced
+subsample of labeled rows to an Excel workbook for hand-labeling (the stored
+labels live on a separate sheet so they can't anchor the rater), then scores
+raw agreement and Cohen's kappa once filled in. The chain the thesis reports:
+human <-> reward labels (kappa, here) -> harness <-> reward labels (test F1,
+eval_harness) -> corpus measurement (apply_harness, deterministic).
 
 Usage:
-    uv run python scripts/agreement_check.py --cycle prefilter --make [--n 60] [--seed 42]
-    uv run python scripts/agreement_check.py --cycle prefilter --score
-    uv run python scripts/agreement_check.py --cycle tags --make [--n 60]
-    uv run python scripts/agreement_check.py --cycle tags --score
+    uv run python scripts/agreement_check.py --cycle eval --make [--n 60] [--seed 42]
+    uv run python scripts/agreement_check.py --cycle eval --score
 """
 
 import argparse
@@ -39,28 +37,20 @@ class CycleSpec:
 
 
 CYCLES = {
-    "prefilter": CycleSpec(
-        labeled_path=Path("data/interim/prefilter_fit/labeled.parquet"),
+    "eval": CycleSpec(
+        labeled_path=Path("data/interim/eval/eval_set.parquet"),
         id_col="paragraph_id",
         text_col="paragraph_text",
-        label_fields=["is_ai_related"],
-        workbook=Path("reports/agreement_prefilter.xlsx"),
-        report=Path("reports/agreement_prefilter_eval.txt"),
-    ),
-    "tags": CycleSpec(
-        labeled_path=Path("data/interim/tag_fit/labeled.parquet"),
-        id_col="chunk_id",
-        text_col="chunk_text",
-        label_fields=["is_substantive", "is_promotional", "is_risk_related",
+        label_fields=["is_ai_related", "is_substantive", "is_promotional", "is_risk_related",
                       "is_governance_related", "is_use_case_specific", "is_quantified"],
-        workbook=Path("reports/agreement_tags.xlsx"),
-        report=Path("reports/agreement_tags_eval.txt"),
+        workbook=Path("reports/agreement_eval.xlsx"),
+        report=Path("reports/agreement_eval_report.txt"),
     ),
 }
 
 
 def auto_make(cycle: str, n: int = 60, seed: int = 42) -> None:
-    """Called by the labeling scripts (07/10) right after a labeling run:
+    """Called by build_eval_set right after a labeling run:
     export the human validation workbook automatically if it doesn't exist
     yet, so the to-be-validated sample is always generated without a separate
     manual step. Never overwrites an existing workbook (it may hold hand
