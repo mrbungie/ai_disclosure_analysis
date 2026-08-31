@@ -25,7 +25,7 @@ DIMENSIONS = [
 # meta-optimizer draws from when growing a pool. The ACTIVE pool each fit run
 # actually searches lives in configs/config.json (tagging.atom_pools), starts
 # deliberately minimal, and every change to it is logged in
-# docs/journals/harness2_classification.md.
+# .claude/skills/meta-harness-opt/journals/harness2_classification.md.
 DIMENSION_FEATURE_POOLS: dict[str, list[str]] = {
     "is_substantive": [
         "has_model_training", "has_workforce_talent", "has_ai_hedge", "has_specific_product",

@@ -10,7 +10,7 @@ Data collection and preprocessing pipeline for a research project analyzing how 
 
 - **115 US-listed firms** (of 120 in the initial universe; 5 excluded for incomplete filing histories) spanning **55 SIC industry groups**, covering both AI-intensive sectors (software, semiconductors) and traditional industrials, energy, healthcare, and finance.
 - **Annual 10-K filings, fiscal years 2021–2026** (2026 is a partial year, filings submitted through May 2026), yielding **658 firm-year observations**.
-- **AI-related candidate chunks** are extracted by the current state of the detection harness, so their count evolves with it (3,564 under the initial seed keywords; see `docs/journals/harness1_detection.md` for the state history).
+- **AI-related candidate chunks** are extracted by the current state of the detection harness, so their count evolves with it (3,564 under the initial seed keywords; see `.claude/skills/meta-harness-opt/journals/harness1_detection.md` for the state history).
 - Scope limitations: 10-K only (no 8-K/10-Q/proxy/earnings-call text), US-listed firms only.
 
 ---
@@ -48,8 +48,8 @@ in `docs/meta_harness_methodology.md` (diagram: `docs/meta_harness_map.html`).
 (Cohen's kappa on a hand-labeled Excel subsample per cycle).
 
 Both harnesses start from a deliberately minimal seed and grow only through
-journaled optimization iterations (`docs/journals/harness1_detection.md`,
-`docs/journals/harness2_classification.md` — append-only, one entry per
+journaled optimization iterations (`.claude/skills/meta-harness-opt/journals/harness1_detection.md`,
+`.claude/skills/meta-harness-opt/journals/harness2_classification.md` — append-only, one entry per
 iteration). Iterations are run by the `meta-harness-opt` skill
 (`.claude/skills/meta-harness-opt/`), one harness at a time (lock file),
 always in the fit scripts' `--dev-only` mode until a state is frozen against
@@ -73,29 +73,96 @@ The same cycle, instantiated for "what does the AI text say?": **09** extracts ~
 ### Judge validation (human anchor)
 Fully wired into the cycle — no separate step to remember: finishing a labeling run (07/10 `--label`) **automatically exports** a balanced Excel workbook of to-be-validated rows (`reports/agreement_{prefilter,tags}.xlsx`; the judge's answers sit on a separate sheet so they can't anchor you), and the fit scripts (08/11) **automatically score it** into the holdout report — Cohen's kappa per label if you filled it in, an explicit `UNVALIDATED` warning if you haven't. `scripts/agreement_check.py --cycle {prefilter,tags} --make/--score` remains as the manual CLI for the same flow. The measurement-error chain the thesis reports is: human ↔ judge (kappa) → judge ↔ harness (holdout F1) → harness → corpus (deterministic).
 
-**Keyword list provenance.** The list starts from the minimal seed `["ai", "artificial intelligence", "machine learning"]` (no false-positive exclusions) and grows ONLY through journaled optimization iterations — every addition, its evidence, and its dev delta are recorded in `docs/journals/harness1_detection.md`. No result from any pre-reset state is carried forward; the corpus artifacts on disk are regenerated from the current seed.
+**Keyword list provenance.** The list starts from the minimal seed `["ai", "artificial intelligence", "machine learning"]` (no false-positive exclusions) and grows ONLY through journaled optimization iterations — every addition, its evidence, and its dev delta are recorded in `.claude/skills/meta-harness-opt/journals/harness1_detection.md`. No result from any pre-reset state is carried forward; the corpus artifacts on disk are regenerated from the current seed.
 
 ---
 
-## Setup & Installation
+## How to run
+
+### 0. Setup
 
 Uses `uv` for Python environment and dependency management.
 
 ```bash
-uv venv
-source .venv/bin/activate
-uv sync
+uv venv && source .venv/bin/activate && uv sync
+cp .env.example .env    # then set LLM_JUDGE_API_KEY / LLM_JUDGE_BASE_URL / LLM_JUDGE_MODEL
 ```
 
-## Makefile Automation
+The judge env vars are only needed for the `--label` steps; everything else is
+offline regex/pandas work.
+
+### 1. Data collection (one-time, network)
+
+Scripts 00–04 are run directly — they hit SEC EDGAR and are resumable:
 
 ```bash
-make test               # unit tests
-make install-deps       # install pytest
-make run-pipeline        # prefilter + chunk candidates (scripts 05-06)
+.venv/bin/python scripts/00_build_firm_universe.py
+.venv/bin/python scripts/01_build_filing_manifest.py
+.venv/bin/python scripts/02_select_download_batch.py
+.venv/bin/python scripts/03_download_selected_filings.py
+.venv/bin/python scripts/04_extract_sections.py
 ```
 
-Scripts 00–04 are run directly (`.venv/bin/python scripts/00_build_firm_universe.py`, etc.) since they involve one-time setup and network calls to SEC EDGAR rather than being re-run repeatedly.
+### 2. Build the corpus from the current harness state
+
+```bash
+make run-pipeline     # 05 prefilter + 06 chunking (uses ai_keywords from config)
+make extract-atoms    # 09 keyword atoms per chunk (cycle 2's search space)
+```
+
+Re-run these whenever a harness freeze changes `configs/config.json`.
+
+### 3. Cycle 1 — fit the detection keywords
+
+```bash
+make fit-prefilter-sample                 # draw paragraphs (stratified, weights recorded)
+make fit-prefilter-label                  # LLM judge labels them ($, needs .env)
+                                          #   -> auto-exports reports/agreement_prefilter.xlsx
+# hand-label the 'label_me' sheet of that workbook (instructions inside)
+make fit-prefilter-selfcheck              # sanity: search recovers dropped keywords (free)
+make fit-prefilter-harness ARGS='--dev-only'   # iterate freely: dev search only
+make fit-prefilter-harness                # FINAL: single holdout look + gated config write
+                                          #   (holdout report includes your kappa, or UNVALIDATED)
+make run-pipeline                         # apply the frozen list to the corpus
+```
+
+### 4. Cycle 2 — fit the classification formulas
+
+```bash
+make fit-tags-sample                      # draw chunks (weights recorded)
+make fit-tags-label                       # LLM judge labels 6 dimensions ($, needs .env)
+                                          #   -> auto-exports reports/agreement_tags.xlsx
+# hand-label its 'label_me' sheet
+make fit-tags-harness ARGS='--dev-only'   # iterate freely: dev search only
+make fit-tags-harness                     # FINAL: single holdout look + gated config write
+make tag-chunks                           # 12: apply frozen formulas -> data/processed/tagged_chunks.parquet
+```
+
+### 5. Meta-optimization (the agentic proposer)
+
+Harness improvements (new keywords beyond what the greedy search finds, new
+atoms in a dimension's pool, cycle-code changes) go through the
+**`meta-harness-opt` skill** inside Claude Code — one iteration, one harness
+at a time:
+
+```
+/meta-harness-opt detection          # or: classification
+```
+
+The skill reads the journals, traces and reports, proposes ONE change,
+validates it with `--dev-only` (never the holdout), appends a journal entry,
+and commits. Its journals and lock live in
+`.claude/skills/meta-harness-opt/journals/` (gitignored — the local audit
+trail; the committed history is the config/code/reports each entry points
+to). A second optimization while one is open is refused via `OPT_LOCK`.
+
+### Rules of the road
+
+- `--dev-only` is always safe to re-run; a run WITHOUT it spends that batch's
+  holdout permanently — the next improvement needs a fresh `--sample`+`--label`.
+- Never edit `configs/config.json` harness state by hand: it changes only
+  through a fit script's gated write, journaled by the skill.
+- `make test` runs the unit tests; `make help` lists every target.
 
 ## Logging & Diagnostics
 

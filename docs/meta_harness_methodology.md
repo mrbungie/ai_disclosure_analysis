@@ -117,15 +117,15 @@ so the growth trajectory from seed to final state — which atoms/keywords were
 added, on what evidence, with what dev delta — is itself a documented result
 of the thesis rather than a tuned artifact of mixed provenance.
 
-**Journals** (`docs/journals/harness1_detection.md`,
-`docs/journals/harness2_classification.md`): append-only change logs, one
+**Journals** (`.claude/skills/meta-harness-opt/journals/harness1_detection.md`,
+`.claude/skills/meta-harness-opt/journals/harness2_classification.md`): append-only change logs, one
 entry per iteration (state before, evidence read, change, dev validation,
 holdout status, commit). Together with the git history they are the
 proposer's trace.
 
 **Proposer operating mode**: the `meta-harness-opt` skill
 (`.claude/skills/meta-harness-opt/`) runs ONE iteration for ONE harness at a
-time (a lock file, `docs/journals/OPT_LOCK`, serializes optimizations). All
+time (a lock file, `.claude/skills/meta-harness-opt/journals/OPT_LOCK`, serializes optimizations). All
 iteration uses the fit scripts' `--dev-only` mode — dev search and report
 with no holdout look and no config write — plus the synthetic self-check;
 the holdout is looked at only when the state is frozen, and a spent holdout

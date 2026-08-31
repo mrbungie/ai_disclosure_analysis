@@ -19,9 +19,29 @@ and/or its level-1 cycle code — one journaled iteration at a time.
 **Argument (required):** `detection` or `classification`. If the user didn't
 specify which harness, ask before doing anything else.
 
-## 0. Acquire the lock (one optimization at a time)
+## 0. Journals and lock live INSIDE this skill (gitignored, local-only)
 
-- Lock file: `docs/journals/OPT_LOCK`.
+This skill owns its audit trail at `.claude/skills/meta-harness-opt/journals/`:
+`harness1_detection.md`, `harness2_classification.md`, and the lock file
+`OPT_LOCK`. The directory is gitignored — journals are a local working trail;
+what IS committed is the state they explain (config, code, reports) and the
+commit messages. If a journal file is missing (fresh clone), bootstrap it
+before iterating: copy the entry template below into a new file and write an
+entry `000 — initial state observed` describing the CURRENT config state of
+that harness, marked as reconstructed.
+
+```
+## NNN — YYYY-MM-DD — <one-line summary>
+- State before: ...
+- Evidence read: ...
+- Change: ...
+- Validation: <dev / self-check only — NEVER holdout before freeze>
+- Holdout: <untouched | spent this iteration: result>
+- Commit: <hash>
+```
+
+**Acquire the lock (one optimization at a time):**
+- Lock file: `.claude/skills/meta-harness-opt/journals/OPT_LOCK`.
 - If it exists: REFUSE to proceed. Report its contents (which harness, when)
   and stop — tell the user to finish or explicitly abandon that iteration
   first (abandoning = they ask you to delete the lock).
@@ -32,9 +52,8 @@ specify which harness, ask before doing anything else.
 ## 1. Read the state (before proposing anything)
 
 Read, in this order:
-1. The harness's journal — `docs/journals/harness1_detection.md` or
-   `docs/journals/harness2_classification.md` — the full history of what has
-   been tried and why.
+1. The harness's journal in `.claude/skills/meta-harness-opt/journals/` —
+   the full history of what has been tried and why.
 2. The current level-0 state in `configs/config.json` (`prefiltering.*` for
    detection; `tagging.atom_pools` + `tagging.formulas` for classification).
 3. The latest evidence: `reports/prefilter_fit_*` or `reports/tag_fit_*`
@@ -93,6 +112,6 @@ result as-is, favorable or not.
 2. Commit everything from this iteration with message prefix
    `[meta-opt/detection]` or `[meta-opt/classification]`, and put the commit
    hash into the journal entry (amend or note "(this commit)").
-3. Delete `docs/journals/OPT_LOCK`.
+3. Delete `.claude/skills/meta-harness-opt/journals/OPT_LOCK`.
 4. Report to the user: what changed, dev delta, what the next iteration
    should probably look at.

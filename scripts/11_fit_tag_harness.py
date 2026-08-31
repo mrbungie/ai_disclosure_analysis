@@ -88,7 +88,7 @@ def build_candidates(df: pd.DataFrame, dimension: str, pool: list[str],
 
     `pool` is the dimension's ACTIVE atom pool from config
     (tagging.atom_pools) — the harness state the meta-optimizer grows; see
-    the journal in docs/journals/. Pool names may be atom columns or meta-atom
+    the journal in .claude/skills/meta-harness-opt/journals/. Pool names may be atom columns or meta-atom
     names (tag_harness_defs.build_meta_atoms)."""
     meta = defs.build_meta_atoms(df)
     atoms: dict[str, pd.Series] = {}
