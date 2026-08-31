@@ -1,4 +1,4 @@
-.PHONY: test install-deps run-pipeline fit-prefilter-sample fit-prefilter-label fit-prefilter-harness fit-prefilter-selfcheck extract-atoms fit-tags-sample fit-tags-label fit-tags-harness tag-chunks agreement-make agreement-score format help
+.PHONY: test install-deps build-universe build-manifest select-batch download-filings extract-sections collect-data run-pipeline fit-prefilter-sample fit-prefilter-label fit-prefilter-harness fit-prefilter-selfcheck extract-atoms fit-tags-sample fit-tags-label fit-tags-harness tag-chunks agreement-make agreement-score format help
 
 # Default target
 all: test
@@ -12,6 +12,33 @@ test:
 install-deps:
 	@echo "Installing test dependencies..."
 	uv pip install pytest
+
+# ---- Data collection (00-04, network: SEC EDGAR; all resumable) ----
+# WHAT gets downloaded is config-driven: pipeline.tickers, start_year/end_year,
+# form_types in configs/config.json. 02 marks pending filings in that window
+# as 'selected'; 03 downloads only 'selected'.
+
+build-universe:
+	@echo "Building firm universe from configured tickers (script 00)..."
+	.venv/bin/python scripts/00_build_firm_universe.py
+
+build-manifest:
+	@echo "Building filing manifest from SEC EDGAR (script 01)..."
+	.venv/bin/python scripts/01_build_filing_manifest.py
+
+select-batch:
+	@echo "Selecting pending filings inside the configured year window (script 02)..."
+	.venv/bin/python scripts/02_select_download_batch.py
+
+download-filings:
+	@echo "Downloading selected filings (script 03)..."
+	.venv/bin/python scripts/03_download_selected_filings.py
+
+extract-sections:
+	@echo "Extracting Business/Risk/MD&A sections (script 04)..."
+	.venv/bin/python scripts/04_extract_sections.py
+
+collect-data: build-universe build-manifest select-batch download-filings extract-sections
 
 # Run pipeline validation scripts on pending filings
 run-pipeline:
@@ -73,6 +100,11 @@ help:
 	@echo "Available Makefile commands:"
 	@echo "  make test                     Run the test suite using unittest"
 	@echo "  make install-deps             Install pytest in the virtual environment using uv"
+	@echo ""
+	@echo "  Data collection (00-04; what to download = pipeline.{tickers,start_year,end_year,form_types} in config):"
+	@echo "  make collect-data             Run 00->04 in order (or each: build-universe, build-manifest,"
+	@echo "                                select-batch, download-filings, extract-sections)"
+	@echo ""
 	@echo "  make run-pipeline             Run the prefilter and chunking scripts (05-06)"
 	@echo ""
 	@echo "  Cycle 1 — detection keywords:"

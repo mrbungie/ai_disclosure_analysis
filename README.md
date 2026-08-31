@@ -91,17 +91,22 @@ cp .env.example .env    # then set LLM_JUDGE_API_KEY / LLM_JUDGE_BASE_URL / LLM_
 The judge env vars are only needed for the `--label` steps; everything else is
 offline regex/pandas work.
 
-### 1. Data collection (one-time, network)
+### 1. Data collection (network, resumable)
 
-Scripts 00–04 are run directly — they hit SEC EDGAR and are resumable:
+**What gets downloaded is decided in `configs/config.json`** — there is no
+selection UI on this branch (the Streamlit dashboard was stripped in
+`9e6138c`): edit `pipeline.tickers` (the firm list), `pipeline.start_year` /
+`end_year` (the filing window), and `pipeline.form_types` (10-K), then:
 
 ```bash
-.venv/bin/python scripts/00_build_firm_universe.py
-.venv/bin/python scripts/01_build_filing_manifest.py
-.venv/bin/python scripts/02_select_download_batch.py
-.venv/bin/python scripts/03_download_selected_filings.py
-.venv/bin/python scripts/04_extract_sections.py
+make collect-data     # runs 00->04 in order
 ```
+
+Or step by step: `make build-universe` (00) → `make build-manifest` (01) →
+`make select-batch` (02: marks pending filings inside the configured window
+as selected) → `make download-filings` (03: downloads only the selected
+ones) → `make extract-sections` (04). All resumable — re-running skips what's
+already done.
 
 ### 2. Build the corpus from the current harness state
 
