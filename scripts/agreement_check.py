@@ -37,14 +37,22 @@ class CycleSpec:
 
 
 CYCLES = {
-    "eval": CycleSpec(
-        labeled_path=Path("data/interim/eval/eval_set.parquet"),
+    "eval_detection": CycleSpec(
+        labeled_path=Path("data/interim/eval/eval_set_detection.parquet"),
         id_col="paragraph_id",
         text_col="paragraph_text",
-        label_fields=["is_ai_related", "is_substantive", "is_promotional", "is_risk_related",
+        label_fields=["is_ai_related"],
+        workbook=Path("reports/agreement_eval_detection.xlsx"),
+        report=Path("reports/agreement_eval_detection_report.txt"),
+    ),
+    "eval_classification": CycleSpec(
+        labeled_path=Path("data/interim/eval/eval_set_classification.parquet"),
+        id_col="chunk_id",
+        text_col="chunk_text",
+        label_fields=["is_substantive", "is_promotional", "is_risk_related",
                       "is_governance_related", "is_use_case_specific", "is_quantified"],
-        workbook=Path("reports/agreement_eval.xlsx"),
-        report=Path("reports/agreement_eval_report.txt"),
+        workbook=Path("reports/agreement_eval_classification.xlsx"),
+        report=Path("reports/agreement_eval_classification_report.txt"),
     ),
 }
 

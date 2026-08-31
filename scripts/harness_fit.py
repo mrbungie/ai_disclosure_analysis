@@ -1,38 +1,41 @@
 """
-harness_fit.py — Shared machinery for the harness-optimization cycle.
+harness_fit.py — Shared machinery for the two-stage distillation cascade
+(docs/distillation_map.html): a fixed seed screen and two frozen reference
+classifiers (scope rule, six-dimension codebook) each distill into a cheap
+program via the SAME outer loop:
 
-The pipeline contains two rule-based harnesses — keyword machinery standing in
-for an LLM at corpus scale — and both are fit by the SAME cycle (the
-meta-harness framing, docs/meta_harness_plan.md):
+    stratified sample -> LLM judge labels -> search-split search (fold-
+    stability penalized) -> freeze artifact -> single holdout look
 
-    stratified sample -> LLM judge labels -> dev-only search (fold-stability
-    penalized) -> freeze artifact -> single holdout look -> write to config
-
-Cycle 1 (scripts 07-08) fits the detection keywords (`ai_keywords`: "is this
-text AI-related?"). Cycle 2 (scripts 09-12) fits the classification formulas
-("what does the AI text say?", six dimensions). This module holds everything
-the two cycles share, so the cycle itself is one implementation with two
-instantiation sites, not two ad-hoc copies.
+Stage 1 (detection) fits the prefilter against the scope rule, sampled from
+the lexical seed screen's three strata (scripts/seed_screen.py). Stage 2
+(classification) fits the six-dimension tagger against the codebook, sampled
+as chunks built around stage 1's admitted paragraphs — and only after stage
+1 is frozen. This module holds everything the two stages share, so the
+cascade is one implementation with two instantiation sites, not two ad-hoc
+copies.
 
 Discipline encoded here:
   - Metrics come in two flavors: RAW (on the sample as drawn — internally
     consistent, but shaped by the sampling design) and WEIGHTED
     (inverse-probability weighted by each row's `sampling_weight` — an
     unbiased estimate of the population value). Sampling designs that
-    oversample one stratum (e.g. 07's 50/50 candidate/excluded draw) inflate
-    raw recall; the weighted numbers undo that.
+    oversample one stratum inflate raw recall; the weighted numbers undo
+    that.
   - fold_stability_score() is deliberately NOT called cross-validation:
     nothing is trained per fold (a keyword list / boolean formula has no
-    trainable parameters), and search candidates are mined from ALL of dev,
-    including every fold's test rows. The folds only measure how stable a
-    candidate's F1 is across subsamples, penalizing candidates that win on
-    one lucky fold. The single-look holdout is the only honest estimate.
-  - The holdout lock: once a cycle's holdout report exists, re-running the
-    fit against the same holdout is refused. Improving further requires a
-    fresh labeled batch.
+    trainable parameters), and search candidates are mined from ALL of the
+    search split, including every fold's test rows. The folds only measure
+    how stable a candidate's score is across subsamples, penalizing
+    candidates that win on one lucky fold. The single-look holdout is the
+    only honest estimate.
+  - The holdout lock: once a stage's holdout report exists, re-running
+    against the same holdout is refused. Improving further requires a fresh
+    labeled batch.
 """
 
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -51,6 +54,42 @@ import pandas as pd
 # rewrite freely; harnesses/<task>/ACTIVE names the frozen candidate.
 
 HARNESSES_DIR = Path("harnesses")
+
+
+def paragraph_id(accession_number: str, section_name: str, para_idx: int, text: str) -> str:
+    h = hashlib.sha256(f"{accession_number}|{section_name}|{para_idx}|{text}".encode("utf-8")).hexdigest()
+    return h[:16]
+
+
+def flatten_corpus_paragraphs(config: dict) -> pd.DataFrame:
+    """One row per paragraph across the entire parsed corpus: paragraph_id,
+    accession_number, ticker, industry_group, filing_date, section_name,
+    paragraph_text. Shared by the seed screen and both eval-set builders so
+    every stage samples from the same paragraph universe."""
+    manifest = pd.read_parquet(Path(config["paths"]["interim_manifests"]) / "filing_manifest.parquet")
+    sections = pd.read_parquet(Path(config["paths"]["interim_sections"]) / "filing_sections.parquet")
+    firm_universe = pd.read_parquet(Path(config["paths"]["interim_manifests"]) / "firm_universe.parquet")
+    ticker_industry = dict(zip(firm_universe["ticker"], firm_universe["industry_group"]))
+
+    completed_acc = set(manifest.loc[manifest["parse_status"] == "completed", "accession_number"])
+    sections = sections[sections["accession_number"].isin(completed_acc)]
+
+    rows = []
+    for _, row in sections.iterrows():
+        paragraphs = [p.strip() for p in row["section_text"].split("\n") if p.strip()]
+        for i, p in enumerate(paragraphs):
+            rows.append({
+                "paragraph_id": paragraph_id(row["accession_number"], row["section_name"], i, p),
+                "accession_number": row["accession_number"],
+                "ticker": row["ticker"],
+                "industry_group": ticker_industry.get(row["ticker"]),
+                "filing_date": row["filing_date"],
+                "section_name": row["section_name"],
+                "paragraph_index": i,
+                "paragraph_text": p,
+            })
+    return pd.DataFrame(rows)
+
 
 TASK_LABELS = {
     "detection": ["is_ai_related"],
@@ -120,6 +159,23 @@ def precision_recall_f1(y_true: np.ndarray, y_pred: np.ndarray,
 
 def f1_score(y_true: np.ndarray, y_pred: np.ndarray, weights: np.ndarray | None = None) -> float:
     return precision_recall_f1(y_true, y_pred, weights)[2]
+
+
+def balanced_accuracy(y_true: np.ndarray, y_pred: np.ndarray,
+                      weights: np.ndarray | None = None) -> tuple[float, float, float]:
+    """Sensitivity, specificity, and their mean (balanced accuracy). Base
+    rates differ enough across the six dimensions that raw agreement can be
+    trivially high by predicting the majority class — balanced accuracy is
+    the map's operational measure of per-label fidelity, not F1."""
+    if weights is None:
+        weights = np.ones(len(y_true))
+    tp = float(np.sum(weights[y_true & y_pred]))
+    fn = float(np.sum(weights[y_true & ~y_pred]))
+    tn = float(np.sum(weights[~y_true & ~y_pred]))
+    fp = float(np.sum(weights[~y_true & y_pred]))
+    sensitivity = tp / (tp + fn) if (tp + fn) else 0.0
+    specificity = tn / (tn + fp) if (tn + fp) else 0.0
+    return sensitivity, specificity, (sensitivity + specificity) / 2
 
 
 def metrics_block(label: str, y_true: np.ndarray, y_pred: np.ndarray,
@@ -348,6 +404,110 @@ def attach_sampling_weights(sample: pd.DataFrame, population: pd.DataFrame,
     out = sample.merge(weights, on=strata_cols, how="left")
     assert out["sampling_weight"].notna().all(), "every sampled row must fall in a counted stratum"
     return out
+
+
+def weighted_search_sample(df: pd.DataFrame, stratum_col: str, hit_count_col: str,
+                           n: int, seed: int) -> pd.DataFrame:
+    """Stage-1 search draw, deliberately skewed toward hard cases (map §2):
+    weak hits (a single keyword hit) over strong ones, and no-hit paragraphs
+    inside filings the screen hit elsewhere over the clean-filing stratum.
+    Not a probability sample — the search sample is spent freely, never used
+    for a population estimate."""
+    def base_weight(row):
+        if row[stratum_col] == "hit":
+            return 3.0 if row[hit_count_col] <= 1 else 1.0
+        if row[stratum_col] == "no_hit_filing_hits":
+            return 2.0
+        return 0.5  # no_hit_filing_clean
+
+    weights = df.apply(base_weight, axis=1)
+    n = min(n, len(df))
+    return df.sample(n=n, weights=weights, random_state=seed)
+
+
+def stratified_holdout_with_coverage(df: pd.DataFrame, population: pd.DataFrame, stratum_col: str,
+                                     cross_cols: list[str], n: int, seed: int,
+                                     min_per_stratum: int = 10) -> pd.DataFrame:
+    """Probability draw, proportional within stratum_col x cross_cols cells,
+    with a floor per stratum_col value so every seed-screen stratum —
+    including paragraphs in filings the screen never flagged at all — has
+    guaranteed holdout coverage (map §2, §7). Records `sampling_weight`
+    against `population` for inverse-probability-weighted corpus estimates."""
+    df = df.copy()
+    df["_cross"] = list(zip(*[df[c].astype(str) for c in cross_cols])) if cross_cols else "_all"
+    n_strata = max(df[stratum_col].nunique(), 1)
+    per_stratum = max(min_per_stratum, n // n_strata)
+    parts = [proportional_by_group(g, "_cross", per_stratum, seed) for _, g in df.groupby(stratum_col)]
+    sample = pd.concat(parts, ignore_index=True).drop(columns="_cross")
+    return attach_sampling_weights(sample, population, [stratum_col] + cross_cols)
+
+
+def select_stage1_candidate(candidate_scores: dict[str, dict], recall_floor: float) -> str | None:
+    """Stage-1's constrained objective (map §3): minimize candidate volume
+    subject to weighted search recall >= recall_floor. `candidate_scores` is
+    {name: {"recall_weighted": float, "volume_weighted": float}}. Returns
+    the eligible candidate with the smallest volume, or None if no candidate
+    clears the floor — unconstrained recall has a trivial optimum (admit
+    everything), so a candidate is never selected on volume alone."""
+    eligible = {name: v for name, v in candidate_scores.items() if v["recall_weighted"] >= recall_floor}
+    if not eligible:
+        return None
+    return min(eligible, key=lambda name: eligible[name]["volume_weighted"])
+
+
+# ---------------------------------------------------------------------------
+# Chunking — stage-2 labeling unit only (map §3: population = "chunks built
+# around admitted paragraphs"); tags are broadcast back to member paragraphs
+# so downstream analysis stays paragraph-indexed.
+# ---------------------------------------------------------------------------
+
+
+def build_chunks(paragraphs: pd.DataFrame, admit_col: str,
+                 window: int = 1) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Merge +/-window paragraph neighborhoods around admitted paragraphs
+    into chunks (port of the original 06_chunk_candidates.py windowing/merge
+    logic, generalized from a fixed keyword regex to any admit predicate).
+
+    `paragraphs` must contain every paragraph in each (accession_number,
+    section_name) group, admitted or not, so a window can borrow context
+    from non-admitted neighbors — but only admitted paragraphs seed a window
+    and only admitted paragraphs are members whose tags get broadcast back;
+    non-admitted neighbors contribute text only.
+
+    Returns (chunks, membership):
+      chunks: chunk_id, accession_number, ticker, filing_date, section_name,
+              chunk_text, member_paragraph_ids (list, admitted only)
+      membership: one row per admitted paragraph, paragraph_id -> chunk_id
+    """
+    chunk_rows: list[dict] = []
+    membership_rows: list[dict] = []
+    for (acc, sec), group in paragraphs.groupby(["accession_number", "section_name"], sort=False):
+        g = group.sort_values("paragraph_index").reset_index(drop=True)
+        admitted_positions = g.index[g[admit_col].astype(bool)].tolist()
+        if not admitted_positions:
+            continue
+        windows = [(max(0, p - window), min(len(g) - 1, p + window)) for p in admitted_positions]
+        merged: list[list[int]] = []
+        for start, end in sorted(windows):
+            if not merged or merged[-1][1] < start:
+                merged.append([start, end])
+            else:
+                merged[-1][1] = max(merged[-1][1], end)
+        for start, end in merged:
+            block = g.iloc[start:end + 1]
+            chunk_text = "\n\n".join(block["paragraph_text"])
+            chunk_id = hashlib.sha256(f"{acc}|{sec}|{start}|{end}".encode("utf-8")).hexdigest()[:16]
+            members = block.loc[block[admit_col].astype(bool), "paragraph_id"].tolist()
+            chunk_rows.append({
+                "chunk_id": chunk_id, "accession_number": acc, "ticker": block["ticker"].iloc[0],
+                "filing_date": block["filing_date"].iloc[0], "section_name": sec,
+                "chunk_text": chunk_text, "member_paragraph_ids": members,
+            })
+            for pid in members:
+                membership_rows.append({"paragraph_id": pid, "chunk_id": chunk_id})
+    chunks = pd.DataFrame(chunk_rows)
+    membership = pd.DataFrame(membership_rows)
+    return chunks, membership
 
 
 # ---------------------------------------------------------------------------

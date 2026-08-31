@@ -759,6 +759,42 @@
     "interim_manifests": "data/interim/manifests",
     "interim_batches": "data/interim/batches",
     "interim_sections": "data/interim/sections",
-    "candidate_chunks": "data/interim/candidate_chunks"
+    "candidate_chunks": "data/interim/candidate_chunks",
+    "interim_seed_screen": "data/interim/seed_screen"
+  },
+  "seed_screen": {
+    "ai_keywords": [
+      "ai",
+      "artificial intelligence",
+      "generative ai",
+      "gen ai",
+      "machine learning",
+      "large language model",
+      "llm",
+      "deep learning",
+      "natural language processing",
+      "predictive analytics",
+      "algorithmic",
+      "automation",
+      "computer vision",
+      "neural network",
+      "openai",
+      "anthropic",
+      "claude",
+      "deepseek",
+      "chatgpt",
+      "copilot",
+      "gemini",
+      "aip",
+      "aiops"
+    ],
+    "false_positives": [
+      "adobe illustrator",
+      "appreciation",
+      "said",
+      "paid"
+    ],
+    "recall_floor": 0.9,
+    "chunk_window": 1
   }
 }

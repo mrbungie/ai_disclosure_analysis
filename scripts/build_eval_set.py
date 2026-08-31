@@ -1,35 +1,42 @@
 """
-build_eval_set.py — Build one labeled evaluation set for the classification
-harness (the task instances X and their reward labels).
+build_eval_set.py — Build one stage's labeled evaluation set (the task
+instances X and their reward labels), per docs/distillation_map.html.
 
-    build_eval_set --sample   draw paragraphs from the full corpus
-    build_eval_set --label    obtain reward labels (LLM labeler) + export the
-                              human audit workbook
-    -> data/interim/eval/eval_set.parquet  (one row per instance: text,
-       7 llm_* label columns, sampling_weight, split ∈ {search, test})
+    build_eval_set --stage detection --sample
+    build_eval_set --stage detection --label
+    build_eval_set --stage classification --sample   # only after detection is frozen
+    build_eval_set --stage classification --label
 
-Design, mirroring the meta-harness setup:
-  - Instances are PARAGRAPHS drawn from the entire corpus. Stratified by the
-    ACTIVE candidate's own is_ai_related prediction (half predicted-positive,
-    half predicted-negative, industry-proportional within each) so both error
-    directions get labeled rows; every row records its inverse sampling
-    probability (`sampling_weight`) so population-weighted metrics stay
-    honest despite the balanced draw.
-  - The search/test split is assigned HERE, once, at labeling time, and
-    stored in the parquet. The proposer spends the search rows freely;
-    eval_harness.py enforces the single look at the test rows.
-  - Reward labels come from an LLM labeler (LLM_JUDGE_* env vars) over the
-    FULL text, all seven fields in one call; a balanced human audit workbook
-    is exported automatically at the end (agreement_check.py scores it).
+Two stages, two populations, two reference judges — never fused (map §1,
+§3, §6):
 
-Usage:
-    uv run python scripts/build_eval_set.py --sample [--n 800] [--seed 42]
-    uv run python scripts/build_eval_set.py --label [--concurrency 3] [--delay 0.3]
+  detection (stage 1)
+    Population: every corpus paragraph, stratified by the lexical seed
+    screen (scripts/seed_screen.py) into hit / no_hit_filing_hits /
+    no_hit_filing_clean (map §2). Search sample is weighted toward weak
+    hits and no-hit-in-a-hitting-filing; holdout is a probability sample,
+    stratified by year and sector, with guaranteed coverage of all three
+    strata (including the no-hit-anywhere stratum). Reference judge scores
+    ONLY the scope question: is_ai_related.
+    -> data/interim/eval/eval_set_detection.parquet (one row per paragraph)
+
+  classification (stage 2)
+    Cannot start until harnesses/detection/ACTIVE has produced the
+    candidate frame (data/processed/candidate_frame.parquet via
+    scripts/apply_harness.py). Population: chunks built around admitted
+    paragraphs (harness_fit.build_chunks) so the reference judge sees
+    enough context to apply the codebook. Reference judge scores ONLY the
+    six dimensions, per chunk.
+    -> data/interim/eval/eval_set_classification.parquet (one row per
+       chunk, with member_paragraph_ids for the paragraph-level rollout)
+
+Both stages: the search/test split is assigned HERE, once, at sampling
+time, and stored in the parquet — the proposer spends search rows freely;
+eval_harness.py enforces the single test look per stage.
 """
 
 import argparse
 import asyncio
-import hashlib
 import json
 from pathlib import Path
 
@@ -46,24 +53,27 @@ except ImportError:
 
 load_dotenv()
 
-SAMPLE_PATH = Path("data/interim/eval/sample.parquet")
-EVAL_SET_PATH = Path("data/interim/eval/eval_set.parquet")
-HARNESSES_DIR = Path("harnesses")
+SEED_SCREEN_PATH = Path("data/interim/seed_screen/seed_screen.parquet")
+CANDIDATE_FRAME_PATH = Path("data/processed/candidate_frame.parquet")
+SAMPLE_PATHS = {
+    "detection": Path("data/interim/eval/sample_detection.parquet"),
+    "classification": Path("data/interim/eval/sample_classification.parquet"),
+}
+EVAL_SET_PATHS = {
+    "detection": Path("data/interim/eval/eval_set_detection.parquet"),
+    "classification": Path("data/interim/eval/eval_set_classification.parquet"),
+}
 
-LABEL_FIELDS = ["is_ai_related", "is_substantive", "is_promotional", "is_risk_related",
-                "is_governance_related", "is_use_case_specific", "is_quantified"]
-
-SYSTEM_PROMPT = (
-    "You are a financial disclosure analyst specializing in SEC 10-K filings. "
-    "Classify a short excerpt on seven independent binary dimensions about artificial "
-    "intelligence and related technology. Judge only what the text itself says. "
-    "If the excerpt does not discuss AI/ML/LLMs or closely related technology at all, "
-    "is_ai_related is false and every other dimension is false too."
-)
+DIMENSION_FIELDS = ["is_substantive", "is_promotional", "is_risk_related",
+                    "is_governance_related", "is_use_case_specific", "is_quantified"]
 
 
-class RewardLabel(BaseModel):
+class ScopeLabel(BaseModel):
     is_ai_related: bool = Field(description="Discusses AI, ML, LLMs, or closely related technology in any capacity.")
+    rationale: str = Field(description="One sentence citing the text evidence.")
+
+
+class DimensionLabel(BaseModel):
     is_substantive: bool = Field(description="Concrete, operational AI activity the firm itself does or owns (deployed products, training on own data, infrastructure in use, completed acquisitions). Vague intentions or market commentary are NOT substantive.")
     is_promotional: bool = Field(description="Promotional, hype-oriented AI language: transformative/revolutionary/leader-style claims, benefits asserted without evidence.")
     is_risk_related: bool = Field(description="Risks, harms, uncertainties, or adverse effects connected to AI.")
@@ -73,101 +83,166 @@ class RewardLabel(BaseModel):
     rationale: str = Field(description="One sentence citing the text evidence.")
 
 
+SCOPE_SYSTEM_PROMPT = (
+    "You are a financial disclosure analyst specializing in SEC 10-K filings. "
+    "Decide whether a short excerpt discusses AI, ML, LLMs, or closely related technology "
+    "in any capacity. Judge only what the text itself says."
+)
+
+DIMENSION_SYSTEM_PROMPT = (
+    "You are a financial disclosure analyst specializing in SEC 10-K filings. This excerpt "
+    "has already been judged to discuss AI in some capacity. Classify it on six independent "
+    "binary dimensions about that AI discussion. Judge only what the text itself says."
+)
+
+
 def load_config() -> dict:
     with open("configs/config.json") as f:
         return json.load(f)
 
 
-def load_active_harness():
-    """The ACTIVE detection candidate stratifies the draw (its own
-    predicted-positive/negative split)."""
-    name = harness_fit.active_candidate("detection")
-    print(f"Active detection candidate for stratification: {name}")
-    return harness_fit.load_candidate("detection", name)
+def year_of(filing_date) -> str:
+    return str(pd.Timestamp(filing_date).year)
 
 
-def paragraph_id(accession_number: str, section_name: str, para_idx: int, text: str) -> str:
-    h = hashlib.sha256(f"{accession_number}|{section_name}|{para_idx}|{text}".encode("utf-8")).hexdigest()
-    return h[:16]
+# ---------------------------------------------------------------------------
+# Stage 1: detection
+# ---------------------------------------------------------------------------
 
 
-def build_population(config: dict, classify) -> pd.DataFrame:
-    """One row per paragraph across the entire parsed corpus, tagged with the
-    active candidate's is_ai_related prediction and the firm's industry."""
-    manifest = pd.read_parquet(Path(config["paths"]["interim_manifests"]) / "filing_manifest.parquet")
-    sections = pd.read_parquet(Path(config["paths"]["interim_sections"]) / "filing_sections.parquet")
-    firm_universe = pd.read_parquet(Path(config["paths"]["interim_manifests"]) / "firm_universe.parquet")
-    ticker_industry = dict(zip(firm_universe["ticker"], firm_universe["industry_group"]))
+def do_sample_detection(args: argparse.Namespace) -> None:
+    if not SEED_SCREEN_PATH.exists():
+        print(f"Error: {SEED_SCREEN_PATH} not found. Run scripts/seed_screen.py first.")
+        return
+    population = pd.read_parquet(SEED_SCREEN_PATH)
+    counts = population["stratum"].value_counts()
+    print(f"Seed-screen population: {len(population)} paragraphs — " +
+          ", ".join(f"{s}={n}" for s, n in counts.items()))
 
-    completed_acc = set(manifest.loc[manifest["parse_status"] == "completed", "accession_number"])
-    sections = sections[sections["accession_number"].isin(completed_acc)]
+    search = harness_fit.weighted_search_sample(population, "stratum", "hit_count",
+                                                args.n_search, args.seed)
+    population["_year"] = population["filing_date"].map(year_of)
+    holdout_pool = population[~population["paragraph_id"].isin(search["paragraph_id"])]
+    holdout = harness_fit.stratified_holdout_with_coverage(
+        holdout_pool, population, "stratum", ["_year", "industry_group"],
+        args.n_holdout, args.seed)
+    population.drop(columns="_year", inplace=True)
+    holdout = holdout.drop(columns="_year", errors="ignore")
 
-    rows = []
-    for _, row in sections.iterrows():
-        paragraphs = [p.strip() for p in row["section_text"].split("\n") if p.strip()]
-        for i, p in enumerate(paragraphs):
-            rows.append({
-                "paragraph_id": paragraph_id(row["accession_number"], row["section_name"], i, p),
-                "accession_number": row["accession_number"],
-                "ticker": row["ticker"],
-                "industry_group": ticker_industry.get(row["ticker"]),
-                "filing_date": row["filing_date"],
-                "section_name": row["section_name"],
-                "paragraph_text": p,
-            })
-    df = pd.DataFrame(rows)
-    df["stratum"] = ["pred_positive" if classify(t) else "pred_negative"
-                     for t in df["paragraph_text"]]
-    return df
+    search = search.copy()
+    search["sampling_weight"] = pd.NA  # search sample is spent freely, never population-weighted
+    search["split"] = "search"
+    holdout["split"] = "test"
+    sample = pd.concat([search, holdout], ignore_index=True)
 
+    missing_strata = set(population["stratum"].unique()) - set(holdout["stratum"].unique())
+    if missing_strata:
+        print(f"WARNING: holdout is missing strata {missing_strata} — "
+              f"increase --n-holdout or --min-per-stratum for full coverage.")
 
-def do_sample(args: argparse.Namespace) -> None:
-    config = load_config()
-    classify = load_active_harness()
-    population = build_population(config, classify)
-    pos = population[population["stratum"] == "pred_positive"]
-    neg = population[population["stratum"] == "pred_negative"]
-    print(f"Corpus: {len(population)} paragraphs — active candidate predicts "
-          f"{len(pos)} AI-related ({len(pos)/len(population)*100:.2f}%).")
+    print(f"Sample: {len(search)} search + {len(holdout)} holdout = {len(sample)} "
+          f"(holdout strata: {dict(holdout['stratum'].value_counts())})")
+    SAMPLE_PATHS["detection"].parent.mkdir(parents=True, exist_ok=True)
+    sample.to_parquet(SAMPLE_PATHS["detection"], index=False)
+    print(f"Wrote sample -> {SAMPLE_PATHS['detection']}\nNot labeled yet. Run with --stage detection --label.")
 
-    n_pos = args.n // 2
-    pos_sample = harness_fit.proportional_by_group(pos, "industry_group", n_pos, args.seed)
-    neg_sample = harness_fit.proportional_by_group(neg, "industry_group", args.n - n_pos, args.seed)
-    sample = pd.concat([pos_sample, neg_sample], ignore_index=True)
-    sample = harness_fit.attach_sampling_weights(sample, population, ["stratum", "industry_group"])
-
-    # The search/test split is fixed NOW, before any labels exist, stratified
-    # by the sampling stratum. eval_harness.py enforces the one test look.
-    _, test = harness_fit.stratified_split(sample, "stratum", args.search_frac, args.seed)
-    sample["split"] = "search"
-    sample.loc[sample["paragraph_id"].isin(test["paragraph_id"]), "split"] = "test"
-
-    print(f"Sample: {len(pos_sample)} pred-positive + {len(neg_sample)} pred-negative = {len(sample)} "
-          f"({(sample['split'] == 'search').sum()} search / {(sample['split'] == 'test').sum()} test)")
-    SAMPLE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    sample.to_parquet(SAMPLE_PATH, index=False)
-    print(f"Wrote sample -> {SAMPLE_PATH}\nNot labeled yet. Run with --label.")
-
-    pipeline_logger.log_event(pipeline_step="eval_set", level="SUCCESS",
-                              message=f"Sampled {len(sample)} paragraphs for the harness eval set.",
+    pipeline_logger.log_event(pipeline_step="eval_set_detection", level="SUCCESS",
+                              message=f"Sampled {len(sample)} paragraphs for the detection eval set.",
                               details={"n": len(sample)})
 
 
-def make_prompt(row: pd.Series) -> str:
-    return (f"Classify this excerpt from a corporate 10-K SEC filing on all seven "
-            f"dimensions:\n\n---\n{row['paragraph_text']}\n---")
+def make_scope_prompt(row: pd.Series) -> str:
+    return f"Classify this excerpt from a corporate 10-K SEC filing:\n\n---\n{row['paragraph_text']}\n---"
 
 
-async def do_label(args: argparse.Namespace) -> None:
-    if not SAMPLE_PATH.exists():
-        print(f"Error: {SAMPLE_PATH} not found. Run with --sample first.")
+async def do_label_detection(args: argparse.Namespace) -> None:
+    await _label_stage(
+        stage="detection", sample_path=SAMPLE_PATHS["detection"], eval_set_path=EVAL_SET_PATHS["detection"],
+        label_fields=["is_ai_related"], output_type=ScopeLabel, system_prompt=SCOPE_SYSTEM_PROMPT,
+        make_prompt=make_scope_prompt, args=args)
+
+
+# ---------------------------------------------------------------------------
+# Stage 2: classification
+# ---------------------------------------------------------------------------
+
+
+def do_sample_classification(args: argparse.Namespace) -> None:
+    if not CANDIDATE_FRAME_PATH.exists():
+        print(f"Error: {CANDIDATE_FRAME_PATH} not found. Stage 1 must be frozen and applied "
+              f"(scripts/apply_harness.py) before stage 2 can sample its candidate frame.")
         return
-    candidates = pd.read_parquet(SAMPLE_PATH)
-    if EVAL_SET_PATH.exists():
-        existing = pd.read_parquet(EVAL_SET_PATH)
-        done = set(existing["paragraph_id"])
+    config = load_config()
+    all_paragraphs = harness_fit.flatten_corpus_paragraphs(config)
+    admitted = pd.read_parquet(CANDIDATE_FRAME_PATH)
+    all_paragraphs["is_ai_related"] = all_paragraphs["paragraph_id"].isin(admitted["paragraph_id"])
+    n_admitted = int(all_paragraphs["is_ai_related"].sum())
+    print(f"Candidate frame: {n_admitted} admitted paragraphs of {len(all_paragraphs)} "
+          f"({n_admitted / len(all_paragraphs) * 100:.2f}%).")
+
+    chunks, membership = harness_fit.build_chunks(
+        all_paragraphs, admit_col="is_ai_related", window=args.chunk_window)
+    print(f"Built {len(chunks)} chunks from {membership['paragraph_id'].nunique()} admitted paragraphs.")
+
+    firm_universe = pd.read_parquet(Path(config["paths"]["interim_manifests"]) / "firm_universe.parquet")
+    ticker_industry = dict(zip(firm_universe["ticker"], firm_universe["industry_group"]))
+    chunks["industry_group"] = chunks["ticker"].map(ticker_industry)
+    chunks["_year"] = chunks["filing_date"].map(year_of)
+
+    n = min(args.n, len(chunks))
+    search_n = round(n * args.search_frac)
+    search = chunks.sample(n=min(search_n, len(chunks)), random_state=args.seed)
+    holdout_pool = chunks[~chunks["chunk_id"].isin(search["chunk_id"])]
+    holdout = harness_fit.proportional_by_group(
+        holdout_pool, "industry_group", min(n - len(search), len(holdout_pool)), args.seed)
+    holdout = harness_fit.attach_sampling_weights(holdout, chunks, ["industry_group"])
+
+    search = search.copy()
+    search["sampling_weight"] = pd.NA
+    search["split"] = "search"
+    holdout["split"] = "test"
+    sample = pd.concat([search, holdout], ignore_index=True).drop(columns="_year", errors="ignore")
+
+    print(f"Sample: {len(search)} search + {len(holdout)} holdout chunks = {len(sample)}")
+    SAMPLE_PATHS["classification"].parent.mkdir(parents=True, exist_ok=True)
+    sample.to_parquet(SAMPLE_PATHS["classification"], index=False)
+    print(f"Wrote sample -> {SAMPLE_PATHS['classification']}\nNot labeled yet. Run with --stage classification --label.")
+
+    pipeline_logger.log_event(pipeline_step="eval_set_classification", level="SUCCESS",
+                              message=f"Sampled {len(sample)} chunks for the classification eval set.",
+                              details={"n": len(sample)})
+
+
+def make_dimension_prompt(row: pd.Series) -> str:
+    return (f"Classify this excerpt (already known to discuss AI) from a corporate 10-K SEC "
+            f"filing on all six dimensions:\n\n---\n{row['chunk_text']}\n---")
+
+
+async def do_label_classification(args: argparse.Namespace) -> None:
+    await _label_stage(
+        stage="classification", sample_path=SAMPLE_PATHS["classification"],
+        eval_set_path=EVAL_SET_PATHS["classification"], label_fields=DIMENSION_FIELDS,
+        output_type=DimensionLabel, system_prompt=DIMENSION_SYSTEM_PROMPT,
+        make_prompt=make_dimension_prompt, args=args)
+
+
+# ---------------------------------------------------------------------------
+# Shared labeling loop
+# ---------------------------------------------------------------------------
+
+
+async def _label_stage(stage: str, sample_path: Path, eval_set_path: Path, label_fields: list[str],
+                       output_type, system_prompt: str, make_prompt, args: argparse.Namespace) -> None:
+    if not sample_path.exists():
+        print(f"Error: {sample_path} not found. Run with --stage {stage} --sample first.")
+        return
+    id_col = "paragraph_id" if stage == "detection" else "chunk_id"
+    candidates = pd.read_parquet(sample_path)
+    if eval_set_path.exists():
+        existing = pd.read_parquet(eval_set_path)
+        done = set(existing[id_col])
         records = existing.to_dict("records")
-        to_label = candidates[~candidates["paragraph_id"].isin(done)].reset_index(drop=True)
+        to_label = candidates[~candidates[id_col].isin(done)].reset_index(drop=True)
         print(f"Resuming: {len(done)} labeled, {len(to_label)} remaining.")
         if not len(to_label):
             print("Eval set already fully labeled.")
@@ -175,27 +250,32 @@ async def do_label(args: argparse.Namespace) -> None:
     else:
         to_label, records = candidates, []
 
-    agent = harness_fit.build_judge(RewardLabel, SYSTEM_PROMPT)
+    agent = harness_fit.build_judge(output_type, system_prompt)
     labeled = await harness_fit.judge_batch(
-        agent, to_label, make_prompt, LABEL_FIELDS + ["rationale"],
-        records, EVAL_SET_PATH, args.concurrency, args.delay)
-    print(f"\nDone. {len(labeled)} labeled instances -> {EVAL_SET_PATH}")
-    for f in LABEL_FIELDS:
-        print(f"  {f}: {labeled[f'llm_{f}'].astype(bool).mean()*100:.1f}% positive")
+        agent, to_label, make_prompt, label_fields + ["rationale"],
+        records, eval_set_path, args.concurrency, args.delay)
+    print(f"\nDone. {len(labeled)} labeled instances -> {eval_set_path}")
+    for f in label_fields:
+        print(f"  {f}: {labeled[f'llm_{f}'].astype(bool).mean() * 100:.1f}% positive")
 
-    agreement_check.auto_make("eval")
-    print("Next: scripts/eval_harness.py --task detection --candidate 000_seed")
+    agreement_check.auto_make(f"eval_{stage}")
+    print(f"Next: scripts/eval_harness.py --task {stage} --candidate 000_seed")
 
-    pipeline_logger.log_event(pipeline_step="eval_set", level="SUCCESS",
-                              message=f"Labeled {len(labeled)} eval instances.",
+    pipeline_logger.log_event(pipeline_step=f"eval_set_{stage}", level="SUCCESS",
+                              message=f"Labeled {len(labeled)} {stage} eval instances.",
                               details={"n": len(labeled)})
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--stage", choices=["detection", "classification"], required=True)
     parser.add_argument("--sample", action="store_true")
     parser.add_argument("--label", action="store_true")
-    parser.add_argument("--n", type=int, default=800)
+    parser.add_argument("--n", type=int, default=800, help="classification: total chunks to sample")
+    parser.add_argument("--n-search", type=int, default=560, help="detection: search sample size")
+    parser.add_argument("--n-holdout", type=int, default=240, help="detection: holdout sample size")
+    parser.add_argument("--chunk-window", type=int, default=None,
+                        help="classification: paragraphs of context each side (default: configs/config.json)")
     parser.add_argument("--search-frac", type=float, default=0.7)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--concurrency", type=int, default=3)
@@ -203,10 +283,19 @@ def main() -> None:
     args = parser.parse_args()
     if not args.sample and not args.label:
         parser.error("Pass --sample and/or --label")
-    if args.sample:
-        do_sample(args)
-    if args.label:
-        asyncio.run(do_label(args))
+    if args.chunk_window is None:
+        args.chunk_window = load_config()["seed_screen"]["chunk_window"]
+
+    if args.stage == "detection":
+        if args.sample:
+            do_sample_detection(args)
+        if args.label:
+            asyncio.run(do_label_detection(args))
+    else:
+        if args.sample:
+            do_sample_classification(args)
+        if args.label:
+            asyncio.run(do_label_classification(args))
 
 
 if __name__ == "__main__":

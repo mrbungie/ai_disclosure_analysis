@@ -13,19 +13,34 @@ description: >
 
 # Meta-harness optimization iteration (agentic proposer)
 
-You are the proposer from the Meta-Harness pattern (docs/meta_harness_methodology.md):
-a coding agent with filesystem access to every prior candidate's source code,
-scores, and per-instance traces. One iteration = inspect history → write one
-new candidate program → evaluate it on the search split → journal → commit.
+You are the proposer from the Meta-Harness pattern applied as a two-stage
+distillation cascade (docs/distillation_map.html): a coding agent with
+filesystem access to every prior candidate's source code, scores, and
+per-instance traces. One iteration = inspect history → write one new
+candidate program → evaluate it on the search split → journal → commit.
 
 **Argument (required):** `detection` or `classification`. If unspecified, ask.
 
-The two tasks (fixed contracts; everything inside a candidate is yours to design):
-- `detection`: `classify(text) -> bool` — is this filing text AI-related?
-  Keywords, patterns, staging — candidate-internal.
-- `classification`: `classify(text) -> dict` with the six dimension bools
-  (substantive, promotional, risk, governance, use-case, quantified) —
-  defined on detection's positives.
+The two stages (fixed contracts; everything inside a candidate is yours to
+design). They are NOT interchangeable — classification cannot be worked on
+until detection is frozen, because detection's ACTIVE candidate produces the
+candidate frame classification samples from:
+- `detection` (stage 1): `classify(text: str) -> bool` on individual
+  paragraphs — is this filing text AI-related? Selection metric: minimize
+  candidate volume subject to weighted search recall >= the recall floor
+  (`configs/config.json: seed_screen.recall_floor`) — recall is a gate, not
+  something to maximize past the floor. Sampled from
+  `data/interim/eval/eval_set_detection.parquet` (seed-screen-stratified
+  paragraphs — see `scripts/seed_screen.py`).
+- `classification` (stage 2): `classify(text: str) -> dict` with the six
+  dimension bools (substantive, promotional, risk, governance, use-case,
+  quantified), operating on CHUNK text (a merged +/-1 paragraph window
+  around admitted paragraphs — `harness_fit.build_chunks`), not raw
+  paragraphs. Selection metric: macro-averaged balanced accuracy (mean of
+  sensitivity/specificity) per label, not F1. Sampled from
+  `data/interim/eval/eval_set_classification.parquet`. Requires
+  `data/processed/candidate_frame.parquet` to exist (written by
+  `scripts/apply_harness.py --detection-only` after a detection freeze).
 
 ## 0. Journals and lock (this directory, gitignored)
 
@@ -61,9 +76,12 @@ All under `harnesses/<task>/`:
    the point of the filesystem: diagnose WHY, not just how much.
 2. `scripts/eval_harness.py --leaderboard --task <task>` for the standings.
 3. `git log --oneline -15` for recent iterations; the journal for the story.
-4. The eval set exists? (`data/interim/eval/eval_set.parquet`). If not, stop:
-   the user must run build_eval_set (--label costs money — never run it
-   without their go-ahead in this conversation).
+4. The stage's eval set exists? (`data/interim/eval/eval_set_<task>.parquet`).
+   If not, stop: the user must run
+   `build_eval_set.py --stage <task> --sample/--label` (`--label` costs
+   money — never run it without their go-ahead in this conversation). For
+   `classification`, also check `data/processed/candidate_frame.parquet`
+   exists — it can't sample without it.
 
 ## 2. Iron rules
 
@@ -95,16 +113,20 @@ All under `harnesses/<task>/`:
    — repeat read→edit within THIS candidate only until its idea is cleanly
    expressed (avoid overfitting spirals: if you are tweaking thresholds to
    chase the search score, stop and journal that).
-4. Compare against the leaderboard; the weighted reward is the number that
-   matters.
+4. Compare against the leaderboard; for `detection` the number that matters
+   is search recall against the floor (volume only breaks ties among
+   eligible candidates); for `classification` it's macro balanced accuracy.
 
 **Freezing** (only with explicit user agreement, when iterations plateau):
 `eval_harness.py --task <task> --candidate <best> --split test` — one look,
-auto-promotes to ACTIVE, spends the test split for this task+batch. Report
-the result as-is, favorable or not. A spent test split means the next freeze
-needs a fresh labeled eval set. After a detection freeze, re-run
-`scripts/apply_harness.py` (and note that build_eval_set stratification
-shifts with the new ACTIVE).
+auto-promotes to ACTIVE, spends the test split for this stage's eval-set
+batch. Report the result as-is, favorable or not. Detection's freeze is
+additionally gated: it refuses if the candidate's recorded search recall is
+below the floor. A spent test split means the next freeze needs a fresh
+labeled eval set. After a detection freeze, run
+`scripts/apply_harness.py --detection-only` to (re)write
+`data/processed/candidate_frame.parquet` — classification's eval set
+samples from that frame, so it shifts whenever detection's ACTIVE changes.
 
 ## 4. Close
 
