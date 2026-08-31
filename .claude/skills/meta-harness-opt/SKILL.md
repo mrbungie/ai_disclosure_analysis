@@ -24,11 +24,28 @@ specify which harness, ask before doing anything else.
 This skill owns its audit trail at `.claude/skills/meta-harness-opt/journals/`:
 `harness1_detection.md`, `harness2_classification.md`, and the lock file
 `OPT_LOCK`. The directory is gitignored — journals are a local working trail;
-what IS committed is the state they explain (config, code, reports) and the
-commit messages. If a journal file is missing (fresh clone), bootstrap it
-before iterating: copy the entry template below into a new file and write an
-entry `000 — initial state observed` describing the CURRENT config state of
-that harness, marked as reconstructed.
+what IS committed is the state they explain (state files, code, reports) and
+the commit messages. If a journal file is missing (fresh clone), bootstrap it
+before iterating: create the file with the standard header below, then write
+an entry `000 — initial state observed (reconstructed)` describing the
+CURRENT state of that harness's `configs/harness_*.json`.
+
+Standard journal header (fill in the harness name/state file):
+
+```markdown
+# Journal — Harness <N>: <name> (`configs/harness_<x>.json`)
+
+Change log of this harness's state (level 0) and of the cycle code that fits
+it (level 1). One entry per meta-optimization iteration, appended by the
+proposer (.claude/skills/meta-harness-opt/). Never edit or delete past
+entries — this journal is part of the method's audit trail
+(docs/meta_harness_methodology.md). Local and gitignored: the committed
+evidence lives in reports/, the search traces, and the [meta-opt/*] commits.
+
+Entry template:
+```
+
+Entry template (also used for every later entry):
 
 ```
 ## NNN — YYYY-MM-DD — <one-line summary>
