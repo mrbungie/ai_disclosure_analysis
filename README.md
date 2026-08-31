@@ -1,6 +1,6 @@
 # AI Washing or Credible Disclosure? Patterns and Clusters in Corporate AI Disclosures
 
-Data collection and preprocessing pipeline for a research project analyzing how listed firms communicate about artificial intelligence in SEC 10-K filings (2021–2026): builds the firm/filing universe, extracts filing sections, and identifies which text discusses AI.
+Data collection and preprocessing pipeline for a research project analyzing how listed firms communicate about artificial intelligence in SEC 10-K filings (2021–2026): builds the firm/filing universe, extracts filing sections, and identifies which text discusses AI and how.
 
 **Author:** Germán Oviedo
 
@@ -8,80 +8,67 @@ Data collection and preprocessing pipeline for a research project analyzing how 
 
 ## Sample
 
-- **115 US-listed firms** (of 120 in the initial universe; 5 excluded for incomplete filing histories) spanning **55 SIC industry groups**, covering both AI-intensive sectors (software, semiconductors) and traditional industrials, energy, healthcare, and finance.
-- **Annual 10-K filings, fiscal years 2021–2026** (2026 is a partial year, filings submitted through May 2026), yielding **658 firm-year observations**.
-- **AI-related text** is identified by the current ACTIVE detection candidate, so counts evolve with the harness state (see `.claude/skills/meta-harness-opt/journals/`).
+- **US-listed firms** in the frozen S&P 500 (2021-12-31) universe plus a delisted-satellite core (see `docs/universe_expansion_plan.md`), spanning aggregated sectors (tech, semis, defense, industrials, telecom, autos, retail, consumer, energy, utilities, health, financials, insurance, real estate, materials, media, travel/leisure).
+- **Annual 10-K filings, fiscal years 2021–2026** (2026 is a partial year).
+- **AI-related text** is identified by the ACTIVE detection candidate; **what it says about AI** by the ACTIVE classification candidate — so both counts evolve with harness state (see `.claude/skills/meta-harness-opt/journals/`).
 - Scope limitations: 10-K only (no 8-K/10-Q/proxy/earnings-call text), US-listed firms only.
 
 ---
 
-## Pipeline
+## Methodology: a two-stage distillation cascade
 
-File-first, incremental system (Parquet/JSONL, no production database), resumable at every stage.
+Full spec: **`docs/distillation_map.html`**. Summary:
 
-```
-SEC EDGAR
-  → 00 Build firm universe                  (firm_universe.parquet)
-  → 01 Build filing manifest                (filing_manifest.parquet)
-  → 02 Select download batch
-  → 03 Download filings                     (filings_html/)
-  → 04 Extract sections (Business/Risk/MD&A) (filing_sections.parquet)
+An expensive LLM reference classifier can't run over the whole corpus, so two
+things are distilled into cheap programs instead, in sequence:
 
-  The two harnesses (candidate programs, harnesses/<task>/<candidate>/harness.py):
-    detection       classify(text) -> bool           "is this text AI-related?"
-    classification  classify(text) -> 6 dim booleans "what does the AI text say?"
+1. **Detection (stage 1).** A lexical **seed screen** (`scripts/seed_screen.py`)
+   — fixed, deliberately over-inclusive keyword matching, never scored itself
+   — flags every paragraph and every filing, producing three sampling strata:
+   `hit`, `no_hit_filing_hits` (a miss inside a filing that hit elsewhere),
+   `no_hit_filing_clean` (a miss inside a filing with no hits anywhere). All
+   three keep positive inclusion probability. A search sample (weighted
+   toward hard cases) and a probability holdout (stratified by year/sector,
+   with guaranteed coverage of all three strata) are drawn from this
+   population and reward-labeled by an LLM judge against a short **scope
+   rule**: does this paragraph discuss AI at all? Candidates
+   (`harnesses/detection/<name>/harness.py`, `classify(text) -> bool`) are
+   scored by **minimizing predicted-positive volume subject to a weighted
+   search recall floor** — recall is a gate, not something to maximize past
+   it, since unconstrained recall has a trivial optimum (admit everything).
+2. **Classification (stage 2).** Once detection is frozen and applied, its
+   admitted paragraphs form the **candidate frame**
+   (`data/processed/candidate_frame.parquet`). Chunks are built around them
+   (±1 paragraph window, merged when overlapping —
+   `harness_fit.build_chunks`) so the reference judge has enough context.
+   Chunks are reward-labeled against the six-dimension **codebook**
+   (substantive, promotional, risk-related, governance-related, use-case-
+   specific, quantified). Candidates
+   (`harnesses/classification/<name>/harness.py`, `classify(text) -> dict[6
+   bools]`) are scored by **macro-averaged balanced accuracy** (mean of
+   sensitivity and specificity per label) — not F1, since the six labels'
+   base rates differ enough that raw agreement can be trivially high.
+3. **Rollout.** A chunk's six tags are broadcast back to every paragraph
+   inside it, so the final panel (`data/processed/classified_paragraphs.parquet`)
+   stays **one row per paragraph** even though the classification decision
+   was made at chunk granularity. Non-AI paragraphs get `NA` dimension tags
+   (not `False` — the task is only defined on AI text).
 
-  → build_eval_set   sample paragraphs + reward-label them (one labeled set
-                     serves both tasks; fixed search/test split; weights)
-  → eval_harness     Evaluate(H, X): score a candidate on the search split,
-                     log scores + per-instance traces to its directory
-  → /meta-harness-opt <task>   the proposer: reads all prior candidates'
-                     code/scores/traces, writes a NEW candidate, evaluates it
-  → eval_harness --split test  ONE look per task per batch = the freeze
-                     (promotes the candidate to harnesses/<task>/ACTIVE)
-  → apply_harness    frozen detection pre-classifies every corpus paragraph;
-                     frozen classification tags the positives
-                     -> data/processed/classified_paragraphs.parquet
-```
-
-This is the meta-harness pattern (docs/meta_harness_methodology.md): each
-task's harness is a self-contained program searched by an agentic proposer
-with filesystem access to every prior candidate's source, scores, and
-per-instance traces. The search split is spent freely; the test split is
-looked at once per labeled batch and then locked. Reward labels come from an
-LLM labeler and are human-audited (Cohen's kappa). Both harnesses start from
-deliberately minimal `000_seed` candidates and grow only through journaled
-proposer iterations (`.claude/skills/meta-harness-opt/journals/`).
+Both stages share one outer loop (`scripts/harness_fit.py`): a search split
+(spent freely, weighted toward hard cases) and a probability holdout
+(inclusion weights recorded, opened once). Iteration is done by an agentic
+proposer (`/meta-harness-opt <task>` skill) with filesystem access to every
+prior candidate's source, scores, and per-instance traces — one candidate
+per iteration, immutable history, one optimization at a time
+(`OPT_LOCK`). Reward labels come from an LLM judge and are human-audited
+(Cohen's kappa) before being trusted.
 
 ### Collection (scripts 00–04)
 Firm universe and filing manifest are built from SEC EDGAR (universe defined
-in `configs/universe.csv`; sectors via config sector_groups + per-company
+in `configs/universe.csv`; sectors via config `sector_groups` + per-company
 overrides, resolved by `scripts/sector_map.py`); only 10-Ks are downloaded
 and cached by accession number. Business, Risk Factors, and MD&A sections
 are extracted with header-parsing rules.
-
-### The harnesses (harnesses/, scripts/build_eval_set.py + eval_harness.py)
-Each candidate is ONE self-contained stdlib-only `harness.py` — keywords,
-patterns, staging are internal to the candidate, so the whole program is
-auditable and the proposer can rewrite any part. `eval_harness.py` scores a
-candidate against the labeled eval set: detection on all rows
-(`is_ai_related`), classification on the AI-labeled rows (six dimensions:
-substantive, promotional, risk, governance, use-case-specific, quantified);
-reward = (macro-)F1, reported raw (sample as drawn — optimistic by design)
-and inverse-probability weighted (the honest population estimate, via each
-row's `sampling_weight`). Scores and full per-instance traces land in the
-candidate's directory — the filesystem history the proposer greps. The
-search/test split is fixed when the eval set is sampled; `--split test` is
-refused after its one use until a fresh batch is labeled.
-
-### Reward labels (human anchor)
-`build_eval_set --label` obtains all seven labels per sampled paragraph from
-an LLM labeler (`LLM_JUDGE_*` env vars, full text) and auto-exports a
-balanced audit workbook (`reports/agreement_eval.xlsx`; stored labels on a
-separate sheet so they can't anchor you). `make agreement-score` computes
-Cohen's kappa; the freeze output includes it or an explicit UNVALIDATED
-warning. The chain the thesis reports: human ↔ reward labels (kappa) →
-harness ↔ reward labels (test F1) → corpus (deterministic).
 
 ## How to run
 
@@ -94,25 +81,22 @@ uv venv && source .venv/bin/activate && uv sync
 cp .env.example .env    # then set LLM_JUDGE_API_KEY / LLM_JUDGE_BASE_URL / LLM_JUDGE_MODEL
 ```
 
-The judge env vars are only needed for the `--label` steps; everything else is
+The judge env vars are only needed for `--label` steps; everything else is
 offline regex/pandas work.
 
 ### 1. Data collection (network, resumable)
 
-**What gets downloaded is decided by `configs/universe.csv`** (the firm
-universe: ticker, cik, company_name, inclusion_rule, active_status — see
+**What gets downloaded is decided by `configs/universe.csv`** (ticker, cik,
+company_name, inclusion_rule, active_status — see
 `docs/universe_expansion_plan.md` Phase A) plus `configs/config.json`'s
 filing window (`pipeline.start_year` / `end_year`) and `pipeline.form_types`
 (10-K). `pipeline.tickers` in config.json is only a generated mirror (sorted
-tickers) that script 00 rewrites from universe.csv every run, kept for
-legacy/TUI code paths — never edit it directly; edit universe.csv, or use the
-TUI. Firms are fetched from EDGAR by CIK, so a ticker with no live mapping
-(delisted/acquired) still gets manifest and download coverage. On top of
-that, `pipeline.sector_groups`
-maps the thesis' **aggregated sectors** (tech, semis, defensa, industriales,
-telecom, autos, retail, consumo, energia, utilities, salud, financieras) to
-the SIC industry groups that compose them — a sector's tickers are derived
-from its SIC groups. To browse or edit without touching JSON:
+tickers) that script 00 rewrites from universe.csv every run — never edit it
+directly; edit universe.csv, or use the TUI. Firms are fetched from EDGAR by
+CIK, so a ticker with no live mapping (delisted/acquired) still gets
+manifest and download coverage. `pipeline.sector_groups` maps the thesis'
+aggregated sectors to the SIC industry groups that compose them. To browse
+or edit without touching JSON:
 
 ```bash
 make tickers-tui      # view sectors -> SIC groups -> tickers; create sectors
@@ -132,52 +116,86 @@ ones) → `make extract-sections` (04). All resumable — re-running skips what'
 already done.
 
 **Market data** (outcome linkage): `make collect-market` (13) snapshots daily
-adjusted prices — **one parquet per ticker** under `data/raw/market/prices/`,
-so adding tickers later is just a re-run and a broken download can't corrupt
-the rest — plus Fama-French 3-factor files (daily + monthly, Ken French data
-library) for abnormal returns. Every row carries a `source` column
-(`yfinance` / `ken_french`); a CRSP export dropped into the same per-ticker
-layout with `source='crsp'` upgrades the data with no code changes — that is
-also the path to returns for delisted firms (e.g. DFS, acquired 2025; SQ,
-renamed XYZ), whose EDGAR filings still flow through the text pipeline.
+adjusted prices — **one parquet per ticker** under `data/raw/market/prices/`
+— plus Fama-French 3-factor files (daily + monthly, Ken French data library)
+for abnormal returns. Every row carries a `source` column (`yfinance` /
+`ken_french`); a CRSP export dropped into the same per-ticker layout with
+`source='crsp'` upgrades the data with no code changes — that is also the
+path to returns for delisted firms, whose EDGAR filings still flow through
+the text pipeline.
 
-### 2. Build the eval set (one labeled batch serves both tasks)
+### 2. Stage 1 — detection
 
-```bash
-make eval-sample                # draw paragraphs (free; stratified by ACTIVE detection)
-make eval-label                 # reward labels ($, needs .env) -> auto-exports reports/agreement_eval.xlsx
-# hand-label the workbook's 'label_me' sheet (instructions inside)
-```
-
-### 3. Optimize the harnesses (the proposer loop)
-
-```
-/meta-harness-opt detection         # in Claude Code — one iteration: read traces,
-/meta-harness-opt classification    # write a new candidate, score it on search
-```
-
-Search-split evaluations are free and repeatable
-(`make eval-harness ARGS='--task detection --candidate 001_x'`,
-`make leaderboard`).
-
-### 4. Freeze and apply
+The seed screen must exist before sampling (run once; re-run only if the
+corpus grows or the keyword list in `configs/config.json: seed_screen`
+changes):
 
 ```bash
+make seed-screen
+```
+
+Then the sample/label/iterate/freeze cycle:
+
+```bash
+make eval-sample-detection             # free. ARGS='--n-search 560 --n-holdout 240'
+make eval-label-detection              # $, LLM judge — scope only (is_ai_related)
+# hand-label reports/agreement_eval_detection.xlsx's 'label_me' sheet (auto-exported)
+make agreement-score ARGS='--cycle eval_detection'   # Cohen's kappa
+```
+
+```
+/meta-harness-opt detection            # in Claude Code — one proposer iteration:
+                                        # reads traces, writes ONE new candidate, scores it
+```
+
+```bash
+make eval-harness ARGS='--task detection --candidate 001_x'   # free, repeatable
+make leaderboard ARGS='--task detection'                       # standings + who the floor selects
 make eval-harness ARGS='--task detection --candidate <best> --split test'   # THE one look; promotes to ACTIVE
-make eval-harness ARGS='--task classification --candidate <best> --split test'
-make apply-harness              # frozen candidates -> data/processed/classified_paragraphs.parquet
+make apply-detection                   # writes data/processed/candidate_frame.parquet
 ```
 
-A spent test split means the next freeze needs a fresh `eval-sample` +
-`eval-label` batch.
+The freeze is gated: it refuses if the candidate's recorded search recall
+is below `configs/config.json: seed_screen.recall_floor`.
+
+### 3. Stage 2 — classification (needs the candidate frame above)
+
+```bash
+make eval-sample-classification        # free. ARGS='--n 800'. builds chunks over the candidate frame
+make eval-label-classification         # $, LLM judge — six dimensions
+# hand-label reports/agreement_eval_classification.xlsx
+make agreement-score ARGS='--cycle eval_classification'
+```
+
+```
+/meta-harness-opt classification       # one proposer iteration
+```
+
+```bash
+make eval-harness ARGS='--task classification --candidate 001_x'
+make eval-harness ARGS='--task classification --candidate <best> --split test'   # THE one look; promotes to ACTIVE
+```
+
+### 4. Full corpus pass
+
+```bash
+make apply-harness      # both frozen candidates -> data/processed/classified_paragraphs.parquet
+                        # (paragraph-level; chunk tags broadcast back to member paragraphs)
+```
+
+A spent test split (for either stage) means the next freeze on that stage
+needs a fresh `eval-sample-*` + `eval-label-*` batch.
 
 ### Rules of the road
 
 - Search-split evaluation is always safe to re-run; `--split test` spends
-  that task's one look for the batch — the next freeze needs a fresh labeled
-  eval set.
+  that stage's one look for the batch — the next freeze needs a fresh
+  labeled eval set.
 - Never edit an evaluated candidate's `harness.py`: new idea = new candidate
   directory. History is immutable; `harnesses/<task>/ACTIVE` is the freeze.
+- Classification can't sample until detection is frozen and
+  `make apply-detection` has written the candidate frame — sampling refuses
+  otherwise.
 - The proposer (skill) is the only search operator — one optimization at a
   time (`OPT_LOCK`).
 - `make test` runs the unit tests; `make help` lists every target.
