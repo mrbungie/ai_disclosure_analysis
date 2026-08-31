@@ -33,6 +33,7 @@ Usage:
 import argparse
 import io
 import json
+import os
 import time
 import zipfile
 from datetime import datetime, timezone
@@ -40,6 +41,9 @@ from pathlib import Path
 
 import pandas as pd
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 try:
     import pipeline_logger
@@ -48,6 +52,12 @@ except ImportError:
 
 PRICES_DIR = Path("data/raw/market/prices")
 FACTORS_DIR = Path("data/raw/market/factors")
+
+# Config ticker -> Yahoo symbol, for renames (the EDGAR/text pipeline keeps
+# the config ticker; only the price fetch uses the alias).
+YAHOO_ALIASES = {
+    "SQ": "XYZ",  # Block renamed SQ -> XYZ (Jan 2025); Yahoo serves the full series under XYZ
+}
 
 FF_BASE = "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp"
 FF_FILES = {
@@ -63,7 +73,8 @@ def load_tickers() -> list[str]:
 
 def fetch_prices(ticker: str, start: str) -> pd.DataFrame | None:
     import yfinance as yf
-    df = yf.download(ticker, start=start, auto_adjust=False, progress=False)
+    symbol = YAHOO_ALIASES.get(ticker, ticker)
+    df = yf.download(symbol, start=start, auto_adjust=False, progress=False)
     if df is None or df.empty:
         return None
     if isinstance(df.columns, pd.MultiIndex):
@@ -75,7 +86,62 @@ def fetch_prices(ticker: str, start: str) -> pd.DataFrame | None:
         "volume": df["Volume"].to_numpy(dtype=float),
     })
     out["ticker"] = ticker
-    out["source"] = "yfinance"
+    out["source"] = "yfinance" if symbol == ticker else f"yfinance:{symbol}"
+    out["retrieved_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return out
+
+
+def fetch_prices_stooq(ticker: str, start: str) -> pd.DataFrame | None:
+    """Fallback for tickers Yahoo no longer serves (delisted, e.g. DFS after
+    the Capital One acquisition). Stooq keeps delisted US histories, free, no
+    key. Caveat carried in `source`: Stooq adjusts for splits but NOT
+    dividends, so adj_close here is a split-adjusted close — fine for event
+    windows, mildly understates long-horizon total returns."""
+    url = f"https://stooq.com/q/d/l/?s={ticker.lower()}.us&i=d"
+    resp = requests.get(url, timeout=60)
+    resp.raise_for_status()
+    if not resp.text.startswith("Date,"):
+        return None
+    df = pd.read_csv(io.StringIO(resp.text), parse_dates=["Date"])
+    df = df[df["Date"] >= pd.Timestamp(start)]
+    if df.empty:
+        return None
+    out = pd.DataFrame({
+        "date": df["Date"],
+        "adj_close": df["Close"].to_numpy(dtype=float),  # split-adjusted only
+        "close": df["Close"].to_numpy(dtype=float),
+        "volume": df.get("Volume", pd.Series(dtype=float)).to_numpy(dtype=float),
+    })
+    out["ticker"] = ticker
+    out["source"] = "stooq"
+    out["retrieved_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return out
+
+
+def fetch_prices_tiingo(ticker: str, start: str) -> pd.DataFrame | None:
+    """Last-resort fallback for delisted tickers neither Yahoo nor Stooq
+    serve (e.g. DFS after the Capital One acquisition). Tiingo keeps delisted
+    histories with real dividend-adjusted closes; free API key at tiingo.com,
+    set TIINGO_API_KEY in .env. Skipped silently when no key is set."""
+    key = os.environ.get("TIINGO_API_KEY")
+    if not key:
+        return None
+    url = f"https://api.tiingo.com/tiingo/daily/{ticker.lower()}/prices"
+    resp = requests.get(url, params={"startDate": start, "token": key, "format": "json"}, timeout=60)
+    if resp.status_code != 200:
+        return None
+    data = resp.json()
+    if not data:
+        return None
+    df = pd.DataFrame(data)
+    out = pd.DataFrame({
+        "date": pd.to_datetime(df["date"]).dt.tz_localize(None),
+        "adj_close": df["adjClose"].astype(float),
+        "close": df["close"].astype(float),
+        "volume": df["volume"].astype(float),
+    })
+    out["ticker"] = ticker
+    out["source"] = "tiingo"
     out["retrieved_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     return out
 
@@ -91,11 +157,28 @@ def collect_prices(tickers: list[str], start: str, refresh: bool, delay: float) 
         try:
             df = fetch_prices(ticker, start)
         except Exception as e:
-            print(f"  {ticker}: download error: {e}")
-            failed.append(ticker)
-            continue
+            print(f"  {ticker}: yfinance error: {e}")
+            df = None
         if df is None or df.empty:
-            print(f"  {ticker}: no data returned")
+            try:
+                df = fetch_prices_stooq(ticker, start)
+                if df is not None:
+                    print(f"  {ticker}: not on Yahoo — using Stooq fallback (split-adjusted only)")
+            except Exception as e:
+                print(f"  {ticker}: stooq error: {e}")
+                df = None
+        if df is None or df.empty:
+            try:
+                df = fetch_prices_tiingo(ticker, start)
+                if df is not None:
+                    print(f"  {ticker}: using Tiingo fallback")
+            except Exception as e:
+                print(f"  {ticker}: tiingo error: {e}")
+                df = None
+        if df is None or df.empty:
+            print(f"  {ticker}: no data from any source"
+                  + ("" if os.environ.get("TIINGO_API_KEY")
+                     else " (a free TIINGO_API_KEY in .env would try Tiingo, which keeps delisted histories)"))
             failed.append(ticker)
             continue
         df.to_parquet(path, index=False)
