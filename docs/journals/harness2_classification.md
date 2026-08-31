@@ -48,4 +48,20 @@ Entry template:
   pool addition's marginal value is measurable against this floor.
 - **Validation:** none needed (initialization, no search run).
 - **Holdout:** untouched (never yet created for this harness).
+- **Commit:** 306c8ad
+
+## 001 — 2026-08-31 — Decontamination: pre-reset derived state deleted, atoms re-extracted
+
+- **State before:** pools/formulas at seed (entry 000), but disk artifacts
+  derived from the archived detection harness: chunk sample
+  (`data/interim/tag_fit/`), atom features and stale pre-strip parquets in
+  `data/interim/candidate_chunks/`.
+- **Change:** deleted `data/interim/tag_fit/` and every parquet in
+  `candidate_chunks/`; after 05–06 regenerated the corpus from the detection
+  seed, re-ran 09 → **3,564 chunks × 345 atoms**. Level-1 additions: 10 now
+  auto-exports the human validation workbook when labeling finishes, and 11's
+  holdout report auto-scores it (kappa, or an UNVALIDATED warning).
+- **Validation:** none to run — no labeled batch exists for this harness yet.
+  Next iteration: `10 --sample` + `--label`, then `11 --dev-only`.
+- **Holdout:** none exists (clean slate).
 - **Commit:** (this commit)

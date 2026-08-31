@@ -139,11 +139,14 @@ is measured, and each estimate names its link:
     human  <-- Cohen's kappa -->  LLM judge  <-- holdout F1 -->  keyword harness  -->  corpus measurement
            (agreement_check.py)              (08 / 11 reports)                     (05-06 / 12)
 
-- **Human ↔ judge**: `scripts/agreement_check.py` exports a balanced,
-  hand-labelable Excel subsample per cycle (judge labels on a separate sheet
-  so they can't anchor the rater) and computes raw agreement and Cohen's
-  kappa once filled in. Kappa is the reported number; raw agreement on the
-  deliberately balanced draw is descriptive only.
+- **Human ↔ judge**: the labeling scripts (07/10) automatically export a
+  balanced, hand-labelable Excel subsample the moment a labeling run
+  finishes (judge labels on a separate sheet so they can't anchor the
+  rater), and the fit scripts (08/11) automatically score it — raw agreement
+  and Cohen's kappa land in the holdout report, or an explicit UNVALIDATED
+  warning if the workbook isn't filled in yet. Kappa is the reported number;
+  raw agreement on the deliberately balanced draw is descriptive only.
+  (`scripts/agreement_check.py` remains as the manual CLI for the same flow.)
 - **Judge ↔ harness**: the single-look holdout F1, reported **raw** (on the
   sample as drawn) and **inverse-probability weighted** (population
   estimate) side by side. The weighted number matters wherever the sampling

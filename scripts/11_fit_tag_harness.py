@@ -36,11 +36,12 @@ import numpy as np
 import pandas as pd
 
 try:
+    import agreement_check
     import harness_fit
     import pipeline_logger
     import tag_harness_defs as defs
 except ImportError:
-    from scripts import harness_fit, pipeline_logger
+    from scripts import agreement_check, harness_fit, pipeline_logger
     from scripts import tag_harness_defs as defs
 
 LABELED_PATH = Path("data/interim/tag_fit/labeled.parquet")
@@ -290,6 +291,9 @@ def main() -> None:
                                  "This dimension needs better atoms or a fresh labeled batch (10).")
         holdout_lines.append("")
 
+    holdout_lines.append("Judge validation (human anchor, from the auto-generated workbook):")
+    holdout_lines.extend("  " + line for line in agreement_check.report_lines("tags"))
+    holdout_lines.append("")
     holdout_lines.append("Rule: if this disappoints, do not re-run this script against this holdout.")
     holdout_lines.append("Sample and label a fresh batch (10) for the next fit iteration instead.")
     holdout_report = "\n".join(holdout_lines)

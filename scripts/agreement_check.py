@@ -59,6 +59,42 @@ CYCLES = {
 }
 
 
+def auto_make(cycle: str, n: int = 60, seed: int = 42) -> None:
+    """Called by the labeling scripts (07/10) right after a labeling run:
+    export the human validation workbook automatically if it doesn't exist
+    yet, so the to-be-validated sample is always generated without a separate
+    manual step. Never overwrites an existing workbook (it may hold hand
+    labels)."""
+    spec = CYCLES[cycle]
+    if spec.workbook.exists():
+        print(f"Human validation workbook already exists (not overwritten): {spec.workbook}")
+        return
+    labeled = pd.read_parquet(spec.labeled_path)
+    harness_fit.export_agreement_workbook(
+        labeled, spec.id_col, spec.text_col, spec.label_fields,
+        spec.workbook, n, seed,
+    )
+    print(f"ACTION NEEDED: hand-label the 'label_me' sheet in {spec.workbook} "
+          f"(instructions inside). The fit script will pick it up automatically.")
+
+
+def report_lines(cycle: str) -> list[str]:
+    """Judge-validation lines for the fit scripts' final reports: Cohen's
+    kappa per label if the workbook is filled in, an explicit UNVALIDATED
+    warning otherwise. Also refreshes the standalone agreement report."""
+    spec = CYCLES[cycle]
+    if not spec.workbook.exists():
+        return [f"JUDGE VALIDATION: no workbook at {spec.workbook} — the judge is UNVALIDATED "
+                f"(it is generated automatically at the end of the labeling step)."]
+    lines = harness_fit.score_agreement(spec.workbook, spec.id_col, spec.label_fields)
+    spec.report.parent.mkdir(parents=True, exist_ok=True)
+    spec.report.write_text("\n".join(lines) + "\n")
+    if any("no human labels filled in yet" in line for line in lines):
+        lines.append(f"JUDGE VALIDATION incomplete: fill in {spec.workbook} — "
+                     f"until then the judge is UNVALIDATED for the fields above.")
+    return lines
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cycle", choices=sorted(CYCLES), required=True)

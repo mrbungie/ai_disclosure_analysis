@@ -49,4 +49,23 @@ Entry template:
   cannot discriminate seed from full list and MUST NOT be used to justify
   additions; it validates only the `--dev-only` plumbing.
 - **Holdout:** untouched (the spent one belongs to the archived state).
+- **Commit:** 306c8ad
+
+## 001 — 2026-08-31 — Decontamination: all pre-reset derived state deleted, corpus regenerated from seed
+
+- **State before:** seed keywords in config (entry 000), but disk artifacts
+  still derived from the archived 23-keyword state: labeled batch + splits
+  (`data/interim/prefilter_fit/`), fit/holdout/self-check reports and traces,
+  the agreement workbook, and the corpus itself (manifest flags, chunks).
+- **Change:** deleted `data/interim/prefilter_fit/`, all
+  `reports/prefilter_fit_*` and `reports/agreement_prefilter.xlsx`; reset all
+  658 manifest rows to `prefilter_status=pending`; re-ran 05–06 under the
+  seed → **439 filings matched, 3,564 candidate chunks** (archived state: 513
+  / 4,228). Level-1 additions: 07 now auto-exports the human validation
+  workbook when labeling finishes, and 08's holdout report auto-scores it
+  (kappa, or an UNVALIDATED warning). Living docs (README, methodology)
+  scrubbed of archived-state results; they now point here.
+- **Validation:** none to run — there is deliberately no labeled data for
+  this harness state yet. Next iteration starts with a fresh 07 batch.
+- **Holdout:** none exists (clean slate).
 - **Commit:** (this commit)

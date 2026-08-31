@@ -1,9 +1,0 @@
-Prefilter fit harness — SELF-CHECK (synthetic; no holdout spent, no config written)
-==============================================================================
-Dropped keywords: [np.str_('artificial intelligence'), np.str_('gemini')]
-Full-list dev stability mean F1 (recovery target): 0.923
-Crippled-list baseline: 0.880
-After search: 0.923 (1 keyword(s) added: ['artificial'])
-Candidates evaluated: 117  (trace: reports/prefilter_fit_selfcheck_trace.json)
-
-RESULT: PASS — the search machinery recovered the removed keywords' F1 within min_delta.

@@ -30,10 +30,11 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 try:
+    import agreement_check
     import harness_fit
     import pipeline_logger
 except ImportError:
-    from scripts import harness_fit, pipeline_logger
+    from scripts import agreement_check, harness_fit, pipeline_logger
 
 load_dotenv()
 
@@ -145,6 +146,10 @@ async def do_label(args: argparse.Namespace) -> None:
     print(f"\nDone. {len(labeled_df)} labeled chunks -> {LABELED_PATH}")
     for f in LABEL_FIELDS[:-1]:
         print(f"  {f}: {labeled_df[f'llm_{f}'].astype(bool).mean()*100:.1f}% positive")
+
+    # Auto-generate the human validation workbook from this batch — the
+    # to-be-validated sample always exists as soon as labeling finishes.
+    agreement_check.auto_make("tags")
     print("Next: scripts/11_fit_tag_harness.py")
 
     pipeline_logger.log_event(

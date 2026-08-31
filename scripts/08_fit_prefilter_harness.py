@@ -41,10 +41,11 @@ import numpy as np
 import pandas as pd
 
 try:
+    import agreement_check
     import harness_fit
     import pipeline_logger
 except ImportError:
-    from scripts import harness_fit, pipeline_logger
+    from scripts import agreement_check, harness_fit, pipeline_logger
 
 LABELED_PATH = Path("data/interim/prefilter_fit/labeled.parquet")
 DEV_PATH = Path("data/interim/prefilter_fit/dev_split.parquet")
@@ -84,9 +85,8 @@ def predict(texts: pd.Series, keywords: list[str], false_positives: list[str]) -
 
 def mine_candidates(dev: pd.DataFrame, keywords: list[str], false_positives: list[str]) -> list[str]:
     """Extract candidate keyword tokens (1-2 word n-grams) from dev's false
-    negatives (judge says AI-related, current regex misses it) — the same kind
-    of gap "AIP"/"AIOps" were, just found automatically via frequency instead
-    of manual inspection."""
+    negatives (judge says AI-related, current regex misses it), ranked by how
+    many distinct false-negative paragraphs they appear in."""
     y = dev["llm_is_ai_related"].to_numpy()
     pred = predict(dev["paragraph_text"], keywords, false_positives)
     false_negatives = dev[y & ~pred]
@@ -371,6 +371,9 @@ def main() -> None:
         "",
         f"Original config keywords ({len(base_keywords)} terms, for comparison):",
         *("  " + line for line in harness_fit.metrics_block("baseline", y_holdout, pred_baseline, w_holdout)),
+        "",
+        "Judge validation (human anchor, from the auto-generated workbook):",
+        *("  " + line for line in agreement_check.report_lines("prefilter")),
         "",
         "Rule: if this disappoints, do not re-run this script against this holdout.",
         "Sample and label a fresh batch (07) for the next fit iteration instead.",
