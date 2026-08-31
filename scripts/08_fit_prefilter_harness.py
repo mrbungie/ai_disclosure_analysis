@@ -5,7 +5,7 @@ fold-stability-penalized score until a target F1 is hit (or no candidate
 helps, or the iteration budget runs out), then evaluate the frozen keyword
 list ONCE on the disjoint holdout.
 
-    07 (sample + LLM judge)  ->  08 (this script)  ->  configs/config.json
+    07 (sample + LLM judge)  ->  08 (this script)  ->  configs/harness_detection.json
                                                         (ai_keywords updated)
 
 This is one instantiation of the shared harness-optimization cycle
@@ -20,7 +20,7 @@ This is one instantiation of the shared harness-optimization cycle
   - Metrics are reported raw AND inverse-probability weighted (07 records
     sampling_weight), so the balanced stratum draw doesn't overstate
     recall/F1 relative to the population.
-  - config.json's ai_keywords is only overwritten after the dev search
+  - harness_detection.json's ai_keywords is only overwritten after the dev search
     converges AND the fitted list does not underperform the baseline on the
     holdout — a crashed run or a losing search never degrades the config.
   - Every round's full candidate evaluation is flushed to the search trace
@@ -55,7 +55,6 @@ HOLDOUT_REPORT_PATH = Path("reports/prefilter_fit_holdout_eval.txt")
 SEARCH_TRACE_PATH = Path("reports/prefilter_fit_search_trace.json")
 SELFCHECK_REPORT_PATH = Path("reports/prefilter_fit_selfcheck.txt")
 SELFCHECK_TRACE_PATH = Path("reports/prefilter_fit_selfcheck_trace.json")
-CONFIG_PATH = Path("configs/config.json")
 
 STOPWORDS = {
     "the", "and", "for", "are", "our", "with", "that", "this", "have", "has",
@@ -64,17 +63,6 @@ STOPWORDS = {
     "into", "under", "over", "each", "other", "more", "most", "some", "use",
     "used", "using", "new", "based", "including", "include", "includes",
 }
-
-
-def load_config() -> dict:
-    with open(CONFIG_PATH) as f:
-        return json.load(f)
-
-
-def save_config(config: dict) -> None:
-    with open(CONFIG_PATH, "w") as f:
-        json.dump(config, f, indent=2)
-        f.write("\n")
 
 
 def predict(texts: pd.Series, keywords: list[str], false_positives: list[str]) -> np.ndarray:
@@ -208,14 +196,14 @@ def greedy_search(dev: pd.DataFrame, base_keywords: list[str], false_positives: 
             "final_mean_f1": current_mean, "final_std_f1": current_std, "hit_target": current_mean >= target_f1}
 
 
-def run_self_check(labeled: pd.DataFrame, config: dict, args: argparse.Namespace) -> None:
+def run_self_check(labeled: pd.DataFrame, state: dict, args: argparse.Namespace) -> None:
     """Synthetic validation of the search machinery itself: remove keywords
     from the baseline list, run the dev search, and check it recovers the lost
     F1. Uses dev only — the real holdout is neither read nor created, no
     config is written, and the real trace/report files are untouched, so this
     can run at any time without spending anything."""
-    base_keywords = config["prefiltering"]["ai_keywords"]
-    false_positives = config["prefiltering"]["false_positives"]
+    base_keywords = state["ai_keywords"]
+    false_positives = state["false_positives"]
 
     if args.self_check_drop:
         dropped = [k.strip() for k in args.self_check_drop.split(",")]
@@ -286,12 +274,12 @@ def main() -> None:
         print(f"Error: {LABELED_PATH} not found. Run scripts/07_sample_and_label_prefilter.py first.")
         return
 
-    config = load_config()
+    state = harness_fit.load_detection_state()
     labeled = pd.read_parquet(LABELED_PATH)
     labeled["llm_is_ai_related"] = labeled["llm_is_ai_related"].astype(bool)
 
     if args.self_check:
-        run_self_check(labeled, config, args)
+        run_self_check(labeled, state, args)
         return
 
     if not args.dev_only and harness_fit.refuse_if_holdout_spent(
@@ -300,8 +288,8 @@ def main() -> None:
             "or iterate with --dev-only (no holdout spent)."):
         return
 
-    base_keywords = config["prefiltering"]["ai_keywords"]
-    false_positives = config["prefiltering"]["false_positives"]
+    base_keywords = state["ai_keywords"]
+    false_positives = state["false_positives"]
 
     print(f"Loaded {len(labeled)} labeled paragraphs "
           f"({labeled['llm_is_ai_related'].mean()*100:.1f}% positive).")
@@ -387,15 +375,15 @@ def main() -> None:
     # only if the fitted list does not underperform the baseline on holdout —
     # at that point the baseline was the safer choice.
     if final_keywords == base_keywords:
-        print(f"\nKeyword list unchanged — {CONFIG_PATH} left as is.")
+        print(f"\nKeyword list unchanged — {harness_fit.DETECTION_STATE_PATH} left as is.")
     elif f1_final < f1_base:
-        print(f"\nNOT updating {CONFIG_PATH}: fitted list underperforms the baseline on holdout "
+        print(f"\nNOT updating {harness_fit.DETECTION_STATE_PATH}: fitted list underperforms the baseline on holdout "
               f"(F1 {f1_final:.3f} < {f1_base:.3f}). Baseline keywords kept. "
               f"Sample a fresh batch (07) before trying again.")
     else:
-        config["prefiltering"]["ai_keywords"] = final_keywords
-        save_config(config)
-        print(f"\nUpdated {CONFIG_PATH} with the fitted keyword list ({len(final_keywords)} terms). "
+        state["ai_keywords"] = final_keywords
+        harness_fit.save_detection_state(state)
+        print(f"\nUpdated {harness_fit.DETECTION_STATE_PATH} with the fitted keyword list ({len(final_keywords)} terms). "
               f"Re-run scripts 05-06 to apply it to the corpus.")
 
     pipeline_logger.log_event(

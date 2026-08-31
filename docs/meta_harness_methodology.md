@@ -73,7 +73,9 @@ harness:
    disjoint holdout; the report file then locks — re-running the fit against
    the same holdout is refused in code. A disappointing holdout stands as
    reported; improving further requires a fresh labeled batch.
-6. **Gated config write**: the artifact enters `configs/config.json` only if
+6. **Gated state write**: the artifact enters its harness-state file
+   (`configs/harness_detection.json` / `configs/harness_tagging.json` —
+   gitignored, per-harness, auto-seeded on first use) only if
    the holdout supports it (cycle 1: not underperforming the incumbent
    baseline; cycle 2: beating the always-True prevalence exploit).
 
@@ -107,8 +109,8 @@ archived previous states in git and in each journal's entry 000):
 
 - Detection: `ai_keywords = ["ai", "artificial intelligence", "machine learning"]`,
   no false-positive exclusions.
-- Classification: `tagging.formulas = {}` and one-to-two obvious atoms per
-  dimension in `tagging.atom_pools`; the ~345-atom extractor (09) and the
+- Classification: frozen `formulas = {}` and one-to-two obvious atoms per
+  dimension in `atom_pools` (`configs/harness_tagging.json`); the ~345-atom extractor (09) and the
   per-dimension reference library (`tag_harness_defs.DIMENSION_FEATURE_POOLS`)
   exist only as the proposer's *menu*.
 

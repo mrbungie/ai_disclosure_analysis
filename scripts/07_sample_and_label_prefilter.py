@@ -97,8 +97,9 @@ def build_population(config: dict) -> pd.DataFrame:
     """One row per paragraph across the ENTIRE filing universe (not just
     candidate chunks), tagged with the current prefilter's predicted label
     (in_candidate_window) and industry_group, for stratified sampling."""
-    keywords = config["prefiltering"]["ai_keywords"]
-    false_positives = config["prefiltering"]["false_positives"]
+    detection_state = harness_fit.load_detection_state()
+    keywords = detection_state["ai_keywords"]
+    false_positives = detection_state["false_positives"]
     ai_regex = harness_fit.build_regex(keywords)
 
     manifest = pd.read_parquet(Path(config["paths"]["interim_manifests"]) / "filing_manifest.parquet")

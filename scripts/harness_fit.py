@@ -42,6 +42,69 @@ import numpy as np
 import pandas as pd
 
 # ---------------------------------------------------------------------------
+# Harness state files — one per harness, gitignored (local level-0 state)
+# ---------------------------------------------------------------------------
+# Each harness's optimizable state lives in its own JSON under configs/,
+# OUTSIDE configs/config.json (which holds only human-edited pipeline config)
+# and outside git (the journals + commit messages document its evolution; the
+# holdout reports carry the numbers). Missing files bootstrap to the minimal
+# seed, so a fresh clone starts at the documented initial state.
+
+DETECTION_STATE_PATH = Path("configs/harness_detection.json")
+TAGGING_STATE_PATH = Path("configs/harness_tagging.json")
+
+DETECTION_SEED = {
+    "ai_keywords": ["ai", "artificial intelligence", "machine learning"],
+    "false_positives": [],
+}
+
+TAGGING_SEED = {
+    "atom_pools": {
+        "is_substantive": ["has_ai_own_use", "has_deployment_verb"],
+        "is_promotional": ["has_word_transform", "has_word_leader"],
+        "is_risk_related": ["has_risk_factor"],
+        "is_governance_related": ["has_board_oversight", "has_compliance"],
+        "is_use_case_specific": ["has_ai_use_case_specific"],
+        "is_quantified": ["has_metric_percentage", "has_metric_dollar"],
+    },
+    "formulas": {},
+}
+
+
+def _load_state(path: Path, seed: dict) -> dict:
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(seed, f, indent=2)
+            f.write("\n")
+        print(f"Bootstrapped {path} to the minimal seed state.")
+    with open(path) as f:
+        return json.load(f)
+
+
+def load_detection_state() -> dict:
+    """Harness 1 state: ai_keywords + false_positives (seeds if missing)."""
+    return _load_state(DETECTION_STATE_PATH, DETECTION_SEED)
+
+
+def save_detection_state(state: dict) -> None:
+    with open(DETECTION_STATE_PATH, "w") as f:
+        json.dump(state, f, indent=2)
+        f.write("\n")
+
+
+def load_tagging_state() -> dict:
+    """Harness 2 state: atom_pools + frozen formulas (seeds if missing)."""
+    return _load_state(TAGGING_STATE_PATH, TAGGING_SEED)
+
+
+def save_tagging_state(state: dict) -> None:
+    with open(TAGGING_STATE_PATH, "w") as f:
+        json.dump(state, f, indent=2)
+        f.write("\n")
+
+
+# ---------------------------------------------------------------------------
 # Regex harness primitives (shared with scripts 05-06)
 # ---------------------------------------------------------------------------
 

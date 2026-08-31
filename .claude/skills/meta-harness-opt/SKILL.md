@@ -54,8 +54,10 @@ that harness, marked as reconstructed.
 Read, in this order:
 1. The harness's journal in `.claude/skills/meta-harness-opt/journals/` —
    the full history of what has been tried and why.
-2. The current level-0 state in `configs/config.json` (`prefiltering.*` for
-   detection; `tagging.atom_pools` + `tagging.formulas` for classification).
+2. The current level-0 state in its own gitignored file:
+   `configs/harness_detection.json` (ai_keywords + false_positives) or
+   `configs/harness_tagging.json` (atom_pools + frozen formulas). Missing
+   file = harness_fit bootstraps the minimal seed on next load.
 3. The latest evidence: `reports/prefilter_fit_*` or `reports/tag_fit_*`
    (dev report, search trace JSON, self-check report). For weak spots, read
    the actual misclassified texts from the dev split parquet
@@ -96,7 +98,7 @@ For **classification**:
    and the trace. For weak dimensions, read misclassified chunk texts.
 4. Propose ONE change: add atoms from the reference menu
    (`tag_harness_defs.DIMENSION_FEATURE_POOLS`) into that dimension's
-   `tagging.atom_pools`, or write a NEW atom regex in script 09 (it's code —
+   `atom_pools` in configs/harness_tagging.json, or write a NEW atom regex in script 09 (it's code —
    keep it auditable and add it to the menu too), justified by the texts you
    read. Re-run `--dev-only` to measure the delta.
 

@@ -1,6 +1,6 @@
 """
 12_tag_chunks.py — Cycle 2, application: tag every AI candidate chunk with the
-frozen classification formulas (configs/config.json tagging.formulas, written
+frozen classification formulas (configs/harness_tagging.json, written
 by 11 after its single holdout look) and write the chunk-level tagged panel.
 
 This is the harness running at corpus scale — the deterministic stand-in for
@@ -18,10 +18,11 @@ from pathlib import Path
 import pandas as pd
 
 try:
+    import harness_fit
     import pipeline_logger
     import tag_harness_defs as defs
 except ImportError:
-    from scripts import pipeline_logger
+    from scripts import harness_fit, pipeline_logger
     from scripts import tag_harness_defs as defs
 
 CONFIG_PATH = Path("configs/config.json")
@@ -32,9 +33,9 @@ def main() -> None:
     with open(CONFIG_PATH) as f:
         config = json.load(f)
 
-    formulas = config.get("tagging", {}).get("formulas", {})
+    formulas = harness_fit.load_tagging_state().get("formulas", {})
     if not formulas:
-        print("Error: no tagging.formulas in config. Run scripts/11_fit_tag_harness.py first.")
+        print(f"Error: no frozen formulas in {harness_fit.TAGGING_STATE_PATH}. Run scripts/11_fit_tag_harness.py first.")
         return
 
     chunks = pd.read_parquet(Path(config["paths"]["candidate_chunks"]) / "ai_candidate_chunks.parquet")

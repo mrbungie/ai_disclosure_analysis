@@ -7,9 +7,10 @@ from tqdm import tqdm
 from datetime import datetime
 
 try:
+    import harness_fit
     import pipeline_logger
 except ImportError:
-    from scripts import pipeline_logger
+    from scripts import harness_fit, pipeline_logger
 
 def build_keyword_regex(keywords):
     # Escape keywords and join with OR, wrapping in word boundaries
@@ -25,8 +26,9 @@ def main():
     with open(config_path, "r") as f:
         config = json.load(f)
         
-    keywords = config["prefiltering"]["ai_keywords"]
-    false_positives = config["prefiltering"]["false_positives"]
+    detection_state = harness_fit.load_detection_state()
+    keywords = detection_state["ai_keywords"]
+    false_positives = detection_state["false_positives"]
     
     manifest_path = Path(config["paths"]["interim_manifests"]) / "filing_manifest.parquet"
     sections_path = Path(config["paths"]["interim_sections"]) / "filing_sections.parquet"

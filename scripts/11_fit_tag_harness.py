@@ -2,10 +2,10 @@
 11_fit_tag_harness.py — Cycle 2, the fit: split the LLM-judged chunk sample
 (10) into dev/holdout, search boolean keyword formulas per dimension against
 dev with a fold-stability-penalized score, then evaluate the frozen formulas
-ONCE on the disjoint holdout and write the winners into configs/config.json.
+ONCE on the disjoint holdout and write the winners into configs/harness_tagging.json.
 
-    10 (sample + LLM judge)  ->  11 (this script)  ->  configs/config.json
-                                                        (tagging.formulas)
+    10 (sample + LLM judge)  ->  11 (this script)  ->  configs/harness_tagging.json
+                                                        (frozen formulas)
                                                     ->  12 (tag the corpus)
 
 Second instantiation of the shared harness-optimization cycle
@@ -50,19 +50,13 @@ HOLDOUT_PATH = Path("data/interim/tag_fit/holdout_split.parquet")
 FIT_REPORT_PATH = Path("reports/tag_fit_harness.txt")
 HOLDOUT_REPORT_PATH = Path("reports/tag_fit_holdout_eval.txt")
 SEARCH_TRACE_PATH = Path("reports/tag_fit_search_trace.json")
-CONFIG_PATH = Path("configs/config.json")
+CONFIG_PATH = Path("configs/config.json")  # pipeline config (paths) only — harness state lives in harness_fit.TAGGING_STATE_PATH
 ATOMS_PATH_KEY = "keyword_atom_features.parquet"
 
 
 def load_config() -> dict:
     with open(CONFIG_PATH) as f:
         return json.load(f)
-
-
-def save_config(config: dict) -> None:
-    with open(CONFIG_PATH, "w") as f:
-        json.dump(config, f, indent=2)
-        f.write("\n")
 
 
 def load_labeled_with_atoms(config: dict) -> pd.DataFrame:
@@ -86,8 +80,8 @@ def build_candidates(df: pd.DataFrame, dimension: str, pool: list[str],
     mean. Degenerate (constant) atoms are dropped first — a constant atom's
     negation is an always-True predictor that trivially exploits prevalence.
 
-    `pool` is the dimension's ACTIVE atom pool from config
-    (tagging.atom_pools) — the harness state the meta-optimizer grows; see
+    `pool` is the dimension's ACTIVE atom pool from
+    configs/harness_tagging.json — the harness state the meta-optimizer grows; see
     the journal in .claude/skills/meta-harness-opt/journals/. Pool names may be atom columns or meta-atom
     names (tag_harness_defs.build_meta_atoms)."""
     meta = defs.build_meta_atoms(df)
@@ -178,9 +172,10 @@ def main() -> None:
         return
 
     config = load_config()
-    atom_pools = config.get("tagging", {}).get("atom_pools")
+    tagging_state = harness_fit.load_tagging_state()
+    atom_pools = tagging_state.get("atom_pools")
     if not atom_pools:
-        print("Error: no tagging.atom_pools in config — the harness has no active atom space.")
+        print(f"Error: no atom_pools in {harness_fit.TAGGING_STATE_PATH} — the harness has no active atom space.")
         return
     df = load_labeled_with_atoms(config)
     print(f"Loaded {len(df)} labeled chunks with atom features.")
@@ -301,9 +296,9 @@ def main() -> None:
     HOLDOUT_REPORT_PATH.write_text(holdout_report + "\n")
     print(f"\nLocked holdout report -> {HOLDOUT_REPORT_PATH}")
 
-    config.setdefault("tagging", {})["formulas"] = frozen
-    save_config(config)
-    print(f"\nUpdated {CONFIG_PATH} tagging.formulas with {len(frozen)}/{len(defs.DIMENSIONS)} dimensions. "
+    tagging_state["formulas"] = frozen
+    harness_fit.save_tagging_state(tagging_state)
+    print(f"\nUpdated {harness_fit.TAGGING_STATE_PATH} formulas with {len(frozen)}/{len(defs.DIMENSIONS)} dimensions. "
           f"Run scripts/12_tag_chunks.py to apply them to the corpus.")
 
     pipeline_logger.log_event(
