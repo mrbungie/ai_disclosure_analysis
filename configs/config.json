@@ -745,7 +745,12 @@
       ]
     },
     "sector_overrides": {
-      "FRC": "financieras"
+      "FRC": "financieras",
+      "SHW": "materiales",
+      "KMB": "consumo",
+      "DHR": "salud",
+      "VLTO": "industriales",
+      "CTAS": "industriales"
     }
   },
   "paths": {
