@@ -93,10 +93,17 @@ offline regex/pandas work.
 
 ### 1. Data collection (network, resumable)
 
-**What gets downloaded is decided in `configs/config.json`** — there is no
-selection UI on this branch (the Streamlit dashboard was stripped in
-`9e6138c`): edit `pipeline.tickers` (the firm list), `pipeline.start_year` /
-`end_year` (the filing window), and `pipeline.form_types` (10-K), then:
+**What gets downloaded is decided in `configs/config.json`**: the firm list
+(`pipeline.ticker_groups` — named groups whose union becomes
+`pipeline.tickers`), the filing window (`pipeline.start_year` / `end_year`),
+and `pipeline.form_types` (10-K). To browse the universe or add groups
+without editing JSON:
+
+```bash
+make tickers-tui      # view tickers by group (+industry), add new ticker groups
+```
+
+Then collect:
 
 ```bash
 make collect-data     # runs 00->04 in order

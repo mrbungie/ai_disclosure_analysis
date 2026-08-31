@@ -1,4 +1,4 @@
-.PHONY: test install-deps build-universe build-manifest select-batch download-filings extract-sections collect-data run-pipeline fit-prefilter-sample fit-prefilter-label fit-prefilter-harness fit-prefilter-selfcheck extract-atoms fit-tags-sample fit-tags-label fit-tags-harness tag-chunks agreement-make agreement-score format help
+.PHONY: test install-deps tickers-tui build-universe build-manifest select-batch download-filings extract-sections collect-data run-pipeline fit-prefilter-sample fit-prefilter-label fit-prefilter-harness fit-prefilter-selfcheck extract-atoms fit-tags-sample fit-tags-label fit-tags-harness tag-chunks agreement-make agreement-score format help
 
 # Default target
 all: test
@@ -39,6 +39,9 @@ extract-sections:
 	.venv/bin/python scripts/04_extract_sections.py
 
 collect-data: build-universe build-manifest select-batch download-filings extract-sections
+
+tickers-tui:
+	@.venv/bin/python scripts/tui_tickers.py
 
 # Run pipeline validation scripts on pending filings
 run-pipeline:
@@ -102,6 +105,7 @@ help:
 	@echo "  make install-deps             Install pytest in the virtual environment using uv"
 	@echo ""
 	@echo "  Data collection (00-04; what to download = pipeline.{tickers,start_year,end_year,form_types} in config):"
+	@echo "  make tickers-tui              Simple TUI: view ticker groups, add new groups"
 	@echo "  make collect-data             Run 00->04 in order (or each: build-universe, build-manifest,"
 	@echo "                                select-batch, download-filings, extract-sections)"
 	@echo ""
