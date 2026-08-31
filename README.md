@@ -47,6 +47,14 @@ in `docs/meta_harness_methodology.md` (diagram: `docs/meta_harness_map.html`).
 `scripts/agreement_check.py` anchors the judge itself to a human rater
 (Cohen's kappa on a hand-labeled Excel subsample per cycle).
 
+Both harnesses start from a deliberately minimal seed and grow only through
+journaled optimization iterations (`docs/journals/harness1_detection.md`,
+`docs/journals/harness2_classification.md` — append-only, one entry per
+iteration). Iterations are run by the `meta-harness-opt` skill
+(`.claude/skills/meta-harness-opt/`), one harness at a time (lock file),
+always in the fit scripts' `--dev-only` mode until a state is frozen against
+a fresh holdout.
+
 ### Collection and chunking (scripts 00–06)
 Firm universe and filing manifest are built from SEC EDGAR; only 10-Ks are downloaded and cached locally by accession number. Business, Risk Factors, and MD&A sections are extracted with header-parsing rules (with fallbacks for non-standard filing typography). This is also where filings are classified as AI-related or not: a keyword/regex prefilter (`ai_keywords` in `configs/config.json` — generative AI, LLM, machine learning, neural network, named vendors/products, etc., with false-positive exclusions) flags candidate paragraphs at the filing level (script 05) and the paragraph level (script 06), which are then chunked with surrounding context (previous + matched + next paragraph, deduplicated by hash) to keep only ~1–5% of the token volume of the original filings.
 

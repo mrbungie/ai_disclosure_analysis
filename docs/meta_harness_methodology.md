@@ -100,6 +100,37 @@ candidate's score with no path dependence. The pre-strip production formulas
 are kept in the candidate set as baselines: the search either beats them on
 the merits or confirms them. Frozen winners are applied to the corpus by 12.
 
+## Initial state, journals, and the proposer's operating mode
+
+Both harnesses start from a **deliberately minimal seed** (set 2026-08-31,
+archived previous states in git and in each journal's entry 000):
+
+- Detection: `ai_keywords = ["ai", "artificial intelligence", "machine learning"]`,
+  no false-positive exclusions.
+- Classification: `tagging.formulas = {}` and one-to-two obvious atoms per
+  dimension in `tagging.atom_pools`; the ~345-atom extractor (09) and the
+  per-dimension reference library (`tag_harness_defs.DIMENSION_FEATURE_POOLS`)
+  exist only as the proposer's *menu*.
+
+Nothing enters a harness except through a journaled optimization iteration,
+so the growth trajectory from seed to final state — which atoms/keywords were
+added, on what evidence, with what dev delta — is itself a documented result
+of the thesis rather than a tuned artifact of mixed provenance.
+
+**Journals** (`docs/journals/harness1_detection.md`,
+`docs/journals/harness2_classification.md`): append-only change logs, one
+entry per iteration (state before, evidence read, change, dev validation,
+holdout status, commit). Together with the git history they are the
+proposer's trace.
+
+**Proposer operating mode**: the `meta-harness-opt` skill
+(`.claude/skills/meta-harness-opt/`) runs ONE iteration for ONE harness at a
+time (a lock file, `docs/journals/OPT_LOCK`, serializes optimizations). All
+iteration uses the fit scripts' `--dev-only` mode — dev search and report
+with no holdout look and no config write — plus the synthetic self-check;
+the holdout is looked at only when the state is frozen, and a spent holdout
+forces a fresh labeled batch.
+
 ## The measurement-error chain
 
 Every link between "what a human would say" and "what the corpus numbers say"

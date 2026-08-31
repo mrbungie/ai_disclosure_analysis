@@ -21,10 +21,11 @@ DIMENSIONS = [
     "is_quantified",
 ]
 
-# Feature columns relevant to each dimension's search space — narrowed from
-# the full atom set to the ones plausibly related to that dimension's
-# semantics, so top-K single-atom pre-filtering isn't just picking up noise
-# correlated by chance in a few-hundred-row sample.
+# REFERENCE LIBRARY of known-relevant atoms per dimension — the menu the
+# meta-optimizer draws from when growing a pool. The ACTIVE pool each fit run
+# actually searches lives in configs/config.json (tagging.atom_pools), starts
+# deliberately minimal, and every change to it is logged in
+# docs/journals/harness2_classification.md.
 DIMENSION_FEATURE_POOLS: dict[str, list[str]] = {
     "is_substantive": [
         "has_model_training", "has_workforce_talent", "has_ai_hedge", "has_specific_product",

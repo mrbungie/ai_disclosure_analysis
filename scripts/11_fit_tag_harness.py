@@ -78,18 +78,26 @@ def load_labeled_with_atoms(config: dict) -> pd.DataFrame:
     return merged
 
 
-def build_candidates(df: pd.DataFrame, dimension: str,
+def build_candidates(df: pd.DataFrame, dimension: str, pool: list[str],
                      folds: list[np.ndarray], y: np.ndarray) -> dict[str, tuple[dict, np.ndarray]]:
     """Bounded candidate set: legacy formula (if any), single atoms and their
     negations, and AND/OR/AND-NOT pairs of the top-15 singles by fold-stability
     mean. Degenerate (constant) atoms are dropped first — a constant atom's
-    negation is an always-True predictor that trivially exploits prevalence."""
-    pool = defs.DIMENSION_FEATURE_POOLS[dimension]
-    meta = defs.build_meta_atoms(df)
+    negation is an always-True predictor that trivially exploits prevalence.
 
-    atoms: dict[str, pd.Series] = {name: df[name].astype(bool) for name in pool if name in df.columns}
-    if dimension == "is_promotional":
-        atoms.update(meta)
+    `pool` is the dimension's ACTIVE atom pool from config
+    (tagging.atom_pools) — the harness state the meta-optimizer grows; see
+    the journal in docs/journals/. Pool names may be atom columns or meta-atom
+    names (tag_harness_defs.build_meta_atoms)."""
+    meta = defs.build_meta_atoms(df)
+    atoms: dict[str, pd.Series] = {}
+    for name in pool:
+        if name in meta:
+            atoms[name] = meta[name].astype(bool)
+        elif name in df.columns:
+            atoms[name] = df[name].astype(bool)
+        else:
+            print(f"  WARNING [{dimension}]: pool atom '{name}' not found in features or meta-atoms — skipped.")
 
     degenerate = [name for name, s in atoms.items() if s.nunique() < 2]
     for name in degenerate:
@@ -117,11 +125,11 @@ def build_candidates(df: pd.DataFrame, dimension: str,
     return candidates
 
 
-def search_dimension(dev: pd.DataFrame, dimension: str, n_folds: int, seed: int,
-                     variance_penalty: float) -> dict:
+def search_dimension(dev: pd.DataFrame, dimension: str, pool: list[str],
+                     n_folds: int, seed: int, variance_penalty: float) -> dict:
     y = dev[f"llm_{dimension}"].astype(bool).to_numpy()
     folds = harness_fit.stability_folds(y, n_folds, seed)
-    candidates = build_candidates(dev, dimension, folds, y)
+    candidates = build_candidates(dev, dimension, pool, folds, y)
 
     results: list[dict] = []
     for name, (spec, pred) in candidates.items():
@@ -154,17 +162,25 @@ def main() -> None:
     parser.add_argument("--dev-frac", type=float, default=0.7)
     parser.add_argument("--variance-penalty", type=float, default=1.0,
                         help="Subtract penalty*std from mean F1 when ranking — a formula that only wins on one lucky fold doesn't get picked")
+    parser.add_argument("--dev-only", action="store_true",
+                        help="Proposer mode: run the dev search and report only — no holdout look, no config write. "
+                             "Safe to run any number of times while iterating on atom pools / cycle code.")
     args = parser.parse_args()
 
     if not LABELED_PATH.exists():
         print(f"Error: {LABELED_PATH} not found. Run scripts/10_sample_and_label_tags.py first.")
         return
-    if harness_fit.refuse_if_holdout_spent(
+    if not args.dev_only and harness_fit.refuse_if_holdout_spent(
             HOLDOUT_REPORT_PATH,
-            "Sample a fresh batch (10) for another iteration instead of re-running this."):
+            "Sample a fresh batch (10) for another iteration instead of re-running this, "
+            "or iterate with --dev-only (no holdout spent)."):
         return
 
     config = load_config()
+    atom_pools = config.get("tagging", {}).get("atom_pools")
+    if not atom_pools:
+        print("Error: no tagging.atom_pools in config — the harness has no active atom space.")
+        return
     df = load_labeled_with_atoms(config)
     print(f"Loaded {len(df)} labeled chunks with atom features.")
 
@@ -198,7 +214,8 @@ def main() -> None:
 
     results = {}
     for dimension in defs.DIMENSIONS:
-        result = search_dimension(dev, dimension, args.folds, args.seed, args.variance_penalty)
+        pool = atom_pools.get(dimension, [])
+        result = search_dimension(dev, dimension, pool, args.folds, args.seed, args.variance_penalty)
         results[dimension] = result
         trace_rounds.append({
             "dimension": dimension,
@@ -230,6 +247,10 @@ def main() -> None:
     FIT_REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     FIT_REPORT_PATH.write_text(report + "\n")
     print(f"\nDev report -> {FIT_REPORT_PATH}")
+
+    if args.dev_only:
+        print("\n--dev-only: stopping before the holdout look. No holdout spent, no config written.")
+        return
 
     # ---- Single-look holdout evaluation of the frozen winners ----
     w_holdout = harness_fit.sampling_weights(holdout)

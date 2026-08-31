@@ -145,33 +145,35 @@
     "ai_keywords": [
       "ai",
       "artificial intelligence",
-      "generative ai",
-      "gen ai",
-      "machine learning",
-      "large language model",
-      "llm",
-      "deep learning",
-      "natural language processing",
-      "predictive analytics",
-      "algorithmic",
-      "automation",
-      "computer vision",
-      "neural network",
-      "openai",
-      "anthropic",
-      "claude",
-      "deepseek",
-      "chatgpt",
-      "copilot",
-      "gemini",
-      "aip",
-      "aiops"
+      "machine learning"
     ],
-    "false_positives": [
-      "adobe illustrator",
-      "appreciation",
-      "said",
-      "paid"
-    ]
+    "false_positives": []
+  },
+  "tagging": {
+    "atom_pools": {
+      "is_substantive": [
+        "has_ai_own_use",
+        "has_deployment_verb"
+      ],
+      "is_promotional": [
+        "has_word_transform",
+        "has_word_leader"
+      ],
+      "is_risk_related": [
+        "has_risk_factor"
+      ],
+      "is_governance_related": [
+        "has_board_oversight",
+        "has_compliance"
+      ],
+      "is_use_case_specific": [
+        "has_ai_use_case_specific"
+      ],
+      "is_quantified": [
+        "has_metric_percentage",
+        "has_metric_dollar"
+      ]
+    },
+    "formulas": {}
   }
 }

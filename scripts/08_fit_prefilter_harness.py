@@ -277,6 +277,9 @@ def main() -> None:
                         help="Synthetic search validation: drop keywords, verify the search recovers them (dev only)")
     parser.add_argument("--self-check-drop", type=str, default=None,
                         help="Comma-separated keywords to drop in --self-check (default: 2 random firing keywords)")
+    parser.add_argument("--dev-only", action="store_true",
+                        help="Proposer mode: run the dev search and report only — no holdout look, no config write. "
+                             "Safe to run any number of times while iterating on the cycle code.")
     args = parser.parse_args()
 
     if not LABELED_PATH.exists():
@@ -291,9 +294,10 @@ def main() -> None:
         run_self_check(labeled, config, args)
         return
 
-    if harness_fit.refuse_if_holdout_spent(
+    if not args.dev_only and harness_fit.refuse_if_holdout_spent(
             HOLDOUT_REPORT_PATH,
-            "Sample a fresh batch (07) for another iteration instead of re-running this."):
+            "Sample a fresh batch (07) for another iteration instead of re-running this, "
+            "or iterate with --dev-only (no holdout spent)."):
         return
 
     base_keywords = config["prefiltering"]["ai_keywords"]
@@ -339,6 +343,10 @@ def main() -> None:
     FIT_REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     FIT_REPORT_PATH.write_text(report + "\n")
     print(f"\nDev report -> {FIT_REPORT_PATH}")
+
+    if args.dev_only:
+        print("\n--dev-only: stopping before the holdout look. No holdout spent, no config written.")
+        return
 
     # Single-look holdout evaluation of the frozen keyword list — raw and
     # inverse-probability-weighted (population) metrics side by side.
