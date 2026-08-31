@@ -748,13 +748,25 @@ def cohens_kappa(a: np.ndarray, b: np.ndarray) -> float:
 
 def export_agreement_workbook(labeled: pd.DataFrame, id_col: str, text_col: str,
                               label_fields: list[str], out_path: Path,
-                              n: int, seed: int) -> None:
+                              n: int, seed: int, priority: pd.Series | None = None,
+                              exclude_ids: set | None = None) -> None:
     """Excel workbook for hand-labeling a subsample of judge-labeled rows.
 
     Sheet 'label_me': id, text, and one EMPTY TRUE/FALSE column per label
     field — the LLM's labels are deliberately NOT on this sheet, so the human
     rater isn't anchored. Sheet 'llm_labels' holds the judge's labels for the
     same ids; score_agreement() joins the two after the human sheet is filled.
+
+    `exclude_ids` drops rows already answered in a prior audit (see
+    load_ground_truth_ids/save_ground_truth) so every export asks about NEW
+    cases instead of re-drawing ones already hand-labeled.
+
+    `priority` (index-aligned to `labeled`, higher = more worth auditing)
+    picks the TOP-priority rows within each class instead of a uniform
+    random draw — e.g. cases where a cheap independent signal (a keyword
+    screen) disagrees with the judge are far more informative to a human
+    auditor than an easy case both would obviously agree on. Falls back to
+    uniform random per class when not given.
 
     The subsample is drawn BALANCED on the first label field (up to n/2 per
     class): kappa needs disagreement opportunities in both classes, and a
@@ -767,13 +779,20 @@ def export_agreement_workbook(labeled: pd.DataFrame, id_col: str, text_col: str,
     llm_cols = [f"llm_{f}" for f in label_fields]
     strat = f"llm_{label_fields[0]}"
     pool = labeled[labeled[text_col].str.len() >= 40]
-    parts = []
-    for _, group in pool.groupby(pool[strat].astype(bool)):
-        parts.append(group.sample(min(len(group), n // 2), random_state=rng_seed))
+    if exclude_ids:
+        pool = pool[~pool[id_col].isin(exclude_ids)]
+
+    def pick(group: pd.DataFrame, k: int) -> pd.DataFrame:
+        k = min(k, len(group))
+        if priority is None:
+            return group.sample(k, random_state=rng_seed)
+        return group.loc[priority.reindex(group.index).fillna(0).sort_values(ascending=False).index[:k]]
+
+    parts = [pick(group, n // 2) for _, group in pool.groupby(pool[strat].astype(bool))]
     sub = pd.concat(parts)
     if len(sub) < n:  # one class exhausted — top up from the other
         rest = pool.drop(sub.index)
-        sub = pd.concat([sub, rest.sample(min(len(rest), n - len(sub)), random_state=rng_seed)])
+        sub = pd.concat([sub, pick(rest, n - len(sub))])
     sub = sub.sample(frac=1, random_state=rng_seed)
 
     human = sub[[id_col, text_col]].copy()
@@ -785,7 +804,7 @@ def export_agreement_workbook(labeled: pd.DataFrame, id_col: str, text_col: str,
         "How to fill this in": [
             "1. Work ONLY on the 'label_me' sheet. Do not open 'llm_labels' until you are done",
             "   (it holds the LLM judge's answers; peeking anchors your labels and voids the check).",
-            f"2. For each row, read the text and fill every your_* column with TRUE or FALSE.",
+            f"2. For each row, read the text and fill every your_* column with 1 (yes) or 0 (no).",
             "3. Save the file in place, then run:  make agreement-score  (or scripts/agreement_check.py --score)",
             "   to get raw agreement and Cohen's kappa per label.",
             "4. Label what the TEXT says, not what you know about the company.",
@@ -807,29 +826,82 @@ def export_agreement_workbook(labeled: pd.DataFrame, id_col: str, text_col: str,
     print(f"Agreement workbook ({len(sub)} rows) -> {out_path}")
 
 
-def score_agreement(workbook_path: Path, id_col: str, label_fields: list[str]) -> list[str]:
+def _to_bool_one(v) -> bool:
+    """Accepts 0/1 (as typed into Excel, which stores them as numbers, not
+    strings — str(1.0) == '1.0', not '1', so a pure string-set check would
+    silently misread a numeric 1) as well as TRUE/FALSE/yes/no text."""
+    try:
+        f = float(v)
+        return f != 0.0 and not pd.isna(f)
+    except (TypeError, ValueError):
+        return str(v).strip().lower() in {"true", "yes", "y", "t"}
+
+
+def _to_bool_series(series: pd.Series) -> pd.Series:
+    return series.map(_to_bool_one)
+
+
+def load_ground_truth_ids(store_path: Path, id_col: str) -> set:
+    """Ids already hand-labeled in a prior audit round — never re-drawn into
+    a future workbook, and never lost even if the workbook itself, or the
+    eval set it was drawn from, gets regenerated (e.g. a corpus/paragraph
+    definition fix invalidates and rebuilds the eval set)."""
+    if not store_path.exists():
+        return set()
+    return set(pd.read_parquet(store_path)[id_col])
+
+
+def save_ground_truth(store_path: Path, id_col: str, filled: pd.DataFrame, label_fields: list[str]) -> int:
+    """Append newly hand-labeled rows (id + one bool column per label field)
+    to the persistent ground-truth store, deduping by id_col — existing
+    entries are kept as-is (a human label is never silently overwritten by a
+    later run touching the same id). Returns how many NEW ids were added."""
+    new_rows = filled[[id_col] + label_fields].copy()
+    if store_path.exists():
+        existing = pd.read_parquet(store_path)
+        new_only = new_rows[~new_rows[id_col].isin(set(existing[id_col]))]
+        combined = pd.concat([existing, new_only], ignore_index=True)
+    else:
+        new_only = new_rows
+        combined = new_rows
+    store_path.parent.mkdir(parents=True, exist_ok=True)
+    combined.to_parquet(store_path, index=False)
+    return len(new_only)
+
+
+def score_agreement(workbook_path: Path, id_col: str, label_fields: list[str],
+                    ground_truth_path: Path | None = None) -> list[str]:
     """Score a filled-in agreement workbook: raw agreement + Cohen's kappa per
-    label field. Returns report lines (also printed)."""
+    label field. Returns report lines (also printed). When `ground_truth_path`
+    is given, every filled human label is also persisted there (see
+    save_ground_truth) so it's never lost or re-asked."""
     human = pd.read_excel(workbook_path, sheet_name="label_me")
     llm = pd.read_excel(workbook_path, sheet_name="llm_labels")
     merged = human.merge(llm, on=id_col, how="inner")
 
-    def to_bool(series: pd.Series) -> pd.Series:
-        return series.map(lambda v: str(v).strip().lower() in {"true", "1", "yes", "y", "t"})
-
     lines = [f"Judge agreement check — {workbook_path.name}, n={len(merged)}"]
+    fully_filled_mask = pd.Series(True, index=merged.index)
     for f in label_fields:
         col = merged[f"your_{f}"]
         filled = col.notna() & (col.astype(str).str.strip() != "")
+        fully_filled_mask &= filled
         if filled.sum() == 0:
             lines.append(f"  {f}: no human labels filled in yet")
             continue
         sub = merged[filled]
-        h = to_bool(sub[f"your_{f}"]).to_numpy()
+        h = _to_bool_series(sub[f"your_{f}"]).to_numpy()
         m = sub[f"llm_{f}"].astype(bool).to_numpy()
         kappa = cohens_kappa(h, m)
         agree = float(np.mean(h == m))
         lines.append(f"  {f}: n={len(sub)}  raw agreement={agree:.3f}  Cohen's kappa={kappa:.3f}")
+
+    if ground_truth_path is not None and fully_filled_mask.any():
+        to_save = merged[fully_filled_mask].copy()
+        for f in label_fields:
+            to_save[f] = _to_bool_series(to_save[f"your_{f}"])
+        n_new = save_ground_truth(ground_truth_path, id_col, to_save, label_fields)
+        lines.append(f"  Ground truth: +{n_new} new hand-labeled rows saved -> {ground_truth_path}")
+
     for line in lines:
         print(line)
     return lines

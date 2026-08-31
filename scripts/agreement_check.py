@@ -17,6 +17,7 @@ Usage:
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 import pandas as pd
 
@@ -24,6 +25,17 @@ try:
     import harness_fit
 except ImportError:
     from scripts import harness_fit
+
+
+def _detection_disagreement_priority(labeled: pd.DataFrame) -> pd.Series:
+    """Borderline score for detection: 1 where the cheap keyword screen and
+    the LLM judge disagree (screen flagged a paragraph the judge rejected,
+    or the judge found AI content the screen's keywords missed entirely) —
+    these are exactly the cases worth a human's time, unlike an easy case
+    both would obviously agree on."""
+    screen_says_hit = (labeled["stratum"] == "hit")
+    judge_says_ai = labeled["llm_is_ai_related"].astype(bool)
+    return (screen_says_hit != judge_says_ai).astype(float)
 
 
 @dataclass
@@ -34,6 +46,8 @@ class CycleSpec:
     label_fields: list[str]
     workbook: Path
     report: Path
+    ground_truth: Path
+    priority_fn: Callable[[pd.DataFrame], pd.Series] | None = None
 
 
 CYCLES = {
@@ -44,6 +58,8 @@ CYCLES = {
         label_fields=["is_ai_related"],
         workbook=Path("reports/agreement_eval_detection.xlsx"),
         report=Path("reports/agreement_eval_detection_report.txt"),
+        ground_truth=Path("data/interim/eval/ground_truth_eval_detection.parquet"),
+        priority_fn=_detection_disagreement_priority,
     ),
     "eval_classification": CycleSpec(
         labeled_path=Path("data/interim/eval/eval_set_classification.parquet"),
@@ -53,8 +69,22 @@ CYCLES = {
                       "is_governance_related", "is_use_case_specific", "is_quantified"],
         workbook=Path("reports/agreement_eval_classification.xlsx"),
         report=Path("reports/agreement_eval_classification_report.txt"),
+        ground_truth=Path("data/interim/eval/ground_truth_eval_classification.parquet"),
     ),
 }
+
+
+def _make_workbook(spec: CycleSpec, n: int, seed: int) -> None:
+    labeled = pd.read_parquet(spec.labeled_path)
+    exclude_ids = harness_fit.load_ground_truth_ids(spec.ground_truth, spec.id_col)
+    priority = spec.priority_fn(labeled) if spec.priority_fn else None
+    harness_fit.export_agreement_workbook(
+        labeled, spec.id_col, spec.text_col, spec.label_fields,
+        spec.workbook, n, seed, priority=priority, exclude_ids=exclude_ids,
+    )
+    if exclude_ids:
+        print(f"({len(exclude_ids)} previously hand-labeled ids excluded from this draw — "
+              f"see {spec.ground_truth})")
 
 
 def auto_make(cycle: str, n: int = 60, seed: int = 42) -> None:
@@ -62,16 +92,14 @@ def auto_make(cycle: str, n: int = 60, seed: int = 42) -> None:
     export the human validation workbook automatically if it doesn't exist
     yet, so the to-be-validated sample is always generated without a separate
     manual step. Never overwrites an existing workbook (it may hold hand
-    labels)."""
+    labels). Rows already answered in a prior round (spec.ground_truth) are
+    never redrawn, and — for cycles with a priority_fn — the draw favors
+    borderline cases (screen/judge disagreement) over a uniform random pick."""
     spec = CYCLES[cycle]
     if spec.workbook.exists():
         print(f"Human validation workbook already exists (not overwritten): {spec.workbook}")
         return
-    labeled = pd.read_parquet(spec.labeled_path)
-    harness_fit.export_agreement_workbook(
-        labeled, spec.id_col, spec.text_col, spec.label_fields,
-        spec.workbook, n, seed,
-    )
+    _make_workbook(spec, n, seed)
     print(f"ACTION NEEDED: hand-label the 'label_me' sheet in {spec.workbook} "
           f"(instructions inside). The fit script will pick it up automatically.")
 
@@ -79,12 +107,14 @@ def auto_make(cycle: str, n: int = 60, seed: int = 42) -> None:
 def report_lines(cycle: str) -> list[str]:
     """Judge-validation lines for the fit scripts' final reports: Cohen's
     kappa per label if the workbook is filled in, an explicit UNVALIDATED
-    warning otherwise. Also refreshes the standalone agreement report."""
+    warning otherwise. Also refreshes the standalone agreement report and
+    persists any newly-filled human labels to the ground-truth store."""
     spec = CYCLES[cycle]
     if not spec.workbook.exists():
         return [f"JUDGE VALIDATION: no workbook at {spec.workbook} — the judge is UNVALIDATED "
                 f"(it is generated automatically at the end of the labeling step)."]
-    lines = harness_fit.score_agreement(spec.workbook, spec.id_col, spec.label_fields)
+    lines = harness_fit.score_agreement(spec.workbook, spec.id_col, spec.label_fields,
+                                        ground_truth_path=spec.ground_truth)
     spec.report.parent.mkdir(parents=True, exist_ok=True)
     spec.report.write_text("\n".join(lines) + "\n")
     if any("no human labels filled in yet" in line for line in lines):
@@ -114,18 +144,15 @@ def main() -> None:
             print(f"Error: {spec.workbook} already exists. Refusing to overwrite a workbook "
                   f"that may hold hand labels — delete it yourself if you want a fresh one.")
             return
-        labeled = pd.read_parquet(spec.labeled_path)
-        harness_fit.export_agreement_workbook(
-            labeled, spec.id_col, spec.text_col, spec.label_fields,
-            spec.workbook, args.n, args.seed,
-        )
+        _make_workbook(spec, args.n, args.seed)
         print("Fill in the your_* columns on the 'label_me' sheet, then run with --score.")
 
     if args.score:
         if not spec.workbook.exists():
             print(f"Error: {spec.workbook} not found — run with --make first.")
             return
-        lines = harness_fit.score_agreement(spec.workbook, spec.id_col, spec.label_fields)
+        lines = harness_fit.score_agreement(spec.workbook, spec.id_col, spec.label_fields,
+                                            ground_truth_path=spec.ground_truth)
         spec.report.parent.mkdir(parents=True, exist_ok=True)
         spec.report.write_text("\n".join(lines) + "\n")
         print(f"Agreement report -> {spec.report}")
