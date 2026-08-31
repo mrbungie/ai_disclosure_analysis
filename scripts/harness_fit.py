@@ -39,6 +39,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -61,11 +62,92 @@ def paragraph_id(accession_number: str, section_name: str, para_idx: int, text: 
     return h[:16]
 
 
+_TABLE_SEPARATOR_RE = re.compile(r"^\|?[\s:|-]+\|?$")
+# A line made up ENTIRELY of one or more markdown links (plus stray
+# whitespace/punctuation/digits around them) — markdownify's rendering of
+# navigational chrome (TOC entries, exhibit-index links), never prose.
+_PURE_LINK_LINE_RE = re.compile(r"^(\[[^\]]*\]\([^)]*\)[\s.,\d$]*)+$")
+
+
+def _looks_like_table_row(line: str) -> bool:
+    return line.count("|") >= 2
+
+
+def _is_table_separator(line: str) -> bool:
+    return "-" in line and "|" in line and bool(_TABLE_SEPARATOR_RE.match(line))
+
+
+def _is_pure_link_line(line: str) -> bool:
+    return bool(_PURE_LINK_LINE_RE.match(line))
+
+
+_HAS_LETTER_RE = re.compile(r"[A-Za-z]")
+
+
+def _has_no_letters(line: str) -> bool:
+    """True for a line with no alphabetic character at all: a lone page
+    number, a bare horizontal rule ('---'), a zero-width space, an unadorned
+    bullet marker or footnote reference ('•', '(1)') — decoration or
+    pagination artifacts, never prose. A bullet or heading WITH real words
+    on it always has letters and is kept."""
+    return not bool(_HAS_LETTER_RE.search(line))
+
+
+def markdown_to_paragraphs(text: str) -> list[str]:
+    """Split markdown section text (markdownify's HTML->markdown output —
+    see scripts/04_extract_sections.py) into paragraph units.
+
+    The source has no blank lines between blocks — markdownify emits one
+    line per original HTML block element, so a real block-level markdown
+    parser (which needs blank lines to separate paragraphs under CommonMark)
+    just collapses everything into a handful of giant paragraphs instead.
+    One line IS already the right paragraph unit here: a heading, a body
+    sentence, and a bullet each already occupy exactly one line. Two things
+    must NOT be kept as paragraphs even though they're each one line:
+      - GFM pipe tables — each row (header, `| --- | --- |` separator, and
+        data rows) is its own line, and naively keeping them individually
+        made ~58% of the corpus's "paragraphs" degenerate table-row
+        fragments with no prose content.
+      - Pure navigational links ("[Table of Contents](#anchor)", exhibit-
+        index entries) — ~4% of lines, chrome rather than disclosure text.
+      - Lines with no letters at all — page numbers, bare '---' rules,
+        zero-width spaces, unadorned bullet/footnote markers.
+    So: keep every line as its own paragraph, except drop a detected table
+    block (rows included), pure-link lines, and letterless lines."""
+    lines = [line.strip() for line in text.split("\n")]
+    paragraphs: list[str] = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        line = lines[i]
+        if not line:
+            i += 1
+            continue
+        # Table-block detection must run before the letterless check: a
+        # table's header row is very often itself letterless (blank cells,
+        # "|  |  |  |"), so checking letterless first would eat just that
+        # one line, break the header+separator pattern the block detector
+        # looks for, and let every data row after it leak through as
+        # individual "paragraphs" again.
+        if _looks_like_table_row(line) and i + 1 < n and _is_table_separator(lines[i + 1]):
+            i += 2
+            while i < n and _looks_like_table_row(lines[i]):
+                i += 1
+            continue
+        if _is_pure_link_line(line) or _has_no_letters(line):
+            i += 1
+            continue
+        paragraphs.append(line)
+        i += 1
+    return paragraphs
+
+
 def flatten_corpus_paragraphs(config: dict) -> pd.DataFrame:
     """One row per paragraph across the entire parsed corpus: paragraph_id,
     accession_number, ticker, industry_group, filing_date, section_name,
     paragraph_text. Shared by the seed screen and both eval-set builders so
-    every stage samples from the same paragraph universe."""
+    every stage samples from the same paragraph universe. Paragraphs are
+    markdown blocks (markdown_to_paragraphs), not raw text lines."""
     manifest = pd.read_parquet(Path(config["paths"]["interim_manifests"]) / "filing_manifest.parquet")
     sections = pd.read_parquet(Path(config["paths"]["interim_sections"]) / "filing_sections.parquet")
     firm_universe = pd.read_parquet(Path(config["paths"]["interim_manifests"]) / "firm_universe.parquet")
@@ -76,7 +158,7 @@ def flatten_corpus_paragraphs(config: dict) -> pd.DataFrame:
 
     rows = []
     for _, row in sections.iterrows():
-        paragraphs = [p.strip() for p in row["section_text"].split("\n") if p.strip()]
+        paragraphs = markdown_to_paragraphs(row["section_text"])
         for i, p in enumerate(paragraphs):
             rows.append({
                 "paragraph_id": paragraph_id(row["accession_number"], row["section_name"], i, p),
@@ -278,10 +360,60 @@ def refuse_if_holdout_spent(holdout_report_path: Path, resample_hint: str) -> bo
 # ---------------------------------------------------------------------------
 
 
+def build_batch_output_type(item_type):
+    """Wrap a single-item Pydantic output type into {items: [item_type +
+    index]} so one judge call can score several excerpts at once. Batching
+    (not concurrency) is what actually pays off on some NIM-hosted models:
+    benchmarked at ~2.9s/item and 100% success for batch_size=5 vs ~5.9s/item
+    serially and ~50% failures (500s / schema-retry exhaustion) under
+    concurrency=5 — the endpoint chokes on parallel connections, not on
+    longer single requests."""
+    from pydantic import Field, create_model
+    indexed_item = create_model(
+        f"Indexed{item_type.__name__}",
+        __base__=item_type,
+        index=(int, Field(description="the excerpt's number from the input, 0-based, matching exactly")),
+    )
+    return create_model(f"Batch{item_type.__name__}", items=(list[indexed_item], ...))
+
+
 def build_judge(output_type, system_prompt: str):
     """Pydantic-AI agent for the outer-loop judge. Reads LLM_JUDGE_* env vars;
     the judge should be a different model family from anything the harness
-    approximates, so it isn't grading a close relative of itself."""
+    approximates, so it isn't grading a close relative of itself. `output_type`
+    is the single-item schema; judge calls are always batched (see
+    build_batch_output_type, judge_batch).
+
+    `LLM_JUDGE_PROVIDER=google` selects the Gemini API (GOOGLE_API_KEY,
+    LLM_JUDGE_MODEL e.g. gemini-3.1-flash-lite); anything else (the default)
+    uses an OpenAI-compatible endpoint (LLM_JUDGE_API_KEY/BASE_URL/MODEL —
+    this is how NVIDIA NIM models are reached). Switched to Gemini
+    2026-08-31 after nvidia/nemotron-3-ultra-550b-a55b's free-tier NIM
+    endpoint proved unstable (sustained 429/500/timeout/404 under sequential
+    load, ~2.9s/item best case); Gemini Flash Lite benchmarked ~0.28s/item,
+    zero errors, and 100% scope-label agreement with nemotron on a 20-item
+    sample including the 3 positives seen so far."""
+    batch_type = build_batch_output_type(output_type)
+    batched_prompt = (
+        f"{system_prompt}\n\nYou will receive several numbered excerpts in one message, each as "
+        f"'[N] <text>'. Return exactly one item per excerpt, in `items`, with each item's `index` "
+        f"field set to match its excerpt's number N exactly."
+    )
+
+    if os.environ.get("LLM_JUDGE_PROVIDER", "").lower() == "google":
+        from pydantic_ai import Agent
+        from pydantic_ai.models.google import GoogleModel
+        from pydantic_ai.providers.google import GoogleProvider
+
+        api_key = os.environ.get("GOOGLE_API_KEY")
+        if not api_key:
+            raise ValueError("GOOGLE_API_KEY is not set. Configure it in .env.")
+        model_name = os.environ.get("LLM_JUDGE_MODEL", "gemini-3.1-flash-lite")
+        provider = GoogleProvider(api_key=api_key)
+        model = GoogleModel(model_name, provider=provider)
+        return Agent(model, output_type=batch_type, retries=3, system_prompt=batched_prompt)
+
+    import httpx
     from pydantic_ai import Agent
     from pydantic_ai.models.openai import OpenAIChatModel
     from pydantic_ai.profiles.openai import OpenAIModelProfile
@@ -293,19 +425,26 @@ def build_judge(output_type, system_prompt: str):
     base_url = os.environ.get("LLM_JUDGE_BASE_URL", "https://api.openai.com/v1")
     model_name = os.environ.get("LLM_JUDGE_MODEL", "gpt-4o-mini")
 
-    provider = OpenAIProvider(base_url=base_url, api_key=api_key)
+    # Some OpenAI-"compatible" endpoints stall a connection with no response
+    # and no error; the OpenAI SDK's default httpx timeout is long enough
+    # (600s) that a stalled call otherwise looks indistinguishable from a
+    # slow-but-working run for many minutes. A short explicit timeout turns
+    # that into a fast, retried failure instead (see judge_one).
+    http_client = httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=15.0))
+    provider = OpenAIProvider(base_url=base_url, api_key=api_key, http_client=http_client)
     # Several OpenAI-"compatible" NIM-hosted models 400 on strict tool-definition
     # mode (extra_forbidden on tools.0.function.strict) — disable it so the judge
     # isn't locked to the handful of models that happen to support it.
     profile = OpenAIModelProfile(openai_supports_strict_tool_definition=False)
     model = OpenAIChatModel(model_name, provider=provider, profile=profile)
-    return Agent(model, output_type=output_type, retries=3, system_prompt=system_prompt)
+    return Agent(model, output_type=batch_type, retries=3, system_prompt=batched_prompt)
 
 
 async def judge_one(agent, prompt: str, max_retries: int = 5) -> dict | None:
-    """One judge call with rate-limit backoff. The FULL text is judged — no
-    truncation: a label for a truncated excerpt is a label for a different
-    document than the harness will see."""
+    """One judge call (a batch of excerpts numbered into one prompt — see
+    build_judge/judge_batch) with backoff on transient failures. The FULL
+    text of every excerpt is judged — no truncation: a label for a truncated
+    excerpt is a label for a different document than the harness will see."""
     retry_delay = 5.0
     for attempt in range(max_retries):
         try:
@@ -313,55 +452,91 @@ async def judge_one(agent, prompt: str, max_retries: int = 5) -> dict | None:
             return result.output.model_dump(mode="json")
         except Exception as e:
             error_str = str(e)
-            is_rate_limit = ("429" in error_str or "rate limit" in error_str.lower()
-                             or getattr(e, "status_code", None) == 429)
-            if is_rate_limit and attempt < max_retries - 1:
-                print(f"  Rate limited. Retrying in {retry_delay}s...")
+            is_transient = ("429" in error_str or "rate limit" in error_str.lower()
+                            or "500" in error_str or "502" in error_str or "503" in error_str
+                            or "504" in error_str or "timed out" in error_str.lower()
+                            or "timeout" in type(e).__name__.lower()
+                            or getattr(e, "status_code", None) in (429, 500, 502, 503, 504))
+            if is_transient and attempt < max_retries - 1:
+                print(f"  Transient judge error, retrying in {retry_delay}s: {e}", flush=True)
                 await asyncio.sleep(retry_delay)
                 retry_delay *= 2.0
                 continue
-            print(f"  Judge error: {e}")
+            print(f"  Judge error: {e}", flush=True)
             return None
     return None
 
 
-async def judge_batch(agent, to_label: pd.DataFrame, make_prompt, label_fields: list[str],
+async def judge_batch(agent, to_label: pd.DataFrame, text_col: str, label_fields: list[str],
                       existing_records: list[dict], out_path: Path,
-                      concurrency: int, delay: float) -> pd.DataFrame:
-    """Concurrent judge labeling with periodic checkpointing to `out_path`.
-    `make_prompt(row)` builds the judge prompt; each judge output dict's
-    `label_fields` are stored as llm_<field> columns."""
+                      batch_size: int, delay: float) -> pd.DataFrame:
+    """Sequential batched judge labeling: `batch_size` excerpts numbered into
+    one prompt per call (see build_judge/build_batch_output_type) — measured
+    far faster and more reliable than one-item-per-call concurrency, which
+    overloads some NIM-hosted models into 500s/schema failures.
+
+    Checkpoints `out_path` after every batch, so a run interrupted or killed
+    partway through — a crash, a rate limit exhausting retries, Ctrl-C — only
+    loses the batch in flight. Resumability across separate invocations is
+    the caller's job: `existing_records` should already exclude ids present
+    in a prior checkpoint (see build_eval_set._label_stage), so re-running
+    this function on the same sample only labels what's still missing.
+
+    A batch can fail as a whole even when only one excerpt in it is the
+    problem (a garbage table-fragment paragraph derailing the model's
+    structured output breaks the whole batch's JSON, not just its own item).
+    Since the sample is fixed, the same items would land in the same batch
+    on every resumed run and fail identically forever — so a failed batch is
+    retried once item-by-item (batch_size=1) before anything in it is given
+    up on."""
+    from tqdm import tqdm
+
     records = existing_records
-    write_lock = asyncio.Lock()
-    queue: asyncio.Queue = asyncio.Queue()
-    for _, row in to_label.iterrows():
-        queue.put_nowait(row)
+    rows = list(to_label.iterrows())
+    bar = tqdm(total=len(rows), desc="labeling", file=sys.stdout)
 
-    progress = {"done": 0, "total": len(to_label)}
+    async def label_one_row(row) -> None:
+        prompt = f"[0] {row[text_col]}"
+        result = await judge_one(agent, prompt)
+        if not result or not result["items"]:
+            print(f"  WARNING: single-item retry also failed for one row — dropped, "
+                  f"will be picked up by a resumed run.", flush=True)
+            return
+        item = result["items"][0]
+        record = row.to_dict()
+        for field in label_fields:
+            record[f"llm_{field}"] = item[field]
+        records.append(record)
 
-    async def worker():
-        while True:
-            try:
-                row = queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
-            label = await judge_one(agent, make_prompt(row))
-            async with write_lock:
-                if label is not None:
-                    record = row.to_dict()
-                    for field in label_fields:
-                        record[f"llm_{field}"] = label[field]
-                    records.append(record)
-                progress["done"] += 1
-                print(f"[{progress['done']}/{progress['total']}] labeled")
-                if len(records) % 20 == 0:
-                    pd.DataFrame(records).to_parquet(out_path, index=False)
-            if delay > 0:
-                await asyncio.sleep(delay)
-            queue.task_done()
-
-    workers = [asyncio.create_task(worker()) for _ in range(max(1, concurrency))]
-    await asyncio.gather(*workers)
+    for start in range(0, len(rows), batch_size):
+        chunk = rows[start:start + batch_size]
+        prompt = "\n\n".join(f"[{i}] {row[text_col]}" for i, (_, row) in enumerate(chunk))
+        result = await judge_one(agent, prompt)
+        if result is not None:
+            by_index = {item["index"]: item for item in result["items"]}
+            for i, (_, row) in enumerate(chunk):
+                item = by_index.get(i)
+                if item is None:
+                    print(f"  WARNING: no item at index {i} in a batch response — dropped, "
+                          f"will be picked up by a resumed run.", flush=True)
+                    continue
+                record = row.to_dict()
+                for field in label_fields:
+                    record[f"llm_{field}"] = item[field]
+                records.append(record)
+        elif len(chunk) > 1:
+            print(f"  Batch of {len(chunk)} failed — retrying item-by-item.", flush=True)
+            for _, row in chunk:
+                await label_one_row(row)
+                if delay > 0:
+                    await asyncio.sleep(delay)
+        else:
+            await label_one_row(chunk[0][1])
+        bar.update(len(chunk))
+        pd.DataFrame(records).to_parquet(out_path, index=False)
+        if delay > 0:
+            await asyncio.sleep(delay)
+    bar.close()
 
     labeled_df = pd.DataFrame(records)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -407,22 +582,38 @@ def attach_sampling_weights(sample: pd.DataFrame, population: pd.DataFrame,
 
 
 def weighted_search_sample(df: pd.DataFrame, stratum_col: str, hit_count_col: str,
-                           n: int, seed: int) -> pd.DataFrame:
+                           n: int, seed: int,
+                           stratum_fracs: dict[str, float] | None = None) -> pd.DataFrame:
     """Stage-1 search draw, deliberately skewed toward hard cases (map §2):
-    weak hits (a single keyword hit) over strong ones, and no-hit paragraphs
-    inside filings the screen hit elsewhere over the clean-filing stratum.
-    Not a probability sample — the search sample is spent freely, never used
-    for a population estimate."""
-    def base_weight(row):
-        if row[stratum_col] == "hit":
-            return 3.0 if row[hit_count_col] <= 1 else 1.0
-        if row[stratum_col] == "no_hit_filing_hits":
-            return 2.0
-        return 0.5  # no_hit_filing_clean
+    weak hits (a single keyword hit, within the hit stratum) and no-hit
+    paragraphs inside filings the screen hit elsewhere, over the
+    overwhelmingly-easy clean-filing stratum. Not a probability sample — the
+    search sample is spent freely, never used for a population estimate.
 
-    weights = df.apply(base_weight, axis=1)
-    n = min(n, len(df))
-    return df.sample(n=n, weights=weights, random_state=seed)
+    Fixed per-stratum quotas (`stratum_fracs`), not a multiplicative weight
+    on the raw population: the hit stratum is ~0.5% of the corpus, so any
+    weight multiplier small enough to leave the other two strata sane gets
+    swamped by the ~140x population-size gap and barely moves the draw (a 3x
+    weight produced 5/560 hit rows — indistinguishable from unweighted
+    prevalence). A quota guarantees real representation regardless of how
+    skewed the underlying strata sizes are."""
+    if stratum_fracs is None:
+        stratum_fracs = {"hit": 0.40, "no_hit_filing_hits": 0.40, "no_hit_filing_clean": 0.20}
+
+    parts = []
+    for stratum, frac in stratum_fracs.items():
+        pool = df[df[stratum_col] == stratum]
+        target = min(round(n * frac), len(pool))
+        if target == 0:
+            continue
+        if stratum == "hit":
+            # Within hit, favor weak (single-keyword) hits — the ambiguous,
+            # informative cases — over strong multi-keyword ones.
+            weights = 1.0 / pool[hit_count_col].clip(lower=1)
+            parts.append(pool.sample(n=target, weights=weights, random_state=seed))
+        else:
+            parts.append(pool.sample(n=target, random_state=seed))
+    return pd.concat(parts, ignore_index=True)
 
 
 def stratified_holdout_with_coverage(df: pd.DataFrame, population: pd.DataFrame, stratum_col: str,

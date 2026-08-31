@@ -1,5 +1,6 @@
 .venv/
 data/
+reports/
 duckdb/
 __pycache__/
 *.pyc

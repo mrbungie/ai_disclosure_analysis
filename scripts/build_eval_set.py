@@ -110,7 +110,19 @@ def year_of(filing_date) -> str:
 # ---------------------------------------------------------------------------
 
 
+SEARCH_STRATUM_FRACS = {"hit": 0.40, "no_hit_filing_hits": 0.40, "no_hit_filing_clean": 0.20}
+
+
 def do_sample_detection(args: argparse.Namespace) -> None:
+    """Accumulative and index-based: never redraws or discards a row already
+    in the sample. The search split is topped up to meet its per-stratum
+    quotas (SEARCH_STRATUM_FRACS) by adding only the shortfall as NEW rows —
+    already-sampled (and possibly already-labeled) search rows are kept
+    as-is even if their stratum already exceeds its quota, so a re-run never
+    throws away paid labeling work. The holdout is drawn once and never
+    touched again after that: it's the probability sample opened a single
+    time at freeze, so redrawing it after some of it may already be labeled
+    would break that guarantee."""
     if not SEED_SCREEN_PATH.exists():
         print(f"Error: {SEED_SCREEN_PATH} not found. Run scripts/seed_screen.py first.")
         return
@@ -119,47 +131,74 @@ def do_sample_detection(args: argparse.Namespace) -> None:
     print(f"Seed-screen population: {len(population)} paragraphs — " +
           ", ".join(f"{s}={n}" for s, n in counts.items()))
 
-    search = harness_fit.weighted_search_sample(population, "stratum", "hit_count",
-                                                args.n_search, args.seed)
-    population["_year"] = population["filing_date"].map(year_of)
-    holdout_pool = population[~population["paragraph_id"].isin(search["paragraph_id"])]
-    holdout = harness_fit.stratified_holdout_with_coverage(
-        holdout_pool, population, "stratum", ["_year", "industry_group"],
-        args.n_holdout, args.seed)
-    population.drop(columns="_year", inplace=True)
-    holdout = holdout.drop(columns="_year", errors="ignore")
+    sample_path = SAMPLE_PATHS["detection"]
+    existing = pd.read_parquet(sample_path) if sample_path.exists() else None
+    existing_ids = set(existing["paragraph_id"]) if existing is not None else set()
+    existing_search = existing[existing["split"] == "search"] if existing is not None else population.iloc[0:0]
+    existing_holdout = existing[existing["split"] == "test"] if existing is not None else population.iloc[0:0]
 
-    search = search.copy()
-    search["sampling_weight"] = pd.NA  # search sample is spent freely, never population-weighted
-    search["split"] = "search"
-    holdout["split"] = "test"
-    sample = pd.concat([search, holdout], ignore_index=True)
+    new_search_parts = []
+    for stratum, frac in SEARCH_STRATUM_FRACS.items():
+        target = round(args.n_search * frac)
+        have = int((existing_search["stratum"] == stratum).sum())
+        need = max(0, target - have)
+        pool = population[(population["stratum"] == stratum) & (~population["paragraph_id"].isin(existing_ids))]
+        need = min(need, len(pool))
+        if need == 0:
+            continue
+        weights = (1.0 / pool["hit_count"].clip(lower=1)) if stratum == "hit" else None
+        draw = pool.sample(n=need, weights=weights, random_state=args.seed).copy()
+        draw["sampling_weight"] = pd.NA
+        draw["split"] = "search"
+        new_search_parts.append(draw)
+        existing_ids |= set(draw["paragraph_id"])
 
-    missing_strata = set(population["stratum"].unique()) - set(holdout["stratum"].unique())
-    if missing_strata:
-        print(f"WARNING: holdout is missing strata {missing_strata} — "
-              f"increase --n-holdout or --min-per-stratum for full coverage.")
+    if new_search_parts:
+        added_search = pd.concat(new_search_parts, ignore_index=True)
+        print(f"Topping up search sample: +{len(added_search)} new rows "
+              f"({dict(added_search['stratum'].value_counts())}); "
+              f"{len(existing_search)} existing search rows kept untouched.")
+    else:
+        added_search = population.iloc[0:0]
+        print(f"Search sample already meets its per-stratum quotas ({len(existing_search)} rows) — nothing to add.")
 
-    print(f"Sample: {len(search)} search + {len(holdout)} holdout = {len(sample)} "
-          f"(holdout strata: {dict(holdout['stratum'].value_counts())})")
-    SAMPLE_PATHS["detection"].parent.mkdir(parents=True, exist_ok=True)
-    sample.to_parquet(SAMPLE_PATHS["detection"], index=False)
-    print(f"Wrote sample -> {SAMPLE_PATHS['detection']}\nNot labeled yet. Run with --stage detection --label.")
+    if len(existing_holdout):
+        holdout = existing_holdout
+        print(f"Holdout already drawn ({len(holdout)} rows) — never redrawn once it exists "
+              f"(it's the single-look probability sample).")
+    else:
+        population["_year"] = population["filing_date"].map(year_of)
+        holdout_pool = population[~population["paragraph_id"].isin(existing_ids)]
+        holdout = harness_fit.stratified_holdout_with_coverage(
+            holdout_pool, population, "stratum", ["_year", "industry_group"],
+            args.n_holdout, args.seed)
+        holdout = holdout.drop(columns="_year", errors="ignore")
+        holdout["split"] = "test"
+        missing_strata = set(population["stratum"].unique()) - set(holdout["stratum"].unique())
+        if missing_strata:
+            print(f"WARNING: holdout is missing strata {missing_strata} — "
+                  f"increase --n-holdout for full coverage.")
+        print(f"Drew holdout: {len(holdout)} rows ({dict(holdout['stratum'].value_counts())}).")
+
+    sample = pd.concat([existing_search, added_search, holdout], ignore_index=True)
+    sample_path.parent.mkdir(parents=True, exist_ok=True)
+    sample.to_parquet(sample_path, index=False)
+    n_search_total = int((sample["split"] == "search").sum())
+    n_holdout_total = int((sample["split"] == "test").sum())
+    print(f"Sample: {n_search_total} search + {n_holdout_total} holdout = {len(sample)} -> {sample_path}")
+    print("Run with --stage detection --label to label any unlabeled rows.")
 
     pipeline_logger.log_event(pipeline_step="eval_set_detection", level="SUCCESS",
-                              message=f"Sampled {len(sample)} paragraphs for the detection eval set.",
-                              details={"n": len(sample)})
-
-
-def make_scope_prompt(row: pd.Series) -> str:
-    return f"Classify this excerpt from a corporate 10-K SEC filing:\n\n---\n{row['paragraph_text']}\n---"
+                              message=f"Sampled {len(sample)} paragraphs for the detection eval set "
+                                      f"(+{len(added_search)} new search rows).",
+                              details={"n": len(sample), "added": len(added_search)})
 
 
 async def do_label_detection(args: argparse.Namespace) -> None:
     await _label_stage(
         stage="detection", sample_path=SAMPLE_PATHS["detection"], eval_set_path=EVAL_SET_PATHS["detection"],
         label_fields=["is_ai_related"], output_type=ScopeLabel, system_prompt=SCOPE_SYSTEM_PROMPT,
-        make_prompt=make_scope_prompt, args=args)
+        text_col="paragraph_text", args=args)
 
 
 # ---------------------------------------------------------------------------
@@ -213,17 +252,12 @@ def do_sample_classification(args: argparse.Namespace) -> None:
                               details={"n": len(sample)})
 
 
-def make_dimension_prompt(row: pd.Series) -> str:
-    return (f"Classify this excerpt (already known to discuss AI) from a corporate 10-K SEC "
-            f"filing on all six dimensions:\n\n---\n{row['chunk_text']}\n---")
-
-
 async def do_label_classification(args: argparse.Namespace) -> None:
     await _label_stage(
         stage="classification", sample_path=SAMPLE_PATHS["classification"],
         eval_set_path=EVAL_SET_PATHS["classification"], label_fields=DIMENSION_FIELDS,
         output_type=DimensionLabel, system_prompt=DIMENSION_SYSTEM_PROMPT,
-        make_prompt=make_dimension_prompt, args=args)
+        text_col="chunk_text", args=args)
 
 
 # ---------------------------------------------------------------------------
@@ -232,7 +266,11 @@ async def do_label_classification(args: argparse.Namespace) -> None:
 
 
 async def _label_stage(stage: str, sample_path: Path, eval_set_path: Path, label_fields: list[str],
-                       output_type, system_prompt: str, make_prompt, args: argparse.Namespace) -> None:
+                       output_type, system_prompt: str, text_col: str, args: argparse.Namespace) -> None:
+    """The sample is fixed once by --sample; --label only ever labels what's
+    still missing from eval_set_path, so a failed/interrupted run and a
+    later re-run accumulate onto the same fixed sample instead of starting
+    over or drawing a new one."""
     if not sample_path.exists():
         print(f"Error: {sample_path} not found. Run with --stage {stage} --sample first.")
         return
@@ -252,8 +290,8 @@ async def _label_stage(stage: str, sample_path: Path, eval_set_path: Path, label
 
     agent = harness_fit.build_judge(output_type, system_prompt)
     labeled = await harness_fit.judge_batch(
-        agent, to_label, make_prompt, label_fields + ["rationale"],
-        records, eval_set_path, args.concurrency, args.delay)
+        agent, to_label, text_col, label_fields + ["rationale"],
+        records, eval_set_path, args.batch_size, args.delay)
     print(f"\nDone. {len(labeled)} labeled instances -> {eval_set_path}")
     for f in label_fields:
         print(f"  {f}: {labeled[f'llm_{f}'].astype(bool).mean() * 100:.1f}% positive")
@@ -278,8 +316,9 @@ def main() -> None:
                         help="classification: paragraphs of context each side (default: configs/config.json)")
     parser.add_argument("--search-frac", type=float, default=0.7)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--concurrency", type=int, default=3)
-    parser.add_argument("--delay", type=float, default=0.3)
+    parser.add_argument("--batch-size", type=int, default=5,
+                        help="excerpts numbered into one judge call (benchmarked sweet spot: 5)")
+    parser.add_argument("--delay", type=float, default=0.3, help="pause between sequential batch calls")
     args = parser.parse_args()
     if not args.sample and not args.label:
         parser.error("Pass --sample and/or --label")

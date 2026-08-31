@@ -65,7 +65,7 @@ eval-sample-detection:
 
 eval-label-detection:
 	@echo "Reward-labeling the detection eval set (scope only, $$, uses LLM_JUDGE_* env)..."
-	.venv/bin/python scripts/build_eval_set.py --stage detection --label $(ARGS)
+	.venv/bin/python -u scripts/build_eval_set.py --stage detection --label $(ARGS)
 
 apply-detection:
 	@echo "Applying the frozen detection ACTIVE to produce the candidate frame (stage 2's population)..."
@@ -77,7 +77,7 @@ eval-sample-classification:
 
 eval-label-classification:
 	@echo "Reward-labeling the classification eval set (six dimensions, $$, uses LLM_JUDGE_* env)..."
-	.venv/bin/python scripts/build_eval_set.py --stage classification --label $(ARGS)
+	.venv/bin/python -u scripts/build_eval_set.py --stage classification --label $(ARGS)
 
 eval-harness:
 	@echo "Evaluate(H, X): scoring a candidate on the search split..."
