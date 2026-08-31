@@ -1,0 +1,29 @@
+\begin{table*}[t]
+\centering \small
+\vspace{-3mm}
+\setlength{\tabcolsep}{4pt}
+\newcommand{\posdelta}[2]{#1\,{\scriptsize(\textcolor{ForestGreen!70!black}{#2})}}
+\newcommand{\negdelta}[2]{#1\,{\scriptsize(\textcolor{BrickRed}{#2})}}
+\begin{tabular}{l ccccc|c}
+\toprule
+Method & \texttt{GPT-5.4n} & \texttt{GPT-5.4m} & \texttt{Gem-3.1FL} & \texttt{Gem-3F} & \texttt{GPT-20B} & Avg. \\
+\midrule
+No Retriever & 23.0 & 28.8 & 28.6 & 42.6 & 47.6 & 34.1 \\
+\midrule
+Dense Retrieval ($k{=}1$) & \posdelta{27.1}{+4.1} & \negdelta{24.5}{-4.3} & \posdelta{31.3}{+2.7} & \negdelta{42.3}{-0.3} & \negdelta{46.9}{-0.7} & \posdelta{34.4}{+0.3} \\
+Dense Retrieval ($k{=}5$) & \posdelta{31.1}{+8.1} & \negdelta{28.3}{-0.5} & \posdelta{37.1}{+8.5} & \posdelta{47.2}{+4.6} & \negdelta{46.7}{-0.9} & \posdelta{38.1}{+4.0} \\
+\midrule
+Random Few-shot & \posdelta{23.1}{+0.1} & \negdelta{24.5}{-4.3} & \posdelta{31.0}{+2.4} & \negdelta{40.4}{-2.2} & \negdelta{41.8}{-5.8} & \negdelta{32.2}{-1.9} \\
+BM25 Retrieval & \posdelta{30.2}{+7.2} & \posdelta{29.2}{+0.4} & \posdelta{32.8}{+4.2} & \posdelta{46.6}{+4.0} & \posdelta{48.9}{+1.3} & \posdelta{37.5}{+3.4} \\
+\ours{Meta-Harness} & \posdelta{31.7}{+8.7} & \posdelta{30.4}{+1.6} & \posdelta{34.9}{+6.3} & \posdelta{46.3}{+3.7} & \posdelta{50.6}{+3.0} & \posdelta{\textbf{38.8}}{+4.7} \\
+\bottomrule
+\end{tabular}
+\vspace{-2mm}
+\caption{
+\label{tab:math_results}
+  Retrieval-augmented math problem solving on 200 IMO-level math problems.
+  We show pass@1 averaged over three samples per problem, with absolute improvement over the baseline in parentheses.
+  \textbf{The discovered Meta-Harness retrieval strategy improves reasoning on these IMO-level problems across all five held-out models, with a 4.7-point average gain over no retriever.}
+}
+\vspace{-8mm}
+\end{table*}

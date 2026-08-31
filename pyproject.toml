@@ -15,6 +15,7 @@ dependencies = [
     "pydantic>=2.5.0",
     "pydantic-ai>=0.0.18",
     "python-dotenv>=1.0.0",
+    "openpyxl>=3.1.5",
 ]
 
 [dependency-groups]

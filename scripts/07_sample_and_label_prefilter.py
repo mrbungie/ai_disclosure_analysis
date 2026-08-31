@@ -1,22 +1,28 @@
 """
-07_sample_and_label_prefilter.py — Sample paragraphs across the full filing
-universe (both currently AI-flagged and currently excluded) and get an
-independent LLM judge's is_ai_related label for each, as ground truth for
-08_fit_prefilter_harness.py.
+07_sample_and_label_prefilter.py — Cycle 1, sampling + judging: draw paragraphs
+across the full filing universe (both currently AI-flagged and currently
+excluded) and get an independent LLM judge's is_ai_related label for each, as
+the reward signal for 08_fit_prefilter_harness.py.
 
-This is step 1 of the semi-reproducible prefilter fit cycle:
+This is the first half of harness-optimization cycle 1 (detection keywords —
+see docs/meta_harness_plan.md and scripts/harness_fit.py):
 
-    07 (sample + LLM label)  ->  08 (CV harness fits ai_keywords against a dev
-    split, evaluates once on a held-out split, writes the fitted keyword list)
+    07 (sample + LLM judge)  ->  08 (dev-only search fits ai_keywords,
+    evaluates once on holdout, writes the fitted list back to config)
 
-Population sampled, industry-stratified (proportional, no oversampling — the
-harness needs an unbiased estimate of both precision and recall):
+Sampling design, and why weights are recorded:
   - "candidate" stratum: paragraphs already inside a candidate chunk window
     (current prefilter says AI-related) — measures precision.
-  - "excluded" stratum: paragraphs the current prefilter does NOT flag,
-    whether because their filing never matched any keyword at all, or because
-    they fall outside every keyword hit's +/-1 window — measures recall / the
-    search space for new candidate keywords.
+  - "excluded" stratum: paragraphs the current prefilter does NOT flag —
+    measures recall / the search space for new candidate keywords.
+  - The draw is HALF/HALF across those strata (so both precision and recall
+    get enough labeled rows), proportional by industry within each stratum.
+    That balanced draw is deliberate oversampling of the (tiny) candidate
+    stratum, so every row records its `sampling_weight` (population count /
+    sampled count for its stratum x industry cell); 08 reports
+    inverse-probability-weighted metrics next to the raw ones. Without the
+    weights, recall and F1 would be overstated relative to the population.
+  - The judge sees the FULL paragraph — no truncation.
 
 Usage:
     uv run python scripts/07_sample_and_label_prefilter.py --sample [--n 800] [--seed 42]
@@ -27,22 +33,17 @@ import argparse
 import asyncio
 import hashlib
 import json
-import os
-import re
 from pathlib import Path
 
 import pandas as pd
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.profiles.openai import OpenAIModelProfile
-from pydantic_ai.providers.openai import OpenAIProvider
 
 try:
+    import harness_fit
     import pipeline_logger
 except ImportError:
-    from scripts import pipeline_logger
+    from scripts import harness_fit, pipeline_logger
 
 load_dotenv()
 
@@ -67,25 +68,15 @@ def load_config() -> dict:
         return json.load(f)
 
 
-def build_regex(keywords: list[str]) -> re.Pattern:
-    patterns = [r"\b" + re.escape(kw).replace(r"\ ", r"\s+") + r"\b" for kw in keywords]
-    return re.compile("|".join(patterns), re.IGNORECASE)
-
-
-def clean_false_positives(text: str, false_positives: list[str]) -> str:
-    for fp in false_positives:
-        text = re.sub(r"\b" + re.escape(fp) + r"\b", "", text, flags=re.IGNORECASE)
-    return text
-
-
 def paragraph_id(accession_number: str, section_name: str, para_idx: int, text: str) -> str:
     h = hashlib.sha256(f"{accession_number}|{section_name}|{para_idx}|{text}".encode("utf-8")).hexdigest()
     return h[:16]
 
 
-def matched_window(paragraphs: list[str], ai_regex: re.Pattern, false_positives: list[str]) -> set[int]:
+def matched_window(paragraphs: list[str], ai_regex, false_positives: list[str]) -> set[int]:
     """Paragraph indices covered by script 06's +/-1 merged windows around keyword hits."""
-    matched_idx = [i for i, p in enumerate(paragraphs) if ai_regex.search(clean_false_positives(p, false_positives))]
+    matched_idx = [i for i, p in enumerate(paragraphs)
+                   if ai_regex.search(harness_fit.clean_false_positives(p, false_positives))]
     if not matched_idx:
         return set()
     windows = [(max(0, i - 1), min(len(paragraphs) - 1, i + 1)) for i in matched_idx]
@@ -107,7 +98,7 @@ def build_population(config: dict) -> pd.DataFrame:
     (in_candidate_window) and industry_group, for stratified sampling."""
     keywords = config["prefiltering"]["ai_keywords"]
     false_positives = config["prefiltering"]["false_positives"]
-    ai_regex = build_regex(keywords)
+    ai_regex = harness_fit.build_regex(keywords)
 
     manifest = pd.read_parquet(Path(config["paths"]["interim_manifests"]) / "filing_manifest.parquet")
     sections = pd.read_parquet(Path(config["paths"]["interim_sections"]) / "filing_sections.parquet")
@@ -138,25 +129,9 @@ def build_population(config: dict) -> pd.DataFrame:
                 "paragraph_text": p,
                 "in_candidate_window": i in covered,
             })
-    return pd.DataFrame(rows)
-
-
-def proportional_by_group(df: pd.DataFrame, group_col: str, n: int, seed: int, min_per_group: int = 1) -> pd.DataFrame:
-    """Proportional allocation by group_col (frac = n/N within each group), with
-    a floor so small groups aren't zeroed out. No equal-count stratification —
-    that biases rare groups the way ensure_dimension_coverage()-style top-ups do."""
-    df = df.copy()
-    frac = min(1.0, n / len(df)) if len(df) else 0.0
-
-    def sample_group(g):
-        target = max(min_per_group, round(len(g) * frac))
-        return g.sample(min(target, len(g)), random_state=seed)
-
-    sampled = df.groupby(group_col, group_keys=False).apply(sample_group, include_groups=False)
-    sampled = df.loc[sampled.index]
-    if len(sampled) > n:
-        sampled = sampled.sample(n, random_state=seed)
-    return sampled
+    df = pd.DataFrame(rows)
+    df["stratum"] = df["in_candidate_window"].map({True: "candidate", False: "excluded"})
+    return df
 
 
 def do_sample(args: argparse.Namespace) -> None:
@@ -165,19 +140,27 @@ def do_sample(args: argparse.Namespace) -> None:
     print(f"Full paragraph universe: {len(population)} paragraphs across "
           f"{population['industry_group'].nunique()} industries.")
 
-    candidate_pop = population[population["in_candidate_window"]]
-    excluded_pop = population[~population["in_candidate_window"]]
+    candidate_pop = population[population["stratum"] == "candidate"]
+    excluded_pop = population[population["stratum"] == "excluded"]
     print(f"  in_candidate_window=True (current prefilter says AI-related): {len(candidate_pop)}")
     print(f"  in_candidate_window=False (excluded by current prefilter): {len(excluded_pop)}")
 
     n_candidate = args.n // 2
     n_excluded = args.n - n_candidate
-    candidate_sample = proportional_by_group(candidate_pop, "industry_group", n_candidate, args.seed)
-    excluded_sample = proportional_by_group(excluded_pop, "industry_group", n_excluded, args.seed)
+    candidate_sample = harness_fit.proportional_by_group(candidate_pop, "industry_group", n_candidate, args.seed)
+    excluded_sample = harness_fit.proportional_by_group(excluded_pop, "industry_group", n_excluded, args.seed)
 
     sample = pd.concat([candidate_sample, excluded_sample], ignore_index=True)
+    # The 50/50 stratum draw oversamples the candidate stratum by design;
+    # record each row's inverse sampling probability so 08 can weight metrics
+    # back to the population.
+    sample = harness_fit.attach_sampling_weights(sample, population, ["stratum", "industry_group"])
+
     print(f"\nSample: {len(candidate_sample)} candidate + {len(excluded_sample)} excluded = {len(sample)} total")
     print(f"Industries covered: {sample['industry_group'].nunique()}")
+    print(f"Sampling weights: candidate stratum mean={sample.loc[sample['stratum'] == 'candidate', 'sampling_weight'].mean():.1f}, "
+          f"excluded stratum mean={sample.loc[sample['stratum'] == 'excluded', 'sampling_weight'].mean():.1f} "
+          f"(population paragraphs represented per labeled row)")
 
     SAMPLE_PATH.parent.mkdir(parents=True, exist_ok=True)
     sample.to_parquet(SAMPLE_PATH, index=False)
@@ -192,39 +175,10 @@ def do_sample(args: argparse.Namespace) -> None:
     )
 
 
-def build_agent() -> Agent:
-    api_key = os.environ.get("LLM_JUDGE_API_KEY")
-    if not api_key:
-        raise ValueError("LLM_JUDGE_API_KEY is not set. Configure it in .env.")
-    base_url = os.environ.get("LLM_JUDGE_BASE_URL", "https://api.openai.com/v1")
-    model_name = os.environ.get("LLM_JUDGE_MODEL", "gpt-4o-mini")
-
-    provider = OpenAIProvider(base_url=base_url, api_key=api_key)
-    # Several OpenAI-"compatible" NIM-hosted models 400 on strict tool-definition
-    # mode (extra_forbidden on tools.0.function.strict) — disable it so the judge
-    # isn't locked to the handful of models that happen to support it.
-    profile = OpenAIModelProfile(openai_supports_strict_tool_definition=False)
-    model = OpenAIChatModel(model_name, provider=provider, profile=profile)
-    return Agent(model, output_type=PrefilterLabel, retries=3, system_prompt=SYSTEM_PROMPT)
-
-
-async def label_one(agent: Agent, text: str, max_retries: int = 5) -> dict | None:
-    retry_delay = 5.0
-    for attempt in range(max_retries):
-        try:
-            result = await agent.run(f"Analyze this excerpt from a corporate 10-K SEC filing:\n\n---\n{text[:2500]}\n---")
-            return result.output.model_dump(mode="json")
-        except Exception as e:
-            error_str = str(e)
-            is_rate_limit = "429" in error_str or "rate limit" in error_str.lower() or getattr(e, "status_code", None) == 429
-            if is_rate_limit and attempt < max_retries - 1:
-                print(f"  Rate limited. Retrying in {retry_delay}s...")
-                await asyncio.sleep(retry_delay)
-                retry_delay *= 2.0
-                continue
-            print(f"  Judge error: {e}")
-            return None
-    return None
+def make_prompt(row: pd.Series) -> str:
+    # Full paragraph, no truncation — a label for a truncated excerpt is a
+    # label for a different document than the harness will see.
+    return f"Analyze this excerpt from a corporate 10-K SEC filing:\n\n---\n{row['paragraph_text']}\n---"
 
 
 async def do_label(args: argparse.Namespace) -> None:
@@ -241,47 +195,17 @@ async def do_label(args: argparse.Namespace) -> None:
         to_label = candidates[~candidates["paragraph_id"].isin(done_ids)].reset_index(drop=True)
         print(f"Resuming: {len(done_ids)} already labeled, {len(to_label)} remaining.")
         if len(to_label) == 0:
-            print("All chunks already labeled.")
+            print("All paragraphs already labeled.")
             return
     else:
         to_label = candidates
         records = []
 
-    agent = build_agent()
-    write_lock = asyncio.Lock()
-    queue: asyncio.Queue = asyncio.Queue()
-    for _, row in to_label.iterrows():
-        queue.put_nowait(row)
-
-    progress = {"done": 0, "total": len(to_label)}
-
-    async def worker():
-        while True:
-            try:
-                row = queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
-            label = await label_one(agent, row["paragraph_text"])
-            async with write_lock:
-                if label is not None:
-                    record = row.to_dict()
-                    record["llm_is_ai_related"] = label["is_ai_related"]
-                    record["llm_rationale"] = label["rationale"]
-                    records.append(record)
-                progress["done"] += 1
-                print(f"[{progress['done']}/{progress['total']}] Labeled {row['paragraph_id']} "
-                      f"({'candidate' if row['in_candidate_window'] else 'excluded'})")
-                if len(records) % 20 == 0:
-                    pd.DataFrame(records).to_parquet(LABELED_PATH, index=False)
-            if args.delay > 0:
-                await asyncio.sleep(args.delay)
-            queue.task_done()
-
-    workers = [asyncio.create_task(worker()) for _ in range(max(1, args.concurrency))]
-    await asyncio.gather(*workers)
-
-    labeled_df = pd.DataFrame(records)
-    labeled_df.to_parquet(LABELED_PATH, index=False)
+    agent = harness_fit.build_judge(PrefilterLabel, SYSTEM_PROMPT)
+    labeled_df = await harness_fit.judge_batch(
+        agent, to_label, make_prompt, ["is_ai_related", "rationale"],
+        records, LABELED_PATH, args.concurrency, args.delay,
+    )
     print(f"\nDone. {len(labeled_df)} labeled paragraphs -> {LABELED_PATH}")
     print("Next: scripts/08_fit_prefilter_harness.py")
 

@@ -1,0 +1,28 @@
+\begin{table}[t]
+\vspace{-2mm}
+\centering
+\small
+\newcommand{\xno}{\textcolor{my-red}{\texttimes}}
+\newcommand{\cyes}{\textcolor{ForestGreen}{\checkmark}}
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{lcccccccc}
+\toprule
+Method & Scores & Code & Summ. & Traces & Median $\uparrow$ & Best Acc $\uparrow$ & $>$ ZS \\
+\midrule
+Scores Only & \cyes & \cyes & \xno & \xno & 34.6 & 41.3 & 26 \\
+Scores + Summary & \cyes & \cyes & \cyes & \xno & 34.9 & 38.7 & 23 \\
+\midrule
+\ours{Meta-Harness} (full) & \cyes & \cyes & - & \cyes & \textbf{50.0} & \textbf{56.7} & 39 \\
+\bottomrule
+\end{tabular}
+}
+\vspace{-1mm}
+\caption{
+\label{tab:text_classification_history_ablation}
+Ablation of the information available to the proposer in online text classification.
+$>$ ZS: number of runs whose accuracy exceeded the zero-shot baseline.
+The full Meta-Harness interface substantially outperforms scores-only and scores-plus-summary ablations.
+\textbf{Access to raw execution traces is the key ingredient for enabling harness search.}
+}
+\vspace{-1mm}
+\end{table}

@@ -1,0 +1,24 @@
+\begin{wraptable}{r}{0.38\textwidth}
+\vspace{-3mm}
+\centering
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Method & Median & Best \\
+\midrule
+GEPA~\citep{agrawal2025gepa} & 32.6 & 40.2 \\
+Best-of-N & 34.0 & 44.2 \\
+OpenEvolve~\citep{openevolve} & 39.1 & 43.3 \\
+TTT-Discover~\citep{yuksekgonul2026learning} & 34.1 & 45.6 \\
+\midrule
+\ours{Meta-Harness} & \textbf{50.0} & \textbf{56.7} \\
+\bottomrule
+\end{tabular}
+\vspace{-2mm}
+\caption{
+\label{tab:text_classification_optimizer_comparison}
+Text classification accuracies of the harnesses proposed by different text optimizers (search set).
+\textbf{Meta-Harness is substantially more effective at harness optimization.}
+}
+\vspace{-3mm}
+\end{wraptable}

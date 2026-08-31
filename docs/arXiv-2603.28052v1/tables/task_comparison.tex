@@ -1,0 +1,28 @@
+\begin{table}[t]
+\vspace{-2mm}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lp{1.8cm}p{5.2cm}S[table-format=2.3,detect-weight=true]}
+\toprule
+Method & History & Log content & \multicolumn{1}{c}{MTok/iter} \\
+\midrule
+OPRO~\citep{yang2023large}            & Window & past (solution, score) pairs               & 0.002 \\
+TextGrad~\citep{yuksekgonul2024textgradautomaticdifferentiationtext}        & Last & textual feedback on current artifact & 0.015 \\
+AlphaEvolve~\citep{novikov2025alphaevolve}     & Window & program database + eval.\ scores           & 0.022 \\
+GEPA~\citep{agrawal2025gepa}            & Summary & reflective feedback from rollout traces & 0.008 \\
+Feedback Descent~\citep{lee2025feedback} & Summary & comparison + textual feedback & 0.012 \\
+TTT-Discover~\citep{yuksekgonul2026learningdiscovertesttime}    & Window & prev.\ solution fragment & 0.026 \\
+\midrule
+\ours{Meta-Harness}   & \textbf{Full} & \textbf{\textit{all}} logs and scores & 10.0 \\
+\bottomrule
+\end{tabular}
+\vspace{-1mm}
+\caption{
+\textbf{Comparison of text optimization methods and their settings.}
+Each row represents a method collapsed across tasks. 
+\texttt{Mtok/iter} is our best estimate of the full context generated from one evaluation of a text artifact in the \textit{largest setting considered in each paper}. 
+This paper considers settings that yield orders-of-magnitude more context per artifact evaluation.}
+\label{tab:task_comparison}
+\vspace{-3mm}
+\end{table}
