@@ -118,6 +118,16 @@ as selected) → `make download-filings` (03: downloads only the selected
 ones) → `make extract-sections` (04). All resumable — re-running skips what's
 already done.
 
+**Market data** (outcome linkage): `make collect-market` (13) snapshots daily
+adjusted prices — **one parquet per ticker** under `data/raw/market/prices/`,
+so adding tickers later is just a re-run and a broken download can't corrupt
+the rest — plus Fama-French 3-factor files (daily + monthly, Ken French data
+library) for abnormal returns. Every row carries a `source` column
+(`yfinance` / `ken_french`); a CRSP export dropped into the same per-ticker
+layout with `source='crsp'` upgrades the data with no code changes — that is
+also the path to returns for delisted firms (e.g. DFS, acquired 2025; SQ,
+renamed XYZ), whose EDGAR filings still flow through the text pipeline.
+
 ### 2. Build the corpus from the current harness state
 
 ```bash

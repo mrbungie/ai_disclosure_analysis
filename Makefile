@@ -40,6 +40,10 @@ extract-sections:
 
 collect-data: build-universe build-manifest select-batch download-filings extract-sections
 
+collect-market:
+	@echo "Snapshotting prices (per-ticker parquet) + Fama-French factors (script 13)..."
+	.venv/bin/python scripts/13_collect_market_data.py $(ARGS)
+
 tickers-tui:
 	@.venv/bin/python scripts/tui_tickers.py
 
@@ -108,6 +112,7 @@ help:
 	@echo "  make tickers-tui              Simple TUI: aggregated sectors over SIC groups (view/create), add tickers"
 	@echo "  make collect-data             Run 00->04 in order (or each: build-universe, build-manifest,"
 	@echo "                                select-batch, download-filings, extract-sections)"
+	@echo "  make collect-market           Snapshot prices (one parquet per ticker) + Fama-French factors (13)"
 	@echo ""
 	@echo "  make run-pipeline             Run the prefilter and chunking scripts (05-06)"
 	@echo ""
