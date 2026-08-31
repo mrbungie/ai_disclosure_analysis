@@ -529,83 +529,219 @@
     ],
     "sector_groups": {
       "tech": [
-        "Services-Prepackaged Software",
-        "Services-Computer Programming, Data Processing, Etc.",
-        "Services-Computer Processing & Data Preparation",
-        "Services-Computer Programming Services",
         "Computer & office Equipment",
         "Computer Communications Equipment",
         "Computer Peripheral Equipment, NEC",
+        "Computer Storage Devices",
+        "Drawing & Insulating of  Nonferrous Wire",
         "Electronic Computers",
+        "Electronic Connectors",
         "Retail-Catalog & Mail-Order Houses",
-        "Services-Video Tape Rental"
+        "Services-Computer Integrated Systems Design",
+        "Services-Computer Processing & Data Preparation",
+        "Services-Computer Programming Services",
+        "Services-Computer Programming, Data Processing, Etc.",
+        "Services-Management Services",
+        "Services-Prepackaged Software",
+        "Services-Video Tape Rental",
+        "Wholesale-Electronic Parts & Equipment, NEC"
       ],
       "semis": [
-        "Semiconductors & Related Devices",
-        "Special Industry Machinery, NEC",
+        "Instruments For Meas & Testing of  Electricity & Elec Signals",
         "Optical Instruments & Lenses",
-        "Radio & Tv Broadcasting & Communications Equipment"
+        "Radio & Tv Broadcasting & Communications Equipment",
+        "Semiconductors & Related Devices",
+        "Special Industry Machinery, NEC"
       ],
       "defensa": [
         "Aircraft",
+        "Aircraft & Parts",
         "Aircraft Engines & Engine Parts",
         "Aircraft Parts & Auxiliary Equipment, NEC",
         "Guided Missiles & Space Vehicles & Parts",
+        "Rolling Drawing & Extruding of  Nonferrous Metals",
         "Search, Detection, Navigation, Guidance, Aeronautical Sys",
-        "Ship & Boat Building & Repairing",
-        "Rolling Drawing & Extruding of  Nonferrous Metals"
+        "Ship & Boat Building & Repairing"
       ],
       "industriales": [
+        "Air Courier Services",
+        "Air Transportation, Scheduled",
+        "Air-Cond & Warm Air Heatg Equip & Comm & Indl Refrig Equip",
+        "Arrangement of  Transportation of  Freight & Cargo",
+        "Auto Controls For Regulating Residential & Comml Environments",
         "Construction Machinery & Equip",
-        "Farm Machinery & Equipment",
-        "General Industrial Machinery & Equipment",
+        "Construction, Mining & Materials Handling Machinery & Equip",
+        "Cutlery, Handtools & General Hardware",
+        "Electrical Work",
         "Electronic & Other Electrical Equipment (No Computer Equip)",
-        "Surgical & Medical Instruments & Apparatus",
+        "Engines & Turbines",
+        "Farm Machinery & Equipment",
+        "General Bldg Contractors - Residential Bldgs",
+        "General Industrial Machinery & Equipment",
+        "Heating Equip, Except Elec & Warm Air; & Plumbing Fixtures",
+        "Heavy Construction Other Than Bldg Const - Contractors",
+        "Industrial Instruments For Measurement, Display, and Control",
+        "Misc Industrial & Commercial Machinery & Equipment",
+        "Miscellaneous Fabricated Metal Products",
+        "Motors & Generators",
+        "Operative Builders",
+        "Pumps & Pumping Equipment",
+        "Railroad Equipment",
         "Railroads, Line-Haul Operating",
+        "Refuse Systems",
+        "Services-Detective, Guard & Armored Car Services",
+        "Services-Engineering, Accounting, Research, Management",
+        "Services-Equipment Rental & Leasing, NEC",
+        "Services-Help Supply Services",
+        "Services-To Dwellings & Other Buildings",
+        "Special Industry Machinery (No Metalworking Machinery)",
+        "Surgical & Medical Instruments & Apparatus",
         "Trucking & Courier Services (No Air)",
-        "Air Courier Services"
+        "Trucking (No Local)"
       ],
       "telecom": [
-        "Telephone Communications (No Radiotelephone)",
+        "Cable & Other Pay Television Services",
+        "Communications Services, NEC",
         "Radiotelephone Communications",
-        "Cable & Other Pay Television Services"
+        "Telephone Communications (No Radiotelephone)"
       ],
       "autos": [
-        "Motor Vehicles & Passenger Car Bodies"
+        "Motor Vehicle Parts & Accessories",
+        "Motor Vehicles & Passenger Car Bodies",
+        "Retail-Auto & Home Supply Stores",
+        "Retail-Auto Dealers & Gasoline Stations",
+        "Wholesale-Motor Vehicle Supplies & New Parts",
+        "Wholesale-Motor Vehicles & Motor Vehicle Parts & Supplies"
       ],
       "retail": [
-        "Retail-Variety Stores",
-        "Retail-Lumber & Other Building Materials Dealers",
+        "Retail-Building Materials, Hardware, Garden Supply",
+        "Retail-Drug Stores and Proprietary Stores",
         "Retail-Eating  Places",
-        "Retail-Eating & Drinking Places"
+        "Retail-Eating & Drinking Places",
+        "Retail-Family Clothing Stores",
+        "Retail-Grocery Stores",
+        "Retail-Lumber & Other Building Materials Dealers",
+        "Retail-Radio, Tv & Consumer Electronics Stores",
+        "Retail-Retail Stores, NEC",
+        "Retail-Variety Stores",
+        "Wholesale-Durable Goods",
+        "Wholesale-Groceries & Related Products",
+        "Wholesale-Misc Durable Goods"
       ],
       "consumo": [
+        "Apparel & Other Finishd Prods of  Fabrics & Similar Matl",
         "Beverages",
+        "Bottled & Canned Soft Drinks & Carbonated Waters",
+        "Canned, Frozen & Preservd Fruit, Veg & Food Specialties",
+        "Canned, Fruits, Veg, Preserves, Jams & Jellies",
+        "Carpets & Rugs",
+        "Cigarettes",
+        "Fats & Oils",
+        "Food and Kindred Products",
+        "Games, Toys & Children's Vehicles (No Dolls & Bicycles)",
+        "Grain Mill Products",
+        "Household Appliances",
+        "Leather & Leather Products",
+        "Malt Beverages",
+        "Meat Packing Plants",
+        "Men's & Boys' Furnishgs, Work Clothg, & Allied Garments",
+        "Miscellaneous Food Preparations & Kindred Products",
         "Perfumes, Cosmetics & Other Toilet Preparations",
+        "Plastics Products, NEC",
+        "Poultry Slaughtering and Processing",
+        "Rubber & Plastics Footwear",
         "Soap, Detergents, Cleang Preparations, Perfumes, Cosmetics",
-        "Rubber & Plastics Footwear"
+        "Specialty Cleaning, Polishing and Sanitation Preparations",
+        "Sugar & Confectionery Products"
       ],
       "energia": [
-        "Petroleum Refining",
         "Crude Petroleum & Natural Gas",
-        "Oil & Gas Field Services, NEC"
+        "Natural Gas Transmisison & Distribution",
+        "Natural Gas Transmission",
+        "Oil & Gas Field Machinery & Equipment",
+        "Oil & Gas Field Services, NEC",
+        "Petroleum Refining"
       ],
       "utilities": [
-        "Electric Services",
+        "Cogeneration Services & Small Power Producers",
         "Electric & Other Services Combined",
-        "Gas & Other Services Combined"
+        "Electric Services",
+        "Gas & Other Services Combined",
+        "Natural Gas Distribution",
+        "Water Supply"
       ],
       "salud": [
-        "Pharmaceutical Preparations",
         "Biological Products, (No Diagnostic Substances)",
+        "Electromedical & Electrotherapeutic Apparatus",
+        "Hospital & Medical Service Plans",
+        "In Vitro & In Vivo Diagnostic Substances",
+        "Laboratory Analytical Instruments",
+        "Measuring & Controlling Devices, NEC",
+        "Ophthalmic Goods",
         "Orthopedic, Prosthetic & Surgical Appliances & Supplies",
-        "Measuring & Controlling Devices, NEC"
+        "Pharmaceutical Preparations",
+        "Services-Commercial Physical & Biological Research",
+        "Services-General Medical & Surgical Hospitals, NEC",
+        "Services-Medical Laboratories",
+        "Services-Misc Health & Allied Services, NEC",
+        "Wholesale-Drugs, Proprietaries & Druggists' Sundries",
+        "Wholesale-Medical, Dental & Hospital Equipment & Supplies",
+        "X-Ray Apparatus & Tubes & Related Irradiation Apparatus"
       ],
       "financieras": [
+        "Finance Services",
+        "Investment Advice",
         "National Commercial Banks",
+        "Personal Credit Institutions",
+        "Savings Institution, Federally Chartered",
+        "Security & Commodity Brokers, Dealers, Exchanges & Services",
         "Security Brokers, Dealers & Flotation Companies",
         "Services-Business Services, NEC",
-        "Finance Services"
+        "Services-Consumer Credit Reporting, Collection Agencies",
+        "State Commercial Banks"
+      ],
+      "seguros": [
+        "Accident & Health Insurance",
+        "Fire, Marine & Casualty Insurance",
+        "Insurance Agents, Brokers & Service",
+        "Insurance Carriers, NEC",
+        "Life Insurance"
+      ],
+      "inmobiliario": [
+        "Real Estate",
+        "Real Estate Investment Trusts"
+      ],
+      "materiales": [
+        "Agricultural Chemicals",
+        "Agricultural Production-Crops",
+        "Chemicals & Allied Products",
+        "Converted Paper & Paperboard Prods (No Contaners/Boxes)",
+        "Gold and Silver Ores",
+        "Industrial Inorganic Chemicals",
+        "Industrial Organic Chemicals",
+        "Metal Cans",
+        "Metal Mining",
+        "Millwood, Veneer, Plywood, & Structural Wood Members",
+        "Mining & Quarrying of  Nonmetallic Minerals (No Fuels)",
+        "Miscellaneous Manufacturing Industries",
+        "Paints, Varnishes, Lacquers, Enamels & Allied Prods",
+        "Paper Mills",
+        "Paperboard Containers & Boxes",
+        "Plastic Material, Synth Resin/Rubber, Cellulos (No Glass)",
+        "Plastic Materials, Synth Resins & Nonvulcan Elastomers",
+        "Steel Works, Blast Furnaces & Rolling Mills (Coke Ovens)"
+      ],
+      "media": [
+        "Newspapers: Publishing or  Publishing & Printing",
+        "Services-Advertising Agencies",
+        "Services-Amusement & Recreation Services",
+        "Services-Miscellaneous Amusement & Recreation",
+        "Television Broadcasting Stations"
+      ],
+      "viajes_ocio": [
+        "Hotels & Motels",
+        "Transportation Services",
+        "Water Transportation"
       ]
     }
   },
