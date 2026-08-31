@@ -94,13 +94,16 @@ offline regex/pandas work.
 ### 1. Data collection (network, resumable)
 
 **What gets downloaded is decided in `configs/config.json`**: the firm list
-(`pipeline.ticker_groups` — named groups whose union becomes
-`pipeline.tickers`), the filing window (`pipeline.start_year` / `end_year`),
-and `pipeline.form_types` (10-K). To browse the universe or add groups
-without editing JSON:
+(`pipeline.tickers`), the filing window (`pipeline.start_year` / `end_year`),
+and `pipeline.form_types` (10-K). On top of that, `pipeline.sector_groups`
+maps the thesis' **aggregated sectors** (tech, semis, defensa, industriales,
+telecom, autos, retail, consumo, energia, utilities, salud, financieras) to
+the SIC industry groups that compose them — a sector's tickers are derived
+from its SIC groups. To browse or edit without touching JSON:
 
 ```bash
-make tickers-tui      # view tickers by group (+industry), add new ticker groups
+make tickers-tui      # view sectors -> SIC groups -> tickers; create sectors
+                      # from SIC groups; add new tickers to the universe
 ```
 
 Then collect:

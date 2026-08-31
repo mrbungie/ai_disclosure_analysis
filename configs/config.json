@@ -132,240 +132,85 @@
       "XOM",
       "ZS"
     ],
-    "ticker_groups": {
-      "Air Courier Services": [
-        "FDX"
+    "sector_groups": {
+      "tech": [
+        "Services-Prepackaged Software",
+        "Services-Computer Programming, Data Processing, Etc.",
+        "Services-Computer Processing & Data Preparation",
+        "Services-Computer Programming Services",
+        "Computer & office Equipment",
+        "Computer Communications Equipment",
+        "Computer Peripheral Equipment, NEC",
+        "Electronic Computers",
+        "Retail-Catalog & Mail-Order Houses",
+        "Services-Video Tape Rental"
       ],
-      "Aircraft": [
-        "BA"
+      "semis": [
+        "Semiconductors & Related Devices",
+        "Special Industry Machinery, NEC",
+        "Optical Instruments & Lenses",
+        "Radio & Tv Broadcasting & Communications Equipment"
       ],
-      "Aircraft Engines & Engine Parts": [
-        "HON",
-        "RTX"
+      "defensa": [
+        "Aircraft",
+        "Aircraft Engines & Engine Parts",
+        "Aircraft Parts & Auxiliary Equipment, NEC",
+        "Guided Missiles & Space Vehicles & Parts",
+        "Search, Detection, Navigation, Guidance, Aeronautical Sys",
+        "Ship & Boat Building & Repairing",
+        "Rolling Drawing & Extruding of  Nonferrous Metals"
       ],
-      "Aircraft Parts & Auxiliary Equipment, NEC": [
-        "TDG"
+      "industriales": [
+        "Construction Machinery & Equip",
+        "Farm Machinery & Equipment",
+        "General Industrial Machinery & Equipment",
+        "Electronic & Other Electrical Equipment (No Computer Equip)",
+        "Surgical & Medical Instruments & Apparatus",
+        "Railroads, Line-Haul Operating",
+        "Trucking & Courier Services (No Air)",
+        "Air Courier Services"
       ],
-      "Beverages": [
-        "KO",
-        "PEP"
+      "telecom": [
+        "Telephone Communications (No Radiotelephone)",
+        "Radiotelephone Communications",
+        "Cable & Other Pay Television Services"
       ],
-      "Biological Products, (No Diagnostic Substances)": [
-        "AMGN",
-        "BIIB",
-        "GILD",
-        "MRNA"
+      "autos": [
+        "Motor Vehicles & Passenger Car Bodies"
       ],
-      "Cable & Other Pay Television Services": [
-        "CHTR",
-        "CMCSA"
+      "retail": [
+        "Retail-Variety Stores",
+        "Retail-Lumber & Other Building Materials Dealers",
+        "Retail-Eating  Places",
+        "Retail-Eating & Drinking Places"
       ],
-      "Computer & office Equipment": [
-        "IBM"
+      "consumo": [
+        "Beverages",
+        "Perfumes, Cosmetics & Other Toilet Preparations",
+        "Soap, Detergents, Cleang Preparations, Perfumes, Cosmetics",
+        "Rubber & Plastics Footwear"
       ],
-      "Computer Communications Equipment": [
-        "CSCO"
+      "energia": [
+        "Petroleum Refining",
+        "Crude Petroleum & Natural Gas",
+        "Oil & Gas Field Services, NEC"
       ],
-      "Computer Peripheral Equipment, NEC": [
-        "PANW"
+      "utilities": [
+        "Electric Services",
+        "Electric & Other Services Combined",
+        "Gas & Other Services Combined"
       ],
-      "Construction Machinery & Equip": [
-        "CAT"
+      "salud": [
+        "Pharmaceutical Preparations",
+        "Biological Products, (No Diagnostic Substances)",
+        "Orthopedic, Prosthetic & Surgical Appliances & Supplies",
+        "Measuring & Controlling Devices, NEC"
       ],
-      "Crude Petroleum & Natural Gas": [
-        "EOG"
-      ],
-      "Electric & Other Services Combined": [
-        "DUK"
-      ],
-      "Electric Services": [
-        "AEP",
-        "NEE",
-        "SO"
-      ],
-      "Electronic & Other Electrical Equipment (No Computer Equip)": [
-        "GE"
-      ],
-      "Electronic Computers": [
-        "AAPL"
-      ],
-      "Farm Machinery & Equipment": [
-        "DE"
-      ],
-      "Finance Services": [
-        "AXP"
-      ],
-      "Gas & Other Services Combined": [
-        "SRE"
-      ],
-      "General Industrial Machinery & Equipment": [
-        "ITW"
-      ],
-      "Guided Missiles & Space Vehicles & Parts": [
-        "LMT"
-      ],
-      "Measuring & Controlling Devices, NEC": [
-        "TMO"
-      ],
-      "Motor Vehicles & Passenger Car Bodies": [
-        "F",
-        "GM",
-        "HMC",
-        "RIVN",
-        "TM",
-        "TSLA"
-      ],
-      "National Commercial Banks": [
-        "BAC",
-        "C",
-        "COF",
-        "JPM",
-        "WFC"
-      ],
-      "Oil & Gas Field Services, NEC": [
-        "SLB"
-      ],
-      "Optical Instruments & Lenses": [
-        "KLAC"
-      ],
-      "Orthopedic, Prosthetic & Surgical Appliances & Supplies": [
-        "ISRG"
-      ],
-      "Perfumes, Cosmetics & Other Toilet Preparations": [
-        "CL",
-        "EL"
-      ],
-      "Petroleum Refining": [
-        "COP",
-        "CVX",
-        "MPC",
-        "PSX",
-        "XOM"
-      ],
-      "Pharmaceutical Preparations": [
-        "ABBV",
-        "BMY",
-        "JNJ",
-        "LLY",
-        "MRK",
-        "PFE",
-        "REGN",
-        "VRTX"
-      ],
-      "Radio & Tv Broadcasting & Communications Equipment": [
-        "QCOM"
-      ],
-      "Radiotelephone Communications": [
-        "TMUS"
-      ],
-      "Railroads, Line-Haul Operating": [
-        "CSX",
-        "UNP"
-      ],
-      "Retail-Catalog & Mail-Order Houses": [
-        "AMZN"
-      ],
-      "Retail-Eating  Places": [
-        "MCD"
-      ],
-      "Retail-Eating & Drinking Places": [
-        "SBUX"
-      ],
-      "Retail-Lumber & Other Building Materials Dealers": [
-        "HD",
-        "LOW"
-      ],
-      "Retail-Variety Stores": [
-        "COST",
-        "TGT",
-        "WMT"
-      ],
-      "Rolling Drawing & Extruding of  Nonferrous Metals": [
-        "HWM"
-      ],
-      "Rubber & Plastics Footwear": [
-        "NKE"
-      ],
-      "Search, Detection, Navigation, Guidance, Aeronautical Sys": [
-        "LHX",
-        "NOC"
-      ],
-      "Security Brokers, Dealers & Flotation Companies": [
-        "BLK",
-        "GS",
-        "MS"
-      ],
-      "Semiconductors & Related Devices": [
-        "ADI",
-        "AMAT",
-        "AMD",
-        "AVGO",
-        "INTC",
-        "MRVL",
-        "MU",
-        "NVDA",
-        "TSM",
-        "TXN"
-      ],
-      "Services-Business Services, NEC": [
-        "MA",
-        "MSCI",
-        "PYPL",
-        "V"
-      ],
-      "Services-Computer Processing & Data Preparation": [
-        "WDAY"
-      ],
-      "Services-Computer Programming Services": [
-        "ZS"
-      ],
-      "Services-Computer Programming, Data Processing, Etc.": [
-        "GOOGL",
-        "META"
-      ],
-      "Services-Prepackaged Software": [
-        "ADBE",
-        "ADSK",
-        "CRM",
-        "CRWD",
-        "DDOG",
-        "INTU",
-        "MSFT",
-        "NET",
-        "NOW",
-        "OKTA",
-        "ORCL",
-        "PLTR",
-        "SNOW",
-        "TEAM"
-      ],
-      "Services-Video Tape Rental": [
-        "NFLX"
-      ],
-      "Ship & Boat Building & Repairing": [
-        "GD"
-      ],
-      "Soap, Detergents, Cleang Preparations, Perfumes, Cosmetics": [
-        "PG",
-        "UL"
-      ],
-      "Special Industry Machinery, NEC": [
-        "ASML",
-        "LRCX"
-      ],
-      "Surgical & Medical Instruments & Apparatus": [
-        "MMM"
-      ],
-      "Telephone Communications (No Radiotelephone)": [
-        "T",
-        "VZ"
-      ],
-      "Trucking & Courier Services (No Air)": [
-        "UPS"
-      ],
-      "ungrouped": [
-        "DFS",
-        "SQ"
+      "financieras": [
+        "National Commercial Banks",
+        "Security Brokers, Dealers & Flotation Companies",
+        "Services-Business Services, NEC",
+        "Finance Services"
       ]
     }
   },

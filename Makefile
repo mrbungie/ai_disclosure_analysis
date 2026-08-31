@@ -105,7 +105,7 @@ help:
 	@echo "  make install-deps             Install pytest in the virtual environment using uv"
 	@echo ""
 	@echo "  Data collection (00-04; what to download = pipeline.{tickers,start_year,end_year,form_types} in config):"
-	@echo "  make tickers-tui              Simple TUI: view ticker groups, add new groups"
+	@echo "  make tickers-tui              Simple TUI: aggregated sectors over SIC groups (view/create), add tickers"
 	@echo "  make collect-data             Run 00->04 in order (or each: build-universe, build-manifest,"
 	@echo "                                select-batch, download-filings, extract-sections)"
 	@echo ""
