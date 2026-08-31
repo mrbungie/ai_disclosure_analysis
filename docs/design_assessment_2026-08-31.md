@@ -75,6 +75,25 @@ Three candidates, descending value-per-effort:
 Also: be ready to defend how the 120-firm universe was selected — if
 hand-picked, that is a sampling caveat to document.
 
+## Data-scope decision (2026-08-31, after the meta-harness restructuring)
+
+Settled with the author, superseding the open questions above:
+
+- **Two instruments, never pooled.** (1) The 10-K panel (2021–2026) is the
+  thesis core: archetypes, evolution, and the annual SEC-2024 event study.
+  (2) A separate 10-Q series — MD&A only, ~2024Q1–2025Q2 — powers the shock
+  chapter (SEC-2024 at quarterly resolution, DeepSeek) with its own small
+  harness fit on 10-Q paragraphs and its own reports. The two never appear in
+  the same model or table; mixing document types in one panel was explicitly
+  rejected. The 10-Q chapter is optional-by-time: if time runs short,
+  DeepSeek downgrades to a descriptive mention analysis on the 10-K panel
+  (`has_vendor_deepseek` / `has_deepseek_impact` atoms) and SEC-2024 stays
+  annual.
+- **Outcome linkage, cheap sources only:** monthly returns + event windows
+  (yfinance) and R&D/capex from EDGAR XBRL — the direct washing test
+  (promotional vs substantive archetypes vs real spending). No earnings
+  calls, proxies, 8-Ks, extra firms, or commercial databases.
+
 ## Meta-point
 
 The meta-harness framing is a strength for the methodology chapter — it
