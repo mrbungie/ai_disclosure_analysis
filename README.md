@@ -93,9 +93,16 @@ offline regex/pandas work.
 
 ### 1. Data collection (network, resumable)
 
-**What gets downloaded is decided in `configs/config.json`**: the firm list
-(`pipeline.tickers`), the filing window (`pipeline.start_year` / `end_year`),
-and `pipeline.form_types` (10-K). On top of that, `pipeline.sector_groups`
+**What gets downloaded is decided by `configs/universe.csv`** (the firm
+universe: ticker, cik, company_name, inclusion_rule, active_status — see
+`docs/universe_expansion_plan.md` Phase A) plus `configs/config.json`'s
+filing window (`pipeline.start_year` / `end_year`) and `pipeline.form_types`
+(10-K). `pipeline.tickers` in config.json is only a generated mirror (sorted
+tickers) that script 00 rewrites from universe.csv every run, kept for
+legacy/TUI code paths — never edit it directly; edit universe.csv, or use the
+TUI. Firms are fetched from EDGAR by CIK, so a ticker with no live mapping
+(delisted/acquired) still gets manifest and download coverage. On top of
+that, `pipeline.sector_groups`
 maps the thesis' **aggregated sectors** (tech, semis, defensa, industriales,
 telecom, autos, retail, consumo, energia, utilities, salud, financieras) to
 the SIC industry groups that compose them — a sector's tickers are derived

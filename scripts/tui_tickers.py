@@ -7,9 +7,17 @@ Model: `pipeline.sector_groups` in configs/config.json maps a sector name to
 a list of SIC industry-group names (the `industry_group` values script 00
 writes into firm_universe.parquet). A sector's tickers are DERIVED from that
 mapping — assign a SIC group, and every ticker in it (current and future)
-follows. `pipeline.tickers` stays the flat list scripts 00-03 read; the TUI
-can also append new tickers to it (they get a SIC group after the next
-`make build-universe`).
+follows.
+
+configs/universe.csv is the source of truth for the firm universe (ticker,
+cik, company_name, inclusion_rule, active_status — see
+docs/universe_expansion_plan.md Phase A). `pipeline.tickers` in config.json
+is only a generated mirror (sorted tickers) that script 00 rewrites every
+run for this TUI and other legacy code paths — never edit it directly. The
+TUI appends new tickers to universe.csv with inclusion_rule=core_manual;
+CIKs are resolved against the local SEC ticker cache
+(data/sec_company_tickers.json) at add-time, on a best-effort basis (they
+get a SIC group after the next `make build-universe`).
 
 First run seeds the 12 thesis sectors covering all current SIC groups; edit
 freely afterwards — the seed never overwrites an existing sector_groups.
@@ -18,11 +26,14 @@ Usage:
     make tickers-tui        (or: uv run python scripts/tui_tickers.py)
 """
 
+import csv
 import json
 from pathlib import Path
 
 CONFIG_PATH = Path("configs/config.json")
+UNIVERSE_CSV_PATH = Path("configs/universe.csv")
 UNIVERSE_PATH = Path("data/interim/manifests/firm_universe.parquet")
+SEC_TICKERS_CACHE = Path("data/sec_company_tickers.json")
 
 # Seed: the thesis' aggregated sectors, defined over the SIC industry_group
 # names present in the current universe. Only used when config has no
@@ -239,17 +250,65 @@ def extend_sector(config: dict, sic_map: dict[str, list[str]]) -> None:
     print(f"  Added {len(picked)} SIC group(s) to '{name}'.\n")
 
 
-def add_tickers(config: dict) -> None:
+def load_universe_rows() -> list[dict]:
+    if not UNIVERSE_CSV_PATH.exists():
+        return []
+    with open(UNIVERSE_CSV_PATH, newline="") as f:
+        return list(csv.DictReader(f))
+
+
+def save_universe_rows(rows: list[dict]) -> None:
+    fieldnames = ["ticker", "cik", "company_name", "inclusion_rule", "active_status"]
+    with open(UNIVERSE_CSV_PATH, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writeheader()
+        for row in rows:
+            w.writerow(row)
+
+
+def resolve_cik(ticker: str) -> tuple[str, str]:
+    """Best-effort CIK/company_name lookup from the local SEC ticker cache."""
+    if not SEC_TICKERS_CACHE.exists():
+        return "", ""
+    try:
+        with open(SEC_TICKERS_CACHE) as f:
+            sec_data = json.load(f)
+    except Exception:
+        return "", ""
+    for entry in sec_data.values():
+        if entry.get("ticker", "").upper() == ticker:
+            return str(entry["cik_str"]).zfill(10), entry.get("title", "")
+    return "", ""
+
+
+def add_tickers() -> None:
     raw = input("  New tickers for the universe (space/comma separated): ")
     toks = [t.strip().upper() for t in raw.replace(",", " ").split() if t.strip()]
     if not toks:
         print("  Cancelled.\n")
         return
-    flat = set(config["pipeline"].get("tickers", []))
-    new = sorted(set(toks) - flat)
-    config["pipeline"]["tickers"] = sorted(flat | set(toks))
-    save_config(config)
-    print(f"  Added {len(new)} new ticker(s): {' '.join(new) if new else '(all already present)'}")
+    rows = load_universe_rows()
+    existing = {row["ticker"].upper() for row in rows}
+    new = sorted(set(toks) - existing)
+    if not new:
+        print("  Cancelled (all already present in universe.csv).\n")
+        return
+    for t in new:
+        cik, company_name = resolve_cik(t)
+        active_status = "listed" if cik else "unresolved"
+        rows.append({
+            "ticker": t,
+            "cik": cik,
+            "company_name": company_name,
+            "inclusion_rule": "core_manual",
+            "active_status": active_status,
+        })
+        if not cik:
+            print(f"  WARNING: could not resolve CIK for {t} from the local SEC ticker "
+                  f"cache — added with active_status=unresolved; fill in cik by hand or "
+                  f"refresh data/sec_company_tickers.json.")
+    save_universe_rows(rows)
+    print(f"  Added {len(new)} new ticker(s) to {UNIVERSE_CSV_PATH}: {' '.join(new)}")
     print("  Run `make build-universe` so they get a SIC group, then assign that group to a sector.\n")
 
 
@@ -284,7 +343,7 @@ def main() -> None:
         elif choice == "4":
             extend_sector(config, sic_map)
         elif choice == "5":
-            add_tickers(config)
+            add_tickers()
         elif choice in {"q", "quit", "exit"}:
             print("\n  Saved. New tickers enter the pipeline with: make collect-data\n")
             break
