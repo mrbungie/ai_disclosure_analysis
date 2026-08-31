@@ -18,19 +18,22 @@ except ImportError:
 # Suppress BS4 XML parsing warnings
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
-# Space-tolerant and Markdown-tolerant regex patterns for section starts and ends
+# Space-tolerant and Markdown-tolerant regex patterns for section starts and ends.
+# SEP tolerates the punctuation SEC filers use between "Item N" and the section
+# title: en/em dashes, colons, markdown link brackets, table pipes, NBSPs.
+SEP = r"[|#*_\s\-–—:\[\]]*"
 PATTERNS = {
     "Item 1": {
-        "start": r"^\s*(?:[|#*_\s-]*)\s*(?:Item\s+1\.?\s*(?:[|#*_\s-]*)\s*(?:Business|BUSINESS)|ABOUT\s+HONEYWELL)\b",
-        "end": r"^\s*(?:[|#*_\s-]*)\s*(?:Item\s+1A\.?\s*(?:[|#*_\s-]*)\s*(?:Risk|RISK)\s*(?:[|#*_\s-]*)\s*(?:Factors|FACTORS)|RISK\s+FACTORS)\b"
+        "start": rf"^\s*(?:{SEP})\s*(?:Item{SEP}1\.?{SEP}(?:Business|BUSINESS)|ABOUT\s+HONEYWELL)\b",
+        "end": rf"^\s*(?:{SEP})\s*(?:Item{SEP}1A\.?{SEP}(?:Risk|RISK){SEP}(?:Factors|FACTORS)|RISK\s+FACTORS)\b"
     },
     "Item 1A": {
-        "start": r"^\s*(?:[|#*_\s-]*)\s*(?:Item\s+1A\.?\s*(?:[|#*_\s-]*)\s*(?:Risk|RISK)\s*(?:[|#*_\s-]*)\s*(?:Factors|FACTORS)|RISK\s+FACTORS)\b",
-        "end": r"^\s*(?:[|#*_\s-]*)\s*(?:Item\s+1B\b|Item\s+2\b|UNRESOLVED\s+STAFF\s+COMMENTS\b|PROPERTIES\b)"
+        "start": rf"^\s*(?:{SEP})\s*(?:Item{SEP}1A\.?{SEP}(?:Risk|RISK){SEP}(?:Factors|FACTORS)|RISK\s+FACTORS)\b",
+        "end": rf"^\s*(?:{SEP})\s*(?:Item{SEP}1B\b|Item{SEP}2\b|UNRESOLVED\s+STAFF\s+COMMENTS\b|PROPERTIES\b)"
     },
     "Item 7": {
-        "start": r"^\s*(?:[|#*_\s-]*)\s*(?:Item\s+7\.?\s*(?:[|#*_\s-]*)\s*(?:Management|MANAGEMENT)|MANAGEMENT[’']S\s+DISCUSSION\s+AND\s+ANALYSIS)\b",
-        "end": r"^\s*(?:[|#*_\s-]*)\s*(?:Item\s+7A\b|Item\s+8\b|QUANTITATIVE\s+AND\s+QUALITATIVE\b|FINANCIAL\s+STATEMENTS\b)"
+        "start": rf"^\s*(?:{SEP})\s*(?:Item{SEP}7\.?{SEP}(?:Management|MANAGEMENT)|MANAGEMENT[’']S\s+DISCUSSION\s+AND\s+ANALYSIS)\b",
+        "end": rf"^\s*(?:{SEP})\s*(?:Item{SEP}7A\b|Item{SEP}8\b|QUANTITATIVE\s+AND\s+QUALITATIVE\b|FINANCIAL\s+STATEMENTS\b)"
     }
 }
 

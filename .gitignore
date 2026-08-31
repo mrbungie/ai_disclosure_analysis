@@ -1,5 +1,6 @@
 .venv/
 data/
+reports/
 duckdb/
 __pycache__/
 *.pyc
@@ -10,3 +11,11 @@ __pycache__/
 .env
 scratch/
 
+
+# Meta-harness optimization journals: local working audit trail, owned by the
+# meta-harness-opt skill (see .claude/skills/meta-harness-opt/SKILL.md)
+.claude/skills/meta-harness-opt/journals/
+
+# Harness level-0 state: local, journaled via the meta-harness-opt skill
+configs/harness_detection.json
+configs/harness_tagging.json

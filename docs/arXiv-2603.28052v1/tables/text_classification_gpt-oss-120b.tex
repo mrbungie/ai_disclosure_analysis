@@ -1,0 +1,36 @@
+\centering
+\setlength{\tabcolsep}{3.5pt}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{
+  l
+  S[table-format=2.1, detect-weight]
+  S[table-format=2.1, detect-weight]
+  S[table-format=2.1, detect-weight]
+  |
+  S[table-format=2.1, detect-weight]
+  S[table-format=3.1, detect-weight]
+}
+\toprule
+& \multicolumn{3}{c|}{Datasets} & \multicolumn{2}{c}{Avg.} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-6}
+Harness & {USPTO} & {S2D} & {Law} & {Acc} & {Ctx $\downarrow$} \\
+\midrule
+Zero-Shot & 12.0 & 63.2 & 7.0 & 27.4 & 0 \\
+Few-Shot ($8$) & 14.0 & 67.9 & 21.0 & 34.3 & 2.0 \\
+Few-Shot ($32$) & 13.0 & 72.2 & 21.0 & 35.4 & 7.9 \\
+Few-Shot (all) & 15.0 & 78.3 & 29.0 & 40.8 & 12.3 \\
+MCE~\citep{ye2026meta}\textsuperscript{\dag} & 14.0 & 83.0 & 23.0 & 40.0 & 28.5 \\
+ACE~\citep{zhang2025ace}\textsuperscript{\dag} & {\bfseries 16.0} & 77.8 & 29.0 & 40.9 & 50.8 \\
+\midrule
+\ours{Meta-Harness} & 14.0 & {\bfseries 86.8} & {\bfseries 45.0} & {\bfseries 48.6} & 11.4 \\
+\bottomrule
+\end{tabular}
+}
+\captionof{table}{
+\label{tab:main_results}
+Test-set metrics for all harnesses on the three datasets.
+Ctx denotes additional input tokens in context (thousands).
+\dag: implementation from \citet{ye2026meta}.
+$\downarrow$: lower is better.
+\textbf{Meta-Harness improves online text classification accuracy while using a smaller input context.}
+}

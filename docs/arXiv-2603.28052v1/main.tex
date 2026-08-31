@@ -1,0 +1,491 @@
+
+\documentclass{article}
+
+\usepackage[arxiv]{colm2026_conference}
+\setcitestyle{numbers,square}
+
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{hyperref}
+\usepackage{xurl}       %
+\usepackage{lineno}
+
+\usepackage{amsmath,amsthm,amssymb}
+\usepackage{bm}         %
+\usepackage{siunitx}
+
+\usepackage[dvipsnames,table]{xcolor}
+\usepackage{multirow}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\usepackage{enumitem}
+\usepackage{wrapfig}
+\usepackage[most]{tcolorbox}
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+
+\usepackage[capitalize,noabbrev]{cleveref}
+
+\hypersetup{
+   breaklinks=true,
+   pdftitle={Meta-Harness: End-To-End Optimization of Model Harnesses},
+   urlcolor=NavyBlue,
+   linkcolor=NavyBlue,
+   citecolor=ForestGreen!70!black
+}
+\captionsetup[table]{position=bottom}
+
+\newtheorem{hypothesis}{Hypothesis}
+\newtheorem{proposition}{Proposition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{corollary}{Corollary}
+\newtheorem{definition}{Definition}
+
+\colorlet{my-red}{BrickRed!90!Sepia}
+\colorlet{my-blue}{Aquamarine!30!Blue}
+\definecolor{ours-accent}{HTML}{E45748}
+\newcommand{\ours}[1]{\texttt{#1}}
+\newcommand{\filename}[1]{\nolinkurl{#1}}
+\newcommand{\hrow}{\rowcolor{blue!10}}
+
+\tcbset{
+  takeawaybox/.style={
+    width=\linewidth,
+    boxrule=0.8pt,
+    top=6pt,
+    bottom=2pt,
+    left=3pt,
+    right=3pt,
+    before skip=1pt,
+    after skip=1pt,
+    colback=my-blue!3!white,
+    colframe=my-blue,
+    colbacktitle=my-blue,
+    enhanced,
+    breakable,
+    attach boxed title to top left={yshift=-0.1in,xshift=0.15in},
+    boxed title style={boxrule=0pt,colframe=white,},
+  }
+}
+\newtcolorbox{takeawaybox}[2][]{takeawaybox,title=#2,#1}
+
+\tcbset{
+  logbox/.style={
+    width=\linewidth,
+    top=4pt,
+    bottom=4pt,
+    left=6pt,
+    right=6pt,
+    colback=black!2!white,
+    colframe=black!30!white,
+    fontupper=\small\ttfamily,
+    before upper={\setlength{\parskip}{6pt}\setlength{\parindent}{0pt}},
+    breakable,
+    enhanced,
+  }
+}
+\newtcolorbox{logbox}[1][]{logbox,#1}
+\newcommand{\elision}{\textcolor{black!35}{[\,\ldots\,]}}
+
+\crefname{appendix}{appendix}{appendices}
+\Crefname{appendix}{Appendix}{Appendices}
+
+\input{math_commands.tex}
+
+\newcommand{\fix}{\marginpar{FIX}}
+\newcommand{\new}{\marginpar{NEW}}
+\newcommand{\TODO}{\par\noindent\textbf{\textcolor{red}{[[TODO]]}}\par}
+
+\title{Meta-Harness: End-to-End Optimization of Model Harnesses}
+
+\author{Yoonho Lee \\ Stanford
+\And Roshen Nair \\ Stanford
+\And Qizheng Zhang \\ Stanford
+\And Kangwook Lee \\ KRAFTON
+\AND Omar Khattab \\ MIT
+\And Chelsea Finn \\ Stanford
+}
+
+
+\begin{document}
+
+\ifcolmsubmission
+\linenumbers
+\fi
+
+\maketitle
+
+\ifcolmsubmission\else
+\vspace{-5mm}
+\begin{center}
+\footnotesize
+\textbf{Project page w/ interactive demo}: \url{https://yoonholee.com/meta-harness/} \\
+\textbf{Optimized harness}: \url{https://github.com/stanford-iris-lab/meta-harness-tbench2-artifact}
+\end{center}
+\vspace{-0mm}
+\fi
+
+\begin{figure}[h!]
+\centering
+\vspace{-2mm}
+\includegraphics[width=0.485\linewidth]{figures/learning_curves_simple.pdf}
+\hfill
+\includegraphics[width=0.485\linewidth]{figures/tbench_leaderboard.pdf}
+\vspace{-2mm}
+\caption{\textbf{(Left)} On text classification, Meta-Harness outperforms the best prior hand-designed harnesses (ACE) and existing text optimizers (TTT-Discover, OpenEvolve), matching the next-best method's final accuracy after just 4 evaluations. \textbf{(Right)} On TerminalBench-2, Meta-Harness outperforms all reported \texttt{Claude Haiku 4.5} harnesses.}
+\label{fig:learning-curves}
+\end{figure}
+
+
+\begin{abstract}
+The performance of large language model (LLM) systems depends not only on model weights, but also on their \textit{harness}: the code that determines what information to store, retrieve, and present to the model.
+Yet harnesses are still designed largely by hand, and existing text optimizers are poorly matched to this setting because they compress feedback too aggressively: they are memoryless, condition only on scalar scores, or restrict feedback to short templates or summaries.
+We introduce \textbf{Meta-Harness}, an outer-loop system that searches over harness code for LLM applications.
+It uses an agentic proposer that accesses the source code, scores, and execution traces of all prior candidates through a filesystem.
+On online text classification, Meta-Harness improves over a state-of-the-art context management system by 7.7 points while using 4$\times$ fewer context tokens.
+On retrieval-augmented math reasoning, a single discovered harness improves accuracy on 200 IMO-level problems by 4.7 points on average across five held-out models.
+On agentic coding, discovered harnesses surpass the best hand-engineered baselines on TerminalBench-2.
+Together, these results show that richer access to prior experience can enable automated harness engineering.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:introduction}
+
+Changing the harness around a fixed large language model (LLM) can produce a 6$\times$ performance gap on the same benchmark~\citep{Tian2026SWEBenchMC}.
+The \textit{harness}---the code that determines what to store, retrieve, and show to the model---often matters as much as the model itself.
+This sensitivity has led to growing interest in \textbf{harness engineering}, the practice of refining the code around an LLM to improve the overall system's performance~\citep {openai2026harnessengineering,young2025harness,boluk2026harnessproblem,bockeler2026harnessengineering}.
+But despite its importance, harness engineering remains largely manual: practitioners inspect failures, adjust heuristics, and iterate on a small number of designs.
+In this paper, we ask whether this process itself can be automated.
+
+A natural starting point is recent work on text optimization, since harness engineering also involves iteratively improving text and code artifacts using feedback from prior attempts~\citep{pryzant2023protegi,romera2024mathematical,novikov2025alphaevolve,lee2025feedback,agrawal2025gepa}.
+However, these methods are poorly matched to harness engineering because they typically operate with short-horizon or heavily compressed feedback: some condition only on the current candidate~\citep{madaan2023self,yang2023large,yuksekgonul2024textgradautomaticdifferentiationtext}, others rely primarily on scalar scores~\citep{novikov2025alphaevolve,cemri2026adaevolve}, and others restrict feedback to short templates or LLM-generated summaries~\citep{agrawal2025gepa,lee2025feedback}.
+This is a pragmatic scalability choice, not evidence that longer-range dependencies are uninformative.
+Harnesses act over long horizons: a single choice about what to store, when to retrieve it, or how to present it can affect behavior many reasoning steps later.
+Compressed feedback often removes the information needed to trace downstream failures to earlier harness decisions.
+Across the tasks studied by several representative text optimizers, the available context per optimization step ranges from only 100 to 30{,}000 tokens~(\Cref{tab:task_comparison}), far below the diagnostic footprint of harness search.
+More broadly, work on retrieval and memory-augmented language models suggests that useful context should often be accessed adaptively rather than monolithically packed into a single prompt~\citep{lewis2020retrieval,trivedi2023interleavingretrievalchainofthoughtreasoning,packer2023memgpt,zhang2026recursivelanguagemodels}.
+
+\begin{figure}[t]
+\centering
+\vspace{-11mm}
+\includegraphics[width=0.94\linewidth]{figures/autoharness_v3.pdf}
+\vspace{-3mm}
+\caption{
+\label{fig:method}
+  \textbf{Meta-Harness search loop.}
+  \textbf{(1)} An agent reads a filesystem containing all prior candidates' source code, execution traces, and scores, and proposes a new harness.
+  \textbf{(2)} We evaluate the proposed harness on evaluation tasks.
+  \textbf{(3)} All logs (proposed code, reasoning traces, evaluation scores) are stored in the filesystem in a new directory, and the loop repeats.
+}
+\end{figure}
+\input{tables/task_comparison.tex}
+
+We address this limitation with \textbf{Meta-Harness}, an agentic harness for optimizing harnesses via end-to-end search~(\Cref{fig:method}).
+Its proposer is a coding agent, i.e., a language-model-based system that can invoke developer tools and modify code.
+The choice of coding agent (rather than raw LLM) matters because the amount of experience quickly exceeds context limits, so the proposer must decide \textit{what} to inspect and validate edits through direct interaction with the codebase.
+Its key design choice is to expose \textbf{full history} through a \textit{filesystem}, enabling selective diagnosis of raw prior code and execution traces rather than optimization from compressed per-candidate summaries.
+For every previous candidate harness, the filesystem stores the source code, evaluation scores, and execution traces, which the proposer retrieves via standard operations such as \texttt{grep} and \texttt{cat} rather than ingesting them as a single prompt.
+In practice, the proposer reads a median of \textbf{82 files per iteration} in our most demanding setting, referencing over 20 prior candidates per step~(\Cref{app:proposer-stats}).
+In the settings we study, a single evaluation can produce up to 10,000,000 tokens of diagnostic information, roughly three orders of magnitude beyond the largest feedback budgets used in prior text optimization settings~(\Cref{tab:task_comparison}).
+
+We evaluate Meta-Harness on online text classification, mathematical reasoning, and agentic coding.
+On online text classification, harnesses discovered by Meta-Harness improve over Agentic Context Engineering (ACE, \citet{zhang2025ace}) by \textbf{7.7 points} while using 4$\times$ fewer context tokens, and match the next-best text optimizer's final performance after $60$ proposals with only four~(\cref{fig:learning-curves}).
+On retrieval-augmented math reasoning, a single discovered harness improves accuracy on 200 IMO-level problems by \textbf{4.7 points} on average across five held-out models.
+On TerminalBench-2, the discovered harness \textbf{surpasses Terminus-KIRA and ranks \#1 among all Haiku 4.5 agents}.
+
+\section{Related Work}
+\label{sec:related-work}
+
+At a high level, Meta-Harness brings ideas from the broader literature on credit assignment and meta-learning~\citep{schmidhuber1993self,thrun1998learning,andrychowicz2016learning,finn2017maml,snell2017prototypical,akyürek2023learningalgorithmincontextlearning} in a new regime enabled by recent advances in coding agents.
+Rather than updating model weights, the system assigns credit at the harness level: it uses experience from past rollouts to deliberately reason about which steps and components are responsible for failures, then rewrites the external code that governs future behavior.
+More specifically, the method lies at the intersection of several recent research threads; it is most directly related to work on adaptive access to external context, executable code search, and text optimization.
+
+
+
+\textbf{External memory and adaptive access.}
+Several prior works note the benefits of treating large knowledge sources or long inputs as external resources that a language model accesses adaptively, rather than consuming them in a single pass.
+Specifically, retrieval-augmented generation~\citep{lewis2020retrieval}, interleaved retrieval and reasoning~\citep{trivedi2023interleavingretrievalchainofthoughtreasoning}, memory-based agents~\citep{packer2023memgpt}, or recursive language models~\citep{zhang2026recursivelanguagemodels} are mechanisms for adaptive access to external context.
+Meta-Harness uses a similar access pattern, but in the more demanding setting of harness engineering, where the proposer selectively inspects a large external history of code, scores, and execution traces to improve context-management procedures themselves.
+
+\textbf{Executable code search.} Recent methods search over executable code for functions, workflows, or agent designs.
+Early work proposes using large models as mutation and crossover operators in evolutionary program search~\citep{lehman2022evolutionlargemodels}.
+Later methods evolve designated functions within fixed program scaffolds~\citep{romera2024mathematical}, use meta-agents to program new agents from prior discoveries~\citep{hu2025automated}, or search over workflow graphs for agentic systems~\citep{zhang2025aflowautomatingagenticworkflow}.
+Another line of work searches over memory designs for continual-learning agents, where memory persists across task streams~\citep{zhang2025memevolve,Xiong2026LearningTC}.
+In contrast, Meta-Harness searches over domain-specific harnesses, including prompt construction, retrieval, and state update strategies that reset between tasks.
+Its outer loop is deliberately minimal: instead of relying on a fixed scaffold, an archive of prior discoveries, or a persistent memory mechanism, it gives the proposer unrestricted filesystem access to prior experience.
+This lets the agent decide what information to inspect and enables search over full harness implementations rather than a predefined space of context-management procedures.
+
+
+\textbf{Text optimization methods.} Meta-Harness is also closely related to methods such as ProTeGi, TextGrad, OPRO, GEPA, AlphaEvolve/OpenEvolve, and Feedback Descent, which iteratively improve prompts or other text artifacts using feedback from prior attempts~\citep{pryzant2023protegi,madaan2023self,yuksekgonul2024textgradautomaticdifferentiationtext,yang2023large,agrawal2025gepa,novikov2025alphaevolve,openevolve,lee2025feedback}.
+However, these methods are less well suited to harness engineering, where optimization targets a complete executable procedure, and the relevant environmental feedback is distributed across code, scores, and execution traces in a way that is hard to summarize up front.
+Rather than reacting only to aggregate scores or summaries, the proposer in Meta-Harness can reason over failed examples and their execution traces to propose targeted edits.
+See~\Cref{tab:task_comparison} for a comparison of problem scale considered in those papers and ours, and~\Cref{fig:learning-curves,fig:learning-curves-full} for a direct comparison with OpenEvolve, GEPA, and TTT-Discover in our problem setting.
+
+
+\section{Meta-Harness: A Harness for Optimizing Harnesses}
+\label{sec:meta-harness}
+
+This section describes Meta-Harness, our outer-loop procedure for searching over task-specific harnesses.
+Meta-Harness is built on the idea that harness optimization benefits from allowing a proposer to selectively inspect prior code and execution traces via filesystem access, rather than optimizing from lossy summaries or an additional hand-designed search structure.
+At a high level, it repeatedly proposes, evaluates, and logs new harnesses.
+
+Meta-Harness is itself a harness in the broad sense (hence the name), since it determines what information the proposer model sees during search.
+Unless otherwise noted, we use \emph{harness} to refer to the task-specific programs being optimized.
+
+\textbf{Objective.}
+A harness is a stateful program that wraps a language model and determines what context the model sees at each step.
+The goal is simple: find the harness that makes the underlying model perform best on the target task distribution.
+Formally, let $M$ denote a fixed language model and $\mathcal{X}$ a task distribution.
+For a harness $H$ and task instance $x \sim \mathcal{X}$, we execute a rollout trajectory $\tau \sim p_M(H, x)$.
+The harness constructs prompts for $M$, the model responds, and the harness updates its state after each interaction.
+A task-specific reward function $r(\tau, x)$ scores the trajectory.
+The objective of harness optimization is to \textbf{find the harness that maximizes the expected final reward}:
+\[
+H^* = \argmax_{H} \mathbb{E}_{x \sim \mathcal{X}, \tau \sim p_M(H, x)} \; r(\tau, x),
+\]
+When multiple objectives are relevant (e.g., accuracy and context cost), we evaluate candidates under Pareto dominance and report the resulting frontier.
+In practice, this search has traditionally been carried out by human engineers and researchers, who iteratively refine prompts, context-management rules, and tool-use logic by hand.
+
+\textbf{Meta-Harness search loop.}
+Meta-Harness uses a single coding-agent proposer with access to a growing filesystem $\mathcal{D}$ that serves as its feedback channel\footnote{Based on earlier exploration, we think this workflow only became practical recently, following major improvements in coding-agent capabilities around early 2026.}.
+Here, a \textit{coding agent} is a language-model-based system that can invoke developer tools and modify code.
+Unlike prior systems that externalize the improvement logic in a hand-designed search loop, Meta-Harness delegates diagnosis and proposal to the coding agent itself: it decides which prior artifacts to inspect, which failure modes to address, and whether to make a local edit or a more substantial rewrite.
+Equivalently, the proposer is not a raw next-token model operating on a fixed prompt assembled by the outer loop; it is an agent that retrieves information, navigates prior artifacts, and edits code as part of the search itself.
+Each evaluated harness contributes a directory containing its source code, scores, and execution traces (such as prompts, tool calls, model outputs, and state updates).
+The filesystem is typically far larger than the proposer's context window, so the proposer queries it through terminal tools such as \texttt{grep} and \texttt{cat} rather than ingesting it as a single prompt.
+At each iteration, the proposer first inspects prior code, scores, and execution traces, then reasons about likely failure modes before generating a new harness.
+
+Meta-Harness maintains a population $\mathcal{H}$ and a Pareto frontier over evaluated harnesses, but imposes no parent-selection rule: the proposer is free to inspect \textit{any} prior harness and its execution trace when proposing new ones.
+We run evolution for a fixed number of iterations and perform a final test-set evaluation on the Pareto frontier. This simplicity is deliberate: by leaving diagnosis and edit decisions to the proposer rather than hard-coding search heuristics, Meta-Harness can improve automatically as coding agents become more capable.
+The proposer never sees test-set results; its only feedback comes from the \textbf{search set}, the subset of task instances used to evaluate candidate harnesses during search and generate the feedback signal for improvement, and from execution traces logged during those search runs.
+
+\textbf{Advantages of code-space search.}
+Harness optimization occurs in code space, where small changes to retrieval, memory, or prompt-construction logic can affect behavior many steps later, making local search heuristics poorly matched to the problem.
+By inspecting execution traces, the proposer can often infer \emph{why} a harness failed and which earlier design choices likely contributed to the failure, not just \emph{that} it failed, as illustrated by the search trajectories in \Cref{app:proposer-stats,app:qualitative-behavior}. There, we see that the proposer reads broadly across prior code and logs, then uses those traces to identify confounded edits, isolate likely causal changes, and shift toward safer modifications after repeated regressions.
+The proposer can therefore modify the harness at the level of algorithmic structure, ranging from changes to retrieval, memory, or prompt-construction logic to full program rewrites, rather than filling in templates or applying predefined mutation operators.
+In practice, it often starts from a strong prior harness, but this is an emergent strategy rather than a hard-coded rule.
+Although the search space is large, representing harnesses as programs provides a natural regularization bias: coding models tend to propose coherent algorithms rather than brittle, hard-coded solutions, which biases the search toward reusable context-management procedures.
+This action space is closely aligned with the read--write--execute workflows on which frontier coding assistants are trained.
+
+\textbf{Practical implementation.}
+In our experiments, each harness is a single-file Python program that modifies task-specific prompting, retrieval, memory, and orchestration logic.
+In our experiments, the proposer $P$ is Claude Code~\citep{anthropic2025claudecode} with \texttt{Opus-4.6}.
+The proposer is guided by a minimal domain-specific skill that describes where to write new harnesses, how to inspect previous harnesses and their execution traces, and what files it can and cannot modify.
+The base model $M$ varies by domain and is always frozen; see \Cref{sec:experiments} for details.
+In our experiments, a typical run evaluates roughly 60 harnesses over 20 iterations.
+We provide additional tips for implementing Meta-Harness in a new domain in~\Cref{app:practical-tips}.
+
+\begin{algorithm}[t]
+\caption{Meta-Harness outer loop over harnesses}
+\label{alg:evolution}
+\begin{algorithmic}[1]
+\State \textbf{Input:} tasks $\mathcal{X}$, LLM $M$, proposer $P$, iterations $N$
+\State \textbf{Initialize:} population $\mathcal{H}$ \Comment{Initial set of valid harnesses}
+\State \textbf{Initialize:} filesystem $\mathcal{D} \leftarrow \emptyset$ \Comment{stores code, scores, traces}
+\For{$H \in \mathcal{H}$}
+  \State $E_H \leftarrow \textrm{Evaluate}(H, M, \mathcal{X})$
+  \State $\mathcal{D} \leftarrow \mathcal{D} \cup \{(H, E_H)\}$
+\EndFor
+\For{$t = 1 \ldots N$}
+  \State Proposer $P$ queries filesystem $\mathcal{D}$ \Comment{inspects prior harnesses and scores}
+  \State Proposer $P$ proposes $k$ new harnesses $\{H_1,\dots,H_k\}$
+  \For{$H$ in $\{H_1,\dots,H_k\}$}
+    \If{$H$ passes interface validation}
+      \State $\mathcal{D} \leftarrow \mathcal{D} \cup \{(H,\textsc{Evaluate}(H,M,\mathcal{X}))\}$
+    \EndIf
+  \EndFor
+\EndFor
+\State \Return Pareto frontier of harnesses stored in $\mathcal{D}$
+\end{algorithmic}
+\end{algorithm}
+
+\section{Experiments}
+\label{sec:experiments}
+
+We evaluate Meta-Harness on three task domains: online text classification, math reasoning, and agentic coding.
+In each domain, we compare harnesses discovered by our search against domain-appropriate baselines using the standard evaluation metric.
+Please refer to each subsection for the precise experimental setup.
+
+We compare against two main classes of methods.
+\textbf{(1) Human-designed strategies}: these are hand-crafted harnesses for each domain, representing the current state of the art in context construction.
+We describe these baselines in the corresponding subsections.
+\textbf{(2) Program-search methods:} these methods search over candidate harnesses using feedback and reward signals, but are designed for smaller-scale settings than harness engineering.
+
+
+\subsection{Online Text Classification}
+\label{subsec:text-classification}
+
+We follow the online text classification setup of \citet{zhang2025ace,ye2026meta}: an LLM receives labeled examples one at a time, updates its memory, and is evaluated on a held-out test set.
+We use \texttt{GPT-OSS-120B} as the LLM text classifier, and consider the problem of designing a harness for text classification.
+We use three datasets, chosen for difficulty and domain diversity:
+\textbf{LawBench} (Law)~\citep{fei2024lawbench} predicts criminal charges from case descriptions (215 classes);
+\textbf{Symptom2Disease} (S2D)~\citep{gretelai_symptom_to_diagnosis_2023} predicts diseases from symptom descriptions (22 classes);
+and \textbf{USPTO-50k}~\citep{schneider2016s} predicts precursor reactants from product molecules (180 classes).
+We initialize the search population $\mathcal{H}$ from the main baseline harnesses in this setting: zero-shot, few-shot, ACE, and MCE.
+We ran 20 evolution iterations with two candidates per iteration, producing 40 candidate harnesses.
+
+\begin{figure}[t!]
+\vspace{-8mm}
+\centering
+\begin{minipage}[b]{0.52\linewidth}
+    \centering
+    \input{tables/text_classification_gpt-oss-120b.tex}
+\end{minipage}
+\hfill
+\begin{minipage}[b]{0.46\linewidth}
+    \centering
+    \includegraphics[width=0.995\linewidth]{figures/pareto/classification-pareto-5-ours.pdf}
+    \vspace{-5mm}
+    \caption{
+    Pareto frontier of accuracy vs.\ context tokens on online text classification.
+    \textbf{Meta-Harness achieves a stronger accuracy-context Pareto frontier than all comparison methods.}
+    }
+    \label{fig:pareto}
+\end{minipage}
+\end{figure}
+
+
+\textbf{Comparison vs text optimizers.}
+We compare Meta-Harness against representative methods for optimizing text.
+For a fair comparison, we use the same proposer configuration (\texttt{Opus-4.6} with max reasoning), select candidates solely based on search-set performance, and hold out the test sets until the final evaluation.
+Since evaluation is the main computational bottleneck, we give each method the same budget of proposal harness evaluations.
+We consider the following points of comparison:
+\begin{itemize}[leftmargin=*,noitemsep,topsep=0pt]
+  \item \textbf{Best-of-N}: independent samples from the seed with no search structure; a compute-matched control for whether search matters at all.
+  \item \textbf{OpenEvolve}~\citep{openevolve}: evolutionary search over programs with LLM mutation.
+  \item \textbf{TTT-Discover}~\citep{yuksekgonul2026learning}: we use only the text-optimization component of their method, i.e., proposal selection via the PUCT reuse rule.
+\end{itemize}
+\textbf{In this setting, Meta-Harness matches the best prior text optimizers (OpenEvolve, TTT-Discover) in $0.1\times$ the evaluations}, and its final accuracy surpasses theirs by more than 10 points (\Cref{fig:learning-curves,tab:text_classification_optimizer_comparison}).
+We attribute this speedup to the intentional design choices that impose minimum necessary structure on the outer loop~(\cref{sec:meta-harness}).
+In particular, Meta-Harness preserves \textit{full experience history using a filesystem} and allows the proposer to inspect anything necessary, whereas both OpenEvolve and TTT-Discover operate with more structured and substantially more limited proposer inputs than full filesystem access.
+We note that online text classification is the smallest-context setting we study (\Cref{tab:task_comparison}), so if structure-heavy text optimizers already lag here, their limitations may only grow in harder regimes.
+
+\vspace{2mm}
+\begin{takeawaybox}{Meta-Harness is 10$\times$ Faster and Converges to a Better Harness}
+In this setting, Meta-Harness matches the best prior text optimizers (OpenEvolve, TTT-Discover) with $10\times$ fewer full evaluations, and its final accuracy surpasses theirs by more than 10 points.
+\end{takeawaybox}
+\vspace{2mm}
+
+\input{tables/text_classification_history_ablation.tex}
+
+To isolate which parts of the proposer interface matter most, we compare three conditions in online text classification: a scores-only condition, a scores-plus-summary condition in which the proposer receives LLM-generated summaries but no raw traces, and the full \ours{Meta-Harness} interface with access to execution traces (\Cref{tab:text_classification_history_ablation}). The results show a large gap in favor of the full interface: scores-only reaches 34.6 median and 41.3 best accuracy, while scores-plus-summary reaches 34.9 median and 38.7 best. By contrast, \ours{Meta-Harness} reaches 50.0 median and 56.7 best accuracy, and even its median candidate outperforms the best candidate found under either ablation. We interpret this as evidence that full access to execution traces is the most important component of the interface: summaries do not recover the missing signal, and may even hurt by compressing away diagnostically useful details.
+
+\input{tables/text_classification_optimizer_comparison.tex}
+
+
+\textbf{Comparison vs state-of-the-art harnesses.}
+Our primary points of comparison are hand-designed harnesses for this problem setting: Agentic Context Engineering (ACE, \citet{zhang2025ace}), which uses reflective memory curation to build context over time, and Meta Context Engineering (MCE, \citet{ye2026meta}), which maintains and evolves a library of natural-language skills for context construction.
+As additional baselines, we evaluate zero-shot prompting and few-shot prompting with $N \in \{4, 8, 16, 32, \text{all}\}$ examples.
+Results in~\Cref{tab:main_results} show that Meta-Harness improves substantially over prior hand-designed harnesses.
+The selected \ours{Meta-Harness}\footnote{We slightly overload terminology for brevity: in the tables, \ours{Meta-Harness} denotes the best discovered harness, whereas elsewhere it refers to the entire harness search procedure.} reaches 48.6\% accuracy, outperforming ACE by 7.7 points and MCE by 8.6 points.
+These gains do not come from using more context: \ours{Meta-Harness} uses only 11.4K context tokens, versus 50.8K for ACE and 28.5K for MCE.
+
+\textbf{Accuracy--Context Tradeoffs.}
+Because Meta-Harness performs free-form optimization over harness code, we can express a joint preference for both accuracy and context cost rather than committing to a single scalar objective in advance.
+Given only the current metrics and the desired trade-off, the proposer is able to discover harnesses across a broad range of the frontier, yielding a smooth accuracy--context Pareto curve in~\Cref{fig:pareto}.
+This allows us to trade additional context for higher test accuracy in a controlled way, rather than committing to a single hand-designed operating point.
+
+\textbf{Out-of-distribution (OOD) task evaluation.}
+We evaluate whether the discovered harness generalizes to entirely new datasets unseen during search.
+We consider nine diverse datasets, and describe them in detail in~\Cref{app:text-classification-data}.
+The selected \ours{Meta-Harness} system achieves the best average accuracy (73.1\%), outperforming ACE (70.2\%) and all few-shot baselines~(\Cref{tab:ood_results}).
+Notably, we observe that naively adding more few-shot examples beyond $32$ hurts performance in $7/9$ tasks.
+Meta-Harness shows the highest performance on 6/9 datasets, suggesting that the discovered harness captures generally effective strategies for text classification rather than overfitting to the specific datasets used during search.
+
+\input{tables/ood_classification_gpt-oss-120b.tex}
+
+\subsection{Harnesses for Retrieval-Augmented Reasoning}
+\label{subsec:math-reasoning}
+
+We study a somewhat non-standard setup for olympiad math solving: augmenting the model with the ability to retrieve examples from a large corpus.
+There is a good reason to expect retrieval to help mathematical reasoning in principle, because solutions often share reusable proof patterns, so previous reasoning traces contain information that a model may be able to exploit at inference time.
+Yet retrieval has not become a standard ingredient in this setting, and prior work suggests that it has been much less successful on reasoning-intensive math benchmarks than in more fact-grounded domains~\citep{shakya2026adaptiveretrievalhelpsreasoning,xiao2024rarbreasoningretrievalbenchmark,balunovic_srimatharena_2025}.
+The difficulty is that naive retrieval rarely surfaces the right traces in the right form.
+This suggests that success depends less on adding retrieval per se than on discovering the right retrieval policy.
+Rather than hand-designing that policy, we give Meta-Harness a hard set of olympiad problems and allow the retrieval behavior itself to emerge from search.
+
+The retrieval corpus contains $\geq$500,000 solved problems from eight open-source datasets.
+We carefully deduplicated and decontaminated it against both evaluation benchmarks and the search set, confirmed that held-out problems have no exact prefix matches under our string-based filter, and manually inspected top BM25 retrievals for held-out examples (\cref{app:math-corpus}).
+We use Meta-Harness to optimize a harness for 40 iterations over a 250-problem search set of Olympiad-difficulty math problems (OlympiadBench + Omni-MATH hard), producing 109 candidate retrieval harnesses.
+We initialize the search population $\mathcal{H}$ from the main baseline harnesses in this setting: zero-shot, few-shot, and ACE.
+We select a single harness based on search-set performance using \texttt{GPT-OSS-20B} (\Cref{app:math-retriever}).
+We evaluate this harness on $200$ previously unseen IMO-level problems drawn from IMO-AnswerBench, IMO-ProofBench, and ArXivMath~\citep{imobenchmarks2025,balunovic_srimatharena_2025}.
+In addition to \texttt{GPT-OSS-20B}, we evaluate the same retrieval harness on four models not seen during search: \texttt{GPT-5.4-nano}, \texttt{GPT-5.4-mini}, \texttt{Gemini-3.1-Flash-Lite}, and \texttt{Gemini-3-Flash}.
+We follow the standard evaluation protocol of prior work~\citep{imobenchmarks2025} and report accuracy averaged over three samples per problem.
+
+\textbf{Results.}
+\Cref{tab:math_results} compares the discovered harness against no retrieval, dense retrieval using the separate embedding model \texttt{text-embedding-3-small}, random few-shot prompting, and BM25 retrieval.
+In contrast, Meta-Harness operates entirely in code space on top of the same BM25-based lexical retrieval stack as the sparse baseline, rather than introducing an additional dense encoder.
+The discovered retrieval harness outperforms the no-retrieval baseline across all five held-out models, with an average gain of \textbf{4.7 points}.
+It also matches or exceeds the strongest fixed baselines on average, outperforming BM25 retrieval by 1.3 points overall, while avoiding the regressions observed with dense retrieval and random few-shot prompting across several models.
+
+\input{tables/retriever_comparison}
+
+\vspace{2mm}
+\begin{takeawaybox}{Meta-Harness Improves Reasoning on IMO-Level Math Problems}
+In retrieval-augmented math reasoning, a single discovered retrieval harness transfers across five held-out models, improving accuracy by 4.7 points on average over no retrieval and yielding the strongest overall average among the compared methods.
+\end{takeawaybox}
+
+\subsection{Evaluating Agentic Coding Harnesses on TerminalBench-2}
+\label{subsec:terminalbench}
+
+TerminalBench-2~\citep{merrill2026terminal} evaluates LLM agents on 89 challenging tasks that require long-horizon, fully autonomous execution under complex dependencies, and substantial domain knowledge.
+Prior work has shown that the choice agent harness has a large effect on performance on this benchmark.
+We initialize search from two strong open baselines, Terminus~2~\citep{merrill2026terminal} and Terminus-KIRA~\citep{terminuskira2026}.
+For this experiment, we perform search and final evaluation on the same 89-task benchmark.
+We use this benchmark as a \textit{discovery problem}~\citep{yuksekgonul2026learningdiscovertesttime} in which the goal is to discover a harness configuration that improves performance on a hard, publicly contested benchmark.
+This is standard practice: public writeups already describe repeated benchmark-specific harness iteration on TerminalBench itself~\citep{forgecode_benchmarks_dont_matter,warp_terminal_bench,terminuskira2026}, and the benchmark is small and expensive enough that introducing a separate split would materially weaken the search signal.
+We additionally check for overfitting by manual inspection and regex-based audits for task-specific string leakage into evolved harnesses.
+We note that although the resulting harness is specialized to the TerminalBench-2 regime, autonomous completion of difficult long-horizon tasks from a single instruction is a core capability, and the benchmark consists of many tasks that frontier models and heavily engineered harnesses struggle with.
+
+\input{tables/terminalbench_results.tex}
+\textbf{Results.}
+We report results on the full benchmark in~\Cref{tab:terminalbench_results}, evaluated on two base models: \texttt{Claude Opus 4.6} and \texttt{Claude Haiku 4.5}.
+On \texttt{Opus 4.6}, Meta-Harness discovers a harness achieving 76.4\% pass rate, surpassing the hand-engineered Terminus-KIRA (74.7\%) and ranking \#2 among all \texttt{Opus 4.6} agents on the TerminalBench-2 leaderboard.
+The only higher-scoring \texttt{Opus 4.6} agent is ForgeCode (81.8\%); however, we were unable to reproduce their reported result from the publicly available code alone, suggesting their leaderboard scores depend on components beyond the published repository.
+On the weaker \texttt{Haiku 4.5} model, the improvement is larger: Meta-Harness achieves 37.6\%, outperforming the next-best reported agent (Goose, 35.5\%) by 2.1 points.
+TerminalBench-2 is an actively contested benchmark with multiple teams directly optimizing for it, so the fact that an automatic search method can achieve benefits at this frontier is encouraging for long-horizon text-optimization loops.
+
+\textbf{Qualitative behavior of the proposer.}
+The harness search trajectory helps explain \textit{why} Meta-Harness achieves these gains; we provide a detailed summary in~\Cref{app:proposer-stats}.
+In early iterations, the proposer combined plausible structural fixes with prompt-template edits and observed that both candidates regressed.
+It then explicitly hypothesized that the regressions were confounded by the shared prompt intervention, isolated the structural changes from the prompt rewrite, and ultimately pivoted toward a safer additive modification that became the best candidate in the run.
+This provides qualitative evidence that \textbf{filesystem access enables the proposer to inspect prior experience in enough detail to form causal hypotheses and revise the harness accordingly.}
+
+\begin{center}
+\begin{takeawaybox}{Meta-Harness Surpasses Hand-Engineered Agents on TerminalBench-2}
+On TerminalBench-2, Meta-Harness automatically discovers harnesses that surpass Terminus-KIRA on Opus 4.6 and rank \#1 among all Haiku 4.5 agents.
+\end{takeawaybox}
+\end{center}
+
+\section{Discussion}
+\label{sec:discussion}
+
+Beyond outperforming existing harnesses, Meta-Harness has several practical advantages.
+Discovered harnesses generalize to out-of-distribution classification datasets (\Cref{tab:ood_results}) and to unseen base models in the math setting (\Cref{tab:math_results}).
+A search run completes in a few hours of wall-clock time, yet produces readable, transferable strategies that can be reused across models, including future, stronger ones.
+Overfitting in code space is also more inspectable: brittle if-chains or hard-coded class mappings are visible on inspection in a way that weight-space overfitting is not.
+More broadly, our results suggest that the main advantage of Meta-Harness is not just search over code, but search with \emph{selective access to prior diagnostic experience}.
+The proposer is not limited to scalar rewards or fixed summaries; it can inspect raw code, execution traces, and prior failures, then use that information to form and test hypotheses about what to change.
+The qualitative search trajectories in \Cref{app:qualitative-behavior} illustrate this behavior directly.
+
+
+Our findings reflect a recurring pattern in machine learning~\citep{sutton2019bitter}: once a search space becomes accessible, stronger general-purpose agents can outperform hand-engineered solutions.
+A natural next step for future work is to co-evolve the harness and the model weights, letting the strategy shape what the model learns and vice versa.
+While we evaluate on three diverse domains, our experiments demonstrate that harness search can work with one particularly strong coding-agent proposer (Claude Code); a broader study of how the effect varies across proposer agents remains for future work.
+
+
+
+\clearpage
+\section*{Acknowledgements}
+We thank KRAFTON AI for providing API credit support.
+This work is supported by OpenAI, KFAS, and Schmidt Sciences AI2050.
+We thank Anikait Singh and Jubayer Ibn Hamid for their valuable feedback and suggestions, and Sienna J. Lee for patiently listening to YL's half-formed thoughts during the early stages of this work.
+
+\bibliography{citations}
+\bibliographystyle{colm2026_conference}
+
+\input{appendix.tex}
+
+\end{document}

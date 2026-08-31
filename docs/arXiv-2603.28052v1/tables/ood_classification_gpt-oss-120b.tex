@@ -1,0 +1,27 @@
+\begin{table*}[t]
+\centering \small
+\vspace{-10mm}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lccccccccc|cc}
+\toprule
+Harness & SciC & FiNER & Amz5 & FPB & GoEmo & Bank77 & News & SciT & TwHate & Avg Acc & Ctx $\downarrow$ \\
+\midrule
+Zero-shot & 32.7 & 56.0 & 52.7 & 90.0 & 42.0 & 80.7 & 84.7 & 89.3 & 75.3 & 67.0 & - \\
+Few-shot (8) & 34.0 & 63.0 & 54.0 & 90.0 & 44.0 & 82.7 & 84.7 & \textbf{91.3} & 76.7 & 68.9 & 2.2 \\
+Few-shot (32) & 38.7 & 62.0 & 53.3 & 90.7 & 43.3 & \textbf{86.0} & 85.3 & 90.7 & 76.7 & 69.6 & 5.2 \\
+Few-shot (all) & 35.3 & 61.0 & 50.0 & 93.3 & 42.7 & 80.7 & 84.0 & 90.0 & 76.7 & 68.2 & 7.4 \\
+ACE~\citep{zhang2025ace} & 40.7 & \textbf{74.0} & 48.0 & \textbf{96.7} & 44.0 & 83.3 & 86.0 & 90.7 & 68.7 & 70.2 & 11.7 \\
+\midrule
+\ours{Meta-Harness} & \textbf{53.3} & 67.0 & \textbf{60.0} & 94.0 & \textbf{46.0} & 82.7 & \textbf{86.7} & \textbf{91.3} & \textbf{77.3} & \textbf{73.1} & 7.3 \\
+\bottomrule
+\end{tabular}
+}
+\vspace{-2mm}
+\caption{
+\label{tab:ood_results}
+OOD text classification dataset evaluation.
+We report test accuracy for each dataset and the average additional context tokens across all nine datasets.
+\textbf{\ours{Meta-Harness} outperforms the next best method by 2.9 points on these 9 previously unseen tasks.}
+}
+\vspace{-0mm}
+\end{table*}
