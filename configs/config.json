@@ -743,6 +743,9 @@
         "Transportation Services",
         "Water Transportation"
       ]
+    },
+    "sector_overrides": {
+      "FRC": "financieras"
     }
   },
   "paths": {

@@ -3,11 +3,12 @@ tui_tickers.py — Minimal TUI for the firm universe: view the aggregated
 sectors (tech, semis, defensa, ...), see which SIC industry groups make up
 each one, and build new sectors by picking SIC groups.
 
-Model: `pipeline.sector_groups` in configs/config.json maps a sector name to
-a list of SIC industry-group names (the `industry_group` values script 00
-writes into firm_universe.parquet). A sector's tickers are DERIVED from that
-mapping — assign a SIC group, and every ticker in it (current and future)
-follows.
+Model — two assignment levels (resolved by scripts/sector_map.py, which
+analysis code shares):
+  1. `pipeline.sector_overrides` {TICKER: sector} — per-company override,
+     always wins (for firms whose SIC group misplaces them, or with no SIC).
+  2. `pipeline.sector_groups` {sector: [SIC industry-group names]} — the
+     rule layer; a firm inherits its SIC group's sector.
 
 configs/universe.csv is the source of truth for the firm universe (ticker,
 cik, company_name, inclusion_rule, active_status — see
@@ -29,6 +30,11 @@ Usage:
 import csv
 import json
 from pathlib import Path
+
+try:
+    import sector_map
+except ImportError:
+    from scripts import sector_map
 
 CONFIG_PATH = Path("configs/config.json")
 UNIVERSE_CSV_PATH = Path("configs/universe.csv")
@@ -169,19 +175,29 @@ def sector_tickers(sics: list[str], sic_map: dict[str, list[str]]) -> list[str]:
 
 def show_sectors(config: dict, sic_map: dict[str, list[str]], detail: bool = False) -> None:
     sectors = config["pipeline"]["sector_groups"]
+    overrides = config["pipeline"].get("sector_overrides", {})
+    members = sector_map.sector_members(config)
     universe_tickers = {t for ts in sic_map.values() for t in ts}
     flat = set(config["pipeline"].get("tickers", []))
     print()
     for name, sics in sectors.items():
-        tickers = sector_tickers(sics, sic_map)
-        print(f"  [{name}]  {len(tickers)} tickers, {len(sics)} SIC group(s)")
+        tickers = members.get(name, [])
+        n_over = sum(1 for s in overrides.values() if s == name)
+        print(f"  [{name}]  {len(tickers)} tickers, {len(sics)} SIC group(s)"
+              + (f", {n_over} override(s)" if n_over else ""))
         if detail:
             for s in sics:
                 ts = " ".join(sic_map.get(s, [])) or "(no tickers yet)"
                 print(f"      - {s}: {ts}")
+            for t, s in sorted(overrides.items()):
+                if s == name:
+                    print(f"      * override: {t}")
     left_sics = unassigned(sectors, sic_map)
     if left_sics:
         print(f"  SIC groups not in any sector: {len(left_sics)} (option 2 to see them)")
+    lost = sorted(members.get(sector_map.UNASSIGNED, []))
+    if lost:
+        print(f"  Firms resolving to no sector: {' '.join(lost)} (option 6 to override)")
     no_sic = sorted(flat - universe_tickers)
     if no_sic:
         print(f"  Tickers with no SIC yet (run `make build-universe`): {' '.join(no_sic)}")
@@ -312,6 +328,37 @@ def add_tickers() -> None:
     print("  Run `make build-universe` so they get a SIC group, then assign that group to a sector.\n")
 
 
+def override_company(config: dict) -> None:
+    """Assign one company to a sector directly, bypassing its SIC rule.
+    Empty sector input clears an existing override."""
+    overrides = config["pipeline"].setdefault("sector_overrides", {})
+    ticker = input("  Ticker to override: ").strip().upper()
+    if not ticker:
+        print("  Cancelled.\n")
+        return
+    resolved = sector_map.resolve_sectors(config)
+    current = resolved.get(ticker)
+    print(f"  {ticker}: currently -> {current if current else 'not in universe parquet'}"
+          + (" (via override)" if ticker in overrides else " (via SIC rule)" if current else ""))
+    names = list(config["pipeline"]["sector_groups"])
+    for i, n in enumerate(names, 1):
+        print(f"    {i}. {n}")
+    choice = input("  Sector number (empty = clear override): ").strip()
+    if not choice:
+        if overrides.pop(ticker, None) is not None:
+            save_config(config)
+            print(f"  Cleared override for {ticker} — back to its SIC rule.\n")
+        else:
+            print("  Nothing to clear.\n")
+        return
+    if not choice.isdigit() or not (1 <= int(choice) <= len(names)):
+        print("  Cancelled.\n")
+        return
+    overrides[ticker] = names[int(choice) - 1]
+    save_config(config)
+    print(f"  Override saved: {ticker} -> {overrides[ticker]}\n")
+
+
 def main() -> None:
     config = load_config()
     ensure_sectors(config)
@@ -332,6 +379,7 @@ def main() -> None:
         print("  3. Create a new sector from SIC groups")
         print("  4. Add SIC groups to an existing sector")
         print("  5. Add new tickers to the universe")
+        print("  6. Override one company's sector (wins over its SIC rule)")
         print("  q. Quit")
         choice = input("\n  > ").strip().lower()
         if choice == "1":
@@ -344,6 +392,8 @@ def main() -> None:
             extend_sector(config, sic_map)
         elif choice == "5":
             add_tickers()
+        elif choice == "6":
+            override_company(config)
         elif choice in {"q", "quit", "exit"}:
             print("\n  Saved. New tickers enter the pipeline with: make collect-data\n")
             break
