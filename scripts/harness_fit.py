@@ -93,6 +93,13 @@ def _has_no_letters(line: str) -> bool:
     return not bool(_HAS_LETTER_RE.search(line))
 
 
+_SENTENCE_END_RE = re.compile(r"[.!?:;\"'”’)\]]\s*$")
+
+
+def _ends_sentence(text: str) -> bool:
+    return bool(_SENTENCE_END_RE.search(text))
+
+
 def markdown_to_paragraphs(text: str) -> list[str]:
     """Split markdown section text (markdownify's HTML->markdown output —
     see scripts/04_extract_sections.py) into paragraph units.
@@ -113,9 +120,23 @@ def markdown_to_paragraphs(text: str) -> list[str]:
       - Lines with no letters at all — page numbers, bare '---' rules,
         zero-width spaces, unadorned bullet/footnote markers.
     So: keep every line as its own paragraph, except drop a detected table
-    block (rows included), pure-link lines, and letterless lines."""
+    block (rows included), pure-link lines, and letterless lines.
+
+    One more wrinkle: these EDGAR-to-HTML-to-markdown conversions carry
+    page-break furniture (a page number, a "---" rule, a "[Table of
+    Contents]" link — exactly the three junk kinds above, back to back) that
+    the original HTML injected in the MIDDLE of a paragraph at a page
+    boundary, not between two real paragraphs. Dropping that furniture
+    without reconnecting the prose on either side leaves a sentence
+    truncated mid-clause (ending in a comma, "and", etc.) as one paragraph
+    and its continuation as another, decontextualized one. So: whenever at
+    least one line was skipped as junk right before the next kept line, and
+    the last kept paragraph does not already end on sentence-final
+    punctuation, merge the next line onto it instead of starting a new
+    paragraph."""
     lines = [line.strip() for line in text.split("\n")]
     paragraphs: list[str] = []
+    just_skipped_junk = False
     i = 0
     n = len(lines)
     while i < n:
@@ -133,11 +154,17 @@ def markdown_to_paragraphs(text: str) -> list[str]:
             i += 2
             while i < n and _looks_like_table_row(lines[i]):
                 i += 1
+            just_skipped_junk = True
             continue
         if _is_pure_link_line(line) or _has_no_letters(line):
             i += 1
+            just_skipped_junk = True
             continue
-        paragraphs.append(line)
+        if just_skipped_junk and paragraphs and not _ends_sentence(paragraphs[-1]):
+            paragraphs[-1] = f"{paragraphs[-1]} {line}"
+        else:
+            paragraphs.append(line)
+        just_skipped_junk = False
         i += 1
     return paragraphs
 
