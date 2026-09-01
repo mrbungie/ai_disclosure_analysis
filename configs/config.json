@@ -760,7 +760,9 @@
     "interim_batches": "data/interim/batches",
     "interim_sections": "data/interim/sections",
     "candidate_chunks": "data/interim/candidate_chunks",
-    "interim_seed_screen": "data/interim/seed_screen"
+    "interim_seed_screen": "data/interim/seed_screen",
+    "interim_phase0": "data/interim/phase0",
+    "interim_embeddings": "data/interim/embeddings"
   },
   "seed_screen": {
     "ai_keywords": [
@@ -796,5 +798,42 @@
     ],
     "recall_floor": 0.9,
     "chunk_window": 1
+  },
+  "phase0": {
+    "enabled": false,
+    "discovery_sample": {
+      "n": 800,
+      "seed": 42
+    },
+    "embedding_models": {
+      "bge-m3": {
+        "hf_id": "BAAI/bge-m3",
+        "dim": 1024,
+        "max_seq_length": 8192,
+        "note": "Best choice - long context, strong multilingual"
+      },
+      "embeddinggemma-300m": {
+        "hf_id": "google/embeddinggemma-300m",
+        "dim": 768,
+        "max_seq_length": 2048,
+        "note": "Very good if throughput / M2 memory matters a lot"
+      },
+      "gte-multilingual-base": {
+        "hf_id": "Alibaba-NLP/gte-multilingual-base",
+        "dim": 768,
+        "max_seq_length": 8192,
+        "note": "Good lighter baseline"
+      },
+      "e5-large-instruct": {
+        "hf_id": "intfloat/multilingual-e5-large-instruct",
+        "dim": 1024,
+        "max_seq_length": 512,
+        "note": "Strong semantic model, but 512-token context is annoying for filings"
+      }
+    },
+    "active_embedding_model": "bge-m3",
+    "embedding_device": "auto",
+    "embedding_batch_size": 32,
+    "max_added_volume_frac": 0.05
   }
 }

@@ -119,6 +119,79 @@
   </header>
 
   <section>
+    <h2>0 · Concept discovery (Phase 0)</h2>
+    <p class="sub">Upstream of both cycles, and run once, before any fitting or estimation sample
+    exists. Renamed layers: <strong>Phase 0 is Induction</strong>, Cycle 1 / Distillation 1 is
+    <strong>Selection</strong>, Cycle 2 / Distillation 2 is <strong>Distillation</strong>.</p>
+    <figure>
+      <svg viewBox="0 0 980 300" role="img" aria-label="Concept discovery diagram. The full corpus feeds a small, independent discovery sample. That sample, together with the frozen codebook and scope rule as a construct boundary, feeds Phase 0: LLM induction plus embeddings. Phase 0 outputs a versioned ConceptSeed artifact of concepts, semantic anchors, lexical candidates, and candidate rules, dashed-bordered to mark it frozen before any fitting or estimation sample is drawn. The ConceptSeed then feeds the seed screen at the start of Cycle 1.">
+        <defs>
+          <marker id="arr0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+          <marker id="arr0I" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--inst)"/>
+          </marker>
+        </defs>
+
+        <rect x="650" y="14" width="300" height="50" rx="5" fill="var(--inst-soft)" stroke="var(--inst)" stroke-width="1.6"/>
+        <g font-family="IBM Plex Sans, sans-serif" fill="var(--inst)" text-anchor="middle">
+          <text x="800" y="35" font-size="12" font-weight="600">codebook + scope rule</text>
+          <text x="800" y="51" font-size="10.5" opacity="0.85">construct boundary · frozen</text>
+        </g>
+        <path d="M 800 64 L 800 90 L 660 90 L 660 106" fill="none" stroke="var(--inst)" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr0I)"/>
+
+        <g fill="none" stroke="currentColor" stroke-width="1.3">
+          <rect x="30" y="110" width="160" height="52" rx="5"/>
+          <rect x="230" y="110" width="180" height="52" rx="5"/>
+        </g>
+        <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor" text-anchor="middle">
+          <text x="110" y="132">full corpus</text><text x="110" y="148">extract sections output</text>
+          <text x="320" y="132">discovery sample</text><text x="320" y="148">small, independent draw</text>
+        </g>
+        <g stroke="currentColor" stroke-width="1.3" marker-end="url(#arr0)">
+          <line x1="190" y1="136" x2="226" y2="136"/>
+          <line x1="410" y1="136" x2="426" y2="136"/>
+        </g>
+
+        <rect x="430" y="106" width="270" height="60" rx="6" fill="var(--c1-soft)" stroke="var(--c1)" stroke-width="2"/>
+        <g font-family="IBM Plex Sans, sans-serif" fill="var(--c1)" text-anchor="middle">
+          <text x="565" y="130" font-size="12.5" font-weight="600">PHASE 0 · CONCEPT DISCOVERY</text>
+          <text x="565" y="147" font-size="11.5">LLM induction + embeddings</text>
+        </g>
+
+        <path d="M 565 166 L 565 190" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#arr0)"/>
+
+        <rect x="410" y="194" width="310" height="70" rx="5" fill="none" stroke="currentColor" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.7"/>
+        <g font-family="IBM Plex Sans, sans-serif" fill="currentColor" text-anchor="middle">
+          <text x="565" y="216" font-size="12.5" font-weight="600">ConceptSeed v1</text>
+          <text x="565" y="232" font-size="11">concepts · semantic anchors</text>
+          <text x="565" y="246" font-size="11">lexical candidates · candidate rules</text>
+        </g>
+        <text x="716" y="272" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.65" text-anchor="end">frozen before fitting/estimation samples are drawn</text>
+
+        <path d="M 720 229 L 756 229" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#arr0)"/>
+        <g fill="none" stroke="currentColor" stroke-width="1.3">
+          <rect x="760" y="199" width="190" height="60" rx="5"/>
+        </g>
+        <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor" text-anchor="middle">
+          <text x="855" y="224">into seed screen</text><text x="855" y="240">Cycle 1 / Distillation 1</text>
+        </g>
+      </svg>
+      <figcaption>The discovery sample is drawn independently of the fitting and holdout samples used
+      later — Phase 0 never sees the sample a harness is scored against. Induction reuses the codebook
+      and scope rule only as the construct's boundary, not as labels to fit: nothing here is scored
+      against a reference yet. The output, ConceptSeed, is versioned and immutable like a harness
+      candidate — a revision is a new version, never an in-place edit — and is frozen (see §6's freeze
+      rule) before any fitting/estimation sample exists, so no round of "saw what failed downstream,
+      patched an anchor, re-measured" can enter through this stage. Its lexical candidates are
+      suggestions for the seed screen's keyword list, reviewed like any other candidate change, not
+      auto-merged; its semantic anchors feed the seed screen directly as an additional, embedding-
+      similarity hit signal alongside the lexical one (§2).</figcaption>
+    </figure>
+  </section>
+
+  <section>
     <h2>1 · The cascade</h2>
     <p class="sub">The reference sits above both stages and is never run at corpus scale. Each
     distillation spends LLM inference on a sample and returns a program that runs on everything.</p>
@@ -229,21 +302,28 @@
   <section>
     <h2>2 · The distillation procedure</h2>
     <p class="sub">Both stages share the same search/holdout split and optimization mechanics; their
-    sampling strata differ. The strata drawn below are stage 1's, built from the lexical seed screen
-    over the corpus — stage 2 works inside the candidate frame and needs its own design.</p>
+    sampling strata differ. The strata drawn below are stage 1's, built from the seed screen over the
+    corpus — lexical, plus an optional semantic hit from Phase 0's ConceptSeed (§0) once frozen — stage
+    2 works inside the candidate frame and needs its own design.</p>
     <figure>
-      <svg viewBox="0 0 980 520" role="img" aria-label="One distillation stage. A seed screen over the population defines three strata: hit paragraphs, no-hit paragraphs inside filings that hit elsewhere, and no-hit paragraphs inside filings with no hits at all. All three retain positive inclusion probability and feed the frozen reference classifier. Judged units split into a search sample, spent freely, and a probability holdout sample, held unopened. The search sample feeds a loop of proposer, interface validation, scoring and logging, where the log store is the proposer's only feedback channel. After selection on a pre-declared metric, the holdout is opened once for a single weighted evaluation, then the program is deployed at population scale.">
+      <svg viewBox="0 0 980 520" role="img" aria-label="One distillation stage. A seed screen over the population defines three strata: hit paragraphs, no-hit paragraphs inside filings that hit elsewhere, and no-hit paragraphs inside filings with no hits at all. A hit is lexical or, once Phase 0 is frozen, semantic. All three retain positive inclusion probability and feed the frozen reference classifier. Judged units split into a search sample, spent freely, and a probability holdout sample, held unopened. The search sample feeds a loop of proposer, interface validation, scoring and logging, where the log store is the proposer's only feedback channel. After selection on a pre-declared metric, the holdout is opened once for a single weighted evaluation, then the program is deployed at population scale.">
         <defs>
           <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+          <marker id="arr2I" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--inst)"/>
           </marker>
         </defs>
 
         <rect x="340" y="12" width="300" height="46" rx="5" fill="none" stroke="currentColor" stroke-width="1.3"/>
         <g font-family="IBM Plex Sans, sans-serif" fill="currentColor" text-anchor="middle">
-          <text x="490" y="31" font-size="12.5" font-weight="600">stratification (stage 1: lexical seed screen)</text>
+          <text x="490" y="31" font-size="12.5" font-weight="600">stratification (stage 1: lexical + semantic seed screen)</text>
           <text x="490" y="48" font-size="11.5" opacity="0.8">defines strata — not membership</text>
         </g>
+        <rect x="700" y="8" width="230" height="34" rx="4" fill="var(--inst-soft)" stroke="var(--inst)" stroke-width="1.3"/>
+        <text x="815" y="29" font-family="IBM Plex Sans, sans-serif" font-size="10.5" fill="var(--inst)" text-anchor="middle">ConceptSeed (§0) · once frozen</text>
+        <path d="M 700 25 L 640 35" fill="none" stroke="var(--inst)" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arr2I)"/>
         <path d="M 490 58 L 490 80 L 280 80 L 280 96" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#arr2)"/>
         <path d="M 490 58 L 490 96" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#arr2)"/>
         <path d="M 490 58 L 490 80 L 700 80 L 700 96" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#arr2)"/>
@@ -583,13 +663,18 @@ classifier = distill(population = candidates,
     <p class="sub">Dependencies are strict at the start and loosen once the samples exist. Nothing
     below has been built; sample sizes stay open until corpus prevalence is measured.</p>
     <ol class="build">
+      <li><b>Phase 0 — draw a discovery sample and induce a ConceptSeed.</b> Independent of the
+      fitting/estimation samples used later. LLM induction plus embeddings over that sample propose
+      concepts, semantic anchors, lexical candidates, and candidate rules (§0). Freeze it — a versioned,
+      immutable artifact — before step 4 draws any stage-1 sample.</li>
       <li><b>Codebook v1.</b> The operational definition, with resolved edge cases and a version
       number. Everything downstream measures agreement with this text.</li>
       <li><b>Reliability check on both references.</b> Small sample, repeats and perturbations. The
       codebook carries the construct and needs the closer look; the scope rule errs inward by design.
       Fix them here or not at all.</li>
       <li><b>Seed screen over the whole corpus.</b> Deliberately over-inclusive, recording hit counts
-      per paragraph and per filing. Its accuracy is not assumed; it only defines strata.</li>
+      per paragraph and per filing — lexical hits from the keyword list, plus semantic hits from the
+      frozen ConceptSeed if Phase 0 is enabled. Its accuracy is not assumed; it only defines strata.</li>
       <li><b>Draw stage-1 samples.</b> Search: weighted toward weak hits and toward no-hit paragraphs
       in filings that hit elsewhere. Holdout: probabilistic, stratified by year and sector, inclusion
       probability recorded per unit, with guaranteed coverage of all three screen strata including
@@ -598,23 +683,41 @@ classifier = distill(population = candidates,
       <li><b>Run stage 1</b> under its fixed budget, select on the declared metric, open the holdout
       once.</li>
       <li><b>Deploy the prefilter over the corpus</b> to produce the candidate frame, then repeat
-      steps 4–6 for stage 2 on that frame, with the six binary labels.</li>
+      steps 5–7 for stage 2 on that frame, with the six binary labels.</li>
       <li><b>Build the panel, then validate the construct</b> against external firm characteristics.</li>
     </ol>
 
     <div class="callout">
       <b>Open choices:</b> the value of the stage-1 recall floor r₀; how much judging budget the
       cold-filing stratum receives, which sets how tight the corpus recall bound can be; whether the
-      codebook reference emits the six labels in one pass or six; and whether to fall back to a
-      deterministic search rule if the agentic proposer proves hard to reproduce across runs.
+      codebook reference emits the six labels in one pass or six; whether to fall back to a
+      deterministic search rule if the agentic proposer proves hard to reproduce across runs; and,
+      for Phase 0, which embedding model is active (configs/config.json:
+      phase0.active_embedding_model — swappable, and every model's cache is kept once computed, so
+      trying several costs disk, not lost work) and where the semantic-hit threshold should sit.
     </div>
 
-    <p class="thesis">Because exhaustive LLM-based coding is prohibitively expensive, a versioned
+    <div class="callout">
+      <b>Phase 0's freeze rule is the same rule as §6's, extended upstream.</b> A ConceptSeed is frozen
+      before step 4 draws any fitting/estimation sample, exactly as the codebook and scope rule are
+      frozen before large-scale distillation. Producing a new ConceptSeed version after that point —
+      because a downstream run surfaced a miss and it was tempting to patch an anchor — is a new Phase
+      0 run, not an edit to this one; the version that was actually frozen when sampling began is what
+      stays comparable to what got measured against it.
+    </div>
+
+    <p class="thesis">Before any fitting sample is drawn, Phase 0 — Induction — reads a small,
+    independent discovery sample of the corpus with an LLM plus local sentence embeddings and proposes
+    a versioned ConceptSeed: named concepts, positive/negative semantic anchors, candidate lexical
+    terms, and candidate rules, frozen before it can see what a later stage fails to catch. Because
+    exhaustive LLM-based coding is prohibitively expensive, a versioned
     codebook applied by an LLM defines the construct, and together with a deliberately wider scope rule
     forms two costly reference classifiers — paragraph-level scope and chunk-level dimensions. The
     Meta-Harness
-    outer-loop procedure is used twice, sequentially, to distill it into inexpensive executable
-    programs. The initial lexical screen is a sampling aid rather than a source of truth, so under the
+    outer-loop procedure is then used twice, sequentially — Cycle 1 / Distillation 1 is
+    <strong>Selection</strong>, Cycle 2 / Distillation 2 is <strong>Distillation</strong> — to distill
+    it into inexpensive executable programs. The seed screen that stage 1 samples from is a sampling
+    aid rather than a source of truth, lexical plus, once Phase 0 is frozen, semantic, so under the
     probability-sampling design its errors primarily affect sampling efficiency rather than
     identification; errors in the reference do not have that property, and it is therefore frozen and
     checked for reliability before

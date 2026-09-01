@@ -72,6 +72,10 @@ CYCLES = {
         ground_truth=Path("data/interim/eval/ground_truth_eval_classification.parquet"),
     ),
 }
+# phase0 candidates are scored against the exact same construct/labels as
+# detection (see docs/distillation_map.html §0) — no separate human-audit
+# workbook needed, so this just aliases eval_detection's CycleSpec.
+CYCLES["eval_phase0"] = CYCLES["eval_detection"]
 
 
 def _make_workbook(spec: CycleSpec, n: int, seed: int) -> None:

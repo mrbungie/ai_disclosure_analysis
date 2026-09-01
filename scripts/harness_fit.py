@@ -202,6 +202,7 @@ def flatten_corpus_paragraphs(config: dict) -> pd.DataFrame:
 
 TASK_LABELS = {
     "detection": ["is_ai_related"],
+    "phase0": ["is_ai_related"],  # same construct as detection — see docs/distillation_map.html §0
     "classification": ["is_substantive", "is_promotional", "is_risk_related",
                        "is_governance_related", "is_use_case_specific", "is_quantified"],
 }

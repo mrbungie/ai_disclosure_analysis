@@ -10,7 +10,7 @@ Data collection and preprocessing pipeline for a research project analyzing how 
 
 - **US-listed firms** in the frozen S&P 500 (2021-12-31) universe plus a delisted-satellite core (see `docs/universe_expansion_plan.md`), spanning aggregated sectors (tech, semis, defense, industrials, telecom, autos, retail, consumer, energy, utilities, health, financials, insurance, real estate, materials, media, travel/leisure).
 - **Annual 10-K filings, fiscal years 2021–2026** (2026 is a partial year).
-- **AI-related text** is identified by the ACTIVE detection candidate; **what it says about AI** by the ACTIVE classification candidate — so both counts evolve with harness state (see `.claude/skills/meta-harness-opt/journals/`).
+- **AI-related text** is identified by the ACTIVE detection candidate (optionally widened by the ACTIVE phase0 candidate); **what it says about AI** by the ACTIVE classification candidate — so both counts evolve with harness state (see `.claude/skills/detection-opt/journals/`, `.claude/skills/phase0-opt/journals/`, `.claude/skills/classification-opt/journals/`).
 - Scope limitations: 10-K only (no 8-K/10-Q/proxy/earnings-call text), US-listed firms only.
 
 ---
@@ -54,14 +54,17 @@ things are distilled into cheap programs instead, in sequence:
    was made at chunk granularity. Non-AI paragraphs get `NA` dimension tags
    (not `False` — the task is only defined on AI text).
 
-Both stages share one outer loop (`scripts/harness_fit.py`): a search split
-(spent freely, weighted toward hard cases) and a probability holdout
-(inclusion weights recorded, opened once). Iteration is done by an agentic
-proposer (`/meta-harness-opt <task>` skill) with filesystem access to every
-prior candidate's source, scores, and per-instance traces — one candidate
-per iteration, immutable history, one optimization at a time
-(`OPT_LOCK`). Reward labels come from an LLM judge and are human-audited
-(Cohen's kappa) before being trusted.
+Both stages (plus phase0, an optional third task that widens detection's
+seed screen with embedding/ConceptSeed candidates instead of literal
+keywords — `docs/distillation_map.html` §0) share one outer loop
+(`scripts/harness_fit.py`): a search split (spent freely, weighted toward
+hard cases) and a probability holdout (inclusion weights recorded, opened
+once). Iteration is done by an agentic proposer — one skill per task
+(`/detection-opt`, `/phase0-opt`, `/classification-opt`) — with filesystem
+access to every prior candidate's source, scores, and per-instance traces —
+one candidate per iteration, immutable history, one optimization at a time
+per task (`OPT_LOCK`). Reward labels come from an LLM judge and are
+human-audited (Cohen's kappa) before being trusted.
 
 ### Collection (scripts 00–04)
 Firm universe and filing manifest are built from SEC EDGAR (universe defined
@@ -144,7 +147,7 @@ make agreement-score ARGS='--cycle eval_detection'   # Cohen's kappa
 ```
 
 ```
-/meta-harness-opt detection            # in Claude Code — one proposer iteration:
+/detection-opt                         # in Claude Code — one proposer iteration:
                                         # reads traces, writes ONE new candidate, scores it
 ```
 
@@ -158,6 +161,35 @@ make apply-detection                   # writes data/processed/candidate_frame.p
 The freeze is gated: it refuses if the candidate's recorded search recall
 is below `configs/config.json: seed_screen.recall_floor`.
 
+### 2b. phase0 (optional — widens the seed screen semantically)
+
+Reuses detection's eval set; no separate sampling step. `harnesses/phase0/`
+candidates are `classify(text) -> bool` too, but scored as unique recall
+gain over the current detection ACTIVE (not raw precision/recall):
+
+```bash
+uv run python scripts/phase0_discovery.py --sample     # free, discovery sample only
+uv run python scripts/phase0_discovery.py --induce     # $, one LLM call -> a ConceptSeed suggestion
+```
+
+```
+/phase0-opt                            # one proposer iteration: curates the suggestion into a
+                                        # harnesses/phase0/<name>/{harness.py,concept_seed.json}, scores it
+```
+
+```bash
+make eval-harness ARGS='--task phase0 --candidate 001_x'                     # free, repeatable
+make leaderboard ARGS='--task phase0'                                        # standings vs the volume ceiling
+make eval-harness ARGS='--task phase0 --candidate <best> --split test'       # THE one look; promotes to ACTIVE
+make seed-screen                       # re-run so semantic_hit takes effect (needs phase0.enabled: true)
+```
+
+The freeze is gated: it refuses if the candidate's recorded added volume
+is above `configs/config.json: phase0.max_added_volume_frac`. Embeddings
+are cached per model (`configs/config.json: phase0.active_embedding_model`
+picks which) under `data/interim/embeddings/` and are never deleted —
+switching models costs disk, not lost work.
+
 ### 3. Stage 2 — classification (needs the candidate frame above)
 
 ```bash
@@ -168,7 +200,7 @@ make agreement-score ARGS='--cycle eval_classification'
 ```
 
 ```
-/meta-harness-opt classification       # one proposer iteration
+/classification-opt                    # one proposer iteration
 ```
 
 ```bash
