@@ -168,8 +168,10 @@ candidates are `classify(text) -> bool` too, but scored as unique recall
 gain over the current detection ACTIVE (not raw precision/recall):
 
 ```bash
-uv run python scripts/phase0_discovery.py --sample     # free, discovery sample only
-uv run python scripts/phase0_discovery.py --induce     # $, one LLM call -> a ConceptSeed suggestion
+uv run python scripts/phase0_discovery.py --sample      # free, discovery sample only
+uv run python scripts/phase0_discovery.py --discover    # $, 2 LLM calls -> a ConceptSeed suggestion
+                                                          # (seed anchors -> embed/kNN neighborhoods ->
+                                                          #  discriminative terms -> grounded refinement)
 ```
 
 ```

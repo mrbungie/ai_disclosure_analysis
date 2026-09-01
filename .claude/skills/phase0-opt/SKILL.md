@@ -6,9 +6,11 @@ description: >
   candidates that widen the detection task's seed screen beyond literal
   keyword matching, harnesses/phase0/ — see docs/distillation_map.html
   §0): classify(text: str) -> bool, scored as unique recall gain over the
-  current detection ACTIVE. The proposer draws a discovery sample, induces
-  and curates a ConceptSeed, writes a NEW candidate program, and evaluates
-  it on the search split. Use when the user asks to optimize, improve,
+  current detection ACTIVE. The proposer draws a discovery sample, runs
+  the embeddings-first discovery pipeline (nearest-neighbor neighborhoods
+  + discriminative lexical terms + grounded LLM refinement) to curate a
+  ConceptSeed, writes a NEW candidate program, and evaluates it on the
+  search split. Use when the user asks to optimize, improve,
   iterate, or run an opt cycle on the phase0 / concept-discovery harness.
   Only one optimization at a time (lock file). No argument needed.
 ---
@@ -99,14 +101,22 @@ was measured against.
 
 Everything here can be exercised more than once, in any order, across
 iterations — nothing is a one-shot special case:
-- **Draw a discovery sample and induce a ConceptSeed suggestion.**
-  `scripts/phase0_discovery.py --sample` (accumulative, tops up toward
-  `configs/config.json: phase0.discovery_sample.n`) and `--induce` (one
-  LLM call, writes `data/interim/phase0/concept_seed_suggestions/
-  suggestion_v{N}.json` — raw material, not itself a candidate). Read the
-  suggestion, curate the anchors/rules you actually trust — don't
-  rubber-stamp an LLM's first draft — and write the result into a NEW
-  `harnesses/phase0/<name>/concept_seed.json` + `harness.py`.
+- **Draw a discovery sample and run the embeddings-first discovery
+  pipeline.** `scripts/phase0_discovery.py --sample` (accumulative, tops
+  up toward `configs/config.json: phase0.discovery_sample.n`) then
+  `--discover`: proposes seed anchors (1 LLM call, names/descriptions
+  only), embeds them + the full discovery sample, builds a
+  nearest-neighbor NEIGHBORHOOD per anchor, extracts discriminative
+  lexical terms per neighborhood (frequency-ratio, no LLM call — this is
+  the interpretable trace: "characterized by machine learning,
+  AI-enabled, copilot," not just a bare similarity number), then grounds
+  a second LLM call in each neighborhood's real excerpts + terms to
+  confirm/discard the concept and write anchors from that evidence —
+  writes `data/interim/phase0/concept_seed_suggestions/suggestion_v{N}.
+  json` (raw material, not itself a candidate). Read the suggestion,
+  curate further if the grounding still looks off — don't rubber-stamp
+  it — and write the result into a NEW `harnesses/phase0/<name>/
+  concept_seed.json` + `harness.py`.
 - **Switch the active embedding model.**
   `configs/config.json: phase0.active_embedding_model` picks from the
   registry in `phase0.embedding_models` (BGE-M3, EmbeddingGemma-300M,
@@ -121,9 +131,12 @@ iterations — nothing is a one-shot special case:
   copy with a different threshold, evaluated, is a legitimate new
   candidate, same as a regex tweak is for detection.
 - **Curate/rewrite the concept anchors directly.** You are not bound to
-  what `--induce` produced — read the search trace's false negatives,
+  what `--discover` produced — read the search trace's false negatives,
   write better positive/negative anchors by hand, same as a detection
-  proposer hand-writes regex exclusions from trace evidence.
+  proposer hand-writes regex exclusions from trace evidence. Anchors,
+  discriminative terms, and neighborhood evidence are the discovery/
+  interpretability layers respectively — final judgment on whether a
+  concept is real stays yours, not the LLM's.
 - **Use whatever exploration method actually answers the question in
   front of you** — read the search trace, grep the corpus for phrasing
   patterns, read a handful of `no_hit_filing_hits`-stratum paragraphs
@@ -139,7 +152,12 @@ the score. Read `harnesses/detection/ACTIVE`'s current `harness.py` (the
 baseline everything here is measured against). `scripts/eval_harness.py
 --leaderboard --task phase0` for standings. `git log` and the journal for
 the story so far. Check `data/interim/phase0/concept_seed_suggestions/`
-for unused induction output before running `--induce` again.
+for unused discovery output before running `--discover` again. If
+`configs/config.json: phase0.enabled` was true for the latest
+`scripts/seed_screen.py` run, also check whether the search sample
+carries an `agreement_quadrant` column (`scripts/build_eval_set.py`
+oversamples the two disagreement quadrants there) — that's the most
+informative trace evidence this task has.
 
 ## Freezing
 

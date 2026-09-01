@@ -40,6 +40,7 @@ import asyncio
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -112,6 +113,27 @@ def year_of(filing_date) -> str:
 
 SEARCH_STRATUM_FRACS = {"hit": 0.40, "no_hit_filing_hits": 0.40, "no_hit_filing_clean": 0.20}
 
+# Disagreement quadrants (scripts/seed_screen.py: agreement_quadrant, only
+# populated when phase0 is enabled) are the most informative rows for the
+# proposer to see — lex_high_emb_low are probable lexical false positives,
+# lex_low_emb_high are probable lexical false negatives (exactly what
+# phase0 exists to surface). Open/tunable, not load-bearing science.
+DISAGREEMENT_QUADRANT_BOOST = 3.0
+DISAGREEMENT_QUADRANTS = ["lex_high_emb_low", "lex_low_emb_high"]
+
+
+def _search_weights(pool: pd.DataFrame, stratum: str) -> pd.Series | None:
+    """Sampling weights for the SEARCH draw only — never the holdout, which
+    must stay an unweighted probability sample. Generalizes the existing
+    hit_count reweighting (favor weak lexical hits) with an orthogonal
+    boost for the two lexical x semantic disagreement quadrants, when that
+    signal is available (configs/config.json: phase0.enabled)."""
+    w = 1.0 / pool["hit_count"].clip(lower=1) if stratum == "hit" else pd.Series(1.0, index=pool.index)
+    if "agreement_quadrant" in pool.columns and pool["agreement_quadrant"].notna().any():
+        w = w * np.where(pool["agreement_quadrant"].isin(DISAGREEMENT_QUADRANTS),
+                         DISAGREEMENT_QUADRANT_BOOST, 1.0)
+    return w if (w != 1.0).any() else None
+
 
 def do_sample_detection(args: argparse.Namespace) -> None:
     """Accumulative and index-based: never redraws or discards a row already
@@ -146,7 +168,7 @@ def do_sample_detection(args: argparse.Namespace) -> None:
         need = min(need, len(pool))
         if need == 0:
             continue
-        weights = (1.0 / pool["hit_count"].clip(lower=1)) if stratum == "hit" else None
+        weights = _search_weights(pool, stratum)
         draw = pool.sample(n=need, weights=weights, random_state=args.seed).copy()
         draw["sampling_weight"] = pd.NA
         draw["split"] = "search"

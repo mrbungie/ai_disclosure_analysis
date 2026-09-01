@@ -13,17 +13,36 @@ by this script.
 
 Induces a ConceptSeed SUGGESTION — named concepts, positive/negative
 semantic anchors, candidate lexical terms, and candidate inclusion/
-exclusion rules — from an LLM reading a small DISCOVERY sample of the
-corpus, never the fitting/estimation sample the harnesses search
-against. This widens the seed screen's own construct representation
-beyond literal keyword matching (configs/config.json:
+exclusion rules — via an EMBEDDINGS-FIRST discovery pipeline
+(`--discover`) over a small DISCOVERY sample of the corpus, never the
+fitting/estimation sample the harnesses search against:
+
+    seed anchors (1 LLM call, names/descriptions only)
+      -> embed anchors + the full discovery sample
+      -> nearest-neighbor NEIGHBORHOOD per anchor (pure computation)
+      -> discriminative lexical terms per neighborhood (Counter-based,
+         no new ML dependency — this is what turns an opaque
+         sim(x, concept)=0.81 into "characterized by machine learning,
+         AI-enabled, copilot")
+      -> grounded refinement (1 LLM call, batched): given each
+         neighborhood's REAL excerpts + its discriminative terms, the
+         LLM confirms/discards the concept and writes anchors grounded
+         in that evidence rather than an ungrounded first guess
+
+Two roles for the two signal types, deliberately kept separate rather
+than fused into one score (see docs/distillation_map.html §0): embeddings
+are the DISCOVERY/coverage mechanism (find the concept even when the
+literal wording differs); lexical presence/counts are the
+INTERPRETABILITY mechanism (what a neighborhood is actually about, in
+words a reader can audit). This widens the seed screen's own construct
+representation beyond literal keyword matching (configs/config.json:
 seed_screen.ai_keywords), without touching that keyword list directly —
 lexical_candidates are surfaced as suggestions for a human/proposer to
 fold into seed_screen.ai_keywords later, not auto-merged.
 
 Usage:
     uv run python scripts/phase0_discovery.py --sample
-    uv run python scripts/phase0_discovery.py --induce
+    uv run python scripts/phase0_discovery.py --discover
     uv run python scripts/phase0_discovery.py --embed-anchors
     uv run python scripts/phase0_discovery.py --embed-discovery-sample
 """
@@ -101,17 +120,37 @@ class ConceptSeed(BaseModel):
                     "collisions, generic-tech boilerplate that resembles AI language but isn't).")
 
 
-INDUCTION_SYSTEM_PROMPT = (
-    "You are a financial-disclosure research assistant helping build a search space for detecting "
-    "AI/ML/LLM-related content in SEC 10-K filings. You will read a sample of real 10-K paragraphs "
-    "(NOT all AI-related — most are not) and induce a structured ConceptSeed: a small set of named "
-    "concepts covering the different ways AI shows up in 10-Ks (e.g. internal AI adoption, AI "
-    "products/features, generative AI, AI as a risk factor, AI governance/oversight), each with "
-    "positive example anchors (real or closely paraphrased text expressing the concept) and negative "
-    "anchors (text that superficially resembles AI language but is generic tech/business boilerplate "
-    "with no real AI content — this contrast is important for later precision). Also list lexical "
-    "candidates (terms not already in the existing keyword list) and short inclusion/exclusion rules. "
-    "Do not invent content beyond what plausibly matches the style of the sample; ground anchors in it."
+class SeedAnchor(BaseModel):
+    name: str = Field(description="Short slug, e.g. internal_ai_adoption.")
+    description: str = Field(description="One sentence naming a way AI might show up in a 10-K.")
+
+
+class SeedAnchorSet(BaseModel):
+    anchors: list[SeedAnchor]
+
+
+SEED_ANCHOR_SYSTEM_PROMPT = (
+    "You are a financial-disclosure research assistant. Propose 5-8 short, DISTINCT candidate concepts "
+    "for the different ways AI/ML/LLM content might show up in a SEC 10-K filing (e.g. internal AI "
+    "adoption, AI products/features, generative AI, AI as a risk factor, AI governance/oversight, "
+    "AI-related vendor/partnership disclosures, workforce/hiring for AI). Each concept: a short slug "
+    "name and a ONE-SENTENCE description only — no examples, no anchors yet. These are just starting "
+    "points that will be checked against a real corpus sample next, so cast a reasonably wide net."
+)
+
+REFINEMENT_SYSTEM_PROMPT = (
+    "You are a financial-disclosure research assistant. For each numbered candidate concept below, you "
+    "are shown: its name/description, a NEIGHBORHOOD of real 10-K excerpts that turned out to be "
+    "semantically closest to it in a corpus sample, and a list of terms/phrases that are statistically "
+    "over-represented in that neighborhood versus the rest of the sample. Using ONLY this evidence: "
+    "(1) decide whether the neighborhood is actually about the candidate concept (AI/ML/LLM content) — "
+    "if the excerpts are NOT really AI-related, DROP this concept entirely (return it with an empty "
+    "concepts entry is wrong; simply omit it from your output); (2) if kept, write positive_anchors as "
+    "short excerpts or close paraphrases DRAWN FROM the neighborhood shown (not invented) and "
+    "negative_anchors as short excerpts of generic tech/business language that would be confusable but "
+    "isn't really this concept; (3) from the over-represented terms shown, select the ones that are "
+    "low false-positive-risk as lexical_candidates, and note which ones you rejected and why in "
+    "exclusion_rules. Also fill inclusion_rules with any general pattern you notice across concepts."
 )
 
 
@@ -146,8 +185,9 @@ def do_sample(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
-# --induce: one LLM call over a subset of the discovery sample -> a
-# ConceptSeed SUGGESTION (not a candidate — see module docstring)
+# --discover: seed anchors -> embed -> nearest-neighbor neighborhoods ->
+# discriminative terms -> grounded LLM refinement -> a ConceptSeed
+# SUGGESTION (not a candidate — see module docstring)
 # ---------------------------------------------------------------------------
 
 
@@ -171,47 +211,151 @@ def harness_fit_scope_prompt() -> str:
     return build_eval_set.SCOPE_SYSTEM_PROMPT
 
 
-async def do_induce(args: argparse.Namespace) -> None:
+_TOKEN_RE = re.compile(r"[a-z]+(?:-[a-z]+)*")
+_STOPWORDS = {
+    "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "with", "is", "are",
+    "this", "that", "as", "by", "from", "at", "our", "we", "its", "be", "will", "not",
+    "may", "any", "such", "which", "these", "those", "has", "have", "had", "was", "were",
+}
+
+
+def _ngrams(text: str, n: int) -> list[str]:
+    tokens = _TOKEN_RE.findall(text.lower())
+    return [" ".join(tokens[i:i + n]) for i in range(len(tokens) - n + 1)]
+
+
+def discriminative_terms(neighborhood_texts: list[str], background_texts: list[str],
+                         top_k: int = 15) -> list[str]:
+    """Unigram/bigram/trigram frequency-ratio scoring: a term's rate inside
+    the neighborhood over its (Laplace-smoothed) rate in the background,
+    ranked descending. stdlib Counter only — no new ML dependency. This is
+    the artifact that turns an opaque sim(x, concept)=0.81 into
+    'characterized by machine learning, AI-enabled, copilot' — the
+    interpretability layer for embeddings' discovery layer."""
+    from collections import Counter
+
+    def counts(texts: list[str], n: int) -> Counter:
+        c = Counter()
+        for t in texts:
+            c.update(_ngrams(t, n))
+        return c
+
+    scored: list[tuple[str, float, int]] = []
+    for n in (1, 2, 3):
+        nb, bg = counts(neighborhood_texts, n), counts(background_texts, n)
+        nb_total, bg_total = sum(nb.values()) or 1, sum(bg.values()) or 1
+        for term, c in nb.items():
+            if n == 1 and (term in _STOPWORDS or len(term) < 3):
+                continue
+            if c < 2:
+                continue
+            rate_nb = c / nb_total
+            rate_bg = (bg.get(term, 0) + 0.5) / bg_total
+            scored.append((term, rate_nb / rate_bg, c))
+    scored.sort(key=lambda x: -x[1])
+    return [term for term, _, _ in scored[:top_k]]
+
+
+async def _propose_seed_anchors(config: dict) -> SeedAnchorSet:
+    agent = harness_fit.build_judge(SeedAnchorSet, SEED_ANCHOR_SYSTEM_PROMPT)
+    keywords = ", ".join(config["seed_screen"]["ai_keywords"])
+    prompt = (
+        f"Existing scope rule: {harness_fit_scope_prompt()}\n\n"
+        f"Existing seed-screen keywords (propose concepts beyond these, not restating them): {keywords}"
+    )
+    from pydantic_ai import Agent
+    seed_agent = Agent(agent.model, output_type=SeedAnchorSet, retries=3,
+                       system_prompt=SEED_ANCHOR_SYSTEM_PROMPT)
+    result = await seed_agent.run(prompt)
+    return result.output
+
+
+def _build_neighborhoods(seed_anchors: SeedAnchorSet, sample: pd.DataFrame, model_key: str,
+                         config: dict, top_n: int) -> list[dict]:
+    anchor_df = pd.DataFrame({
+        "paragraph_id": [harness_fit.paragraph_id(a.name, "seed", i, a.description)
+                        for i, a in enumerate(seed_anchors.anchors)],
+        "paragraph_text": [a.description for a in seed_anchors.anchors],
+    })
+    anchor_vecs = embeddings.get_or_compute_embeddings(anchor_df, model_key, config)
+    anchor_matrix = np.stack(anchor_vecs["embedding"].to_numpy())
+
+    sample_vecs = embeddings.get_or_compute_embeddings(sample, model_key, config)
+    sample_vecs = sample.merge(sample_vecs, on="paragraph_id")
+    sample_matrix = np.stack(sample_vecs["embedding"].to_numpy())
+
+    sims = embeddings.cosine_similarity(anchor_matrix, sample_matrix)  # (n_anchors, n_sample)
+    neighborhoods = []
+    for i, anchor in enumerate(seed_anchors.anchors):
+        order = np.argsort(-sims[i])
+        top_idx = order[:top_n]
+        neighborhood_texts = sample_vecs.iloc[top_idx]["paragraph_text"].tolist()
+        background_idx = order[top_n:]
+        background_texts = sample_vecs.iloc[background_idx]["paragraph_text"].sample(
+            n=min(len(background_idx), top_n * 4), random_state=42).tolist() if len(background_idx) else []
+        neighborhoods.append({
+            "anchor": anchor, "texts": neighborhood_texts,
+            "terms": discriminative_terms(neighborhood_texts, background_texts),
+        })
+    return neighborhoods
+
+
+async def do_discover(args: argparse.Namespace) -> None:
     config = load_config()
     sample_path = phase0_dir(config) / DISCOVERY_SAMPLE_NAME
     if not sample_path.exists():
         print(f"Error: {sample_path} not found. Run with --sample first.")
         return
     sample = pd.read_parquet(sample_path)
-    subset = sample.sample(n=min(args.induction_n, len(sample)), random_state=args.seed)
-    excerpts = "\n\n".join(f"[{i}] {t[:args.excerpt_chars]}" for i, t in enumerate(subset["paragraph_text"]))
+    model_key = config["phase0"]["active_embedding_model"]
 
-    keywords = ", ".join(config["seed_screen"]["ai_keywords"])
-    prompt = (
-        f"Existing scope rule: {harness_fit_scope_prompt()}\n\n"
-        f"Existing seed-screen keywords (do not just repeat these as lexical_candidates): {keywords}\n\n"
-        f"Discovery sample ({len(subset)} 10-K paragraphs, mixed AI-related and not):\n\n{excerpts}"
-    )
+    print("Step A: proposing seed anchors...")
+    seed_anchors = await _propose_seed_anchors(config)
+    for a in seed_anchors.anchors:
+        print(f"  - {a.name}: {a.description}")
 
-    agent = harness_fit.build_judge(ConceptSeed, INDUCTION_SYSTEM_PROMPT)
-    # Single unbatched call: build_judge's batching wraps output_type into a
-    # list-of-items schema for per-row labeling; induction wants ONE
-    # aggregate ConceptSeed, so we call the underlying model directly rather
-    # than going through judge_one/judge_batch's per-item plumbing.
+    print(f"Step B: embedding {len(sample)} discovery-sample rows + anchors, "
+          f"building top-{args.neighborhood_size} neighborhoods...")
+    neighborhoods = _build_neighborhoods(seed_anchors, sample, model_key, config, args.neighborhood_size)
+    for nb in neighborhoods:
+        print(f"  - {nb['anchor'].name}: top terms = {', '.join(nb['terms'][:8])}")
+
+    print("Step C: grounded refinement (1 LLM call, all neighborhoods batched)...")
+    blocks = []
+    for i, nb in enumerate(neighborhoods):
+        excerpts = "\n".join(f"    - {t[:300]}" for t in nb["texts"])
+        blocks.append(
+            f"[{i}] Candidate concept: {nb['anchor'].name} — {nb['anchor'].description}\n"
+            f"  Neighborhood excerpts:\n{excerpts}\n"
+            f"  Over-represented terms: {', '.join(nb['terms'])}"
+        )
+    prompt = "\n\n".join(blocks)
+
+    agent = harness_fit.build_judge(ConceptSeed, REFINEMENT_SYSTEM_PROMPT)
     from pydantic_ai import Agent
-    induction_agent = Agent(agent.model, output_type=ConceptSeed, retries=3,
-                            system_prompt=INDUCTION_SYSTEM_PROMPT)
-    result = await induction_agent.run(prompt)
+    refine_agent = Agent(agent.model, output_type=ConceptSeed, retries=3,
+                         system_prompt=REFINEMENT_SYSTEM_PROMPT)
+    result = await refine_agent.run(prompt)
     concept_seed = result.output
 
     version = _next_suggestion_version(config)
     out_path = suggestions_dir(config) / f"suggestion_v{version}.json"
     out_path.write_text(json.dumps(concept_seed.model_dump(), indent=2))
-    print(f"ConceptSeed suggestion v{version}: {len(concept_seed.concepts)} concepts, "
-          f"{len(concept_seed.lexical_candidates)} lexical candidates -> {out_path}")
+    print(f"\nConceptSeed suggestion v{version}: {len(concept_seed.concepts)}/{len(seed_anchors.anchors)} "
+          f"seed anchors kept after grounding, {len(concept_seed.lexical_candidates)} lexical "
+          f"candidates -> {out_path}")
     for c in concept_seed.concepts:
         print(f"  - {c.name}: {len(c.positive_anchors)} positive / {len(c.negative_anchors)} negative anchors")
+    dropped = {a.name for a in seed_anchors.anchors} - {c.name for c in concept_seed.concepts}
+    if dropped:
+        print(f"  Dropped as not grounded in real neighborhood evidence: {', '.join(sorted(dropped))}")
     print("This is raw material, not a candidate — copy/edit it into a new "
           "harnesses/phase0/<name>/concept_seed.json to actually propose and score it "
           "(scripts/eval_harness.py --task phase0 --candidate <name>).")
-    pipeline_logger.log_event(pipeline_step="phase0_induce", level="SUCCESS",
-                              message=f"Induced ConceptSeed suggestion v{version}.",
-                              details={"version": version, "n_concepts": len(concept_seed.concepts)})
+    pipeline_logger.log_event(pipeline_step="phase0_discover", level="SUCCESS",
+                              message=f"Discovered ConceptSeed suggestion v{version}.",
+                              details={"version": version, "n_concepts": len(concept_seed.concepts),
+                                      "n_seed_anchors": len(seed_anchors.anchors)})
 
 
 # ---------------------------------------------------------------------------
@@ -319,23 +463,22 @@ def semantic_hit(text: str, concept_seed: ConceptSeed, model_key: str, threshold
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--sample", action="store_true")
-    parser.add_argument("--induce", action="store_true")
+    parser.add_argument("--discover", action="store_true")
     parser.add_argument("--embed-anchors", action="store_true")
     parser.add_argument("--embed-discovery-sample", action="store_true")
     parser.add_argument("--n", type=int, default=None, help="--sample: override configs/config.json: phase0.discovery_sample.n")
-    parser.add_argument("--seed", type=int, default=None, help="--sample/--induce: override configs/config.json: phase0.discovery_sample.seed")
-    parser.add_argument("--induction-n", type=int, default=300, help="--induce: how many discovery-sample rows to feed the LLM in one call")
-    parser.add_argument("--excerpt-chars", type=int, default=500, help="--induce: chars per excerpt in the induction prompt")
+    parser.add_argument("--seed", type=int, default=None, help="--sample: override configs/config.json: phase0.discovery_sample.seed")
+    parser.add_argument("--neighborhood-size", type=int, default=15, help="--discover: nearest-neighbor rows per seed anchor")
     parser.add_argument("--suggestion-version", type=int, default=None, help="--embed-anchors: default is the latest suggestion")
     args = parser.parse_args()
 
-    if not any([args.sample, args.induce, args.embed_anchors, args.embed_discovery_sample]):
-        parser.error("Pass at least one of --sample/--induce/--embed-anchors/--embed-discovery-sample")
+    if not any([args.sample, args.discover, args.embed_anchors, args.embed_discovery_sample]):
+        parser.error("Pass at least one of --sample/--discover/--embed-anchors/--embed-discovery-sample")
 
     if args.sample:
         do_sample(args)
-    if args.induce:
-        asyncio.run(do_induce(args))
+    if args.discover:
+        asyncio.run(do_discover(args))
     if args.embed_anchors:
         do_embed_anchors(args)
     if args.embed_discovery_sample:

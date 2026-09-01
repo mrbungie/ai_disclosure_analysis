@@ -124,7 +124,7 @@
     exists. Renamed layers: <strong>Phase 0 is Induction</strong>, Cycle 1 / Distillation 1 is
     <strong>Selection</strong>, Cycle 2 / Distillation 2 is <strong>Distillation</strong>.</p>
     <figure>
-      <svg viewBox="0 0 980 300" role="img" aria-label="Concept discovery diagram. The full corpus feeds a small, independent discovery sample. That sample, together with the frozen codebook and scope rule as a construct boundary, feeds Phase 0: LLM induction plus embeddings. Phase 0 outputs a versioned ConceptSeed artifact of concepts, semantic anchors, lexical candidates, and candidate rules, dashed-bordered to mark it frozen before any fitting or estimation sample is drawn. The ConceptSeed then feeds the seed screen at the start of Cycle 1.">
+      <svg viewBox="0 0 980 380" role="img" aria-label="Concept discovery diagram. The full corpus feeds a small, independent discovery sample. An LLM proposes seed anchors (names and descriptions only). Anchors and the discovery sample are embedded, and each anchor's nearest-neighbor discovery-sample rows become its neighborhood. Discriminative lexical terms are extracted from each neighborhood by frequency ratio against the rest of the sample, no LLM call needed. A second LLM call, grounded in each neighborhood's real excerpts and discriminative terms, confirms or discards the concept and writes anchors and lexical candidates from that evidence, producing a versioned ConceptSeed. The ConceptSeed then feeds the seed screen at the start of Cycle 1.">
         <defs>
           <marker id="arr0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -139,55 +139,82 @@
           <text x="800" y="35" font-size="12" font-weight="600">codebook + scope rule</text>
           <text x="800" y="51" font-size="10.5" opacity="0.85">construct boundary · frozen</text>
         </g>
-        <path d="M 800 64 L 800 90 L 660 90 L 660 106" fill="none" stroke="var(--inst)" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr0I)"/>
+        <path d="M 800 64 L 800 84 L 190 84 L 190 106" fill="none" stroke="var(--inst)" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr0I)"/>
 
         <g fill="none" stroke="currentColor" stroke-width="1.3">
-          <rect x="30" y="110" width="160" height="52" rx="5"/>
-          <rect x="230" y="110" width="180" height="52" rx="5"/>
+          <rect x="30" y="110" width="140" height="46" rx="5"/>
         </g>
-        <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor" text-anchor="middle">
-          <text x="110" y="132">full corpus</text><text x="110" y="148">extract sections output</text>
-          <text x="320" y="132">discovery sample</text><text x="320" y="148">small, independent draw</text>
+        <g font-family="IBM Plex Sans, sans-serif" font-size="12" fill="currentColor" text-anchor="middle">
+          <text x="100" y="130">full corpus</text><text x="100" y="145">extract sections</text>
         </g>
-        <g stroke="currentColor" stroke-width="1.3" marker-end="url(#arr0)">
-          <line x1="190" y1="136" x2="226" y2="136"/>
-          <line x1="410" y1="136" x2="426" y2="136"/>
+        <path d="M 170 133 L 200 133" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#arr0)"/>
+
+        <rect x="204" y="106" width="150" height="54" rx="5" fill="none" stroke="currentColor" stroke-width="1.3"/>
+        <g font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="currentColor" text-anchor="middle">
+          <text x="279" y="128">discovery sample</text><text x="279" y="142">independent draw</text>
         </g>
 
-        <rect x="430" y="106" width="270" height="60" rx="6" fill="var(--c1-soft)" stroke="var(--c1)" stroke-width="2"/>
+        <path d="M 279 160 L 279 182 L 130 182 L 130 200" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#arr0)"/>
+        <path d="M 354 133 L 420 133 L 420 160" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#arr0)"/>
+
+        <rect x="40" y="204" width="180" height="52" rx="5" fill="var(--c1-soft)" stroke="var(--c1)" stroke-width="1.8"/>
         <g font-family="IBM Plex Sans, sans-serif" fill="var(--c1)" text-anchor="middle">
-          <text x="565" y="130" font-size="12.5" font-weight="600">PHASE 0 · CONCEPT DISCOVERY</text>
-          <text x="565" y="147" font-size="11.5">LLM induction + embeddings</text>
+          <text x="130" y="225" font-size="11.5" font-weight="600">seed anchors</text>
+          <text x="130" y="240" font-size="10.5">1 LLM call · names + descriptions only</text>
         </g>
 
-        <path d="M 565 166 L 565 190" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#arr0)"/>
-
-        <rect x="410" y="194" width="310" height="70" rx="5" fill="none" stroke="currentColor" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.7"/>
-        <g font-family="IBM Plex Sans, sans-serif" fill="currentColor" text-anchor="middle">
-          <text x="565" y="216" font-size="12.5" font-weight="600">ConceptSeed v1</text>
-          <text x="565" y="232" font-size="11">concepts · semantic anchors</text>
-          <text x="565" y="246" font-size="11">lexical candidates · candidate rules</text>
+        <rect x="330" y="164" width="180" height="52" rx="5" fill="var(--c1-soft)" stroke="var(--c1)" stroke-width="1.8"/>
+        <g font-family="IBM Plex Sans, sans-serif" fill="var(--c1)" text-anchor="middle">
+          <text x="420" y="185" font-size="11.5" font-weight="600">embed + kNN</text>
+          <text x="420" y="200" font-size="10.5">nearest-neighbor neighborhoods</text>
         </g>
-        <text x="716" y="272" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.65" text-anchor="end">frozen before fitting/estimation samples are drawn</text>
 
-        <path d="M 720 229 L 756 229" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#arr0)"/>
+        <path d="M 220 230 L 240 230 L 240 190 L 326 190" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#arr0)"/>
+        <path d="M 510 190 L 545 190" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#arr0)"/>
+
+        <rect x="549" y="164" width="180" height="52" rx="5" fill="none" stroke="currentColor" stroke-width="1.3"/>
+        <g font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="currentColor" text-anchor="middle">
+          <text x="639" y="185" font-weight="600">discriminative terms</text>
+          <text x="639" y="200" font-size="10">frequency ratio · no LLM call</text>
+        </g>
+
+        <path d="M 639 216 L 639 244" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#arr0)"/>
+
+        <rect x="519" y="248" width="240" height="56" rx="5" fill="var(--c2-soft)" stroke="var(--c2)" stroke-width="1.8"/>
+        <g font-family="IBM Plex Sans, sans-serif" fill="var(--c2)" text-anchor="middle">
+          <text x="639" y="270" font-size="11.5" font-weight="600">grounded refinement</text>
+          <text x="639" y="285" font-size="10.5">1 LLM call · confirm/discard, anchors</text>
+          <text x="639" y="298" font-size="10.5">from real neighborhood evidence</text>
+        </g>
+
+        <path d="M 639 304 L 639 320 L 425 320 L 425 336" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#arr0)"/>
+
+        <rect x="290" y="340" width="270" height="34" rx="5" fill="none" stroke="currentColor" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.7"/>
+        <text x="425" y="361" font-family="IBM Plex Sans, sans-serif" font-size="11.5" font-weight="600" fill="currentColor" text-anchor="middle">ConceptSeed v1 · frozen before fitting samples</text>
+
+        <path d="M 560 357 L 610 357" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#arr0)"/>
         <g fill="none" stroke="currentColor" stroke-width="1.3">
-          <rect x="760" y="199" width="190" height="60" rx="5"/>
+          <rect x="614" y="336" width="180" height="44" rx="5"/>
         </g>
-        <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor" text-anchor="middle">
-          <text x="855" y="224">into seed screen</text><text x="855" y="240">Cycle 1 / Distillation 1</text>
+        <g font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="currentColor" text-anchor="middle">
+          <text x="704" y="355">into seed screen</text><text x="704" y="369">Cycle 1</text>
         </g>
       </svg>
-      <figcaption>The discovery sample is drawn independently of the fitting and holdout samples used
-      later — Phase 0 never sees the sample a harness is scored against. Induction reuses the codebook
-      and scope rule only as the construct's boundary, not as labels to fit: nothing here is scored
-      against a reference yet. The output, ConceptSeed, is versioned and immutable like a harness
-      candidate — a revision is a new version, never an in-place edit — and is frozen (see §6's freeze
-      rule) before any fitting/estimation sample exists, so no round of "saw what failed downstream,
-      patched an anchor, re-measured" can enter through this stage. Its lexical candidates are
-      suggestions for the seed screen's keyword list, reviewed like any other candidate change, not
-      auto-merged; its semantic anchors feed the seed screen directly as an additional, embedding-
-      similarity hit signal alongside the lexical one (§2).</figcaption>
+      <figcaption>Two roles for the two signal types, kept separate rather than fused into one
+      score: embeddings are the DISCOVERY layer (kNN neighborhoods find the concept even when the
+      literal wording differs from the seed anchor's description); lexical presence/counts are the
+      INTERPRETABILITY layer (discriminative terms turn an opaque similarity score into "this
+      neighborhood is characterized by machine learning, AI-enabled, copilot" — auditable, not a black
+      box). Only 2 LLM calls total regardless of how many seed anchors are proposed: one to name
+      candidates, one batched call to refine all of them at once against their real evidence. The
+      discovery sample is drawn independently of the fitting and holdout samples used later — Phase 0
+      never sees the sample a harness is scored against. The output, ConceptSeed, is versioned and
+      immutable like a harness candidate — a revision is a new version, never an in-place edit — and is
+      frozen (see §6's freeze rule) before any fitting/estimation sample exists, so no round of "saw
+      what failed downstream, patched an anchor, re-measured" can enter through this stage. Its lexical
+      candidates are suggestions for the seed screen's keyword list, reviewed like any other candidate
+      change, not auto-merged; its semantic anchors feed the seed screen directly as an additional,
+      embedding-similarity hit signal alongside the lexical one — see §2's dual-route seed screen.</figcaption>
     </figure>
   </section>
 
@@ -417,6 +444,27 @@
       measure corpus recall. Stage 2 reuses everything below the stratification band and replaces the
       band with strata of its own.</figcaption>
     </figure>
+
+    <div class="callout">
+      <b>The dual-route seed screen.</b> Stage 1's screen has two independent routes to a hit,
+      unioned rather than required to agree: <code>Seed(x) = [lexical_hit(x)] OR
+      [semantic_hit(x)]</code>. Lexical matching is a partially independent check that carries none
+      of whatever bias a phase0 ConceptSeed's LLM-generated anchors might introduce; embedding
+      similarity catches paraphrases lexical matching structurally cannot. Where they DISAGREE is
+      the most informative evidence stage 1 has, and it feeds the search sample directly — a
+      lexical &times; semantic 2&times;2, read off <code>scripts/seed_screen.py</code>'s
+      <code>agreement_quadrant</code> column and used by <code>build_eval_set.py</code> to oversample
+      the two disagreement cells in the SEARCH draw only (never the holdout, which stays an
+      unweighted probability sample):
+      <table class="map" style="margin-top:10px">
+        <tr><th>&nbsp;</th><th>semantic: high</th><th>semantic: low</th></tr>
+        <tr><td class="note"><b>lexical: high</b></td><td class="note">easy positives</td>
+        <td class="note">probable lexical false positives</td></tr>
+        <tr><td class="note"><b>lexical: low</b></td>
+        <td class="note">probable lexical false negatives — what phase0 exists to surface</td>
+        <td class="note">background</td></tr>
+      </table>
+    </div>
 
     <p class="body" style="margin-top:20px">The stages share one implementation; what differs is
     passed in.</p>
