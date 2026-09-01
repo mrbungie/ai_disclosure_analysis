@@ -169,6 +169,26 @@ def markdown_to_paragraphs(text: str) -> list[str]:
     return paragraphs
 
 
+def load_filing_sections(config: dict) -> pd.DataFrame:
+    """Reads every extraction run's part-files (scripts/04_extract_sections.py
+    writes filing_sections__run=<run_id>__part=<NNNN>__<comment>.parquet, never
+    a single overwritten file) and collapses to one row per
+    (accession_number, section_name), keeping the most recent run_date. Glob,
+    don't hardcode a single filename — new runs just add more part files."""
+    sections_dir = Path(config["paths"]["interim_sections"])
+    part_paths = sorted(sections_dir.glob("filing_sections__run=*__part=*.parquet"))
+    if not part_paths:
+        raise FileNotFoundError(
+            f"No filing_sections__run=*__part=*.parquet files under {sections_dir}. "
+            "Run scripts/04_extract_sections.py first."
+        )
+    sections = pd.concat((pd.read_parquet(p) for p in part_paths), ignore_index=True)
+    sections = sections.sort_values("run_date").drop_duplicates(
+        subset=["accession_number", "section_name"], keep="last"
+    )
+    return sections
+
+
 def flatten_corpus_paragraphs(config: dict) -> pd.DataFrame:
     """One row per paragraph across the entire parsed corpus: paragraph_id,
     accession_number, ticker, industry_group, filing_date, section_name,
@@ -176,7 +196,7 @@ def flatten_corpus_paragraphs(config: dict) -> pd.DataFrame:
     every stage samples from the same paragraph universe. Paragraphs are
     markdown blocks (markdown_to_paragraphs), not raw text lines."""
     manifest = pd.read_parquet(Path(config["paths"]["interim_manifests"]) / "filing_manifest.parquet")
-    sections = pd.read_parquet(Path(config["paths"]["interim_sections"]) / "filing_sections.parquet")
+    sections = load_filing_sections(config)
     firm_universe = pd.read_parquet(Path(config["paths"]["interim_manifests"]) / "firm_universe.parquet")
     ticker_industry = dict(zip(firm_universe["ticker"], firm_universe["industry_group"]))
 
