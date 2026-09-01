@@ -20,11 +20,21 @@ Usage:
 """
 
 import hashlib
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+# HuggingFace Hub's Xet download backend (its default as of late 2026)
+# fails on this network with "CAS Client Error: Format error: I/O error:
+# error decoding response body" on some large-model downloads (BGE-M3
+# reproduced it consistently) — falling back to the plain HTTP downloader
+# fixes it. Must be set before sentence_transformers/huggingface_hub is
+# imported anywhere in the process, so set it at module import time here
+# rather than relying on every caller's shell environment.
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
 _MODEL_CACHE: dict[str, object] = {}
 
