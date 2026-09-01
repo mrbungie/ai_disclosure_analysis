@@ -21,13 +21,13 @@ CRSP drop-in (schema contract): every price file carries a `source` column
 with source='crsp' is a strict upgrade the analysis picks up without code
 changes — that is also the only clean path to returns for DELISTED firms,
 which yfinance does not serve (their EDGAR filings still flow through the
-text pipeline; only their prices need CRSP). Survivorship note: the firm
-universe itself (configs/config.json pipeline.tickers) was hand-assembled
-from currently listed firms — a limitation of the universe, not of this
-collector; documented in docs/design_assessment_2026-08-31.md.
+01_10k text pipeline; only their prices need CRSP). Survivorship note: the
+firm universe itself (configs/config.json pipeline.tickers) was hand-
+assembled from currently listed firms — a limitation of the universe, not
+of this collector.
 
 Usage:
-    uv run python scripts/13_collect_market_data.py [--start 2020-01-01] [--refresh] [--tickers AAPL,MSFT]
+    uv run python 02_market_data/scripts/01_collect_market_data.py [--start 2020-01-01] [--refresh] [--tickers AAPL,MSFT]
 """
 
 import argparse
@@ -45,10 +45,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root, for common/
+
 try:
     import pipeline_logger
 except ImportError:
-    from scripts import pipeline_logger
+    from common import pipeline_logger
 
 PRICES_DIR = Path("data/raw/market/prices")
 FACTORS_DIR = Path("data/raw/market/factors")

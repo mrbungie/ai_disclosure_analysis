@@ -6,10 +6,13 @@ import pandas as pd
 from pathlib import Path
 from datetime import datetime
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root, for common/
+
 try:
     import pipeline_logger
 except ImportError:
-    from scripts import pipeline_logger
+    from common import pipeline_logger
 
 def main():
     # Load configuration

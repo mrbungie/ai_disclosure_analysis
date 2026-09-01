@@ -4,10 +4,13 @@ from pathlib import Path
 
 import pandas as pd
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root, for common/
+
 try:
     import pipeline_logger
 except ImportError:
-    from scripts import pipeline_logger
+    from common import pipeline_logger
 
 # Source of truth for the firm universe: configs/universe.csv (ticker, cik,
 # company_name, inclusion_rule, active_status — see docs/universe_expansion_plan.md

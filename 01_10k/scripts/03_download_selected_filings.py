@@ -7,10 +7,13 @@ from pathlib import Path
 from tqdm import tqdm
 from datetime import datetime
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root, for common/
+
 try:
     import pipeline_logger
 except ImportError:
-    from scripts import pipeline_logger
+    from common import pipeline_logger
 
 def download_filing(metadata, url, local_path, headers, max_retries=3):
     local_path = Path(local_path)
