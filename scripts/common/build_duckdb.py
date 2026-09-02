@@ -304,7 +304,26 @@ def _paragraph_select_sql(form: str, source_view: str) -> str:
             form, country_code, accession_number, item_key,
             line_type AS content_type,
             MIN(line_index) AS paragraph_index,
-            string_agg(line_text, chr(10) ORDER BY line_index) AS paragraph_text
+            string_agg(line_text, chr(10) ORDER BY line_index) AS paragraph_text,
+            -- `is_scorable`: descarta lo que la extracción deja como párrafo
+            -- pero no tiene contenido. Medido sobre el corpus: 235.935 filas
+            -- (7,2%) tienen 3 caracteres o menos — viñetas sueltas, espacios de
+            -- ancho cero, guiones. Un `•` repetido 23.497 veces es el texto más
+            -- "frecuente" del corpus.
+            --
+            -- El criterio es tener al menos un carácter alfanumérico Y más de 3
+            -- caracteres útiles. NO se filtra por largo mayor: encabezados como
+            -- "Risks Related to Artificial Intelligence" tienen 40 caracteres y
+            -- son señal legítima.
+            --
+            -- No se borran las filas: se marcan. El párrafo sigue existiendo
+            -- para reconstruir la sección, y `paragraph_index` mantiene su
+            -- correspondencia con el texto original — filtrarlas acá
+            -- renumeraría todo y rompería las llaves ya escritas en los
+            -- embeddings, los scores y el golden set.
+            length(trim(string_agg(line_text, chr(10) ORDER BY line_index))) > 3
+                AND regexp_matches(string_agg(line_text, chr(10) ORDER BY line_index),
+                                   '[A-Za-z0-9]') AS is_scorable
         FROM grouped
         GROUP BY form, country_code, accession_number, item_key, group_id, line_type
     """

@@ -7,6 +7,23 @@ poder citar de dónde sale cada decisión.
 Corpus de referencia: **3.281.038 párrafos** (`us` 10-K 1.544.496 / 10-Q
 1.736.542), 469.231.281 tokens. Modelo `BAAI/bge-m3`, 1024 dims.
 
+**Base de cálculo: 3.016.097 párrafos puntuables** (`paragraphs.is_scorable`).
+Se descartan 264.941 filas (8,1%) que la extracción deja como párrafo sin
+contenido: viñetas sueltas, espacios de ancho cero, guiones. El texto más
+"frecuente" del corpus es un `•` repetido 23.497 veces, y hay 139.157 filas de
+un solo carácter. Promedian 10 caracteres contra 472 los puntuables.
+
+No se borran, se marcan: `paragraph_index` tiene que seguir correspondiendo al
+texto original o se rompen las llaves ya escritas en embeddings, scores y golden
+set. Tampoco hace falta re-scorear — el prefiltro ya las manejaba bien (score
+semántico máximo 0,5483, ninguna supera 0,6); lo que corregían era el
+denominador. El golden set queda casi intacto: sólo 6 de 6.038 etiquetas cayeron
+sobre filas no puntuables, ninguna positiva.
+
+Los porcentajes de secciones anteriores calculados sobre 3.281.038 quedan ~9%
+bajos. Los corregidos: léxico fuerte marca 8.347 (**0,277%**), el híbrido 13.829
+(**0,459%**).
+
 Fecha de las corridas: 2026-09-02.
 
 ---
