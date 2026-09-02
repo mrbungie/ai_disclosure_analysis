@@ -332,6 +332,23 @@ def build_sample(
 # Partes: verificación y escritura atómica
 # --------------------------------------------------------------------------
 
+LABEL_SCHEMA = pa.schema([
+    ("country_code", pa.string()), ("form", pa.string()),
+    ("accession_number", pa.string()), ("item_key", pa.string()),
+    ("paragraph_index", pa.int64()), ("text_hash", pa.uint64()),
+    ("stage", pa.string()), ("stratum", pa.string()),
+    ("inclusion_weight", pa.float64()), ("keyword_tier", pa.string()),
+    ("sector", pa.string()), ("filing_year", pa.string()),
+    ("sampling_version", pa.string()), ("judge_model", pa.string()),
+    ("prompt_version", pa.string()), ("session_id", pa.string()),
+    ("labeled_at", pa.string()), ("is_ai_disclosure", pa.bool_()),
+    ("relevance", pa.string()), ("categories", pa.list_(pa.string())),
+    ("evidence_quote", pa.string()), ("evidence_verbatim", pa.bool_()),
+    ("mentions_ai_explicitly", pa.bool_()), ("confidence", pa.float64()),
+    ("reasoning", pa.string()), ("error", pa.string()),
+])
+
+
 def label_parts(directory: Path) -> list[Path]:
     return sorted(directory.glob(LABEL_GLOB))
 
@@ -366,13 +383,12 @@ def verify_parts(directory: Path, judge_model: str, prompt_version: str) -> dict
 def commit_part(rows: list[dict], directory: Path, session_id: str, index: int) -> Path:
     final = directory / f"golden_set_labels__session={session_id}__part={index:05d}.parquet"
     staging = final.with_suffix(".parquet.partial")
-    # text_hash explícito como uint64: son 8 bytes sin signo, se pasan de int64,
-    # y así calza con el tipo que escribe ai_embed.py para poder unirlos.
-    table = pa.Table.from_pylist([{k: v for k, v in row.items() if k != "text_hash"}
-                                  for row in rows])
-    table = table.append_column("text_hash",
-                                pa.array([row["text_hash"] for row in rows], type=pa.uint64()))
-    pq.write_table(table, staging, compression="zstd")
+    # Esquema explícito, no inferido. Con inferencia, una parte sin errores tipa
+    # `error` como NULL y una con errores como VARCHAR, y después union_by_name no
+    # las puede unir ("Unimplemented type for cast VARCHAR -> NULL"). Lo mismo
+    # pasa con los campos de etiqueta si una parte entera falló. text_hash va
+    # uint64 —8 bytes sin signo se pasan de int64— igual que en ai_embed.py.
+    pq.write_table(pa.Table.from_pylist(rows, schema=LABEL_SCHEMA), staging, compression="zstd")
     staging.replace(final)
     return final
 
@@ -540,8 +556,13 @@ def cmd_label(args) -> None:
                     f"SELECT * FROM read_parquet('{args.sample_path}')")
         if audit["usable"]:
             files = ", ".join(f"'{p}'" for p in audit["usable"])
+            # `error IS NULL`: una fila que falló en la API está escrita en la
+            # parte para no perder el intento, pero NO es cobertura — si contara,
+            # la corrida siguiente la saltearía y el párrafo quedaría sin etiqueta
+            # para siempre. Así un corte por créditos o por red se reintenta solo.
             con.execute(f"CREATE OR REPLACE TEMP VIEW labeled AS SELECT DISTINCT "
-                        f"{', '.join(PARAGRAPH_KEY)} FROM read_parquet([{files}], union_by_name=True)")
+                        f"{', '.join(PARAGRAPH_KEY)} FROM read_parquet([{files}], union_by_name=True) "
+                        f"WHERE error IS NULL")
         else:
             con.execute(f"CREATE OR REPLACE TEMP VIEW labeled AS SELECT "
                         f"{', '.join(PARAGRAPH_KEY)} FROM sample WHERE false")

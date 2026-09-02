@@ -236,14 +236,27 @@ Uniendo el golden set a `ai_prefilter_scores` por la llave:
 - **Comparación de scorings** — léxico solo, semántico solo, híbrido — sobre la
   misma etiqueta independiente. Es la comparación que la etiqueta léxica no
   permite hacer (§1).
-- **Ranking por categoría**: AUC de cada `score_<categoría>` contra "esa categoría
-  está en `categories`". **No** usar la precisión de `best_semantic_anchor`: el
-  juez asigna 2,1 categorías por párrafo y el argmax elige una sola, así que esa
-  métrica mide tasas base, no calidad de anclas. Medido sobre las primeras 2.000
-  etiquetas, `ai_governance` acertaba el argmax en 4% de los casos pero rankea con
-  AUC 0,962 — pierde siempre contra `ai_risk` porque en filings "board oversight
-  of AI risk" es ambas cosas a la vez. Al revés, `ai_capability` gana el 93% de
-  los argmax con el peor AUC de todos (0,755).
+- **Ranking por categoría**: precisión promedio (AP, área bajo precisión-recall)
+  de cada `score_<categoría>` contra "esa categoría está en `categories`", junto
+  con el **lift** sobre la tasa base y `P@k`. Dos advertencias, ambas verificadas
+  sobre las primeras 4.000 etiquetas:
+
+  1. **No usar la precisión de `best_semantic_anchor`.** El juez asigna 2,1
+     categorías por párrafo y el argmax elige una sola, así que esa métrica mide
+     tasas base: `ai_governance` acierta el argmax en 4% de los casos porque
+     pierde siempre contra `ai_risk` — en filings "board oversight of AI risk" es
+     honestamente ambas —, mientras `ai_capability` gana el 93% de sus argmax
+     siendo de las peores rankeando.
+  2. **No usar ROC-AUC solo.** Las categorías van de 21,9% a 0,9% de tasa base y
+     el ROC-AUC se infla con desbalance: `ai_governance` da 0,924 de AUC pero
+     0,246 de AP. El lift la rescata (16,4x, el más alto de las siete), que es la
+     lectura correcta para una categoría rara.
+
+  Mirando AP y lift juntos aparece la categoría realmente floja, invisible bajo
+  las otras dos métricas: `ai_outcome`, con AP 0,135 sobre base 4,475% (lift
+  3,0x) y 18% de precisión en el top-50 — sus anclas hablan de productividad,
+  costos e ingresos, el lenguaje de medio MD&A tenga IA o no.
+
 - **Diagnóstico de anchors**: los falsos positivos apuntan al anchor que los
   atrajo. Así se detectó que *"The company relies on third-party artificial
   intelligence providers or models."* capturaba boilerplate de proveedores.
