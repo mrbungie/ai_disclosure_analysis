@@ -16,7 +16,18 @@ the branch was deleted unmerged, and the underlying labeled data in
 tree, never in git — was lost with no way to recover it. Git history
 saved the *code*; nothing saved the *data*.
 
-**How to apply:** before removing or overwriting any such file:
+**Exception — an explicit instruction wins.** If I tell you to delete a
+specific file, delete it. Don't archive it "just in case," don't cite this
+rule back at me, don't ask again. This rule exists to stop *incidental*
+deletion — a cleanup step, a branch reset, a regeneration that silently
+takes data with it — not to override me when I've named the file and said
+to remove it. If the deletion looks costly (an LLM-labeled artifact that
+would cost money to rebuild), say so in one line, then do it. Delete it
+everywhere it lives, including the B2 bucket — a stale copy in the remote
+comes back on the next `pull` and is worse than not deleting at all.
+
+**How to apply** (for deletions I did NOT explicitly ask for): before
+removing or overwriting any such file:
 1. Move it (don't delete) into `data/archive/<original-relative-path>/<timestamp>/`.
 2. Next to it, write a `POINTER.json` with:
    - `original_path`: where it lived in `data/`

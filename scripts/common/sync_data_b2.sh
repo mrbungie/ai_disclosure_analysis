@@ -1,22 +1,31 @@
 #!/usr/bin/env bash
-# Mirror data/ to/from the Backblaze B2 bucket configured in .env.
+# Mirror data/ to or from the Backblaze B2 bucket configured in .env.
 #
-# Behavior:
-#   - Bidirectional sync (rclone bisync): new local files go up, new remote
-#     files come down.
-#   - On a real conflict (same relpath changed on both sides), the REMOTE
-#     copy wins (--conflict-resolve=path2) — "arriba manda".
-#   - Deletions are never applied silently: a dry run is inspected first,
-#     and if it would delete or overwrite-via-conflict anything, the diff is
-#     shown and you're asked to confirm before the real sync runs.
-#   - First run against a given local/remote pair needs --resync (rclone
-#     bisync requirement) to build its baseline; the script won't do this
-#     on its own.
+# Two explicit one-way operations, never both at once:
+#   push  (DEFAULT)  local data/  ->  B2      "subir lo que produje"
+#   pull             B2           ->  local data/
+#
+# This replaced an `rclone bisync` setup. Bisync needs a baseline built by
+# --resync, and it aborts the WHOLE run on any fatal error demanding a fresh
+# --resync to recover — which is exactly what happened when B2 returned
+# 403 download_cap_exceeded mid-pull: 4298 of 13133 files had landed and the
+# baseline was gone. One-way copy just resumes where it left off.
+#
+# Both directions are ADDITIVE by default (rclone copy): nothing on the
+# destination is ever deleted or overwritten-to-nothing, so a push cannot
+# destroy remote data and a pull cannot destroy local data. Pass --delete to
+# mirror instead (rclone sync); that path shows a dry run first and asks
+# before touching anything, and refuses outright when not on a terminal.
+#
+# In-flight files are skipped: *.partial is how scripts/common/ai_prefilter.py
+# stages a parquet part before renaming it into place, so uploading one would
+# publish a truncated part.
 #
 # Usage:
-#   scripts/common/sync_data_b2.sh              # normal sync
-#   scripts/common/sync_data_b2.sh --resync      # first run / baseline reset
-#   scripts/common/sync_data_b2.sh --dry-run     # show what would happen, do nothing
+#   scripts/common/sync_data_b2.sh                 # push (default)
+#   scripts/common/sync_data_b2.sh push --dry-run
+#   scripts/common/sync_data_b2.sh pull
+#   scripts/common/sync_data_b2.sh pull --delete   # mirror, asks first
 
 set -euo pipefail
 
@@ -24,13 +33,16 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOCAL_DIR="$REPO_ROOT/data"
 ENV_FILE="$REPO_ROOT/.env"
 
-RESYNC=0
-DRY_RUN_ONLY=0
+DIRECTION="push"
+DRY_RUN=0
+DELETE=0
 for arg in "$@"; do
   case "$arg" in
-    --resync) RESYNC=1 ;;
-    --dry-run) DRY_RUN_ONLY=1 ;;
-    *) echo "Unknown argument: $arg" >&2; exit 1 ;;
+    push|pull) DIRECTION="$arg" ;;
+    --dry-run) DRY_RUN=1 ;;
+    --delete)  DELETE=1 ;;
+    -h|--help) sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    *) echo "Unknown argument: $arg (expected push|pull [--dry-run] [--delete])" >&2; exit 1 ;;
   esac
 done
 
@@ -55,10 +67,7 @@ set +a
 : "${RCLONE_REMOTE_NAME:?Falta RCLONE_REMOTE_NAME en .env}"
 B2_PREFIX="${B2_PREFIX:-}"
 
-if [[ ! -d "$LOCAL_DIR" ]]; then
-  echo "No existe $LOCAL_DIR — nada que sincronizar." >&2
-  exit 1
-fi
+mkdir -p "$LOCAL_DIR"
 
 REMOTE_ENV_NAME="$(echo "$RCLONE_REMOTE_NAME" | tr '[:lower:]-' '[:upper:]_')"
 export "RCLONE_CONFIG_${REMOTE_ENV_NAME}_TYPE"=b2
@@ -70,57 +79,63 @@ if [[ -n "$B2_PREFIX" ]]; then
   REMOTE_PATH="${REMOTE_PATH}/${B2_PREFIX}"
 fi
 
-STATE_DIR="$REPO_ROOT/.rclone-bisync-state"
-mkdir -p "$STATE_DIR"
-
-BISYNC_ARGS=(
-  bisync "$LOCAL_DIR" "$REMOTE_PATH"
-  --workdir "$STATE_DIR"
-  --conflict-resolve path2
-  --conflict-loser pathname
-  --recover
-)
-if [[ $RESYNC -eq 1 ]]; then
-  BISYNC_ARGS+=(--resync)
+if [[ "$DIRECTION" == "push" ]]; then
+  SOURCE="$LOCAL_DIR"; DESTINATION="$REMOTE_PATH"
+else
+  SOURCE="$REMOTE_PATH"; DESTINATION="$LOCAL_DIR"
 fi
 
-echo "Local:  $LOCAL_DIR"
-echo "Remoto: $REMOTE_PATH"
+OPERATION="copy"
+[[ $DELETE -eq 1 ]] && OPERATION="sync"
+
+RCLONE_ARGS=(
+  "$OPERATION" "$SOURCE" "$DESTINATION"
+  --exclude "*.partial"
+  --exclude ".DS_Store"
+  --transfers 8
+  --checkers 16
+)
+
+echo "Operación: $DIRECTION ($OPERATION)"
+echo "  desde: $SOURCE"
+echo "  hacia: $DESTINATION"
 echo
 
-echo "Revisando cambios (dry-run)..."
-DRY_LOG="$(mktemp)"
-trap 'rm -f "$DRY_LOG"' EXIT
-if ! rclone "${BISYNC_ARGS[@]}" --dry-run -v > "$DRY_LOG" 2>&1; then
-  echo "El dry-run de rclone bisync falló:" >&2
-  cat "$DRY_LOG" >&2
-  exit 1
-fi
-
-if [[ $DRY_RUN_ONLY -eq 1 ]]; then
-  cat "$DRY_LOG"
+if [[ $DRY_RUN -eq 1 ]]; then
+  rclone "${RCLONE_ARGS[@]}" --dry-run -v
   echo
   echo "(--dry-run: no se aplicó nada)"
   exit 0
 fi
 
-# Anything that looks like a deletion or a conflict getting resolved is
-# treated as "raro": show it and ask before touching real data.
-RISKY_LINES="$(grep -Ei 'delet|conflict|error|won|renam' "$DRY_LOG" || true)"
-
-if [[ -n "$RISKY_LINES" ]]; then
-  echo "El dry-run detectó cambios que ameritan revisión (borrados/conflictos):"
-  echo
-  echo "$RISKY_LINES"
-  echo
-  read -r -p "¿Continuar con el sync real? [y/N] " CONFIRM
-  case "$CONFIRM" in
-    y|Y|yes|si|sí) ;;
-    *) echo "Cancelado, no se aplicó nada."; exit 0 ;;
-  esac
-else
-  echo "Sin borrados ni conflictos detectados, aplicando sync..."
+# Mirroring can delete. Show exactly what would go and get a yes first — and
+# never guess an answer when nothing is there to answer (cron, CI).
+if [[ $DELETE -eq 1 ]]; then
+  echo "Revisando qué borraría (dry-run)..."
+  DRY_LOG="$(mktemp)"
+  trap 'rm -f "$DRY_LOG"' EXIT
+  if ! rclone "${RCLONE_ARGS[@]}" --dry-run -v > "$DRY_LOG" 2>&1; then
+    echo "El dry-run falló:" >&2
+    cat "$DRY_LOG" >&2
+    exit 1
+  fi
+  DELETIONS="$(grep -Ei 'delet' "$DRY_LOG" || true)"
+  if [[ -n "$DELETIONS" ]]; then
+    echo "$DELETIONS"
+    echo
+    if [[ ! -t 0 ]]; then
+      echo "Hay borrados pendientes y no hay terminal para confirmar. Cancelado." >&2
+      exit 1
+    fi
+    read -r -p "¿Aplicar estos borrados en $DESTINATION? [y/N] " CONFIRM
+    case "$CONFIRM" in
+      y|Y|yes|si|sí) ;;
+      *) echo "Cancelado, no se aplicó nada."; exit 0 ;;
+    esac
+  else
+    echo "Sin borrados pendientes."
+  fi
 fi
 
-rclone "${BISYNC_ARGS[@]}" -v
-echo "Sync completo."
+rclone "${RCLONE_ARGS[@]}" -v --stats 30s --stats-one-line
+echo "$DIRECTION completo."
