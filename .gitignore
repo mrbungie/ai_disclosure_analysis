@@ -11,3 +11,4 @@ __pycache__/
 .env
 scratch/
 .edgartools_data/
+.rclone-bisync-state/
