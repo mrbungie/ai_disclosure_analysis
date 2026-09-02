@@ -75,74 +75,95 @@ lexical:
     - rpa
 
 semantic:
+  # CÓMO ESCRIBIR UN ANCHOR
+  # El anchor tiene que ser LENGUAJE DE IA, no una oración de filing que
+  # mencione IA. La similitud coseno se queda con la parte dominante de la
+  # oración, así que todo el andamiaje corporativo que le agregues ("our board
+  # of directors, through its audit and risk committees...") es lo que va a
+  # recuperar.
+  #
+  # Dos versiones anteriores fallaron por esto y vale la pena tenerlas
+  # presentes:
+  #  1) Descripciones de categoría ("The company relies on third-party
+  #     artificial intelligence providers") -> recuperaba boilerplate de
+  #     dependencia de proveedores; "We are dependent on third-party suppliers"
+  #     quedaba en el puesto 12 del corpus.
+  #  2) Prosa de filing realista ("Our board of directors, through its audit and
+  #     risk committees, oversees the risks associated with our use of
+  #     artificial intelligence") -> peor todavía: los 147.783 párrafos sin
+  #     match léxico y margen alto eran encabezados de sección, boilerplate de
+  #     comités y párrafos de ingresos. Ninguno mencionaba IA.
+  #
+  # La regla: si tapás las palabras de IA del anchor y lo que queda todavía
+  # describe medio corpus, el anchor está mal.
   positive:
     ai_use:
-      - We use artificial intelligence and machine learning technologies across our
-        business operations to automate processes and support decision-making.
-      - Our products and services incorporate artificial intelligence features, and we
-        have deployed machine learning models in our customer-facing offerings.
+      - artificial intelligence and machine learning deployed in production, AI
+        models running in our products, generative AI features used by customers
+      - we use AI to automate workflows, machine learning powers our decisioning,
+        AI-driven automation of internal processes
     ai_exploration:
-      - We are evaluating and piloting generative artificial intelligence tools, and
-        continue to explore additional applications of these technologies.
-      - We have begun testing artificial intelligence in a limited number of use
-        cases, and expect to expand these pilots if the early results justify further
-        investment.
-      - We are in the early stages of assessing how machine learning could be applied
-        to our operations, and no material deployment has occurred to date.
+      - piloting generative AI, evaluating large language models, early-stage AI
+        experiments and proofs of concept, testing AI use cases
+      - exploring artificial intelligence applications, assessing where machine
+        learning could be applied, AI still in trial and not yet deployed
     ai_capability:
-      - We develop and train our own proprietary artificial intelligence models and
-        maintain the machine learning platforms on which our products depend.
-      - Our artificial intelligence features depend on large language models licensed
-        from third-party AI providers, and any interruption in access to those models
-        could affect our offerings.
-      - We are investing in artificial intelligence infrastructure, including
-        specialized computing capacity, training data, and AI engineering talent.
+      - proprietary AI models trained in-house, our own machine learning
+        platform, foundation models we develop, AI research and engineering teams
+      - large language models licensed from AI providers, third-party AI model
+        vendors, dependence on external foundation model providers
+      - AI infrastructure investment, GPU and accelerated computing capacity for
+        machine learning, training data and AI talent
     ai_outcome:
-      - Our use of artificial intelligence has improved productivity and operational
-        efficiency and reduced costs across the organization.
-      - Artificial intelligence capabilities contributed to revenue growth and
-        improved customer experience through greater personalization.
+      - productivity gains from artificial intelligence, cost savings delivered
+        by machine learning, efficiency improvements attributed to AI automation
+      - revenue growth driven by AI products, AI monetization and adoption,
+        customer engagement improved by machine learning personalization
     ai_risk:
-      - The use of artificial intelligence by us or our vendors introduces new
-        cybersecurity and data privacy risks, including the misuse of personal data.
-      - Artificial intelligence is subject to evolving laws and regulation, and our
-        use of AI may give rise to intellectual property, copyright, and litigation
-        risk.
-      - Our artificial intelligence systems may produce inaccurate, biased, or
-        harmful outputs, and such errors could damage our reputation and expose us to
-        liability.
-      - Artificial intelligence may disrupt our competitive position or displace
-        portions of our workforce, and competitors may deploy AI more effectively
-        than we do.
+      - artificial intelligence cybersecurity risk, AI-enabled attacks, misuse of
+        personal data by AI systems, model and training data breaches
+      - AI regulation and compliance, artificial intelligence law, algorithmic
+        accountability requirements, AI copyright and intellectual property
+        disputes
+      - AI hallucination and inaccurate model output, algorithmic bias,
+        unreliable machine learning predictions, harmful AI-generated content
+      - competitive disruption from artificial intelligence, AI displacing our
+        workforce, rivals deploying machine learning faster
     ai_governance:
-      - We have adopted policies, oversight processes, and human review procedures
-        governing the development and deployment of artificial intelligence, including
-        board and management oversight of AI risk.
-      - Our board of directors, through its audit and risk committees, oversees the
-        risks associated with our use of artificial intelligence, and management
-        reports periodically on our AI programs.
-      - We maintain internal controls, acceptable-use standards, and human-in-the-loop
-        review over artificial intelligence systems, and we monitor them for
-        compliance with applicable data protection and AI regulation.
+      - artificial intelligence governance framework, responsible AI policy, AI
+        ethics standards, human-in-the-loop review of AI systems, AI model risk
+        management
+      - AI acceptable use standards, oversight of artificial intelligence
+        deployment, controls and monitoring over machine learning models
     ai_strategy:
-      - Artificial intelligence is central to our long-term strategy, and we believe
-        it will be transformative for our industry and our competitive position.
-      - We are positioning the company to lead in artificial intelligence, and our
-        capital allocation reflects the priority we place on AI capabilities.
-      - Artificial intelligence is reshaping our industry, and our ability to adapt to
-        it will be a key determinant of our future competitiveness.
+      - artificial intelligence is central to our strategy, AI-first company,
+        transformative potential of generative AI for our industry
+      - betting on artificial intelligence, AI as our key competitive
+        differentiator, machine learning at the core of our long-term plan
 
-  # Prose that a keyword filter (and a naive embedding match) mistakes for AI
-  # disclosure. Their similarity is recorded as `negative_similarity` on every
-  # scored row so a downstream threshold can subtract it.
+  # Los negativos son la GEMELA SIN IA de cada positivo: el mismo andamiaje,
+  # ninguna palabra de IA. Así el margen positivo-negativo mide cuánto de la
+  # similitud viene de la IA y no del contexto corporativo. Los cinco genéricos
+  # anteriores no cubrían governance, risk ni outcome, que son justo donde el
+  # andamiaje domina.
   negative:
-    - Our business model is designed to generate recurring revenue across our
-      operating segments.
-    - We use valuation models and discounted cash flow analysis to estimate the fair
-      value of these assets.
-    - Our economic forecasts and projections of future demand are based on
-      macroeconomic indicators and industry data.
-    - We have automated portions of our billing and back-office processes using
-      standard enterprise software.
-    - We are dependent on third-party suppliers and service providers, and any
-      interruption in their performance could harm our operations.
+    - our board of directors and its audit and risk committees oversee risk
+      management, management reports periodically to the committees
+    - risks related to intellectual property, litigation, and regulatory
+      compliance
+    - net revenue increased due to higher average selling prices, partially
+      offset by lower unit volumes and unfavorable currency
+    - our technology offerings, digital platforms and enabling technologies for
+      customers, product and service capabilities
+    - policies, internal controls, standards and oversight procedures over our
+      operations
+    - we are dependent on third-party suppliers, vendors and service providers
+      for components and services
+    - investments in talent, infrastructure and computing capacity for our
+      operations
+    - our business model generates recurring revenue, valuation models and
+      discounted cash flow analysis, economic forecasts of future demand
+    - competitive pressure from rivals, changing customer preferences and
+      technological change in our industry
+    - cybersecurity incidents, data privacy breaches and information technology
+      system failures
