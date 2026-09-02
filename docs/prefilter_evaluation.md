@@ -28,6 +28,82 @@ Fecha de las corridas: 2026-09-02.
 
 ---
 
+## 0. Estado final y próximos pasos
+
+### 0.1 Configuración vigente
+
+Prefiltro de **dos etapas con trabajos distintos**, que es la conclusión
+principal de todo el registro:
+
+1. **Compuerta léxica** — términos con límite de palabra
+   (`(^|[^a-z0-9])término([^a-z0-9]|$)`) sobre minúsculas, incluyendo las
+   siglas (`ai`, `ml`, `llm`, `agi`, `nlp`). Hace el trabajo de **no perder
+   nada**: recall 98,2%.
+2. **Margen semántico** (`max_semantic_score − negative_similarity`) — **no**
+   expande recall, y no puede: los párrafos que divulgan IA sin vocabulario de
+   IA casi no existen en este corpus, porque las empresas que hablan de IA
+   escriben "AI". Su trabajo es **precisión dentro** de lo que la compuerta ya
+   tomó, separando disclosure sustantivo de mención al pasar (AUC 0,671; margen
+   medio 0,0328 en `substantive` contra −0,0016 en `incidental`).
+
+Veníamos usándola al revés todo el tiempo.
+
+### 0.2 Números finales
+
+Sobre 3.016.097 párrafos puntuables y 6.032 etiquetas del golden set. **Sin
+ponderar** — los pesos no son confiables hasta terminar el etiquetado (§4.2),
+así que estas cifras describen el estrato muestreado, no el corpus.
+
+| scorer | prec | recall | F1 | filas marcadas | % corpus |
+|---|---|---|---|---|---|
+| **logit sobre las 11 señales** | **0,736** | **0,946** | **0,828** | **15.282** | **0,507%** |
+| solo compuerta léxica | 0,693 | 0,982 | 0,813 | 16.800 | 0,557% |
+| léxico O (débil Y margen ≥ 0,06) | 0,684 | 0,983 | 0,807 | 17.294 | 0,573% |
+| léxico, podando 10% de margen más bajo | 0,714 | 0,910 | 0,800 | 15.306 | 0,507% |
+| léxico, podando 20% de margen más bajo | 0,739 | 0,838 | 0,786 | 13.613 | 0,451% |
+| léxico, podando 30% de margen más bajo | 0,754 | 0,748 | 0,751 | 12.081 | 0,401% |
+
+**Mejor clasificador: la regresión logística sobre las 11 señales** que el
+pipeline ya calcula (7 scores por categoría + `negative_similarity` +
+`semantic_margin` + los dos flags léxicos), validada out-of-fold con
+`GroupKFold` agrupado por filing. F1 0,828 contra 0,813 de la compuerta sola, y
+domina a las reglas de poda: mejor precisión Y mejor recall que podar 10% o 20%,
+marcando el mismo volumen.
+
+**Si preferís una regla explicable**, la compuerta léxica sola cuesta 1,5 puntos
+de F1 y marca 16.800 párrafos con recall 98,2%. Es una decisión de tesis, no
+técnica: coeficientes aprendidos contra un umbral que se puede escribir en una
+oración.
+
+### 0.3 Próximos pasos, en orden de valor
+
+1. **Terminar el golden set** (3.862 pendientes: 3.472 sin intentar + 390
+   fallidos por créditos). Es lo que desbloquea todo lo demás — sin
+   `stage3_random` etiquetado no hay reponderación, y sin reponderación ninguna
+   cifra proyectada al corpus es citable. Con el orden de etiquetado ya
+   corregido a aleatorio, un corte parcial deja submuestra válida.
+2. **Rehacer §5–§8 con la configuración actual.** Esas tablas se midieron contra
+   la compuerta léxica rota y los anchors viejos. Las conclusiones cualitativas
+   sobreviven; los números no.
+3. **Decidir regla vs modelo** y congelarlo. Afecta cómo se describe el
+   prefiltro en la tesis.
+4. **Revisar la poda por margen como etapa separada.** Podar el 20% más bajo
+   sube precisión de 0,693 a 0,739 perdiendo 14 puntos de recall. Si aguas abajo
+   hay un clasificador LLM caro, ese intercambio puede convenir; si no, no.
+5. **Extraer más secciones del filing.** Hoy hay 3 del 10-K (items 1, 1A, 7) y 2
+   del 10-Q (1A, 2). Es la única palanca que sube el numerador de verdad — lo
+   que se diga de IA en Item 5, 7A o en las notas no está en el corpus.
+6. **Las otras cabezas de bge-m3** (`sparse_vecs`, `colbert_vecs`), sólo si 1–5
+   ya están hechos. Requiere re-embeber y ColBERT no es viable a escala de
+   corpus por almacenamiento; su uso natural es como reranker sobre lo que
+   sobrevive al prefiltro.
+
+**Lo que NO vale la pena reintentar**, ya medido y descartado en §7: BM25 con
+vocabulario a mano (+0,003 F1), centrado del espacio de embeddings (−0,038), y
+TF-IDF con vocabulario del corpus (+0,002).
+
+---
+
 ## 1. El problema que justifica todo lo demás
 
 Evaluar el prefiltro con una etiqueta léxica ("¿el párrafo dice *artificial
