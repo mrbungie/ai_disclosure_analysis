@@ -1,4 +1,4 @@
-.PHONY: test install-deps tickers-tui build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market duckdb help
+.PHONY: test install-deps tickers-tui build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market duckdb duckdb-text help
 
 # Default target
 all: test
@@ -70,10 +70,18 @@ collect-market:
 	.venv/bin/python scripts/03_market_data/01_collect_market_data.py $(ARGS)
 
 # ---- SQL access to all of the above ----
+# `duckdb` (fast, views only) is separate from `duckdb-text` (also
+# materializes paragraphs/sentences — regex-heavy, ~52s) — an explicit,
+# optional step, not chained into collect-data/collect-data-10q, so
+# rebuilding the fast views never pays that cost unless asked for.
 
 duckdb:
 	@echo "(Re)building duckdb/thesis.duckdb views over every parquet output..."
 	.venv/bin/python scripts/common/build_duckdb.py
+
+duckdb-text:
+	@echo "(Re)building duckdb views AND the paragraphs/sentences tables (~52s)..."
+	.venv/bin/python scripts/common/build_duckdb.py --with-text-tables
 
 # ---- 10_fusion: merging the 10-K text pipeline with market data — not built yet ----
 
@@ -97,6 +105,7 @@ help:
 	@echo "  scripts/03_market_data:"
 	@echo "  make collect-market           Snapshot prices (per-ticker parquet) + Fama-French factors"
 	@echo ""
-	@echo "  make duckdb                   (Re)build duckdb/thesis.duckdb — SQL views over every parquet output"
+	@echo "  make duckdb                   (Re)build duckdb/thesis.duckdb — SQL views over every parquet output (fast)"
+	@echo "  make duckdb-text              Also (re)build paragraphs/sentences tables (~52s, regex-heavy)"
 	@echo ""
 	@echo "  10_fusion: not built yet"
