@@ -27,6 +27,7 @@ Usage:
     duckdb duckdb/thesis.duckdb   # then: .tables / select * from filing_manifest limit 5;
 """
 
+import glob
 from pathlib import Path
 
 import duckdb
@@ -34,6 +35,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB_PATH = REPO_ROOT / "duckdb" / "thesis.duckdb"
+PREFILTER_SCORES_DIR = REPO_ROOT / "data" / "interim" / "prefilter_scores"
 
 # Everything else here is a live VIEW (re-evaluated on every query, always
 # current with whatever's on disk). paragraphs/sentences are the
@@ -68,9 +70,26 @@ def _union(selects: list[str]) -> str:
     """One country's SELECT as-is; multiple countries' SELECTs unioned BY
     NAME (column-name alignment, not positional) so a schema difference
     between countries doesn't silently misalign columns or hard-fail."""
+    if not selects:
+        raise ValueError("_union() got zero SELECTs — every country must have been filtered out by _existing()")
     if len(selects) == 1:
         return selects[0]
     return "\n            UNION ALL BY NAME\n".join(f"({s})" for s in selects)
+
+
+def _existing(path_pattern: str) -> bool:
+    """True if path_pattern (an exact path or a glob) matches at least one
+    file on disk. A country appearing under configs/ doesn't mean every
+    view's source file exists for it yet — e.g. Chile has
+    firm_universe.parquet the moment scripts/cl/00_build_firm_universe.py
+    runs, but filing_manifest.parquet only once scripts/cl/
+    01_fetch_filings.py has produced it, and it has no
+    filing_manifest_10q.parquet at all (no 10-Q-shaped instrument for
+    Chile — see docs/international_expansion_plan.md). Without this
+    check, build_duckdb.py hard-fails the ENTIRE run (every country, every
+    view) the moment ANY one country is mid-rollout — exactly the
+    multi-country design this file's docstring promises should be safe."""
+    return len(glob.glob(path_pattern)) > 0
 
 
 # Every raw LINE of section_text (see _paragraph_select_sql) is classified
@@ -441,18 +460,24 @@ def main(with_text_tables: bool = False):
         "firm_universe": _union([
             f"SELECT '{country}' AS country_code, * FROM read_parquet('{dirs(cfg)[0]}/firm_universe.parquet')"
             for country, cfg in countries
+            if _existing(f"{dirs(cfg)[0]}/firm_universe.parquet")
         ]),
         "filing_manifest": _union([
             f"SELECT '{country}' AS country_code, * FROM read_parquet('{dirs(cfg)[0]}/filing_manifest.parquet')"
             for country, cfg in countries
+            if _existing(f"{dirs(cfg)[0]}/filing_manifest.parquet")
         ]),
         # 10-Q shock series — a SEPARATE instrument, never pooled with
         # filing_manifest above (see the project's data-scope decision) —
         # hence its own manifest AND its own extraction_trace/
         # filing_sections views below, never a UNION with the 10-K ones.
+        # Not every country has one at all (Chile doesn't — see
+        # docs/international_expansion_plan.md) — `_existing()` handles
+        # both "not built yet" and "doesn't exist for this country".
         "filing_manifest_10q": _union([
             f"SELECT '{country}' AS country_code, * FROM read_parquet('{dirs(cfg)[0]}/filing_manifest_10q.parquet')"
             for country, cfg in countries
+            if _existing(f"{dirs(cfg)[0]}/filing_manifest_10q.parquet")
         ]),
         # Full trace: one row per (filing, target item), found or not.
         # See scripts/us/section_segmenter.py:load_extraction_trace — this
@@ -474,6 +499,7 @@ def main(with_text_tables: bool = False):
             QUALIFY row_number() OVER (PARTITION BY accession_number, item_key ORDER BY run_date DESC) = 1
             """
             for country, cfg in countries
+            if _existing(f"{dirs(cfg)[1]}/filing_sections__run=*__part=*.parquet")
         ]),
         # Just the found sections — the text itself.
         "filing_sections": "SELECT * FROM extraction_trace WHERE found",
@@ -487,6 +513,7 @@ def main(with_text_tables: bool = False):
             QUALIFY row_number() OVER (PARTITION BY accession_number, item_key ORDER BY run_date DESC) = 1
             """
             for country, cfg in countries
+            if _existing(f"{dirs(cfg)[1]}/filing_sections_10q__run=*__part=*.parquet")
         ]),
         "filing_sections_10q": "SELECT * FROM extraction_trace_10q WHERE found",
         # --- 03_market_data: prices + Fama-French factors ---
@@ -526,6 +553,17 @@ def main(with_text_tables: bool = False):
         views["sentences"] = _sentence_select_sql()
     else:
         print("  skipping paragraphs/sentences (pass --with-text-tables to build them)")
+
+    # Terminal retrieval output: one row per scored paragraph, with lexical
+    # matches and semantic similarities.  Scores are append-only run files;
+    # no threshold/candidate decision belongs in this acquisition-stage view.
+    score_glob = f"{PREFILTER_SCORES_DIR}/prefilter_scores__run=*.parquet"
+    if _existing(score_glob):
+        views["ai_prefilter_scores"] = (
+            f"SELECT * FROM read_parquet('{score_glob}', union_by_name=True)"
+        )
+    else:
+        print("  skipping ai_prefilter_scores (run scripts/common/ai_prefilter.py first)")
 
     for name, query in views.items():
         kind = "TABLE" if name in MATERIALIZED_TABLES else "VIEW"

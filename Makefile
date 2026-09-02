@@ -1,4 +1,4 @@
-.PHONY: test install-deps tickers-tui build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market duckdb duckdb-text help
+.PHONY: test install-deps tickers-tui build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market duckdb duckdb-text prefilter help
 
 # Default target
 all: test
@@ -7,6 +7,7 @@ all: test
 test:
 	@echo "Running unit tests..."
 	.venv/bin/python -m unittest discover -s scripts/us/tests -p "test_*.py" -v
+	.venv/bin/python -m unittest discover -s scripts/common/tests -p "test_*.py" -v
 
 # Install developer/test dependencies (using uv as per project rules)
 install-deps:
@@ -82,6 +83,10 @@ duckdb:
 duckdb-text:
 	@echo "(Re)building duckdb views AND the paragraphs/sentences tables (~52s)..."
 	.venv/bin/python scripts/common/build_duckdb.py --with-text-tables
+
+prefilter:
+	@echo "Scoring paragraphs with DuckDB lexical matching + BGE-M3 embeddings..."
+	.venv/bin/python scripts/common/ai_prefilter.py $(ARGS)
 
 # ---- 10_fusion: merging the 10-K text pipeline with market data — not built yet ----
 

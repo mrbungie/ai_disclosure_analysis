@@ -25,12 +25,18 @@ def get_log_path():
         
     return log_dir / "pipeline_log.jsonl"
 
-def log_event(pipeline_step, level, message, ticker=None, cik=None, accession_number=None, duration_seconds=None, details=None):
+def log_event(pipeline_step, level, message, ticker=None, cik=None, accession_number=None, duration_seconds=None, details=None, log_dir=None):
     """
     Centralized logging function. Writes structured logs in JSONL format,
     which can be natively and efficiently queried via DuckDB.
+
+    `log_dir` lets a non-US country point this at its own
+    configs/<country>/config.yaml:storage.interim_manifests (e.g.
+    scripts/cl passing Path(cl_config["storage"]["interim_manifests"])) —
+    without it, falls back to get_log_path()'s US-hardcoded default, kept
+    only for scripts/us's existing callers.
     """
-    log_path = get_log_path()
+    log_path = (Path(log_dir) / "pipeline_log.jsonl") if log_dir is not None else get_log_path()
     log_path.parent.mkdir(parents=True, exist_ok=True)
     
     log_entry = {

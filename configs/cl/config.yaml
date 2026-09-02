@@ -1,0 +1,27 @@
+cmf:
+  mcp_endpoint: https://cmf-mcp.kumocloud.cl/mcp
+  # Same catalog the hosted MCP server itself uses to resolve tickers to
+  # RUTs (see scripts/cl/cmf_mcp_client.py's docstring for why we go
+  # through the hosted server rather than CMF's site directly).
+  catalog_csv: https://raw.githubusercontent.com/JoaquinMulet/empresas-cmf-chile/master/empresas_chile.csv
+corpus:
+  snapshot_date: '2026-09-02'
+  filings:
+    # annual (Memoria Anual) + quarterly (Análisis Razonado, cortes
+    # 03/06/09/12) — see docs/international_expansion_plan.md's
+    # instrument mapping. Both fetched by the same script (scripts/cl/
+    # 01_fetch_filings.py), unlike US where 10-K/10-Q are two separate
+    # instruments/scripts — CMF's filing calendar doesn't split them into
+    # different regulatory forms the way SEC does.
+    filing_date:
+      from: '2021-01-01'
+      to: '2025-12-31'
+storage:
+  # Suffixed, not nested under a cl/ subfolder — matches the existing
+  # _10q suffix convention (filing_manifest_10q.parquet) rather than
+  # introducing a second layout style; see build_duckdb.py's
+  # _country_configs() docstring on why these must never collide with
+  # another country's paths.
+  raw_documents: data/raw/filings_pdf_cl
+  interim_manifests: data/interim/manifests_cl
+  interim_sections: data/interim/sections_cl
