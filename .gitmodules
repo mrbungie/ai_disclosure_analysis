@@ -1,0 +1,3 @@
+[submodule "vendor/mcp-cmf-chile"]
+	path = vendor/mcp-cmf-chile
+	url = https://github.com/JoaquinMulet/mcp-cmf-chile

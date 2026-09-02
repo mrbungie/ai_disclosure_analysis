@@ -1,4 +1,4 @@
-.PHONY: test install-deps tickers-tui build-universe build-manifest select-batch download-filings extract-sections collect-data collect-market section-audit format help
+.PHONY: test install-deps tickers-tui build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market duckdb duckdb-text prefilter help
 
 # Default target
 all: test
@@ -6,52 +6,87 @@ all: test
 # Run tests using the unittest module in the virtual environment
 test:
 	@echo "Running unit tests..."
-	.venv/bin/python -m unittest discover -s 01_10k/tests -p "test_*.py" -v
+	.venv/bin/python -m unittest discover -s scripts/us/tests -p "test_*.py" -v
+	.venv/bin/python -m unittest discover -s scripts/common/tests -p "test_*.py" -v
 
 # Install developer/test dependencies (using uv as per project rules)
 install-deps:
 	@echo "Installing test dependencies..."
 	uv pip install pytest
 
-# ---- 01_10k: firm universe + 10-K text pipeline (network: SEC EDGAR; all resumable) ----
-# WHAT gets downloaded is config-driven: pipeline.tickers, start_year/end_year,
-# form_types in configs/config.json. 02 marks pending filings in that window
-# as 'selected'; 03 downloads only 'selected'.
+# ---- scripts/us: US/SEC EDGAR — firm universe + 10-K/10-Q pipelines ----
+# Scripts are organized BY COUNTRY (scripts/<country>/...) so a future
+# exchange/source can be added as its own sibling directory without
+# touching this one — fetch AND extraction both live inside scripts/us/
+# because extraction (section_segmenter.py) is sensitive to local filing-
+# format idiosyncrasies (SEC's "Item N" convention), not just fetch
+# mechanics. Only the run/checkpoint plumbing (scripts/common/
+# section_extraction.py) and truly generic infra (pipeline_logger,
+# build_duckdb) are country-agnostic and live in scripts/common/.
+# WHAT gets downloaded is config-driven: configs/universe.csv (universe,
+# has a country column already) + configs/config.yaml: corpus.filings.
+# filing_date (window). Fetch is via edgartools (scripts/us/edgar_fetch.py)
+# — idempotent, skips any filing whose local gzip mirror already exists.
 
 build-universe:
-	@echo "Building firm universe from configured tickers (01_10k/scripts/00)..."
-	.venv/bin/python 01_10k/scripts/00_build_firm_universe.py
+	@echo "Building firm universe from configured tickers (scripts/us/00)..."
+	.venv/bin/python scripts/us/00_build_firm_universe.py
 
-build-manifest:
-	@echo "Building filing manifest from SEC EDGAR (01_10k/scripts/01)..."
-	.venv/bin/python 01_10k/scripts/01_build_filing_manifest.py
-
-select-batch:
-	@echo "Selecting pending filings inside the configured year window (01_10k/scripts/02)..."
-	.venv/bin/python 01_10k/scripts/02_select_download_batch.py
-
-download-filings:
-	@echo "Downloading selected filings (01_10k/scripts/03)..."
-	.venv/bin/python 01_10k/scripts/03_download_selected_filings.py
+fetch-10k:
+	@echo "Building the 10-K manifest and fetching primary documents (scripts/us/10k/01)..."
+	.venv/bin/python scripts/us/10k/01_fetch_filings.py
 
 extract-sections:
-	@echo "Extracting Business/Risk/MD&A sections (01_10k/scripts/04)..."
-	.venv/bin/python 01_10k/scripts/04_extract_sections.py $(ARGS)
+	@echo "Extracting Business/Risk/MD&A sections (scripts/us/10k/02)..."
+	.venv/bin/python scripts/us/10k/02_extract_sections.py $(ARGS)
 
-collect-data: build-universe build-manifest select-batch download-filings extract-sections
+collect-data: build-universe fetch-10k extract-sections
 
 tickers-tui:
-	@.venv/bin/python 01_10k/scripts/tui_tickers.py
+	@.venv/bin/python scripts/us/tui_tickers.py
 
 section-audit:
-	@echo "Auditing extraction coverage against the full 10-K text (01_10k/verif/section_audit)..."
-	.venv/bin/python 01_10k/verif/section_audit/section_audit.py
+	@echo "Auditing extraction coverage against the full 10-K text (scripts/verif/section_audit)..."
+	.venv/bin/python scripts/verif/section_audit/section_audit.py
 
-# ---- 02_market_data: prices + Fama-French factors (independent of 01_10k) ----
+# ---- scripts/us/10q: 10-Q shock series — a SEPARATE instrument, never pooled with 10-K ----
+# Own manifest, own extraction run (Item 2/MD&A + Item 1A/Risk Factor
+# updates — see scripts/us/10q/02_extract_sections.py), own duckdb views
+# — never pooled or unioned with the 10-K outputs above.
+
+fetch-10q:
+	@echo "Building the 10-Q manifest and fetching primary documents (scripts/us/10q/01)..."
+	.venv/bin/python scripts/us/10q/01_fetch_filings.py
+
+extract-sections-10q:
+	@echo "Extracting Item 2 (MD&A) + Item 1A (Risk Factor updates) from 10-Qs (scripts/us/10q/02)..."
+	.venv/bin/python scripts/us/10q/02_extract_sections.py $(ARGS)
+
+collect-data-10q: fetch-10q extract-sections-10q
+
+# ---- scripts/03_market_data: prices + Fama-French factors (independent of scripts/us) ----
 
 collect-market:
-	@echo "Snapshotting prices (per-ticker parquet) + Fama-French factors (02_market_data/scripts/01)..."
-	.venv/bin/python 02_market_data/scripts/01_collect_market_data.py $(ARGS)
+	@echo "Snapshotting prices (per-ticker parquet) + Fama-French factors (scripts/03_market_data/01)..."
+	.venv/bin/python scripts/03_market_data/01_collect_market_data.py $(ARGS)
+
+# ---- SQL access to all of the above ----
+# `duckdb` (fast, views only) is separate from `duckdb-text` (also
+# materializes paragraphs/sentences — regex-heavy, ~52s) — an explicit,
+# optional step, not chained into collect-data/collect-data-10q, so
+# rebuilding the fast views never pays that cost unless asked for.
+
+duckdb:
+	@echo "(Re)building duckdb/thesis.duckdb views over every parquet output..."
+	.venv/bin/python scripts/common/build_duckdb.py
+
+duckdb-text:
+	@echo "(Re)building duckdb views AND the paragraphs/sentences tables (~52s)..."
+	.venv/bin/python scripts/common/build_duckdb.py --with-text-tables
+
+prefilter:
+	@echo "Scoring paragraphs with DuckDB lexical matching + BGE-M3 embeddings..."
+	.venv/bin/python scripts/common/ai_prefilter.py $(ARGS)
 
 # ---- 10_fusion: merging the 10-K text pipeline with market data — not built yet ----
 
@@ -60,13 +95,22 @@ help:
 	@echo "  make test                     Run the test suite"
 	@echo "  make install-deps             Install pytest via uv"
 	@echo ""
-	@echo "  01_10k (what to download = configs/universe.csv + pipeline.{start_year,end_year}):"
+	@echo "  scripts/us/10k (what to download = configs/universe.csv + config.yaml corpus.filings):"
 	@echo "  make tickers-tui              TUI: sectors over SIC groups, per-company overrides, add tickers"
-	@echo "  make collect-data             Run 00->04 in order (resumable)"
+	@echo "  make collect-data             build-universe -> fetch-10k -> extract-sections (resumable)"
+	@echo "  make fetch-10k                Just the manifest+fetch step (idempotent, safe to rerun)"
 	@echo "  make extract-sections ARGS='--comment my-run'   Rerun just the extraction step"
 	@echo "  make section-audit            Verify extraction coverage against the full 10-K text"
 	@echo ""
-	@echo "  02_market_data:"
+	@echo "  scripts/us/10q (separate instrument, own config.yaml corpus.filings_10q):"
+	@echo "  make fetch-10q                Manifest+fetch for 10-Q (raw filings)"
+	@echo "  make extract-sections-10q ARGS='--comment my-run'   Extract Item 2 (MD&A) + Item 1A from 10-Qs"
+	@echo "  make collect-data-10q         fetch-10q -> extract-sections-10q (resumable)"
+	@echo ""
+	@echo "  scripts/03_market_data:"
 	@echo "  make collect-market           Snapshot prices (per-ticker parquet) + Fama-French factors"
+	@echo ""
+	@echo "  make duckdb                   (Re)build duckdb/thesis.duckdb — SQL views over every parquet output (fast)"
+	@echo "  make duckdb-text              Also (re)build paragraphs/sentences tables (~52s, regex-heavy)"
 	@echo ""
 	@echo "  10_fusion: not built yet"
