@@ -297,25 +297,31 @@ def build_sample(
         sample = pd.concat([stage1.assign(cell_size=pd.NA), stage2, stage3], ignore_index=True)
         sample = sample.drop(columns=[c for c in ("rn",) if c in sample.columns])
 
-        # Peso de inclusión = población del estrato / muestreados. Sin esto
-        # ninguna cifra a nivel de corpus es interpretable (§4).
-        stratum_pop = con.execute(f"""
-            SELECT {axes}, count(*) AS n FROM pool GROUP BY {axes}
-        """).df()
-        key_cols = ["country_code", "form", "item_key", "content_type",
-                    "filing_year", "sector", "keyword_tier"]
-        stratum_pop["stratum"] = stratum_pop[key_cols].agg("|".join, axis=1)
-        pop_by_stratum = stratum_pop.set_index("stratum")["n"].to_dict()
-        taken = sample.groupby("stratum")["stratum"].transform("size")
+        # Peso de inclusión = población del estrato / muestreados, con la
+        # población medida EN EL MARCO DEL QUE ESA ETAPA SORTEÓ. Cada etapa usa
+        # una definición de estrato distinta, así que cada una necesita su
+        # propio conteo: buscar la población de la etapa 1 en un índice armado
+        # con las claves de 7 partes de la etapa 2 no acierta nunca y cae a un
+        # fallback, que es como las 3.950 filas del sobremuestreo tech
+        # terminaron pesando 36 párrafos de corpus en lugar de 424.051.
+        axes1 = ["sector", "item_key", "keyword_tier"]
+        axes2 = ["country_code", "form", "item_key", "content_type",
+                 "filing_year", "sector", "keyword_tier"]
+        pob1 = con.execute(f"""SELECT {", ".join(axes1)}, count(*) AS pob FROM pool
+                               WHERE sector IN ({sectors}) GROUP BY ALL""").df()
+        pob2 = con.execute(f"""SELECT {", ".join(axes2)}, count(*) AS pob FROM pool
+                               WHERE sector NOT IN ({sectors}) GROUP BY ALL""").df()
+        p1 = {tuple(r[a] for a in axes1): r["pob"] for _, r in pob1.iterrows()}
+        p2 = {tuple(r[a] for a in axes2): r["pob"] for _, r in pob2.iterrows()}
+        taken = sample.groupby(["stage", "stratum"])["stratum"].transform("size")
 
         def weight(row, size: int) -> float:
-            # Etapa 3 es aleatoria simple sobre todo el pool: su peso es
-            # población total / muestreados. Las otras dos son estratificadas.
+            size = max(int(size), 1)
             if row.stage == "stage3_random":
-                return populations / max(size, 1)
-            fallback = row.cell_size
-            fallback = 1 if pd.isna(fallback) else float(fallback)
-            return pop_by_stratum.get(row.stratum, fallback) / max(size, 1)
+                return populations / size
+            if row.stage == "stage1_tech_oversample":
+                return p1.get(tuple(getattr(row, a) for a in axes1), 1) / size
+            return p2.get(tuple(getattr(row, a) for a in axes2), 1) / size
 
         sample["inclusion_weight"] = [
             weight(row, size) for row, size in zip(sample.itertuples(), taken)
@@ -573,7 +579,13 @@ def cmd_label(args) -> None:
             FROM sample s
             JOIN paragraphs p USING ({', '.join(PARAGRAPH_KEY)})
             WHERE NOT EXISTS (SELECT 1 FROM labeled l WHERE {keys})
-            ORDER BY s.stage, s.stratum, s.accession_number, s.paragraph_index
+            -- Orden aleatorio sembrado, NO por estrato: si la corrida se corta
+            -- (créditos, red), lo etiquetado tiene que seguir siendo una
+            -- submuestra aleatoria del diseño y no los estratos alfabéticamente
+            -- primeros. Ordenar por estrato dejó stage3_random en cero etiquetas
+            -- cuando se agotaron los créditos, y con eso la reponderación
+            -- quedó inservible.
+            ORDER BY hash(s.accession_number || s.paragraph_index || 20260902)
             {f'LIMIT {int(args.limit)}' if args.limit else ''}
         """).df().to_dict("records")
     finally:

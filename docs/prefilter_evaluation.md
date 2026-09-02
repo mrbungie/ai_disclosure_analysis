@@ -132,6 +132,43 @@ Dos debilidades del esquema de salida:
 
 ---
 
+## 4.2 ADVERTENCIA: las cifras ponderadas de §5–§8 no son válidas todavía
+
+Dos defectos del muestreo, encontrados al intentar proyectar al corpus. Ambos
+corregidos en `golden_set.py`, pero las etiquetas existentes se produjeron
+antes:
+
+1. **Los pesos de la etapa 1 estaban rotos.** El peso se buscaba en un índice
+   armado con las claves de 7 partes de la etapa 2, y el estrato de la etapa 1
+   tiene 3 partes: nunca acertaba y caía a un fallback de 1/n. Las 3.950 filas
+   del sobremuestreo tech —donde están 1.172 de los 1.507 positivos— pesaban
+   **36 párrafos de corpus en total** en vez de 424.051. Todo lo "ponderado" se
+   calculó, en la práctica, con las 2.088 filas de la etapa 2.
+   Pesos recalculados en `data/interim/golden_set/golden_set_weights_v2.parquet`.
+
+2. **El etiquetado iba ordenado por estrato.** Al cortarse por créditos, lo
+   etiquetado no es una submuestra aleatoria del diseño sino los estratos
+   alfabéticamente primeros: `stage3_random` quedó con **0 etiquetas**. Los
+   pesos suponen que se etiquetó la muestra completa, así que proyectar desde
+   este subconjunto sobreestima. Ya corregido a orden aleatorio sembrado, para
+   que cualquier corte parcial siga siendo submuestra válida.
+
+Verificación que lo destapó: dos estimaciones que deberían coincidir no lo
+hacen. Proyectando por diseño desde el golden set, el logit marcaría ~14.000
+párrafos únicos; aplicado directamente a los 3.281.038, marca 8.280 (~4.200 en
+únicos). **B/A = 0,30x.** La aplicación directa (B) no depende de los pesos y es
+la cifra utilizable; la proyección (A) no lo será hasta terminar el etiquetado.
+
+Hallazgo lateral, independiente de los defectos: el pool deduplicado por texto
+exacto es de **1.651.191 párrafos**, la mitad del corpus. El resto es
+boilerplate repetido literal entre filings.
+
+**Las comparaciones RELATIVAS entre reglas siguen en pie** — todas se calcularon
+con los mismos pesos, así que el orden se sostiene. Lo que no se puede citar son
+los valores absolutos ponderados ni ninguna proyección al corpus.
+
+---
+
 ## 5. Comparación de reglas (6.038 etiquetas)
 
 `prec`/`recall`/`F1` sobre `is_ai_disclosure`. "Ponderado" usa
