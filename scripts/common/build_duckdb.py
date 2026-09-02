@@ -559,9 +559,25 @@ def main(with_text_tables: bool = False):
     # no threshold/candidate decision belongs in this acquisition-stage view.
     score_glob = f"{PREFILTER_SCORES_DIR}/prefilter_scores__run=*.parquet"
     if _existing(score_glob):
-        views["ai_prefilter_scores"] = (
-            f"SELECT * FROM read_parquet('{score_glob}', union_by_name=True)"
-        )
+        # Only ONE (model, anchors, dtype) population at a time. Score parts are
+        # append-only and are deliberately never deleted, so after retuning the
+        # anchors or switching precision the directory holds several complete
+        # populations of the SAME paragraphs — a plain union over the glob would
+        # silently duplicate every key and mix score scales. The newest run's
+        # configuration wins; older parts stay on disk for comparison and are
+        # reachable by reading the parquet directly.
+        views["ai_prefilter_scores"] = f"""
+            WITH all_scores AS (
+                SELECT * FROM read_parquet('{score_glob}', union_by_name=True)
+            ), current AS (
+                SELECT model, anchors_fingerprint, dtype
+                FROM all_scores ORDER BY run_id DESC LIMIT 1
+            )
+            SELECT a.* FROM all_scores a JOIN current c
+              ON a.model = c.model
+             AND a.anchors_fingerprint = c.anchors_fingerprint
+             AND a.dtype = c.dtype
+        """
     else:
         print("  skipping ai_prefilter_scores (run scripts/common/ai_prefilter.py first)")
 

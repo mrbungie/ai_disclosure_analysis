@@ -66,6 +66,11 @@ semantic:
     ai_exploration:
       - We are evaluating and piloting generative artificial intelligence tools, and
         continue to explore additional applications of these technologies.
+      - We have begun testing artificial intelligence in a limited number of use
+        cases, and expect to expand these pilots if the early results justify further
+        investment.
+      - We are in the early stages of assessing how machine learning could be applied
+        to our operations, and no material deployment has occurred to date.
     ai_capability:
       - We develop and train our own proprietary artificial intelligence models and
         maintain the machine learning platforms on which our products depend.
@@ -95,9 +100,19 @@ semantic:
       - We have adopted policies, oversight processes, and human review procedures
         governing the development and deployment of artificial intelligence, including
         board and management oversight of AI risk.
+      - Our board of directors, through its audit and risk committees, oversees the
+        risks associated with our use of artificial intelligence, and management
+        reports periodically on our AI programs.
+      - We maintain internal controls, acceptable-use standards, and human-in-the-loop
+        review over artificial intelligence systems, and we monitor them for
+        compliance with applicable data protection and AI regulation.
     ai_strategy:
       - Artificial intelligence is central to our long-term strategy, and we believe
         it will be transformative for our industry and our competitive position.
+      - We are positioning the company to lead in artificial intelligence, and our
+        capital allocation reflects the priority we place on AI capabilities.
+      - Artificial intelligence is reshaping our industry, and our ability to adapt to
+        it will be a key determinant of our future competitiveness.
 
   # Prose that a keyword filter (and a naive embedding match) mistakes for AI
   # disclosure. Their similarity is recorded as `negative_similarity` on every

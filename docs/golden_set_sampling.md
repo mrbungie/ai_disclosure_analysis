@@ -107,21 +107,27 @@ Consecuencias que hay que respetar:
 
 ### Etapa 1 — sobremuestreo de empresas tecnológicas (4.000)
 
-Empresas cuyo SIC cae en grupos tecnológicos, según `firm_universe.sic`:
+Los sectores donde se espera más presencia de IA, según la taxonomía de
+`configs/us/config.yaml` (`classification.sector_groups`) resuelta por
+`scripts/us/sector_map.py`:
 
-| prefijo SIC | sector |
+| sector | códigos SIC (grupo mayor) |
 |---|---|
-| 35 | maquinaria industrial y equipos de computación |
-| 36 | equipos electrónicos y componentes |
-| 38 | instrumentos de medición, análisis y control |
-| 48 | comunicaciones |
-| 73 | servicios de negocios (incluye 737x, servicios informáticos) |
+| `software_it` | 73 — servicios informáticos y software |
+| `computing_hardware` | 35, 36 — equipos de cómputo, electrónica, semiconductores |
+| `instruments_devices` | 38 — instrumentos de medición y dispositivos médicos |
 
 La razón es un prior sustantivo y **verificable sin el prefiltro**: se espera más
-presencia de IA en esos sectores. `industry_group` está vacío en el universo
-actual (517 filas en blanco, 100 `NaN`), así que el sector sale del **primer par
-de dígitos del SIC**. Las empresas sin SIC quedan en un estrato propio
-(`sic_unknown`), no se descartan.
+presencia de IA en esos sectores. El sampler no define su propia lista de
+sectores — llama a `sector_map.sic_rule_map()`, para que retocar la taxonomía en
+un solo lugar valga para todo el pipeline.
+
+Esa capa de reglas mapea **códigos SIC**, no nombres de grupo. `industry_group`
+está vacío en las 517 empresas del universo (`edgar_fetch` lo llenaba con
+`company.sic_description`, atributo que edgartools renombró a `industry` en
+5.55, y el `getattr` con default se lo tragaba en silencio), mientras que `sic`
+está poblado 516/517. Las empresas sin SIC caen en `sector_unknown`, que es un
+estrato propio y no se descarta.
 
 Dentro de la etapa, las cuotas se reparten por sección y por presencia de palabra
 clave congelada, para que el sobremuestreo no se concentre todo en Risk Factors.
@@ -137,7 +143,7 @@ Asignación balanceada por round-robin sobre el producto cartesiano de siete eje
 | sección | `paragraphs.item_key` | `1` Business, `1A` Risk Factors, `2` MD&A 10-Q, `7` MD&A 10-K |
 | tipo de contenido | `paragraphs.content_type` | `prose`, `list`, `table` |
 | año | `filing_manifest[_10q].filing_date` | 2021–2026 |
-| sector | `firm_universe.sic` (2 dígitos) | grupos SIC presentes |
+| sector | `sector_map.py` sobre `firm_universe.sic` | 12 sectores + `sector_unknown` |
 | palabra clave | `SAMPLING_KEYWORDS` congelado | `strong`, `weak`, `none` |
 
 Se recorre de la celda **más rara a la más común**, tomando hasta
@@ -155,6 +161,9 @@ lo tanto el único que puede revelar divulgación de IA que ni las palabras clav
 ni los sectores tech anticipan. También es el que da un estimador insesgado de
 prevalencia, con el que se reponderan las otras dos etapas.
 
+Las cuotas redondean, así que el total efectivo queda cerca del pedido pero no
+exacto: con los valores por defecto la muestra sale de 9.900, no de 10.000.
+
 ### Deduplicación previa
 
 El boilerplate se repite entre filings — la misma frase apareció cinco veces en
@@ -167,7 +176,11 @@ veces por la misma etiqueta y se infla el acuerdo.
 ## 6. Etiquetado
 
 - **Modelo**: `gemini-3.8-flash` vía `pydantic-ai` con salida estructurada
-  (Pydantic). Configurable con `--judge-model`; queda guardado en cada fila.
+  (Pydantic). Configurable con `--judge-model`; queda guardado en cada fila. El
+  modelo se construye explícito (`GoogleModel(...)`) y no por string
+  `"google-gla:<nombre>"`: la lista de nombres conocidos de pydantic-ai va por
+  detrás de la API y rechaza modelos que la cuenta sí tiene, `gemini-3.8-flash`
+  entre ellos.
 - **Prompt**: versionado (`PROMPT_VERSION`). El par
   `(judge_model, prompt_version)` define una **población de etiquetas**: filas de
   otro modelo u otro prompt no se mezclan, se reportan aparte.
@@ -223,7 +236,14 @@ Uniendo el golden set a `ai_prefilter_scores` por la llave:
 - **Comparación de scorings** — léxico solo, semántico solo, híbrido — sobre la
   misma etiqueta independiente. Es la comparación que la etiqueta léxica no
   permite hacer (§1).
-- **Precisión por categoría**: `best_semantic_anchor` contra `categories`.
+- **Ranking por categoría**: AUC de cada `score_<categoría>` contra "esa categoría
+  está en `categories`". **No** usar la precisión de `best_semantic_anchor`: el
+  juez asigna 2,1 categorías por párrafo y el argmax elige una sola, así que esa
+  métrica mide tasas base, no calidad de anclas. Medido sobre las primeras 2.000
+  etiquetas, `ai_governance` acertaba el argmax en 4% de los casos pero rankea con
+  AUC 0,962 — pierde siempre contra `ai_risk` porque en filings "board oversight
+  of AI risk" es ambas cosas a la vez. Al revés, `ai_capability` gana el 93% de
+  los argmax con el peor AUC de todos (0,755).
 - **Diagnóstico de anchors**: los falsos positivos apuntan al anchor que los
   atrajo. Así se detectó que *"The company relies on third-party artificial
   intelligence providers or models."* capturaba boilerplate de proveedores.
