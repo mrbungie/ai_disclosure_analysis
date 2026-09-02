@@ -7,8 +7,9 @@ Two assignment levels, resolved in order:
      somewhere the thesis disagrees with (SHW's SIC is a retail group but the
      firm is a paint maker), or firms with no usable SIC (FRC's EDGAR profile
      is empty).
-  2. `classification.sector_groups`: {sector: [SIC industry-group names]} — the
-     rule layer; a firm inherits the sector of its SIC group.
+  2. `classification.sector_groups`: {sector: [SIC major-group codes]} — the
+     rule layer; a firm inherits the sector of its SIC major group (the first
+     two digits of its SIC code).
 Anything matching neither resolves to "unassigned".
 
 Used by the TUI and by any analysis script that needs firm->sector — import
@@ -30,10 +31,10 @@ def load_config() -> dict:
 
 
 def sic_rule_map(config: dict) -> dict[str, str]:
-    """SIC industry-group name -> sector, from the rule layer."""
-    return {sic: sector
-            for sector, sics in config["classification"].get("sector_groups", {}).items()
-            for sic in sics}
+    """SIC major-group code -> sector, from the rule layer."""
+    return {str(code).zfill(2): sector
+            for sector, codes in config["classification"].get("sector_groups", {}).items()
+            for code in codes}
 
 
 def resolve_sectors(config: dict | None = None) -> dict[str, str]:
@@ -50,8 +51,8 @@ def resolve_sectors(config: dict | None = None) -> dict[str, str]:
     out: dict[str, str] = {}
     if UNIVERSE_PATH.exists():
         df = pd.read_parquet(UNIVERSE_PATH)
-        for ticker, sic in zip(df["ticker"], df["industry_group"]):
-            out[ticker] = rules.get(str(sic), UNASSIGNED)
+        for ticker, sic in zip(df["ticker"], df["sic"]):
+            out[ticker] = rules.get(str(sic).zfill(4)[:2], UNASSIGNED)
     for ticker, sector in overrides.items():
         out[ticker] = sector
     return out

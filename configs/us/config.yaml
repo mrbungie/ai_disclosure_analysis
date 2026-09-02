@@ -539,212 +539,30 @@ corpus:
     - ZS
     - ZTS
 classification:
+  # sector -> SIC major-group codes (first two digits). Keyed on the code and
+  # not on `industry_group`: that field is empty for all 517 firms because
+  # edgar_fetch fills it from `company.sic_description`, an attribute
+  # edgartools renamed to `industry` in 5.55. `sic` is populated 516/517.
   sector_groups:
-    tech:
-    - Computer & office Equipment
-    - Computer Communications Equipment
-    - Computer Peripheral Equipment, NEC
-    - Computer Storage Devices
-    - Drawing & Insulating of  Nonferrous Wire
-    - Electronic Computers
-    - Electronic Connectors
-    - Retail-Catalog & Mail-Order Houses
-    - Services-Computer Integrated Systems Design
-    - Services-Computer Processing & Data Preparation
-    - Services-Computer Programming Services
-    - Services-Computer Programming, Data Processing, Etc.
-    - Services-Management Services
-    - Services-Prepackaged Software
-    - Services-Video Tape Rental
-    - Wholesale-Electronic Parts & Equipment, NEC
-    semis:
-    - Instruments For Meas & Testing of  Electricity & Elec Signals
-    - Optical Instruments & Lenses
-    - Radio & Tv Broadcasting & Communications Equipment
-    - Semiconductors & Related Devices
-    - Special Industry Machinery, NEC
-    defensa:
-    - Aircraft
-    - Aircraft & Parts
-    - Aircraft Engines & Engine Parts
-    - Aircraft Parts & Auxiliary Equipment, NEC
-    - Guided Missiles & Space Vehicles & Parts
-    - Rolling Drawing & Extruding of  Nonferrous Metals
-    - Search, Detection, Navigation, Guidance, Aeronautical Sys
-    - Ship & Boat Building & Repairing
-    industriales:
-    - Air Courier Services
-    - Air Transportation, Scheduled
-    - Air-Cond & Warm Air Heatg Equip & Comm & Indl Refrig Equip
-    - Arrangement of  Transportation of  Freight & Cargo
-    - Auto Controls For Regulating Residential & Comml Environments
-    - Construction Machinery & Equip
-    - Construction, Mining & Materials Handling Machinery & Equip
-    - Cutlery, Handtools & General Hardware
-    - Electrical Work
-    - Electronic & Other Electrical Equipment (No Computer Equip)
-    - Engines & Turbines
-    - Farm Machinery & Equipment
-    - General Bldg Contractors - Residential Bldgs
-    - General Industrial Machinery & Equipment
-    - Heating Equip, Except Elec & Warm Air; & Plumbing Fixtures
-    - Heavy Construction Other Than Bldg Const - Contractors
-    - Industrial Instruments For Measurement, Display, and Control
-    - Misc Industrial & Commercial Machinery & Equipment
-    - Miscellaneous Fabricated Metal Products
-    - Motors & Generators
-    - Operative Builders
-    - Pumps & Pumping Equipment
-    - Railroad Equipment
-    - Railroads, Line-Haul Operating
-    - Refuse Systems
-    - Services-Detective, Guard & Armored Car Services
-    - Services-Engineering, Accounting, Research, Management
-    - Services-Equipment Rental & Leasing, NEC
-    - Services-Help Supply Services
-    - Services-To Dwellings & Other Buildings
-    - Special Industry Machinery (No Metalworking Machinery)
-    - Surgical & Medical Instruments & Apparatus
-    - Trucking & Courier Services (No Air)
-    - Trucking (No Local)
-    telecom:
-    - Cable & Other Pay Television Services
-    - Communications Services, NEC
-    - Radiotelephone Communications
-    - Telephone Communications (No Radiotelephone)
-    autos:
-    - Motor Vehicle Parts & Accessories
-    - Motor Vehicles & Passenger Car Bodies
-    - Retail-Auto & Home Supply Stores
-    - Retail-Auto Dealers & Gasoline Stations
-    - Wholesale-Motor Vehicle Supplies & New Parts
-    - Wholesale-Motor Vehicles & Motor Vehicle Parts & Supplies
-    retail:
-    - Retail-Building Materials, Hardware, Garden Supply
-    - Retail-Drug Stores and Proprietary Stores
-    - Retail-Eating  Places
-    - Retail-Eating & Drinking Places
-    - Retail-Family Clothing Stores
-    - Retail-Grocery Stores
-    - Retail-Lumber & Other Building Materials Dealers
-    - Retail-Radio, Tv & Consumer Electronics Stores
-    - Retail-Retail Stores, NEC
-    - Retail-Variety Stores
-    - Wholesale-Durable Goods
-    - Wholesale-Groceries & Related Products
-    - Wholesale-Misc Durable Goods
-    consumo:
-    - Apparel & Other Finishd Prods of  Fabrics & Similar Matl
-    - Beverages
-    - Bottled & Canned Soft Drinks & Carbonated Waters
-    - Canned, Frozen & Preservd Fruit, Veg & Food Specialties
-    - Canned, Fruits, Veg, Preserves, Jams & Jellies
-    - Carpets & Rugs
-    - Cigarettes
-    - Fats & Oils
-    - Food and Kindred Products
-    - Games, Toys & Children's Vehicles (No Dolls & Bicycles)
-    - Grain Mill Products
-    - Household Appliances
-    - Leather & Leather Products
-    - Malt Beverages
-    - Meat Packing Plants
-    - Men's & Boys' Furnishgs, Work Clothg, & Allied Garments
-    - Miscellaneous Food Preparations & Kindred Products
-    - Perfumes, Cosmetics & Other Toilet Preparations
-    - Plastics Products, NEC
-    - Poultry Slaughtering and Processing
-    - Rubber & Plastics Footwear
-    - Soap, Detergents, Cleang Preparations, Perfumes, Cosmetics
-    - Specialty Cleaning, Polishing and Sanitation Preparations
-    - Sugar & Confectionery Products
-    energia:
-    - Crude Petroleum & Natural Gas
-    - Natural Gas Transmisison & Distribution
-    - Natural Gas Transmission
-    - Oil & Gas Field Machinery & Equipment
-    - Oil & Gas Field Services, NEC
-    - Petroleum Refining
-    utilities:
-    - Cogeneration Services & Small Power Producers
-    - Electric & Other Services Combined
-    - Electric Services
-    - Gas & Other Services Combined
-    - Natural Gas Distribution
-    - Water Supply
-    salud:
-    - Biological Products, (No Diagnostic Substances)
-    - Electromedical & Electrotherapeutic Apparatus
-    - Hospital & Medical Service Plans
-    - In Vitro & In Vivo Diagnostic Substances
-    - Laboratory Analytical Instruments
-    - Measuring & Controlling Devices, NEC
-    - Ophthalmic Goods
-    - Orthopedic, Prosthetic & Surgical Appliances & Supplies
-    - Pharmaceutical Preparations
-    - Services-Commercial Physical & Biological Research
-    - Services-General Medical & Surgical Hospitals, NEC
-    - Services-Medical Laboratories
-    - Services-Misc Health & Allied Services, NEC
-    - Wholesale-Drugs, Proprietaries & Druggists' Sundries
-    - Wholesale-Medical, Dental & Hospital Equipment & Supplies
-    - X-Ray Apparatus & Tubes & Related Irradiation Apparatus
-    financieras:
-    - Finance Services
-    - Investment Advice
-    - National Commercial Banks
-    - Personal Credit Institutions
-    - Savings Institution, Federally Chartered
-    - Security & Commodity Brokers, Dealers, Exchanges & Services
-    - Security Brokers, Dealers & Flotation Companies
-    - Services-Business Services, NEC
-    - Services-Consumer Credit Reporting, Collection Agencies
-    - State Commercial Banks
-    seguros:
-    - Accident & Health Insurance
-    - Fire, Marine & Casualty Insurance
-    - Insurance Agents, Brokers & Service
-    - Insurance Carriers, NEC
-    - Life Insurance
-    inmobiliario:
-    - Real Estate
-    - Real Estate Investment Trusts
-    materiales:
-    - Agricultural Chemicals
-    - Agricultural Production-Crops
-    - Chemicals & Allied Products
-    - Converted Paper & Paperboard Prods (No Contaners/Boxes)
-    - Gold and Silver Ores
-    - Industrial Inorganic Chemicals
-    - Industrial Organic Chemicals
-    - Metal Cans
-    - Metal Mining
-    - Millwood, Veneer, Plywood, & Structural Wood Members
-    - Mining & Quarrying of  Nonmetallic Minerals (No Fuels)
-    - Miscellaneous Manufacturing Industries
-    - Paints, Varnishes, Lacquers, Enamels & Allied Prods
-    - Paper Mills
-    - Paperboard Containers & Boxes
-    - Plastic Material, Synth Resin/Rubber, Cellulos (No Glass)
-    - Plastic Materials, Synth Resins & Nonvulcan Elastomers
-    - Steel Works, Blast Furnaces & Rolling Mills (Coke Ovens)
-    media:
-    - 'Newspapers: Publishing or  Publishing & Printing'
-    - Services-Advertising Agencies
-    - Services-Amusement & Recreation Services
-    - Services-Miscellaneous Amusement & Recreation
-    - Television Broadcasting Stations
-    viajes_ocio:
-    - Hotels & Motels
-    - Transportation Services
-    - Water Transportation
+    software_it: ['73']
+    computing_hardware: ['35', '36']
+    instruments_devices: ['38']
+    pharma_chemicals: ['28']
+    health_services: ['80']
+    financials: ['60', '61', '62', '67']
+    insurance_real_estate: ['63', '64', '65']
+    energy: ['13', '29', '46']
+    utilities_telecom: ['48', '49']
+    industrials: ['01', '10', '14', '15', '16', '17', '24', '25', '30', '31', '32', '33', '34', '37', '39', '40', '41', '42', '44', '45', '47', '87']
+    consumer_retail: ['20', '21', '22', '23', '26', '27', '50', '51', '52', '53', '54', '55', '56', '57', '58', '59']
+    media_leisure: ['70', '78', '79']
   overrides:
-    FRC: financieras
-    SHW: materiales
-    KMB: consumo
-    DHR: salud
-    VLTO: industriales
-    CTAS: industriales
+    FRC: financials
+    SHW: pharma_chemicals
+    KMB: consumer_retail
+    DHR: health_services
+    VLTO: industrials
+    CTAS: industrials
 storage:
   raw_submissions: data/raw/sec_submissions
   raw_html: data/raw/filings_html

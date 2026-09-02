@@ -14,7 +14,9 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from ai_prefilter_anchors import POSITIVE_ANCHORS, anchor_rows, register_anchors
+from ai_prefilter_anchors import (
+    POSITIVE_ANCHORS, anchor_rows, register_anchors, strong_terms, weak_terms,
+)
 import ai_embed
 from embedding_runtime import (  # maquinaria compartida con ai_embed.py
     DEFAULT_MEMORY_FRACTION, PARAGRAPH_KEY, TORCH_DTYPES, ThroughputReporter,
@@ -26,17 +28,10 @@ DEFAULT_MODEL = "BAAI/bge-m3"
 DEFAULT_DATABASE = REPO_ROOT / "duckdb" / "thesis.duckdb"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "data" / "interim" / "prefilter_scores"
 
-STRONG_AI_TERMS = (
-    "artificial intelligence", "generative ai", "genai", "machine learning",
-    "deep learning", "large language model", "large language models",
-    "foundation model", "foundation models", "neural network", "neural networks",
-    "chatgpt", "openai", "gpt-4", "copilot", "gemini", "claude",
-)
-WEAK_AI_TERMS = (
-    "algorithm", "predictive", "prediction", "recommendation", "classifier",
-    "automation", "automated decision", "computer vision",
-    "natural language processing", "nlp", "model",
-)
+# Lexical terms come from configs/ai_prefilter.yaml alongside the anchors, so
+# tuning either signal is a config change, not a code change.
+STRONG_AI_TERMS = strong_terms()
+WEAK_AI_TERMS = weak_terms()
 
 
 def _sql_list(items: tuple[str, ...]) -> str:
@@ -120,7 +115,15 @@ def anchors_fingerprint(anchors: list[dict[str, str]]) -> str:
     incompatible score populations in one parquet directory.
     """
     payload = json.dumps(
-        [[row.get("anchor_id"), row.get("category"), row.get("polarity"), row.get("anchor_text")] for row in anchors],
+        {
+            "anchors": [[row.get("anchor_id"), row.get("category"), row.get("polarity"),
+                         row.get("anchor_text")] for row in anchors],
+            # Lexical terms are in the hash too: they decide the *_matched_terms and
+            # *_lexical_match columns, so a run with different terms is a different
+            # score population even when the anchors are untouched.
+            "strong_terms": list(STRONG_AI_TERMS),
+            "weak_terms": list(WEAK_AI_TERMS),
+        },
         sort_keys=True, ensure_ascii=False,
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]

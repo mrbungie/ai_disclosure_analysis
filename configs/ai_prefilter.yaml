@@ -1,0 +1,115 @@
+# Anchors and lexical terms for the AI paragraph prefilter.
+#
+# Both halves of the prefilter are configured here so tuning it never means
+# editing Python. Changing anything in this file changes the content hash that
+# identifies a scoring run, so scores computed under an older version are
+# reported and skipped rather than silently unioned with new ones — and because
+# embedding is a separate pass (scripts/common/ai_embed.py), re-scoring the
+# whole corpus after a change here costs ~30 seconds, not a re-embed.
+#
+# HOW TO WRITE AN ANCHOR
+# Anchors are matched against paragraphs by cosine similarity, so an anchor has
+# to READ LIKE THE PARAGRAPHS it should retrieve: a sentence of filing prose
+# that contains the concept, not a description of the concept.
+#
+# This matters more than it sounds. An earlier version used category
+# descriptions ("The company relies on third-party artificial intelligence
+# providers or models."), and its nearest neighbours in the real corpus were
+# generic supplier-dependence boilerplate — "We are dependent on third-party
+# suppliers." scored 0.795, HIGHER than actual AI risk-factor disclosure. The
+# model was matching the sentence's dominant clause ("relies on third-party
+# providers"), because that is what the anchor was mostly about. Written as
+# disclosure prose instead, the anchor's dominant clause is the AI itself.
+
+lexical:
+  # Substring matches computed in DuckDB. Strong terms name AI directly; weak
+  # terms are ambiguous on their own ("model" hits every valuation paragraph in
+  # the corpus) and are kept as a separate, weaker signal rather than dropped.
+  strong:
+    - artificial intelligence
+    - generative ai
+    - genai
+    - machine learning
+    - deep learning
+    - large language model
+    - large language models
+    - foundation model
+    - foundation models
+    - neural network
+    - neural networks
+    - chatgpt
+    - openai
+    - gpt-4
+    - copilot
+    - gemini
+    - claude
+  weak:
+    - algorithm
+    - predictive
+    - prediction
+    - recommendation
+    - classifier
+    - automation
+    - automated decision
+    - computer vision
+    - natural language processing
+    - nlp
+    - model
+
+semantic:
+  positive:
+    ai_use:
+      - We use artificial intelligence and machine learning technologies across our
+        business operations to automate processes and support decision-making.
+      - Our products and services incorporate artificial intelligence features, and we
+        have deployed machine learning models in our customer-facing offerings.
+    ai_exploration:
+      - We are evaluating and piloting generative artificial intelligence tools, and
+        continue to explore additional applications of these technologies.
+    ai_capability:
+      - We develop and train our own proprietary artificial intelligence models and
+        maintain the machine learning platforms on which our products depend.
+      - Our artificial intelligence features depend on large language models licensed
+        from third-party AI providers, and any interruption in access to those models
+        could affect our offerings.
+      - We are investing in artificial intelligence infrastructure, including
+        specialized computing capacity, training data, and AI engineering talent.
+    ai_outcome:
+      - Our use of artificial intelligence has improved productivity and operational
+        efficiency and reduced costs across the organization.
+      - Artificial intelligence capabilities contributed to revenue growth and
+        improved customer experience through greater personalization.
+    ai_risk:
+      - The use of artificial intelligence by us or our vendors introduces new
+        cybersecurity and data privacy risks, including the misuse of personal data.
+      - Artificial intelligence is subject to evolving laws and regulation, and our
+        use of AI may give rise to intellectual property, copyright, and litigation
+        risk.
+      - Our artificial intelligence systems may produce inaccurate, biased, or
+        harmful outputs, and such errors could damage our reputation and expose us to
+        liability.
+      - Artificial intelligence may disrupt our competitive position or displace
+        portions of our workforce, and competitors may deploy AI more effectively
+        than we do.
+    ai_governance:
+      - We have adopted policies, oversight processes, and human review procedures
+        governing the development and deployment of artificial intelligence, including
+        board and management oversight of AI risk.
+    ai_strategy:
+      - Artificial intelligence is central to our long-term strategy, and we believe
+        it will be transformative for our industry and our competitive position.
+
+  # Prose that a keyword filter (and a naive embedding match) mistakes for AI
+  # disclosure. Their similarity is recorded as `negative_similarity` on every
+  # scored row so a downstream threshold can subtract it.
+  negative:
+    - Our business model is designed to generate recurring revenue across our
+      operating segments.
+    - We use valuation models and discounted cash flow analysis to estimate the fair
+      value of these assets.
+    - Our economic forecasts and projections of future demand are based on
+      macroeconomic indicators and industry data.
+    - We have automated portions of our billing and back-office processes using
+      standard enterprise software.
+    - We are dependent on third-party suppliers and service providers, and any
+      interruption in their performance could harm our operations.

@@ -1,0 +1,232 @@
+# Golden set: diseño muestral y protocolo de etiquetado
+
+Conjunto de párrafos etiquetados por LLM que sirve de referencia para **evaluar y
+ajustar el prefiltro** (`scripts/common/ai_prefilter.py`): elegir su umbral, medir
+precisión y recall por categoría, y comparar variantes de anchors.
+
+Implementación: `scripts/common/golden_set.py`.
+
+---
+
+## 1. Por qué existe: el problema de circularidad
+
+La tentación es evaluar el prefiltro con una etiqueta léxica — "¿el párrafo dice
+literalmente *artificial intelligence*?". No sirve, y conviene entender por qué
+antes de gastar en llamadas a un LLM.
+
+El prefiltro combina coincidencia léxica sobre una lista de términos y similitud
+semántica contra anchors. Si la etiqueta se construye con la primera:
+
+- Un scoring **híbrido** da precisión ~100% por construcción. No mide nada.
+- Un scoring **semántico puro** queda castigado justo donde aporta valor:
+  encontrar disclosure que no usa las palabras de la lista. Medido sobre 940.032
+  párrafos, sólo el **0,38%** contiene un término fuerte, así que la etiqueta
+  léxica declara negativo todo lo demás por definición.
+
+La etiqueta tiene que venir de fuera de ambas señales. De ahí el LLM.
+
+---
+
+## 2. Regla dura: el muestreo no puede usar la salida del prefiltro
+
+**El sampler no lee embeddings ni scores. Nunca.**
+
+Si los párrafos se eligieran por su `max_semantic_score`, el conjunto de
+evaluación quedaría definido por lo mismo que se quiere evaluar. El sesgo es
+específico y fatal: **nunca aparecería un párrafo que es divulgación de IA y que
+los anchors actuales rankean bajo**. Ese es precisamente el error que el golden
+set tiene que poder detectar — y el que ya se observó al descubrir que un anchor
+mal escrito ponía *"We are dependent on third-party suppliers"* en el puesto 12
+del corpus.
+
+De ahí que todo lo que estratifica sea **anterior e independiente** al prefiltro:
+atributos del documento (país, forma, sección, año, tipo de contenido), atributos
+del emisor (sector SIC), y un diccionario de palabras clave **congelado** en
+`golden_set.py` (`SAMPLING_KEYWORDS`), deliberadamente separado de
+`configs/ai_prefilter.yaml`: retocar los términos del prefiltro no debe cambiar
+qué párrafos componen el conjunto de evaluación.
+
+Ese diccionario congelado deja un sesgo residual — la divulgación de IA que no
+usa ninguna de esas palabras está sub-representada en los estratos por palabra
+clave. Por eso existe la **etapa 3, una muestra aleatoria pura** (§5): es el
+único estrato donde ese caso puede aparecer, y es el que permite estimar cuánto
+se está perdiendo.
+
+---
+
+## 3. Identidad del párrafo
+
+Cada fila se identifica por la **llave natural completa**:
+
+```
+(country_code, form, accession_number, item_key, paragraph_index)
+```
+
+Verificado sobre `paragraphs`: 3.281.038 filas, 3.281.038 llaves distintas. Es la
+misma llave de `ai_embed.py` y `ai_prefilter.py`, así que una etiqueta se une a
+su vector y a su score sin ambigüedad.
+
+Los cinco componentes son necesarios, y los tres primeros son los que sostienen
+la unicidad cuando entren más países y tipos de informe:
+
+- `country_code` — `accession_number` es un identificador de la SEC. Cuando entre
+  Chile (`cl`), sus documentos se identifican por `rut`/`nemo` y nada garantiza
+  que no colisionen.
+- `form` — un mismo emisor presenta 10-K y 10-Q; `item_key` `1A` existe en ambos,
+  con numeración de párrafo independiente.
+- `item_key` — la numeración de párrafos reinicia por sección.
+
+Además se guarda `text_hash` (BLAKE2b de 8 bytes). La llave identifica *la
+posición*; el hash identifica *el contenido*. Si una corrida posterior de
+extracción cambia el texto sin cambiar la posición, la etiqueta quedó obsoleta y
+el hash lo detecta — sin él la corrupción sería silenciosa.
+
+---
+
+## 4. El muestreo es exploratorio, no representativo
+
+El diseño sobre-representa a propósito los sectores donde se espera más
+divulgación de IA. Sobre una muestra aleatoria simple, con ~0,4% de prevalencia,
+10.000 párrafos darían unos 40 positivos: no alcanza para medir precisión por
+categoría ni para decidir un umbral.
+
+Consecuencias que hay que respetar:
+
+1. **No estima prevalencia.** La proporción de positivos en el golden set no dice
+   nada sobre la proporción en el corpus.
+2. **Toda cifra a nivel de corpus requiere reponderar.** Cada fila guarda
+   `stratum`, `stage` e `inclusion_weight` = (población del estrato) /
+   (muestreados del estrato). Sin esos pesos, precisión y prevalencia quedan
+   sesgadas hacia arriba.
+3. **Las métricas por estrato son directas.** "Precisión del prefiltro dentro de
+   las empresas tech" no necesita reponderación.
+
+---
+
+## 5. Las tres etapas
+
+### Etapa 1 — sobremuestreo de empresas tecnológicas (4.000)
+
+Empresas cuyo SIC cae en grupos tecnológicos, según `firm_universe.sic`:
+
+| prefijo SIC | sector |
+|---|---|
+| 35 | maquinaria industrial y equipos de computación |
+| 36 | equipos electrónicos y componentes |
+| 38 | instrumentos de medición, análisis y control |
+| 48 | comunicaciones |
+| 73 | servicios de negocios (incluye 737x, servicios informáticos) |
+
+La razón es un prior sustantivo y **verificable sin el prefiltro**: se espera más
+presencia de IA en esos sectores. `industry_group` está vacío en el universo
+actual (517 filas en blanco, 100 `NaN`), así que el sector sale del **primer par
+de dígitos del SIC**. Las empresas sin SIC quedan en un estrato propio
+(`sic_unknown`), no se descartan.
+
+Dentro de la etapa, las cuotas se reparten por sección y por presencia de palabra
+clave congelada, para que el sobremuestreo no se concentre todo en Risk Factors.
+
+### Etapa 2 — máxima variación (4.500)
+
+Asignación balanceada por round-robin sobre el producto cartesiano de siete ejes:
+
+| eje | fuente | valores |
+|---|---|---|
+| país | `paragraphs.country_code` | `us`, `cl` (cl aún sin párrafos extraídos) |
+| forma | `paragraphs.form` | `10-K`, `10-Q` |
+| sección | `paragraphs.item_key` | `1` Business, `1A` Risk Factors, `2` MD&A 10-Q, `7` MD&A 10-K |
+| tipo de contenido | `paragraphs.content_type` | `prose`, `list`, `table` |
+| año | `filing_manifest[_10q].filing_date` | 2021–2026 |
+| sector | `firm_universe.sic` (2 dígitos) | grupos SIC presentes |
+| palabra clave | `SAMPLING_KEYWORDS` congelado | `strong`, `weak`, `none` |
+
+Se recorre de la celda **más rara a la más común**, tomando hasta
+`ceil(4500 / celdas_no_vacías)` de cada una y redistribuyendo el sobrante. Una
+asignación proporcional dejaría `cl`, `10-Q`/`1A` y `table` en cero, y son justo
+los casos donde el pipeline tiene más probabilidad de romperse.
+
+### Etapa 3 — aleatoria pura (1.500)
+
+Muestra aleatoria simple sobre todo el corpus, sin estratificar por nada.
+
+Es el estrato con menos positivos esperados (~6 párrafos con IA) y el más
+importante metodológicamente: es el único **libre de cualquier supuesto**, y por
+lo tanto el único que puede revelar divulgación de IA que ni las palabras clave
+ni los sectores tech anticipan. También es el que da un estimador insesgado de
+prevalencia, con el que se reponderan las otras dos etapas.
+
+### Deduplicación previa
+
+El boilerplate se repite entre filings — la misma frase apareció cinco veces en
+el top semántico. Antes de asignar cuotas se deduplica por `text_hash`,
+conservando una ocurrencia y anotando `duplicate_count`. Sin esto se paga varias
+veces por la misma etiqueta y se infla el acuerdo.
+
+---
+
+## 6. Etiquetado
+
+- **Modelo**: `gemini-3.8-flash` vía `pydantic-ai` con salida estructurada
+  (Pydantic). Configurable con `--judge-model`; queda guardado en cada fila.
+- **Prompt**: versionado (`PROMPT_VERSION`). El par
+  `(judge_model, prompt_version)` define una **población de etiquetas**: filas de
+  otro modelo u otro prompt no se mezclan, se reportan aparte.
+- **Salida estructurada**, diseñada para evaluar el prefiltro:
+  - `is_ai_disclosure` (bool) — la etiqueta binaria contra la que se mide.
+  - `relevance` — `none` / `incidental` / `substantive`. La distinción entre
+    mención de pasada y disclosure sustantivo define si el umbral debe ser
+    agresivo o conservador.
+  - `categories` — las siete de `configs/ai_prefilter.yaml`, para medir
+    `best_semantic_anchor` contra la categoría real.
+  - `evidence_quote` + `evidence_verbatim` — cita literal, verificada contra el
+    texto del párrafo. Si el juez la inventa, la fila queda marcada.
+  - `mentions_ai_explicitly` — permite separar "IA nombrada" de "IA descrita sin
+    nombrarla", que es la pregunta de fondo sobre el aporte del prefiltro
+    semántico.
+  - `confidence` y `reasoning` — para filtrar por confianza y revisar a mano.
+
+### Costo y resiliencia
+
+10.000 párrafos es caro en tiempo y llamadas, así que nada se pierde:
+
+- Parte parquet cada `--part-rows` filas (2.000 por defecto), escrita
+  atómicamente (`.partial` y luego rename).
+- Un fallo de API en un ítem se guarda en la fila (`error`) y la corrida sigue.
+- SIGINT/SIGTERM hacen flush de lo acumulado antes de salir.
+- La corrida siguiente es aditiva: verifica lo que hay y etiqueta sólo lo que
+  falta.
+
+---
+
+## 7. Aditividad entre sesiones
+
+1. Al arrancar se validan las partes existentes (que abran, que traigan la llave,
+   que coincidan `judge_model` y `prompt_version`). Lo que no califica se
+   **reporta y se ignora, nunca se borra**.
+2. Lo pendiente sale de un `NOT EXISTS` contra las llaves ya etiquetadas.
+3. Cada fila guarda `session_id`, `labeled_at`, `judge_model`, `prompt_version`,
+   `sampling_version` y `text_hash`.
+
+Permite crecer en varias sesiones, retomar tras un corte, y sumar Chile más
+adelante sin volver a pagar lo ya etiquetado. Un cambio de modelo no contamina:
+crea una población nueva e identificable, que además sirve para medir acuerdo
+entre jueces.
+
+---
+
+## 8. Cómo se usa para evaluar el prefiltro
+
+Uniendo el golden set a `ai_prefilter_scores` por la llave:
+
+- **Curva precisión-recall** de `max_semantic_score` contra `is_ai_disclosure`,
+  ponderada por `inclusion_weight`, para elegir el umbral.
+- **Comparación de scorings** — léxico solo, semántico solo, híbrido — sobre la
+  misma etiqueta independiente. Es la comparación que la etiqueta léxica no
+  permite hacer (§1).
+- **Precisión por categoría**: `best_semantic_anchor` contra `categories`.
+- **Diagnóstico de anchors**: los falsos positivos apuntan al anchor que los
+  atrajo. Así se detectó que *"The company relies on third-party artificial
+  intelligence providers or models."* capturaba boilerplate de proveedores.
+- **Recall fuera del radar**: los positivos de la etapa 3 con
+  `mentions_ai_explicitly = false` son la medida directa de lo que un filtro
+  puramente léxico pierde.

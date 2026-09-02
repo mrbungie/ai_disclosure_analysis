@@ -15,7 +15,13 @@ import ai_prefilter_anchors
 
 
 class AnchorRegistrationTests(unittest.TestCase):
-    def test_register_anchors_exposes_positive_and_negative_anchor_rows(self):
+    def test_register_anchors_matches_the_configured_anchors(self):
+        """Counts come from configs/ai_prefilter.yaml, not from a literal here:
+        anchors are meant to be retuned, and a test that hardcodes how many
+        there are just breaks every time someone does the intended thing."""
+        expected_positive = sum(len(texts) for texts in ai_prefilter_anchors.positive_anchors().values())
+        expected_negative = len(ai_prefilter_anchors.negative_anchors())
+
         con = duckdb.connect()
         try:
             ai_prefilter_anchors.register_anchors(con)
@@ -25,7 +31,24 @@ class AnchorRegistrationTests(unittest.TestCase):
         finally:
             con.close()
 
-        self.assertEqual(rows, [("negative", 4), ("positive", 16)])
+        self.assertEqual(rows, [("negative", expected_negative), ("positive", expected_positive)])
+        self.assertGreater(expected_positive, 0)
+        self.assertGreater(expected_negative, 0)
+
+    def test_anchor_ids_are_unique(self):
+        ids = [row["anchor_id"] for row in ai_prefilter_anchors.anchor_rows()]
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_anchor_text_is_single_line(self):
+        """YAML block scalars wrap; an anchor's embedding must not depend on
+        where the line happened to break."""
+        for row in ai_prefilter_anchors.anchor_rows():
+            self.assertNotIn("\n", row["anchor_text"])
+            self.assertEqual(row["anchor_text"], " ".join(row["anchor_text"].split()))
+
+    def test_lexical_terms_are_lowercase_for_the_duckdb_contains_match(self):
+        for term in ai_prefilter_anchors.strong_terms() + ai_prefilter_anchors.weak_terms():
+            self.assertEqual(term, term.lower())
 
 
 class LexicalScoringTests(unittest.TestCase):

@@ -73,7 +73,18 @@ def _fetch_one_company(row, form, start_date, end_date, allow_amendments, html_d
             form=form, filing_date=f"{start_date}:{end_date}", amendments=allow_amendments,
         )
         firm_info["sic"] = str(getattr(company, "sic", "") or "")
-        firm_info["industry_group"] = getattr(company, "sic_description", "") or firm_info.get("industry_group", "")
+        # `industry` since edgartools 5.55 (was `sic_description`). Read both, and
+        # do NOT swallow a miss: a silent "" here is what left industry_group empty
+        # for all 517 firms and stayed empty, because script 00 only carries the
+        # previous value forward.
+        industry = getattr(company, "industry", None) or getattr(company, "sic_description", None)
+        if not industry and not firm_info.get("industry_group"):
+            pipeline_logger.log_event(
+                pipeline_step="edgar_fetch", level="WARNING",
+                message=f"No industry/sic_description for {ticker} (CIK {cik}); "
+                        f"industry_group left empty",
+                ticker=ticker, cik=cik)
+        firm_info["industry_group"] = industry or firm_info.get("industry_group", "")
     except Exception as e:
         pipeline_logger.log_event(
             pipeline_step="edgar_fetch", level="ERROR",
