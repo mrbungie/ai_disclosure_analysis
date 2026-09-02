@@ -65,9 +65,38 @@ class LexicalScoringTests(unittest.TestCase):
         rows = con.sql(ai_prefilter.lexical_scores_sql("paragraphs")).fetchall()
         con.close()
 
-        self.assertEqual(rows[0], (1, ["generative ai"], [], True, False))
+        # "generative AI" matchea DOS términos: la sigla suelta y el compuesto.
+        self.assertEqual(rows[0], (1, ["ai", "generative ai"], [], True, False))
         self.assertEqual(rows[1], (2, [], ["algorithm", "model"], False, True))
         self.assertEqual(rows[2], (3, [], [], False, False))
+
+
+class LexicalBoundaryTests(unittest.TestCase):
+    """El límite de palabra es lo único que separa la sigla del ruido: sin él,
+    "ai" matchea "said", "certain", "chair" y "remain", que son de las palabras
+    más comunes del corpus. Con él puesto, distinguir mayúsculas ya no aporta
+    (medido: 29 párrafos de diferencia en 3,28M)."""
+
+    CASOS = [
+        ("We deploy AI across our operations.", True, "sigla suelta"),
+        ("Our AI-powered platform scales.", True, "sigla con guion"),
+        ("The board said that margins improved.", False, "'said' contiene 'ai'"),
+        ("A certain chair remains available.", False, "'certain', 'chair', 'remains'"),
+        ("Revenue in Thailand grew.", False, "'Thailand' contiene 'ai'"),
+        ("We use artificial intelligence.", True, "término largo"),
+    ]
+
+    def test_word_boundary_separates_the_acronym_from_ordinary_words(self):
+        con = duckdb.connect()
+        con.execute("CREATE TABLE paragraphs (paragraph_index INTEGER, paragraph_text VARCHAR)")
+        for index, (text, _, _) in enumerate(self.CASOS, start=1):
+            con.execute("INSERT INTO paragraphs VALUES (?, ?)", [index, text])
+        rows = con.sql(ai_prefilter.lexical_scores_sql("paragraphs")).fetchall()
+        con.close()
+
+        for (text, esperado, motivo), row in zip(self.CASOS, rows):
+            with self.subTest(texto=text, motivo=motivo):
+                self.assertEqual(row[3], esperado, f"{text!r} ({motivo})")
 
 
 class SemanticScoringTests(unittest.TestCase):

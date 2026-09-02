@@ -38,15 +38,55 @@ def _sql_list(items: tuple[str, ...]) -> str:
     return "[" + ", ".join("'" + item.replace("'", "''") + "'" for item in items) + "]"
 
 
+# Límite de palabra: un término sólo cuenta si no viene pegado a otra letra o
+# dígito. Es lo único que separa "ai" de "said", "chair" y "remain" — y con el
+# límite puesto, distinguir mayúsculas ya no aporta (medido: `AI` sensible da
+# 11.963 párrafos, `ai` insensible 11.992, 29 de diferencia en 3 millones).
+# Sin esto la lista se perdía la mitad del corpus: 8.347 párrafos capturados
+# contra 16.608 reales, porque las empresas escriben la sigla y no el término
+# largo.
+BOUNDARY_BEFORE = "(^|[^a-z0-9])"
+BOUNDARY_AFTER = "([^a-z0-9]|$)"
+
+
+def _term_regex(terms: tuple[str, ...]) -> str:
+    """Alternación con límite de palabra, para el booleano."""
+    alt = "|".join(term.replace("'", "''") for term in terms)
+    return f"'{BOUNDARY_BEFORE}({alt}){BOUNDARY_AFTER}'"
+
+
+def _matched_terms_sql(terms: tuple[str, ...], text: str) -> str:
+    """Qué términos matchearon, con el mismo límite de palabra que el booleano."""
+    return (f"list_filter({_sql_list(terms)}, term -> regexp_matches({text}, "
+            f"'{BOUNDARY_BEFORE}' || term || '{BOUNDARY_AFTER}'))")
+
+
+def _token_regex(tokens: tuple[str, ...]) -> str:
+    """Alternación con límite de palabra, sobre el texto CRUDO (sensible a
+    mayúsculas). `contains(lower(...))` no sirve para siglas: "ai" matchea
+    "said" y "ML" matchea "mL"."""
+    alt = "|".join(t.replace(".", "\\.").replace(" ", "[ ]") for t in tokens)
+    return f"'(^|[^A-Za-z0-9])({alt})([^A-Za-z0-9]|$)'"
+
+
+def _token_list_sql(tokens: tuple[str, ...], column: str) -> str:
+    """Lista de las siglas que efectivamente aparecen, para la columna de
+    términos matcheados."""
+    if not tokens:
+        return "[]::VARCHAR[]"
+    return "list_filter(" + _sql_list(tokens) + ", tok -> regexp_matches(" + column + \
+           ", '(^|[^A-Za-z0-9])' || regexp_replace(tok, '([.])', '\\\\\\1', 'g') || '([^A-Za-z0-9]|$)'))"
+
+
 def lexical_scores_sql(source_relation: str = "paragraphs") -> str:
     """DuckDB-only simple substring matching; no Python lexical matcher."""
     text = "lower(coalesce(p.paragraph_text, ''))"
     return f"""
         SELECT p.paragraph_index,
-               list_filter({_sql_list(STRONG_AI_TERMS)}, term -> contains({text}, term)) AS strong_matched_terms,
-               list_filter({_sql_list(WEAK_AI_TERMS)}, term -> contains({text}, term)) AS weak_matched_terms,
-               list_count(list_filter({_sql_list(STRONG_AI_TERMS)}, term -> contains({text}, term))) > 0 AS strong_lexical_match,
-               list_count(list_filter({_sql_list(WEAK_AI_TERMS)}, term -> contains({text}, term))) > 0 AS weak_lexical_match
+               {_matched_terms_sql(STRONG_AI_TERMS, text)} AS strong_matched_terms,
+               {_matched_terms_sql(WEAK_AI_TERMS, text)} AS weak_matched_terms,
+               regexp_matches({text}, {_term_regex(STRONG_AI_TERMS)}) AS strong_lexical_match,
+               regexp_matches({text}, {_term_regex(WEAK_AI_TERMS)}) AS weak_lexical_match
         FROM {source_relation} AS p
         ORDER BY p.paragraph_index
     """
@@ -70,10 +110,10 @@ def lexical_input_sql(source_relation: str = "paragraphs", limit: int = 0, pendi
         anti = f"WHERE NOT EXISTS (SELECT 1 FROM {pending_against} AS s WHERE {keys})"
     return f"""
         SELECT p.*, 
-               list_filter({_sql_list(STRONG_AI_TERMS)}, term -> contains({text}, term)) AS strong_matched_terms,
-               list_filter({_sql_list(WEAK_AI_TERMS)}, term -> contains({text}, term)) AS weak_matched_terms,
-               list_count(list_filter({_sql_list(STRONG_AI_TERMS)}, term -> contains({text}, term))) > 0 AS strong_lexical_match,
-               list_count(list_filter({_sql_list(WEAK_AI_TERMS)}, term -> contains({text}, term))) > 0 AS weak_lexical_match
+               {_matched_terms_sql(STRONG_AI_TERMS, text)} AS strong_matched_terms,
+               {_matched_terms_sql(WEAK_AI_TERMS, text)} AS weak_matched_terms,
+               regexp_matches({text}, {_term_regex(STRONG_AI_TERMS)}) AS strong_lexical_match,
+               regexp_matches({text}, {_term_regex(WEAK_AI_TERMS)}) AS weak_lexical_match
         FROM {source_relation} AS p
         {anti}
         ORDER BY p.form, p.country_code, p.accession_number, p.item_key, p.paragraph_index
@@ -355,10 +395,10 @@ def run_prefilter(
         query = f"""
             SELECT p.form, p.country_code, p.accession_number, p.item_key, p.content_type,
                    p.paragraph_index,
-                   list_filter({_sql_list(STRONG_AI_TERMS)}, term -> contains({text}, term)) AS strong_matched_terms,
-                   list_filter({_sql_list(WEAK_AI_TERMS)}, term -> contains({text}, term)) AS weak_matched_terms,
-                   list_count(list_filter({_sql_list(STRONG_AI_TERMS)}, term -> contains({text}, term))) > 0 AS strong_lexical_match,
-                   list_count(list_filter({_sql_list(WEAK_AI_TERMS)}, term -> contains({text}, term))) > 0 AS weak_lexical_match,
+                   {_matched_terms_sql(STRONG_AI_TERMS, text)} AS strong_matched_terms,
+                   {_matched_terms_sql(WEAK_AI_TERMS, text)} AS weak_matched_terms,
+                   regexp_matches({text}, {_term_regex(STRONG_AI_TERMS)}) AS strong_lexical_match,
+                   regexp_matches({text}, {_term_regex(WEAK_AI_TERMS)}) AS weak_lexical_match,
                    v.embedding, v.text_hash
             FROM paragraphs AS p
             JOIN paragraph_vectors AS v ON {key_join}
