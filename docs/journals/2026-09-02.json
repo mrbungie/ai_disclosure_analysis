@@ -1,0 +1,383 @@
+{
+  "fecha": "2026-09-02",
+  "rama": "prefilter-embed-split",
+  "montaje": {
+    "repo": "clonado mrbungie/mib_tesis_ai_disclosure + submodulo vendor/mcp-cmf-chile",
+    "entorno": "uv + .venv desde uv.lock; sentence-transformers 6.0.1, torch 2.14.0+cu130, CUDA en RTX 5090 (31,4 GiB)",
+    "modelo": "BAAI/bge-m3 (2,27 GB de pesos, dim 1024, max_seq 8192)",
+    "duckdb": "make duckdb-text -> 3.281.038 parrafos (us 10-K 1.544.496 / 10-Q 1.736.542)",
+    "b2_pull": {
+      "estado": "INCOMPLETO",
+      "bajado": "4.298 de 13.133 archivos",
+      "faltan": "8.839 archivos / 1,4 GiB, casi todo HTML de 10-Q",
+      "causa": "403 download_cap_exceeded (tope de descarga de la cuenta Backblaze)",
+      "impacto": "nulo para lo hecho hoy: interim/sections bajo completo (599/599). Bloquea re-extraer."
+    }
+  },
+  "pipeline": {
+    "separacion": "el prefiltro era una sola pasada que tiraba los vectores; ahora ai_embed.py los guarda y ai_prefilter.py los puntua",
+    "motivo": "editar un anchor forzaba re-embeber 3,28M parrafos; ahora cuesta 30s",
+    "embedding": {
+      "throughput": "189.000-205.000 tok/s en fp16",
+      "duracion": "45 min para el corpus completo",
+      "salida": "60 partes, 6,0 GB, fixed_size_list<float16,1024> sin comprimir",
+      "tokens_sin_padding": 469231281,
+      "tokens_con_padding": 469291118,
+      "factor_padding": 1.0,
+      "nota_padding": "el empaquetado ordena por largo antes de agrupar, por eso el padding es nulo"
+    },
+    "scoring": "110.000-165.000 parrafos/s; el corpus completo en ~30 segundos",
+    "autotune": "presupuesto por TOKENS, no por filas; precomputado midiendo memoria libre real y creciendo un batch de prueba hasta que satura throughput. Usa 3,7 de 31,4 GiB: llenar la GPU no aporta (satura a ~10k tokens/batch). Agnostico de backend (cuda/xpu/mps/cpu), con backoff que parte el batch si igual hay OOM."
+  },
+  "decisiones_medidas": {
+    "precision_numerica": {
+      "elegido": "fp16",
+      "razon": "bf16 iguala la velocidad pero cambia bits de mantisa por rango que el modelo no necesita",
+      "tabla": [
+        {
+          "config": "fp32",
+          "tok_s": 59590,
+          "speedup": 1.0,
+          "cos_min": 1.0,
+          "cambia_argmax_pct": 0.0
+        },
+        {
+          "config": "fp32+TF32",
+          "tok_s": 76097,
+          "speedup": 1.28,
+          "cos_min": 0.999872,
+          "cambia_argmax_pct": 0.1
+        },
+        {
+          "config": "fp16",
+          "tok_s": 172664,
+          "speedup": 2.9,
+          "cos_min": 0.999775,
+          "cambia_argmax_pct": 0.28
+        },
+        {
+          "config": "bf16",
+          "tok_s": 173878,
+          "speedup": 2.92,
+          "cos_min": 0.999229,
+          "cambia_argmax_pct": 2.62
+        }
+      ]
+    },
+    "int8_onnx": {
+      "modelo": "gpahal/bge-m3-onnx-int8",
+      "resultado": "1,6k tok/s en CUDA contra 186k de fp16, ~100x mas lento",
+      "causa": "exportado con AutoQuantizationConfig.avx512_vnni (target CPU x86); ORT inserta 606 nodos Memcpy porque los ops int8 no tienen kernel CUDA",
+      "veredicto": "descartado"
+    },
+    "formato_parquet": {
+      "embeddings": "fp16 sin comprimir (6,3 GB vs 13,5 en fp32; zstd solo ahorra 0,2% en vectores casi aleatorios)",
+      "scores": "zstd"
+    }
+  },
+  "hallazgos": {
+    "1_compuerta_lexica_rota": {
+      "severidad": "el mas grande de la sesion",
+      "problema": "el lexico matcheaba con contains(lower(texto), termino) sobre terminos escritos completos; no tenia las siglas",
+      "evidencia": "Microsoft tiene 480 parrafos sobre IA y la lista atrapaba 56 (14%). A nivel corpus, 8.347 de 16.800",
+      "arreglo": "regex con limite de palabra (^|[^a-z0-9])termino([^a-z0-9]|$) sobre minusculas, con ai/ml/llm/agi/nlp en la lista",
+      "por_que_el_limite_y_no_mayusculas": "el limite es lo que impide matchear 'said'/'chair'/'Thailand'. Medido: AI sensible a mayusculas da 11.963 parrafos, ai insensible 11.992 (29 de diferencia en 3,28M)",
+      "recall_antes": 0.802,
+      "recall_despues": 0.982,
+      "precision_antes": 0.671,
+      "precision_despues": 0.693,
+      "nota": "mejor en los dos ejes: el filtro perdia material, no hacia un trade-off"
+    },
+    "2_anchors": {
+      "regla": "si tapas las palabras de IA del anchor y lo que queda todavia describe medio corpus, el anchor esta mal",
+      "v1_descripciones": "'The company relies on third-party AI providers' -> recuperaba boilerplate de proveedores; 'We are dependent on third-party suppliers' quedaba 12o del corpus",
+      "v2_prosa_de_filing": "peor: 147.783 parrafos sin match lexico y margen alto eran encabezados, comites del directorio y lineas de ingresos, ninguno mencionaba IA",
+      "v3_vocabulario_denso": "anchors densos en lenguaje de IA + un negativo GEMELO SIN IA por cada positivo; el conjunto sin lexico cae 27x a 5.353",
+      "residuo": "polisemia genuina: 'model' en banca, 'predict' en pronosticos, 'automation' en flujos. No lo arregla un anchor mejor"
+    },
+    "3_para_que_sirve_la_semantica": {
+      "no_expande_recall": "los parrafos que divulgan IA sin vocabulario de IA casi no existen: las empresas que hablan de IA escriben 'AI'",
+      "si_ordena_dentro": "AUC 0,671 separando disclosure sustantivo de mencion al pasar; margen medio 0,0328 en substantive vs -0,0016 en incidental",
+      "arquitectura": "dos etapas con trabajos distintos: compuerta lexica para RECALL, margen semantico para PRECISION dentro de lo capturado",
+      "mea_culpa": "la veniamos usando al reves todo el dia"
+    },
+    "4_metricas_por_categoria": {
+      "leccion": "tres metricas ordenan las categorias de forma casi opuesta y solo una es correcta",
+      "argmax": "mide tasas base. ai_governance acierta 4% pero rankea su propia categoria con AUC 0,924; ai_capability gana 93% de argmax con de los peores AUC",
+      "roc_auc": "se infla con desbalance (bases de 21,9% a 0,9%)",
+      "correcto": "AP + lift. Revela la categoria realmente floja e invisible bajo las otras dos: ai_outcome, lift 3,0x y 18% de precision en el top-50"
+    },
+    "5_parrafos_sin_contenido": {
+      "hallazgo": "deduplicar por texto exacto colapsa 3.281.038 filas a 1.651.191, pero no es boilerplate: es basura de extraccion",
+      "detalle": "264.941 filas (8,1%) tienen <=3 caracteres. El texto mas 'frecuente' del corpus es un bullet repetido 23.497 veces; 139.157 filas son un solo caracter",
+      "arreglo": "paragraphs.is_scorable las marca sin borrarlas (borrarlas renumeraria paragraph_index y romperia las llaves ya escritas)",
+      "impacto": "no habia que re-scorear: su score semantico maximo es 0,5483 y ninguna pasa 0,6. Lo que corrompian era el denominador"
+    }
+  },
+  "bugs_propios_encontrados_y_corregidos": [
+    {
+      "que": "autotune por caracteres",
+      "sintoma": "OOM de CUDA",
+      "causa": "estimaba tokens desde el largo en chars; en este corpus chars/token va de 0,50 (tablas numericas) a 5,07 (prosa)",
+      "arreglo": "tokenizar exacto, cuesta 0,51s por 20k filas (~1% del encode)"
+    },
+    {
+      "que": "vista ai_prefilter_scores duplicaba llaves",
+      "sintoma": "6,5M filas con llaves repetidas",
+      "causa": "union del glob completo; las partes son append-only y quedan varias poblaciones del mismo corpus",
+      "arreglo": "la vista se queda con la config del run mas reciente; las viejas siguen en disco"
+    },
+    {
+      "que": "pesos de inclusion de la etapa 1",
+      "sintoma": "dos estimaciones que debian coincidir daban 3x",
+      "causa": "buscaba la poblacion con la clave de 7 partes de la etapa 2 y la etapa 1 tiene 3: nunca acertaba, caia a un fallback",
+      "efecto": "las 3.950 filas tech (1.172 de los 1.507 positivos) pesaban 36 parrafos en vez de 424.051",
+      "arreglo": "cada etapa cuenta su poblacion en el marco del que sorteo"
+    },
+    {
+      "que": "orden del etiquetado",
+      "sintoma": "stage3_random quedo con 0 etiquetas al cortarse los creditos",
+      "causa": "ORDER BY stage, stratum: un corte parcial deja los estratos alfabeticamente primeros, no una submuestra aleatoria",
+      "arreglo": "orden aleatorio sembrado"
+    },
+    {
+      "que": "filas con error contaban como cobertura",
+      "sintoma": "390 fallidas nunca se reintentarian",
+      "arreglo": "el NOT EXISTS filtra por error IS NULL"
+    },
+    {
+      "que": "esquema variable entre partes",
+      "sintoma": "Unimplemented type for cast VARCHAR -> NULL",
+      "causa": "con inferencia de tipos, una parte sin errores tipa 'error' como NULL y otra como VARCHAR",
+      "arreglo": "esquema explicito de 26 columnas"
+    },
+    {
+      "que": "evidence_verbatim demasiado estricto",
+      "sintoma": "14 'citas inventadas'",
+      "realidad": "las 14 eran escapes de markdown que el juez cita limpio; alucinaciones reales: 0"
+    }
+  ],
+  "golden_set": {
+    "diseno": "docs/golden_set_sampling.md",
+    "regla_dura": "el sampler NO lee embeddings ni scores: definir el conjunto de evaluacion con la salida de lo que se evalua impediria detectar el error que mas importa (disclosure de IA que los anchors rankean bajo)",
+    "etapas": {
+      "1_tech_oversample": 4000,
+      "2_max_variation": 4500,
+      "3_random": 1500,
+      "total_efectivo": 9900
+    },
+    "estado": {
+      "etiquetados": 6038,
+      "fallidos": 390,
+      "pendientes": 3862,
+      "corte": "429 - Your prepayment credits are depleted (Google AI Studio)"
+    },
+    "juez": {
+      "modelo": "gemini-3.8-flash via pydantic-ai con salida estructurada",
+      "nota_pydantic_ai": "la lista de nombres conocidos va por detras de la API y rechaza gemini-3.8-flash; hay que construir GoogleModel explicito",
+      "acuerdo_factual": 0.9821,
+      "alucinaciones_reales": 0,
+      "coherencia_interna": 1.0,
+      "debilidades": [
+        "is_ai_disclosure es 100% redundante con relevance=='substantive'",
+        "confidence es un flag de 3 niveles: 93,5% dice 1,0, y 13 de 14 citas no literales tienen confianza 1,0",
+        "pendiente v2: poner reasoning PRIMERO, hoy el modelo decide antes de razonar"
+      ]
+    }
+  },
+  "numeros_finales": {
+    "base": {
+      "corpus": 3281038,
+      "puntuables": 3016097,
+      "golden_set_puntuable": 6032,
+      "positivos": 1507
+    },
+    "advertencia": "SIN ponderar: los pesos no son confiables hasta terminar el etiquetado, asi que describen el estrato muestreado, no el corpus",
+    "scorers": [
+      {
+        "scorer": "logit sobre las 11 senales",
+        "prec": 0.736,
+        "recall": 0.946,
+        "f1": 0.828,
+        "filas": 15282,
+        "pct_corpus": 0.507,
+        "mejor": true
+      },
+      {
+        "scorer": "solo compuerta lexica",
+        "prec": 0.693,
+        "recall": 0.982,
+        "f1": 0.813,
+        "filas": 16800,
+        "pct_corpus": 0.557
+      },
+      {
+        "scorer": "lexico O (debil Y margen>=0,06)",
+        "prec": 0.684,
+        "recall": 0.983,
+        "f1": 0.807,
+        "filas": 17294,
+        "pct_corpus": 0.573
+      },
+      {
+        "scorer": "lexico podando 10% de margen",
+        "prec": 0.714,
+        "recall": 0.91,
+        "f1": 0.8,
+        "filas": 15306,
+        "pct_corpus": 0.507
+      },
+      {
+        "scorer": "lexico podando 20% de margen",
+        "prec": 0.739,
+        "recall": 0.838,
+        "f1": 0.786,
+        "filas": 13613,
+        "pct_corpus": 0.451
+      }
+    ],
+    "eleccion": "el logit gana por 1,5 puntos de F1 y domina a las reglas de poda (mejor precision Y recall al mismo volumen). La compuerta sola es la opcion explicable si eso pesa mas que los puntos: es una decision de tesis, no tecnica"
+  },
+  "descartado_no_reintentar": [
+    {
+      "que": "BM25 con vocabulario a mano (IDF del corpus)",
+      "efecto": "+0,003 F1",
+      "razon": "el IDF va de 4,4 a 13,3, solo 3x; un parrafo con 'model' x5 supera a uno con 'artificial intelligence' x1"
+    },
+    {
+      "que": "centrado del espacio de embeddings",
+      "efecto": "-0,038 F1",
+      "razon": "sem-neg ya ES un centrado, con mejor referencia que la media del corpus"
+    },
+    {
+      "que": "TF-IDF con vocabulario del corpus (591.363 terminos)",
+      "efecto": "+0,002 F1",
+      "razon": "los anchors son malas queries lexicas: escritos como prosa de filing matchean medio corpus"
+    },
+    {
+      "que": "logit sobre las 1024 dims",
+      "efecto": "mejor en el estrato (0,824) pero se cae al reponderar (0,704) y se desploma con C=1,0 (0,502)",
+      "razon": "sobreajusta al DISENO MUESTRAL, no a los datos; curva de aprendizaje 0,309/0,288/0,704 no converge"
+    },
+    {
+      "que": "prototipo (centroide de positivos como anchor)",
+      "efecto": "F1 0,542",
+      "razon": "promedia siete categorias muy distintas en un vector que no se parece a ninguna"
+    }
+  ],
+  "otros_arreglos_del_repo": {
+    "sectores": "classification.sector_groups pasa a mapear CODIGOS SIC y se reagrupa en 12 sectores en ingles. industry_group estaba vacio en las 517 empresas porque edgar_fetch lo llena con company.sic_description, atributo que edgartools renombro a 'industry' en 5.55 y el getattr con default se lo tragaba. 511 de 517 resolvian a 'unassigned'; ahora 0",
+    "sync_b2": "bisync -> push (default) y pull, ambos aditivos. Bisync abortaba todo ante un error fatal y exigia --resync, que es exactamente lo que paso con el 403 del cap. Cron cada 5 min con flock",
+    "claude_md": "una instruccion explicita de borrar ahora prevalece sobre la regla de archivar, e incluye borrar en B2"
+  },
+  "clasificacion_de_frases": {
+    "temporalidad": {
+      "estado": "1.000/1.000",
+      "distribucion": {
+        "presente": 476,
+        "hipotetico": 349,
+        "pasado": 116,
+        "futuro": 59
+      },
+      "validacion": "200/200 contra la rebanada guardada a mano; sha256 y round-trip del parquet verificados",
+      "advertencia": "temporalidad_prev_pass.jsonl es una pasada DISTINTA (ids 1-400) que difiere en 76/400. No mezclar"
+    },
+    "foco": {
+      "estado": "200/1.000",
+      "distribucion": {
+        "compania": 147,
+        "clientes": 47,
+        "proveedores": 6
+      },
+      "pendiente": [
+        "201-400",
+        "401-600",
+        "601-800",
+        "801-1000"
+      ]
+    },
+    "leccion_de_metodo": "los primeros subagentes general-purpose reportaron exito detallado sobre archivos que no existian, y uno admitio que 'iba a crear un script'. El diseno que funciona: subagente Explore (sin Write/Edit), que devuelve las clasificaciones en su informe y las escribe el coordinador. Verificacion: 89,0% de acuerdo con una regla trivial de palabras clave, o sea que leyo y a veces difirio, en vez del ~100% que delataria un script"
+  },
+  "pendientes": [
+    {
+      "prioridad": 1,
+      "que": "terminar el golden set (3.862 pendientes)",
+      "bloquea": "sin stage3_random no hay reponderacion y ninguna cifra proyectada al corpus es citable",
+      "accion": "recargar creditos en ai.studio y correr golden_set.py label --concurrency 12"
+    },
+    {
+      "prioridad": 2,
+      "que": "rehacer docs/prefilter_evaluation.md secciones 5-8, medidas contra la compuerta rota y los anchors viejos"
+    },
+    {
+      "prioridad": 3,
+      "que": "decidir regla vs modelo y congelarlo"
+    },
+    {
+      "prioridad": 4,
+      "que": "evaluar la poda por margen como etapa separada; conviene solo si aguas abajo hay un clasificador LLM caro"
+    },
+    {
+      "prioridad": 5,
+      "que": "extraer mas secciones del filing: hoy 3 del 10-K (1, 1A, 7) y 2 del 10-Q (1A, 2). Es la unica palanca que sube el numerador de verdad"
+    },
+    {
+      "prioridad": 6,
+      "que": "cabezas sparse_vecs y colbert_vecs de bge-m3; requiere re-embeber y ColBERT no es viable a escala de corpus por almacenamiento"
+    },
+    {
+      "prioridad": null,
+      "que": "completar el pull de B2 (8.839 archivos) cuando suba el cap"
+    },
+    {
+      "prioridad": null,
+      "que": "completar foco (4 rebanadas)"
+    },
+    {
+      "prioridad": null,
+      "que": "opcional: borrar las 3 poblaciones viejas de prefilter_scores (~480 MB en B2)"
+    }
+  ],
+  "infra_notas": {
+    "cron": "el paquete cron no venia instalado y el contenedor no tiene init (PID 1 es bash); el daemon se levanto a mano y NO sobrevive un reinicio",
+    "b2_estado": "4.435 archivos sincronizados, rclone check reporta 0 diferencias"
+  },
+  "commits": [
+    [
+      "cdbab18",
+      "Split the prefilter into an embed pass and a scoring pass"
+    ],
+    [
+      "8bda5c0",
+      "Golden set for prefilter evaluation; regroup sectors on SIC codes"
+    ],
+    [
+      "9f04141",
+      "Keep the score view to one config; expose semantic_margin"
+    ],
+    [
+      "dc611a3",
+      "Record the prefilter evaluation evidence"
+    ],
+    [
+      "4946bc3",
+      "Fix the sampling weights and the labelling order"
+    ],
+    [
+      "c5ce87b",
+      "Mark contentless paragraphs as not scorable"
+    ],
+    [
+      "33a7092",
+      "Match lexical terms on word boundaries, and add the acronyms"
+    ],
+    [
+      "2d03c49",
+      "Rewrite anchors as AI vocabulary, with non-AI twins as negatives"
+    ],
+    [
+      "dd7fe28",
+      "Record the prefilter's final numbers and next steps"
+    ]
+  ]
+}
