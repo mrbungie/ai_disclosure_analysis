@@ -1,6 +1,6 @@
 # S&P 500 (2021-12-31) reconstruction — provenance
 
-Source data used to build the `sp500_2021` rows in `configs/universe.csv`
+Source data used to build the `sp500_2021` rows in `configs/us/universe.csv`
 (Phase A of `docs/universe_expansion_plan.md`). Raw fetched pages are cached
 under `data/raw/reference/` (gitignored, like the rest of `data/`); this note
 is the versioned record of what was fetched, when, and how it was turned into
@@ -88,14 +88,14 @@ the changes table) correctly resolves to the single continuous META entity.
 - **active_status**: `listed` if the resolved CIK still maps to at least one
   live ticker in SEC's `company_tickers.json`; `delisted` otherwise (acquired,
   taken private, or failed/receivership). 368 listed, 28 delisted among the
-  396 net-new `sp500_2021` rows added to `configs/universe.csv` (399 matched
+  396 net-new `sp500_2021` rows added to `configs/us/universe.csv` (399 matched
   before de-duplicating against tickers/CIKs already present as
   `core_manual`; 104 of the 503 reconstructed 2021 members were already in
   the 122-firm core).
 
 ## Result
 
-`configs/universe.csv`: 518 total rows — 122 `core_manual` (the original
+`configs/us/universe.csv`: 518 total rows — 122 `core_manual` (the original
 universe, including DFS/CIK 0001393612 and SQ→Block Inc/CIK 0001512673 by
 manual CIK lookup since neither resolves via ticker anymore) + 396
 `sp500_2021` (368 listed, 28 delisted). No `sector_topup` or

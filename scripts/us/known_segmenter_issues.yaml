@@ -1,0 +1,187 @@
+# configs/known_segmenter_issues.yaml
+#
+# Filers/filings where section_segmenter.py's heading-text-based extraction
+# has a KNOWN, INVESTIGATED limitation — documented so a future session (or
+# a future run of this one) doesn't re-diagnose the same ticker from
+# scratch. Most of these are gaps in the SOURCE DOCUMENT itself (a heading
+# never restated in matchable text, or positioned somewhere the segmenter's
+# structural assumptions don't expect) — not bugs a regex tweak can fix.
+#
+# Read by section_segmenter.known_issue(ticker, form, item_key=None).
+# Surfaced in segmenter_bench.py's failure output (tagged "[known: ...]")
+# and in section_extraction.py's `note` column for found=False rows, so a
+# benchmark/extraction failure on a listed ticker reads as "already
+# understood" instead of a fresh mystery.
+#
+# `confirmed: true` means the root cause was verified by DIRECT inspection
+# (reading the raw HTML/XBRL, not just "showed up in a failed sample").
+# `confirmed: false` entries are still open — same broad symptom as a
+# confirmed case nearby, but not yet traced to a specific cause the way
+# ILMN's was. Investigate those properly before trusting the category.
+
+categories:
+  no_heading_text_in_body: >
+    The real section's content exists in the document, but its "Item N"
+    heading is never restated as matchable text anywhere in the body —
+    only in the TOC. No regex/structural fix can find text that isn't
+    there. (The Item-1-specific case of this — assume_starts_at_item1 in
+    section_segmenter.py — is already handled for Item 1 specifically;
+    these entries are for OTHER items, or Item 1 cases the backfill still
+    can't rescue because almost no leading span survives.)
+  no_heading_text_anywhere: >
+    Stronger version of the above: not even most/all items restate a
+    matchable "Item N" pattern anywhere in the body — essentially no
+    recoverable heading structure exists in the parsed document at all,
+    only the TOC.
+  part_marker_not_at_document_front: >
+    The document's only "PART I"/"PART II" text occurrences sit inside an
+    index/cross-reference block positioned somewhere OTHER than the front
+    of the document (e.g. right before the signature block, as a
+    secondary cross-reference index). _part_windows assumes PART markers
+    are front-loaded (right after the main TOC); window boundaries end up
+    wrong for a filer that doesn't follow that convention. Partially
+    mitigated by _trailing_index_start (excludes a genuinely TRAILING
+    cross-reference index, past the back half of the document) — entries
+    still in this category are cases that fix doesn't fully resolve.
+  combined_multi_registrant_filing: >
+    A single filing covers MULTIPLE SEC registrants (e.g. a utility
+    holding company + its subsidiaries), each repeating its own PART I-IV
+    structure — _part_windows' "last occurrence wins" (among non-table
+    occurrences) picks up a later registrant's marker, not the first
+    registrant's.
+  combined_heading_multiple_items: >
+    The filer answers two items in ONE heading/section — e.g. NTRS's
+    10-Q: "Items 2. and 3. Management's Discussion and Analysis... and
+    Quantitative and Qualitative Disclosures...". ITEM_RE now matches the
+    plural "Items" (fixed — previously invisible to the regex entirely),
+    capturing the FIRST item number named; the second item folded into
+    the same heading structurally has no separate boundary to find at
+    all — that item's own extraction stays empty, which is correct
+    behavior; it just means MIN_PLAUSIBLE_CHARS floors keyed to that TARGET
+    item will show it as a "failure" that isn't fixable.
+  benchmark_floor_too_strict: >
+    NOT a segmenter bug — the extracted text is correct and complete,
+    just legitimately short (e.g. "There have been no significant
+    changes..."). segmenter_bench.py's MIN_PLAUSIBLE_CHARS floor for that
+    item flags it as a failure anyway. Fix (if ever worth it) belongs in
+    the benchmark's floor calibration, not the segmenter.
+
+issues:
+  - tickers: [ILMN]
+    forms: [10-Q]
+    items: ["3"]
+    category: part_marker_not_at_document_front
+    confirmed: true
+    investigated: "2026-09-02"
+    note: >
+      ILMN's 10-Q has a "FORM 10-Q CROSS-REFERENCE INDEX" positioned near
+      the END of the document (right before the signature block), not at
+      the front. Item 1 and Item 2 (our actual extraction target) are now
+      FIXED via _trailing_index_start (excludes the misleading index) plus
+      the 10-Q MD&A alias in ITEM_ALIASES (real Item 2 heading is a bare
+      "MANAGEMENT'S DISCUSSION & ANALYSIS" line, no "Item 2" restated —
+      confirmed via a byte-for-byte direct fetch from SEC independent of
+      our pipeline, and via the filing's own XBRL facts: zero MD&A-related
+      concepts exist, so XBRL isn't a viable alternative path either).
+      Item 3 still comes back tiny (58 chars, "Item 3. Defaults Upon
+      Senior Securities | None") because that's PART II's item 3 leaking
+      into the bare "3" key — Part I's own real Item 3 (Market Risk) still
+      isn't found. Not our extraction target for 10-Q, left unresolved.
+
+  - tickers: [WY]
+    forms: [10-K]
+    items: ["1", "1A", "7"]
+    category: no_heading_text_anywhere
+    confirmed: true
+    investigated: "2026-09-02"
+    note: >
+      Only 23 "Item N"-pattern matches in the entire 3850-line document,
+      ALL inside the front TOC block (lines 55-105) — zero real-heading
+      occurrences anywhere in the body for any item. general_segment()
+      returns an empty dict for this filing.
+
+  - tickers: [COF]
+    forms: [10-Q]
+    items: ["1"]
+    category: no_heading_text_in_body
+    confirmed: true
+    investigated: "2026-09-01"
+    note: >
+      Body goes straight from the "PART I—FINANCIAL INFORMATION" marker
+      into "Item 2." — Item 1's real heading ("Item 1. Financial
+      Statements") never appears outside the TOC. The Item-1 backfill
+      (assume_starts_at_item1) still applies but has almost nothing to
+      grab, since Item 2's heading follows almost immediately.
+
+  - tickers: [MS]
+    forms: [10-K]
+    items: ["1", "1A", "7"]
+    category: no_heading_text_anywhere
+    confirmed: false
+    investigated: "2026-09-02"
+    note: >
+      Item 1 swallows ~1.27M chars (the rest of the document); zero PART
+      marker occurrences found at all. Same broad symptom family as WY,
+      but not yet confirmed by direct inspection — do that before trusting
+      this category for MS specifically.
+
+  - tickers: [NTRS]
+    forms: [10-Q]
+    items: ["1", "3"]
+    category: combined_heading_multiple_items
+    confirmed: true
+    investigated: "2026-09-02"
+    note: >
+      NTRS's real body heading is "Items 2. and 3. Management's Discussion
+      and Analysis... and Quantitative and Qualitative Disclosures..." —
+      Item 2 (our actual target) is FIXED (ITEM_RE now matches plural
+      "Items"). Item 3 has no separate boundary to find — it's the SAME
+      heading line as Item 2, structurally fused; not fixable without a
+      different extraction unit than "one heading -> one item". Item 1
+      also still comes back wrong (~30 chars, just "PART I – FINANCIAL
+      INFORMATION") because NTRS orders MD&A BEFORE Financial Statements
+      in the body — Item 1's real heading exists further down (line 1218)
+      but the monotonic-rank ordering filter in _segment_window drops it
+      (rank 1 appearing after rank 2/3 looks like a stray/out-of-order
+      match, same guard that rejects genuine page-header noise elsewhere).
+      Item 1 isn't a 10-Q extraction target, left unresolved.
+
+  - tickers: [USB]
+    forms: [10-Q]
+    items: ["3", "4"]
+    category: no_heading_text_in_body
+    confirmed: true
+    investigated: "2026-09-02"
+    note: >
+      "Quantitative and Qualitative"/"Controls and Procedures" each appear
+      exactly ONCE in the whole document — inside the front TOC, never
+      restated as a real heading. Item 2 (our actual target) is fine
+      (401,907 chars via the MD&A alias) and structurally swallows Items
+      3/4's real content along with it, since there's no heading to split
+      on. Same pattern as CPRT/GPC/MLM, just for items 3/4 instead of 1.
+
+  - tickers: [PNC]
+    forms: [10-K]
+    items: ["7"]
+    category: no_heading_text_in_body
+    confirmed: false
+    investigated: "2026-09-02"
+    note: >
+      "Item 7" text appears 34+ times in the document (likely running
+      page-header repeats, like MSFT's pattern) but general_segment()
+      still returns nothing for "7" — not yet traced past that; the
+      first-occurrence-wins fix that solved MSFT's equivalent case
+      apparently isn't sufficient here. Needs a proper debugging pass
+      before trusting a category.
+
+  - tickers: [PM, LUMN, XYL, VRSN, HWM, COF]
+    forms: [10-Q]
+    items: ["3"]
+    category: benchmark_floor_too_strict
+    confirmed: true
+    investigated: "2026-09-02"
+    note: >
+      Item 3 (Quantitative/Qualitative Disclosures About Market Risk)
+      legitimately says things like "There have been no significant
+      changes..." — correct, complete content, just under
+      segmenter_bench.py's 200-char floor for this item.

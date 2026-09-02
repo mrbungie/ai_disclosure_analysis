@@ -1,9 +1,9 @@
 # Section audit — did the extraction fix actually work?
 
 Verification script, not pipeline. Runs on demand, cheap to rerun. Code:
-`section_audit.py`. Run: `uv run python 01_10k/verif/section_audit/section_audit.py`.
+`section_audit.py`. Run: `uv run python scripts/verif/section_audit/section_audit.py`.
 
-Checks whether the filings where `01_10k/scripts/04_extract_sections.py`
+Checks whether the filings where `scripts/us/10k/02_extract_sections.py`
 finds no text for one of its 3 target items (Item 1 Business, Item 1A Risk
 Factors, Item 7 MD&A) are a real extraction bug or a structurally
 different/absent filing — the only way to tell the difference between
@@ -14,7 +14,7 @@ extracted (of 2889 total — 141 have none, see below), 0 errors.
 
 ## The extractor itself changed while investigating this
 
-The first pass of this audit ran against `04_extract_sections.py`'s
+The first pass of this audit ran against `02_extract_sections.py`'s
 original PATTERNS approach: per-item regex requiring the section title on
 the same line as "Item N", with a hardcoded `> 1000` character length
 threshold to tell a real section from a table-of-contents fragment. That
@@ -23,8 +23,8 @@ justification (confirmed via `git log` — it was never explained). It
 turned out to work by accident (real sections run 50K-100K chars, TOC
 fragments run 50-750 — any cutoff in between "works"), but it was an
 unjustifiable proxy for a question ("is this a TOC row or a real heading")
-that has a real, structural answer. `01_10k/scripts/section_segmenter.py`
-now answers it directly and is shared by both `04_extract_sections.py` and
+that has a real, structural answer. `scripts/us/section_segmenter.py`
+now answers it directly and is shared by both `02_extract_sections.py` and
 this audit script — no more duplicated regex, no length guess.
 
 **The structural rule, and what it took to get right** (three real bugs

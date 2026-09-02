@@ -1,24 +1,31 @@
 import csv
-import json
+from collections import defaultdict
 from pathlib import Path
 
 import pandas as pd
+import yaml
 
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root, for common/
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "common"))  # scripts/common/
 
-try:
-    import pipeline_logger
-except ImportError:
-    from common import pipeline_logger
+import pipeline_logger
 
-# Source of truth for the firm universe: configs/universe.csv (ticker, cik,
-# company_name, inclusion_rule, active_status — see docs/universe_expansion_plan.md
-# Phase A). configs/config.json's pipeline.tickers is kept only as a
-# generated *mirror* (sorted tickers) for TUI/legacy code paths that still
-# read it; it is never the source of truth and this script overwrites it
-# every run to stay in sync with universe.csv.
-UNIVERSE_CSV = Path("configs/universe.csv")
+# Source of truth for the firm universe: configs/us/universe.csv (ticker, cik,
+# company_name, active_status — see docs/universe_expansion_plan.md Phase A).
+# configs/us/config.yaml's corpus.universe.tickers is kept only as a generated
+# *mirror* (sorted tickers) for TUI/legacy code paths that still read it; it
+# is never the source of truth and this script overwrites it every run to
+# stay in sync with universe.csv.
+#
+# Membership/inclusion-reason tags (sp500_2021, core_manual, ...) live in a
+# SEPARATE long-format dataset (configs/us/universe_membership.csv: ticker,
+# group — one row per group a ticker belongs to) rather than a column on
+# universe.csv itself, since a company can belong to more than one group at
+# once (e.g. both sp500_2021 and a manually-added reason) — a single
+# `inclusion_rule` column couldn't represent that without picking one
+# arbitrarily. New groups are just new rows here, never a schema change.
+UNIVERSE_CSV = Path("configs/us/universe.csv")
+UNIVERSE_MEMBERSHIP_CSV = Path("configs/us/universe_membership.csv")
 
 
 def load_universe_csv() -> list[dict]:
@@ -26,28 +33,40 @@ def load_universe_csv() -> list[dict]:
         return list(csv.DictReader(f))
 
 
+def load_membership_groups() -> dict[str, list[str]]:
+    """ticker -> sorted list of groups it belongs to (possibly several)."""
+    groups = defaultdict(set)
+    if UNIVERSE_MEMBERSHIP_CSV.exists():
+        with open(UNIVERSE_MEMBERSHIP_CSV, newline="") as f:
+            for row in csv.DictReader(f):
+                ticker = (row.get("ticker") or "").strip().upper()
+                group = (row.get("group") or "").strip()
+                if ticker and group:
+                    groups[ticker].add(group)
+    return {ticker: sorted(g) for ticker, g in groups.items()}
+
+
 def sync_config_ticker_mirror(config_path: Path, config: dict, rows: list[dict]) -> None:
-    """Keep pipeline.tickers as a sorted mirror of universe.csv's tickers.
+    """Keep corpus.universe.tickers as a sorted mirror of universe.csv's tickers.
 
     universe.csv is the source of truth (see module docstring); this mirror
-    exists only so config.json / tui_tickers.py keep working without
+    exists only so config.yaml / tui_tickers.py keep working without
     reading the CSV themselves.
     """
     mirrored = sorted({row["ticker"].upper() for row in rows if row.get("ticker")})
-    if config["pipeline"].get("tickers") == mirrored:
+    if config["corpus"]["universe"].get("tickers") == mirrored:
         return
-    config["pipeline"]["tickers"] = mirrored
+    config["corpus"]["universe"]["tickers"] = mirrored
     with open(config_path, "w") as f:
-        json.dump(config, f, indent=2)
-        f.write("\n")
+        yaml.safe_dump(config, f, sort_keys=False, default_flow_style=False, allow_unicode=True, width=1000)
 
 
 def main():
-    config_path = Path("configs/config.json")
+    config_path = Path("configs/us/config.yaml")
     with open(config_path, "r") as f:
-        config = json.load(f)
+        config = yaml.safe_load(f)
 
-    output_dir = Path(config["paths"]["interim_manifests"])
+    output_dir = Path(config["storage"]["interim_manifests"])
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if not UNIVERSE_CSV.exists():
@@ -60,6 +79,7 @@ def main():
         return
 
     rows = load_universe_csv()
+    membership_groups = load_membership_groups()
     pipeline_logger.log_event(
         pipeline_step="universe_build",
         level="INFO",
@@ -93,18 +113,24 @@ def main():
         ticker = (row.get("ticker") or "").strip().upper()
         cik = (row.get("cik") or "").strip()
         company_name = (row.get("company_name") or "").strip()
-        inclusion_rule = (row.get("inclusion_rule") or "").strip()
         active_status = (row.get("active_status") or "").strip()
+        country = (row.get("country") or "US").strip()
+        source = (row.get("source") or "SEC_EDGAR").strip()
+        groups = membership_groups.get(ticker, [])
 
         if not cik:
             # A ticker with no resolvable CIK (e.g. an unresolved sp500_2021
             # row) contributes nothing to the manifest/download pipeline,
             # since 01 fetches by CIK. Report and skip rather than guess.
+            # NOTE: this CIK requirement is SEC-EDGAR-specific — when a
+            # non-US/non-EDGAR `source` is added, this check (and the
+            # fetch scripts that key off `cik`) will need a per-source
+            # identifier scheme, not just a looser version of this one.
             skipped.append(ticker or "<blank>")
             pipeline_logger.log_event(
                 pipeline_step="universe_build",
                 level="WARNING",
-                message=f"Row has no CIK, skipping: ticker={ticker!r} inclusion_rule={inclusion_rule!r}",
+                message=f"Row has no CIK, skipping: ticker={ticker!r} groups={groups!r}",
                 ticker=ticker
             )
             continue
@@ -115,9 +141,11 @@ def main():
             "ticker": ticker,
             "cik": cik_padded,
             "company_name": company_name,
+            "country": country,
+            "source": source,
             "sic": sic,
             "industry_group": industry_group or "",
-            "inclusion_rule": inclusion_rule,
+            "membership_groups": groups,
             "active_status": active_status,
         })
 

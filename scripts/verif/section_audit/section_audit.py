@@ -1,13 +1,13 @@
 """
-01_10k/verif/section_audit/section_audit.py — verification, not pipeline.
+scripts/verif/section_audit/section_audit.py — verification, not pipeline.
 
-Of the filings where 01_10k/scripts/04_extract_sections.py found no text
+Of the filings where scripts/us/10k/02_extract_sections.py found no text
 for one of its 3 target items (Item 1 Business, Item 1A Risk Factors,
 Item 7 MD&A), how many are (a) genuinely absent / incorporated by
 reference / structurally exceptional vs (b) present in the filing but
 missed by extraction — a real bug? Classified by running the SAME general
 item segmenter the pipeline itself uses (section_segmenter.py) and
-checking whether it found the item that 04_extract_sections.py missed.
+checking whether it found the item that 02_extract_sections.py missed.
 
 It recognizes any "Item N[A-C]" heading (Item 1 through Item 16), not
 just the 3 target items, and tells a real heading from a table-of-
@@ -21,7 +21,7 @@ Output (gitignored, cheap to regenerate):
     data/interim/audits/section_audit/summary.json
 
 Usage:
-    uv run python 01_10k/verif/section_audit/section_audit.py
+    uv run python scripts/verif/section_audit/section_audit.py
 """
 
 import json
@@ -32,22 +32,23 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+import yaml
 from tqdm import tqdm
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 OUTPUT_DIR = REPO_ROOT / "data" / "interim" / "audits" / "section_audit"
 
-sys.path.insert(0, str(REPO_ROOT / "01_10k" / "scripts"))
+sys.path.insert(0, str(REPO_ROOT / "scripts" / "us"))
 from section_segmenter import clean_html_to_lines, general_segment, load_filing_sections  # noqa: E402
 
-# The 3 items 01_10k/scripts/04_extract_sections.py actually extracts today.
+# The 3 items scripts/us/10k/02_extract_sections.py actually extracts today.
 TARGET_ITEMS = ["1", "1A", "7"]
 
 
 def process_one(row: dict) -> dict:
     """Runs in a worker process. Returns per-filing missing-section
     classifications for the 3 target items not found by
-    04_extract_sections.py."""
+    02_extract_sections.py."""
     html_path = Path(row["local_path"])
     acc_num = row["accession_number"]
     ticker = row["ticker"]
@@ -63,7 +64,7 @@ def process_one(row: dict) -> dict:
         missing_rows = []
         for item in TARGET_ITEMS:
             if item in extractor_found:
-                continue  # 04_extract_sections.py already got this one
+                continue  # 02_extract_sections.py already got this one
             cls = "found_by_general_segmenter" if item in segments else "not_found_by_either"
             missing_rows.append({
                 "accession_number": acc_num, "ticker": ticker, "item": item,
@@ -80,11 +81,11 @@ def process_one(row: dict) -> dict:
 
 
 def main():
-    with open(REPO_ROOT / "configs" / "config.json") as f:
-        config = json.load(f)
+    with open(REPO_ROOT / "configs" / "us" / "config.yaml") as f:
+        config = yaml.safe_load(f)
 
     manifest = pd.read_parquet(
-        Path(config["paths"]["interim_manifests"]) / "filing_manifest.parquet"
+        Path(config["storage"]["interim_manifests"]) / "filing_manifest.parquet"
     )
     manifest = manifest[manifest["parse_status"] == "completed"].copy()
 

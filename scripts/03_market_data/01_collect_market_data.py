@@ -21,20 +21,20 @@ CRSP drop-in (schema contract): every price file carries a `source` column
 with source='crsp' is a strict upgrade the analysis picks up without code
 changes — that is also the only clean path to returns for DELISTED firms,
 which yfinance does not serve (their EDGAR filings still flow through the
-01_10k text pipeline; only their prices need CRSP). Survivorship note: the
-firm universe itself (configs/config.json pipeline.tickers) was hand-
+scripts/us/10k text pipeline; only their prices need CRSP). Survivorship note: the
+firm universe itself (configs/us/config.yaml corpus.universe.tickers) was hand-
 assembled from currently listed firms — a limitation of the universe, not
 of this collector.
 
 Usage:
-    uv run python 02_market_data/scripts/01_collect_market_data.py [--start 2020-01-01] [--refresh] [--tickers AAPL,MSFT]
+    uv run python scripts/03_market_data/01_collect_market_data.py [--start 2020-01-01] [--refresh] [--tickers AAPL,MSFT]
 """
 
 import argparse
 import io
-import json
 import os
 import time
+import yaml
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -46,12 +46,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root, for common/
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "common"))  # scripts/common/
 
-try:
-    import pipeline_logger
-except ImportError:
-    from common import pipeline_logger
+import pipeline_logger
 
 PRICES_DIR = Path("data/raw/market/prices")
 FACTORS_DIR = Path("data/raw/market/factors")
@@ -70,8 +67,8 @@ FF_FILES = {
 
 
 def load_tickers() -> list[str]:
-    with open("configs/config.json") as f:
-        return json.load(f)["pipeline"]["tickers"]
+    with open("configs/us/config.yaml") as f:
+        return yaml.safe_load(f)["corpus"]["universe"]["tickers"]
 
 
 def fetch_prices(ticker: str, start: str) -> pd.DataFrame | None:

@@ -1,21 +1,25 @@
 import json
+import yaml
 from datetime import datetime
 from pathlib import Path
 
 def get_log_path():
     """
-    Dynamically locate the log path from configs/config.json.
+    Dynamically locate the log path from configs/us/config.yaml. Hardcoded
+    to "us" for now (the only country configured) — once a second country
+    exists, this needs to become caller-supplied rather than a fixed path,
+    same as section_extraction.py's segmenter functions are.
     Falls back to data/interim/manifests if config cannot be loaded.
     """
     try:
-        config_path = Path("configs/config.json")
+        config_path = Path("configs/us/config.yaml")
         if not config_path.exists():
             # Try parent directory in case script is run from scripts/
-            config_path = Path("../configs/config.json")
-        
+            config_path = Path("../configs/us/config.yaml")
+
         with open(config_path, "r") as f:
-            config = json.load(f)
-        log_dir = Path(config["paths"]["interim_manifests"])
+            config = yaml.safe_load(f)
+        log_dir = Path(config["storage"]["interim_manifests"])
     except Exception:
         log_dir = Path("data/interim/manifests")
         

@@ -2,12 +2,12 @@
 sector_map.py — Single resolver for "which aggregated sector is this firm in".
 
 Two assignment levels, resolved in order:
-  1. `pipeline.sector_overrides` (configs/config.json): {TICKER: sector} —
+  1. `classification.overrides` (configs/us/config.yaml): {TICKER: sector} —
      per-company override, wins always. For firms whose SIC group lands them
      somewhere the thesis disagrees with (SHW's SIC is a retail group but the
      firm is a paint maker), or firms with no usable SIC (FRC's EDGAR profile
      is empty).
-  2. `pipeline.sector_groups`: {sector: [SIC industry-group names]} — the
+  2. `classification.sector_groups`: {sector: [SIC industry-group names]} — the
      rule layer; a firm inherits the sector of its SIC group.
 Anything matching neither resolves to "unassigned".
 
@@ -15,10 +15,10 @@ Used by the TUI and by any analysis script that needs firm->sector — import
 this instead of re-deriving from config, so both levels apply everywhere.
 """
 
-import json
+import yaml
 from pathlib import Path
 
-CONFIG_PATH = Path("configs/config.json")
+CONFIG_PATH = Path("configs/us/config.yaml")
 UNIVERSE_PATH = Path("data/interim/manifests/firm_universe.parquet")
 
 UNASSIGNED = "unassigned"
@@ -26,13 +26,13 @@ UNASSIGNED = "unassigned"
 
 def load_config() -> dict:
     with open(CONFIG_PATH) as f:
-        return json.load(f)
+        return yaml.safe_load(f)
 
 
 def sic_rule_map(config: dict) -> dict[str, str]:
     """SIC industry-group name -> sector, from the rule layer."""
     return {sic: sector
-            for sector, sics in config["pipeline"].get("sector_groups", {}).items()
+            for sector, sics in config["classification"].get("sector_groups", {}).items()
             for sic in sics}
 
 
@@ -44,7 +44,7 @@ def resolve_sectors(config: dict | None = None) -> dict[str, str]:
     import pandas as pd
     if config is None:
         config = load_config()
-    overrides = {t.upper(): s for t, s in config["pipeline"].get("sector_overrides", {}).items()}
+    overrides = {t.upper(): s for t, s in config["classification"].get("overrides", {}).items()}
     rules = sic_rule_map(config)
 
     out: dict[str, str] = {}

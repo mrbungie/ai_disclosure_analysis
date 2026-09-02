@@ -10,3 +10,4 @@ __pycache__/
 *.log
 .env
 scratch/
+.edgartools_data/

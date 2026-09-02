@@ -5,39 +5,42 @@ each one, and build new sectors by picking SIC groups.
 
 Model — two assignment levels (resolved by scripts/sector_map.py, which
 analysis code shares):
-  1. `pipeline.sector_overrides` {TICKER: sector} — per-company override,
+  1. `classification.overrides` {TICKER: sector} — per-company override,
      always wins (for firms whose SIC group misplaces them, or with no SIC).
-  2. `pipeline.sector_groups` {sector: [SIC industry-group names]} — the
+  2. `classification.sector_groups` {sector: [SIC industry-group names]} — the
      rule layer; a firm inherits its SIC group's sector.
 
-configs/universe.csv is the source of truth for the firm universe (ticker,
-cik, company_name, inclusion_rule, active_status — see
-docs/universe_expansion_plan.md Phase A). `pipeline.tickers` in config.json
-is only a generated mirror (sorted tickers) that script 00 rewrites every
-run for this TUI and other legacy code paths — never edit it directly. The
-TUI appends new tickers to universe.csv with inclusion_rule=core_manual;
-CIKs are resolved against the local SEC ticker cache
-(data/sec_company_tickers.json) at add-time, on a best-effort basis (they
-get a SIC group after the next `make build-universe`).
+configs/us/universe.csv is the source of truth for the firm universe (ticker,
+cik, company_name, active_status — see docs/universe_expansion_plan.md
+Phase A). Inclusion-reason tags (sp500_2021, core_manual, ...) live
+separately in configs/us/universe_membership.csv (ticker, group — long
+format, a company can belong to more than one group). `corpus.universe.
+tickers` in config.yaml is only a generated mirror (sorted tickers) that
+script 00 rewrites every run for this TUI and other legacy code paths —
+never edit it directly. The TUI appends new tickers to universe.csv and a
+group="core_manual" row to universe_membership.csv; CIKs are resolved
+against the local SEC ticker cache (data/sec_company_tickers.json) at
+add-time, on a best-effort basis (they get a SIC group after the next
+`make build-universe`).
 
 First run seeds the 12 thesis sectors covering all current SIC groups; edit
 freely afterwards — the seed never overwrites an existing sector_groups.
 
 Usage:
-    make tickers-tui        (or: uv run python scripts/tui_tickers.py)
+    make tickers-tui        (or: uv run python scripts/us/tui_tickers.py)
 """
 
 import csv
 import json
 from pathlib import Path
 
-try:
-    import sector_map
-except ImportError:
-    from scripts import sector_map
+import yaml
 
-CONFIG_PATH = Path("configs/config.json")
-UNIVERSE_CSV_PATH = Path("configs/universe.csv")
+import sector_map  # same dir, no path fix needed
+
+CONFIG_PATH = Path("configs/us/config.yaml")
+UNIVERSE_CSV_PATH = Path("configs/us/universe.csv")
+UNIVERSE_MEMBERSHIP_CSV_PATH = Path("configs/us/universe_membership.csv")
 UNIVERSE_PATH = Path("data/interim/manifests/firm_universe.parquet")
 SEC_TICKERS_CACHE = Path("data/sec_company_tickers.json")
 
@@ -129,13 +132,12 @@ SECTOR_SEED: dict[str, list[str]] = {
 
 def load_config() -> dict:
     with open(CONFIG_PATH) as f:
-        return json.load(f)
+        return yaml.safe_load(f)
 
 
 def save_config(config: dict) -> None:
     with open(CONFIG_PATH, "w") as f:
-        json.dump(config, f, indent=2)
-        f.write("\n")
+        yaml.safe_dump(config, f, sort_keys=False, default_flow_style=False, allow_unicode=True, width=1000)
 
 
 def sic_to_tickers() -> dict[str, list[str]]:
@@ -151,12 +153,12 @@ def sic_to_tickers() -> dict[str, list[str]]:
 
 
 def ensure_sectors(config: dict) -> dict[str, list[str]]:
-    pipeline = config["pipeline"]
-    pipeline.pop("ticker_groups", None)  # legacy SIC-copy seed, superseded by sector_groups
-    if "sector_groups" not in pipeline:
-        pipeline["sector_groups"] = {name: list(sics) for name, sics in SECTOR_SEED.items()}
+    classification = config["classification"]
+    classification.pop("ticker_groups", None)  # legacy SIC-copy seed, superseded by sector_groups
+    if "sector_groups" not in classification:
+        classification["sector_groups"] = {name: list(sics) for name, sics in SECTOR_SEED.items()}
         print(f"  Seeded {len(SECTOR_SEED)} aggregated sectors over the SIC groups.")
-    return pipeline["sector_groups"]
+    return classification["sector_groups"]
 
 
 def assigned_sics(sectors: dict[str, list[str]]) -> dict[str, str]:
@@ -174,11 +176,11 @@ def sector_tickers(sics: list[str], sic_map: dict[str, list[str]]) -> list[str]:
 
 
 def show_sectors(config: dict, sic_map: dict[str, list[str]], detail: bool = False) -> None:
-    sectors = config["pipeline"]["sector_groups"]
-    overrides = config["pipeline"].get("sector_overrides", {})
+    sectors = config["classification"]["sector_groups"]
+    overrides = config["classification"].get("overrides", {})
     members = sector_map.sector_members(config)
     universe_tickers = {t for ts in sic_map.values() for t in ts}
-    flat = set(config["pipeline"].get("tickers", []))
+    flat = set(config["corpus"]["universe"].get("tickers", []))
     print()
     for name, sics in sectors.items():
         tickers = members.get(name, [])
@@ -226,7 +228,7 @@ def pick_sics(left: list[str]) -> list[str]:
 
 
 def create_sector(config: dict, sic_map: dict[str, list[str]]) -> None:
-    sectors = config["pipeline"]["sector_groups"]
+    sectors = config["classification"]["sector_groups"]
     left = show_unassigned(sectors, sic_map)
     if not left:
         return
@@ -245,7 +247,7 @@ def create_sector(config: dict, sic_map: dict[str, list[str]]) -> None:
 
 
 def extend_sector(config: dict, sic_map: dict[str, list[str]]) -> None:
-    sectors = config["pipeline"]["sector_groups"]
+    sectors = config["classification"]["sector_groups"]
     names = list(sectors)
     for i, n in enumerate(names, 1):
         print(f"    {i}. {n}")
@@ -274,12 +276,25 @@ def load_universe_rows() -> list[dict]:
 
 
 def save_universe_rows(rows: list[dict]) -> None:
-    fieldnames = ["ticker", "cik", "company_name", "inclusion_rule", "active_status"]
+    fieldnames = ["ticker", "cik", "company_name", "active_status"]
     with open(UNIVERSE_CSV_PATH, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
         w.writeheader()
         for row in rows:
             w.writerow(row)
+
+
+def add_membership(ticker: str, group: str) -> None:
+    """Appends one (ticker, group) row to universe_membership.csv — the
+    long-format side table for inclusion-reason tags (see
+    00_build_firm_universe.py's module docstring for why it's separate
+    from universe.csv: a company can belong to more than one group)."""
+    is_new_file = not UNIVERSE_MEMBERSHIP_CSV_PATH.exists()
+    with open(UNIVERSE_MEMBERSHIP_CSV_PATH, "a", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["ticker", "group"])
+        if is_new_file:
+            w.writeheader()
+        w.writerow({"ticker": ticker, "group": group})
 
 
 def resolve_cik(ticker: str) -> tuple[str, str]:
@@ -316,9 +331,9 @@ def add_tickers() -> None:
             "ticker": t,
             "cik": cik,
             "company_name": company_name,
-            "inclusion_rule": "core_manual",
             "active_status": active_status,
         })
+        add_membership(t, "core_manual")
         if not cik:
             print(f"  WARNING: could not resolve CIK for {t} from the local SEC ticker "
                   f"cache — added with active_status=unresolved; fill in cik by hand or "
@@ -331,7 +346,7 @@ def add_tickers() -> None:
 def override_company(config: dict) -> None:
     """Assign one company to a sector directly, bypassing its SIC rule.
     Empty sector input clears an existing override."""
-    overrides = config["pipeline"].setdefault("sector_overrides", {})
+    overrides = config["classification"].setdefault("overrides", {})
     ticker = input("  Ticker to override: ").strip().upper()
     if not ticker:
         print("  Cancelled.\n")
@@ -340,7 +355,7 @@ def override_company(config: dict) -> None:
     current = resolved.get(ticker)
     print(f"  {ticker}: currently -> {current if current else 'not in universe parquet'}"
           + (" (via override)" if ticker in overrides else " (via SIC rule)" if current else ""))
-    names = list(config["pipeline"]["sector_groups"])
+    names = list(config["classification"]["sector_groups"])
     for i, n in enumerate(names, 1):
         print(f"    {i}. {n}")
     choice = input("  Sector number (empty = clear override): ").strip()
@@ -385,7 +400,7 @@ def main() -> None:
         if choice == "1":
             show_sectors(config, sic_map, detail=True)
         elif choice == "2":
-            show_unassigned(config["pipeline"]["sector_groups"], sic_map)
+            show_unassigned(config["classification"]["sector_groups"], sic_map)
         elif choice == "3":
             create_sector(config, sic_map)
         elif choice == "4":

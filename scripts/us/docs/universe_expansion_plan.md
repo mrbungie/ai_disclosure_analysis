@@ -55,11 +55,16 @@ current 120-firm universe is academically thin: ad-hoc frame + survivorship).
 
 **Phase A — Universe definition (no network)**
 1. Move the universe out of `pipeline.tickers` into a versioned table
-   (`configs/universe.csv`: ticker, cik, company, inclusion_rule ∈
-   {core_manual, sp500_2021, sector_topup, satellite_delisted}, active_status).
-   Config keeps a pointer; the TUI and script 00 read the table. Rationale:
-   a 550-row list with per-row provenance doesn't belong in a JSON config,
-   and the inclusion_rule column IS the sampling-frame documentation.
+   (`configs/us/universe.csv`: ticker, cik, company, active_status). Config
+   keeps a pointer; the TUI and script 00 read the table. Rationale: a
+   550-row list with per-row provenance doesn't belong in a JSON config.
+   Inclusion-reason tags ∈ {core_manual, sp500_2021, sector_topup,
+   satellite_delisted} live separately in `configs/us/universe_membership.csv`
+   (ticker, group — long format, one row per group a ticker belongs to) —
+   a company can qualify for more than one reason at once, which a single
+   column on universe.csv couldn't represent without picking one
+   arbitrarily; this side table IS the sampling-frame documentation, and
+   extending it (a new inclusion reason) is just new rows, no schema change.
 2. Obtain S&P 500 constituents as of 2021-12-31 from a public, citable,
    reconstructible source (index changes are public record); store the raw
    list + source note under `data/raw/reference/`.
