@@ -73,24 +73,134 @@ def _union(selects: list[str]) -> str:
     return "\n            UNION ALL BY NAME\n".join(f"({s})" for s in selects)
 
 
+# Every raw LINE of section_text (see _paragraph_select_sql) is classified
+# into one of three content types:
+# - 'table': contains "|" (a markdown table cell/row) or is a bare
+#            "| --- |"-style separator row with the pipes stripped —
+#            financial-statement tables are the overwhelming source
+#            (checked on the real corpus: 38.5% of ALL raw lines had a
+#            "|" in them at all — routine, not an edge case) — PROVIDED
+#            it's actually adjacent to real "|" content (see
+#            `_ISOLATED_DASH_ROW_IS_NOISE` below for why that qualifier
+#            matters).
+# - 'list':  starts with "•" (the dominant bullet marker seen — 221,618
+#            occurrences in one corpus check) or "- "/"* ".
+# - 'prose': everything else.
+# `has_pipe`/`prev_has_pipe`/`next_has_pipe` are computed in their own
+# CTE step before this CASE runs — a pure-dash line's classification
+# needs its NEIGHBORS' pipe status, and DuckDB doesn't allow nesting one
+# window function (LAG/LEAD) inside another (a CASE expression used
+# directly inside a window PARTITION/computation).
+_LINE_TYPE_CASE = r"""
+    CASE
+        WHEN has_pipe THEN 'table'
+        WHEN trim(line_text, '- ') = '' AND (prev_has_pipe OR next_has_pipe) THEN 'table'
+        WHEN line_text LIKE '•%' OR regexp_matches(line_text, '^[-*]\s') THEN 'list'
+        ELSE 'prose'
+    END
+"""
+# A bare "---" divider NOT next to any real "|" table content is a
+# markdown horizontal rule / PAGE-BREAK marker — not a table. Checked on
+# the real corpus: 211,817 of 473,200 'table' paragraphs (44.7%!) were
+# nothing but this isolated marker, before this fix. Worse than noise:
+# because prose paragraphs never merge with EACH OTHER (see
+# `_paragraph_select_sql`'s docstring), a page-break marker sandwiched
+# between two prose lines that are really one continuous sentence split
+# it in two — confirmed on a real filing ("...We are unable to predict
+# the" / "---" / "full impact of..."). Dropping isolated dash rows here
+# (same treatment as a page-number line) doesn't reunite that sentence
+# (prose still doesn't re-merge across paragraph boundaries — a separate,
+# bigger change), but it does stop mislabeling near-half of "tables" as
+# tables when they're just page furniture.
+_ISOLATED_DASH_ROW_IS_NOISE = r"""
+    trim(line_text, '- ') = '' AND NOT prev_has_pipe AND NOT next_has_pipe
+"""
+# Inline markdown image refs ("![img188831189_0.jpg](img188831189_0.jpg)")
+# — their "alt text" is invariably just the image filename repeated
+# (confirmed on the real corpus: 4,928 lines that were ONLY an image ref,
+# plus 561 more with real prose text alongside one), never a caption or
+# anything informative. Stripped to '' (not kept like a real link's
+# visible text) at the earliest possible point — inside `raw_lines`
+# itself, before pipe/TOC/classification logic ever sees the line — so a
+# pure-image line collapses to blank and is dropped by `_DROP_LINE_WHERE`
+# same as a page-number line, and a mixed image+prose line keeps only the
+# prose.
+_STRIP_MD_IMAGES_RE = r"!\[[^\]]*\]\([^)]*\)"
+# Regular markdown links ([visible text](#anchor)) are reduced to their
+# visible text — same place, same pass, right after the image strip —
+# because whole LINES that are entirely one link are common and genuinely
+# mixed: some are pure TOC/cross-reference noise ("[Index](#a7195)",
+# "[Item 1A. Risk Factors](#anchor)"), but others are real content that
+# just happens to double as a jump-link — e.g. a "Risk Factor Summary"
+# section where each bullet's visible text IS the summary sentence,
+# hyperlinked to its full discussion later in the document (confirmed on
+# the real corpus: "[Our growth strategy depends, in part, on our
+# ability to make acquisitions...](#anchor)"). Dropping such lines
+# outright would silently lose that real content; stripping to visible
+# text keeps it and only degrades pure-noise lines to short heading-like
+# fragments (still harmless — `_DROP_LINE_WHERE`/`_TOC_NAV_LINK_RE` catch
+# the "Table of Contents"/"Index to Financial Statements" ones of those).
+_STRIP_MD_LINKS_RE = r"\[([^\]]*)\]\([^)]*\)"
+# Some filers chain multiple nav links on one line — "Table of Contents"
+# immediately followed by "Index to Financial Statements" (990
+# occurrences on the real corpus) — so this matches either phrase, any
+# combination, in either order, and nothing else. `[\s\xa0]`, not bare
+# `\s`: these lines are routinely padded with actual U+00A0 non-breaking-
+# space characters between the two link phrases, and RE2's `\s` — unlike
+# Python's — does NOT match \xa0 (confirmed directly); the plain `\s*`
+# version of this regex silently matched 0 of the 990 real "Table of
+# Contents<NBSPs>Index to Financial Statements" lines it was written for.
+_WS = r"[\s\xa0]"
+_TOC_NAV_LINK_RE = (
+    rf"(?i)^{_WS}*"
+    rf"(Tables?({_WS}*of{_WS}*Contents?)?[.`]?{_WS}*)?"
+    rf"(Index{_WS}+to{_WS}+Financial{_WS}+Statements?[.`]?{_WS}*)?"
+    r"$"
+)
+_DROP_LINE_WHERE = rf"""
+    trim(line_text) <> ''
+    AND NOT regexp_matches(line_text, '^[0-9]+$')
+    AND NOT regexp_matches(trim(line_text, '` '), '{_TOC_NAV_LINK_RE}')
+"""
+# ORDER matters between this and _ISOLATED_DASH_ROW_IS_NOISE: dropping
+# page-number/TOC-nav lines happens FIRST (see `pre_pipe_context` in
+# _paragraph_select_sql), and pipe-adjacency for the isolated-dash check
+# is computed on what's LEFT after that — so a "---" divider sitting
+# right next to a page-number line (dropped) still correctly sees past
+# it to whatever real content line is next.
+
+
 def _paragraph_select_sql(form: str, source_view: str) -> str:
-    """One row per LINE of `section_text` (clean_html_to_lines already
-    collapsed real paragraph/bullet/heading breaks down to one non-empty
-    markdown line each — see section_segmenter.py — so a line here IS a
-    structural paragraph, not an arbitrary character chunk; it's routinely
-    MULTI-sentence — see `sentences`, built on top of this, for that
-    granularity). `paragraph_index` is the 1-based position within the
-    section; `char_start`/`char_len` are offsets into the PARENT
-    `section_text`, so `substr(section_text, char_start+1, char_len) =
-    paragraph_text` always holds — full lineage back to the exact byte
-    range in the section this paragraph came from, on top of every other
-    column already on `source_view` (accession_number, ticker, item_key,
-    section_name, run_id, run_date, ...) carried through unchanged,
-    EXCEPT `char_len`/`word_count` — `source_view` (filing_sections)
-    already has WHOLE-SECTION versions of those, which collided with (and
-    got silently shadowed by) the per-paragraph ones this view defines;
-    renamed to `section_char_len`/`section_word_count` so both
-    granularities survive under distinct names.
+    """One row per PARAGRAPH — a run of consecutive same-content-type raw
+    lines of section_text, merged together (see `_LINE_TYPE_CASE`): a
+    table's rows merge into ONE paragraph (the whole table, still marked
+    `content_type='table'` so it's never mistaken for prose), a bulleted
+    list's items merge into ONE paragraph the same way (`content_type=
+    'list'`), and prose lines each stay their OWN paragraph (never merged
+    with a neighboring prose line — clean_html_to_lines already delimited
+    real paragraph/heading breaks one per line; merging those would lose
+    that boundary). Earlier version DROPPED table/list lines outright as
+    "noise" — wrong: ~48% of raw lines were table/list content, and both
+    are real, meaningful content, just not prose sentences (see
+    `sentences`' per-content_type branching for how each gets handled at
+    that finer granularity).
+
+    `paragraph_index` is the 1-based position of the group's FIRST line in
+    the original (pre-grouping) line sequence — not densely renumbered,
+    so it stays a stable pointer even where lines were merged away or
+    dropped. No byte-offset tracking into `section_text` (char_start/
+    char_len) — tried that, it added real complexity (a whole extra
+    window-function pass, plus a documented edge case where a dropped
+    line sandwiched inside a merged group broke exact substr
+    reconstruction) for lineage nobody asked for; `paragraph_index` +
+    (accession_number, item_key) is enough to locate a paragraph without
+    it. Deliberately NARROW on lineage generally: only the columns
+    needed to identify the source (form, country_code, accession_number,
+    item_key) are carried — ticker/filing_date/section_name/run_id/...
+    live on `source_view` and JOIN back cleanly on (accession_number,
+    item_key) when actually needed; duplicating them onto every one of
+    millions of paragraph rows was real, wasted memory for no benefit
+    over a join.
 
     `form` ("10-K"/"10-Q") is stamped onto every row as a literal — this
     is ONE building block meant to be UNION ALL BY NAME'd across every
@@ -100,38 +210,84 @@ def _paragraph_select_sql(form: str, source_view: str) -> str:
     level split by form/country the way filing_manifest legitimately is
     (different instruments, different panel semantics) would just mean
     reimplementing the same "read text, don't care where it's from"
-    query against N near-identical views forever. `form` (and
-    `country_code`, already on `source_view`) is how a query re-imposes
-    that split if it needs to — a WHERE clause, not a different table.
+    query against N near-identical views forever. `form`/`country_code`
+    is how a query re-imposes that split if it needs to — a WHERE clause,
+    not a different table.
 
-    char_start is a running total via a window function (SUM ... ROWS
-    UNBOUNDED PRECEDING), not a per-row correlated subquery re-summing a
-    list slice — the latter is O(n^2) per section and made this view
-    unusably slow (minutes, not seconds) on sections with thousands of
-    lines. The window function is O(n)."""
+    Grouping is the classic "gaps and islands" pattern: a new group
+    starts whenever a line's content_type differs from the previous
+    line's (LAG, computed in its own CTE step — DuckDB doesn't allow
+    nesting one window function inside another), OR whenever the line is
+    'prose' (which ALWAYS starts a new group, even following another
+    prose line)."""
     return f"""
-        WITH split AS (
-            SELECT '{form}' AS form, *,
-                   unnest(string_split(section_text, chr(10))) AS paragraph_text,
-                   generate_subscripts(string_split(section_text, chr(10)), 1) AS paragraph_index
+        WITH raw_lines AS (
+            SELECT '{form}' AS form, country_code, accession_number, item_key,
+                   trim(regexp_replace(
+                       regexp_replace(
+                           unnest(string_split(section_text, chr(10))),
+                           '{_STRIP_MD_IMAGES_RE}', '', 'g'
+                       ),
+                       '{_STRIP_MD_LINKS_RE}', '\1', 'g'
+                   )) AS line_text,
+                   generate_subscripts(string_split(section_text, chr(10)), 1) AS line_index
             FROM {source_view}
+        ),
+        pre_pipe_context AS (
+            -- Page-number/TOC-nav lines dropped FIRST — see
+            -- _DROP_LINE_WHERE's own comment on why this ordering matters
+            -- for the isolated-dash check that follows.
+            SELECT *, line_text LIKE '%|%' AS has_pipe
+            FROM raw_lines
+            WHERE {_DROP_LINE_WHERE}
+        ),
+        with_pipe_context AS (
+            SELECT *,
+                LAG(has_pipe) OVER (
+                    PARTITION BY form, accession_number, item_key ORDER BY line_index
+                ) AS prev_has_pipe,
+                LEAD(has_pipe) OVER (
+                    PARTITION BY form, accession_number, item_key ORDER BY line_index
+                ) AS next_has_pipe
+            FROM pre_pipe_context
+        ),
+        classified AS (
+            SELECT * EXCLUDE (prev_has_pipe, next_has_pipe),
+                COALESCE(prev_has_pipe, false) AS prev_has_pipe,
+                COALESCE(next_has_pipe, false) AS next_has_pipe,
+                {_LINE_TYPE_CASE} AS line_type
+            FROM with_pipe_context
+        ),
+        not_page_break_noise AS (
+            SELECT * FROM classified
+            WHERE NOT ({_ISOLATED_DASH_ROW_IS_NOISE})
+        ),
+        with_prev AS (
+            SELECT *,
+                LAG(line_type) OVER (
+                    PARTITION BY form, accession_number, item_key ORDER BY line_index
+                ) AS prev_line_type
+            FROM not_page_break_noise
+        ),
+        grouped AS (
+            SELECT *,
+                SUM(CASE
+                    WHEN line_type = 'prose' THEN 1
+                    WHEN prev_line_type IS NULL OR line_type != prev_line_type THEN 1
+                    ELSE 0
+                END) OVER (
+                    PARTITION BY form, accession_number, item_key ORDER BY line_index
+                    ROWS UNBOUNDED PRECEDING
+                ) AS group_id
+            FROM with_prev
         )
         SELECT
-            * EXCLUDE (section_text, paragraph_text, paragraph_index, char_len, word_count),
-            char_len AS section_char_len,
-            word_count AS section_word_count,
-            paragraph_index,
-            paragraph_text,
-            CAST(
-                COALESCE(SUM(LENGTH(paragraph_text) + 1) OVER (
-                    PARTITION BY form, accession_number, item_key
-                    ORDER BY paragraph_index
-                    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-                ), 0) AS BIGINT
-            ) AS char_start,
-            LENGTH(paragraph_text) AS char_len
-        FROM split
-        WHERE trim(paragraph_text) <> ''
+            form, country_code, accession_number, item_key,
+            line_type AS content_type,
+            MIN(line_index) AS paragraph_index,
+            string_agg(line_text, chr(10) ORDER BY line_index) AS paragraph_text
+        FROM grouped
+        GROUP BY form, country_code, accession_number, item_key, group_id, line_type
     """
 
 
@@ -164,19 +320,10 @@ _SENTENCE_BOUNDARY_RE = r"([.!?]+)\s+([A-Z])"
 _SENTENCE_BOUNDARY_MARKER = chr(31)  # ASCII unit separator — won't collide with real filing text
 
 
-def _sentence_select_sql() -> str:
-    """One row per SENTENCE within a paragraph (see the abbreviation-mask
-    and `_SENTENCE_BOUNDARY_RE` comments above for the split heuristic).
-    Built directly on `paragraphs` (not on `filing_sections`/
-    `filing_sections_10q` again) — sentences are a finer split of an
-    already-defined paragraph, not a separate derivation from the raw
-    section text, so paragraph_index/paragraph_char_start (the
-    paragraph's own offset into section_text) come along as lineage
-    exactly as computed there. `sentence_char_start`/`char_len` are
-    offsets into the PARENT `paragraph_text` (so `substr(paragraph_text,
-    sentence_char_start+1, char_len) = sentence_text` holds); adding the
-    paragraph's own `char_start` gives the sentence's absolute offset into
-    `section_text` too, without storing it redundantly.
+def _prose_sentence_select_sql() -> str:
+    """One row per SENTENCE within a `content_type='prose'` paragraph (see
+    the abbreviation-mask and `_SENTENCE_BOUNDARY_RE` comments above for
+    the split heuristic).
 
     The mask/boundary-mark/split regex chain runs ONCE per paragraph, into
     a single `sentence_parts` LIST column, which `unnest` and
@@ -184,15 +331,17 @@ def _sentence_select_sql() -> str:
     same 3-regex chain twice per row, as an earlier version did, roughly
     doubled the cost of an already regex-heavy view over 3M+ paragraphs)."""
     return f"""
-        WITH masked AS (
+        WITH prose_paragraphs AS (
+            SELECT * FROM paragraphs WHERE content_type = 'prose'
+        ),
+        masked AS (
             SELECT
-                * EXCLUDE (char_start, char_len),
-                char_start AS paragraph_char_start,
+                form, country_code, accession_number, item_key, content_type, paragraph_index,
                 regexp_replace(
                     regexp_replace(paragraph_text, '{_ABBREV_WORD_RE}', '\\1{_ABBREV_MASK}', 'gi'),
                     '{_ABBREV_COMPOUND_RE}', '\\1{_ABBREV_MASK}', 'gi'
                 ) AS masked_text
-            FROM paragraphs
+            FROM prose_paragraphs
         ),
         split_parts AS (
             SELECT
@@ -211,21 +360,63 @@ def _sentence_select_sql() -> str:
             FROM split_parts
         )
         SELECT
-            * EXCLUDE (paragraph_text, sentence_text, sentence_index),
-            paragraph_text,
-            sentence_index,
-            sentence_text,
-            CAST(
-                COALESCE(SUM(LENGTH(sentence_text) + 1) OVER (
-                    PARTITION BY form, accession_number, item_key, paragraph_index
-                    ORDER BY sentence_index
-                    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-                ), 0) AS BIGINT
-            ) AS sentence_char_start,
-            LENGTH(sentence_text) AS char_len
+            form, country_code, accession_number, item_key, content_type, paragraph_index,
+            sentence_index, sentence_text
         FROM split
         WHERE trim(sentence_text) <> ''
     """
+
+
+def _list_sentence_select_sql() -> str:
+    """One row per ITEM within a `content_type='list'` paragraph — split
+    back on the SAME chr(10) that `_paragraph_select_sql` used to merge
+    the list's original lines together, so each "sentence" here is
+    exactly one bullet/list item, not a regex-guessed boundary. No
+    abbreviation masking needed (list items don't get sentence-boundary-
+    split at all)."""
+    return """
+        WITH list_paragraphs AS (
+            SELECT * FROM paragraphs WHERE content_type = 'list'
+        )
+        SELECT
+            form, country_code, accession_number, item_key, content_type, paragraph_index,
+            generate_subscripts(string_split(paragraph_text, chr(10)), 1) AS sentence_index,
+            unnest(string_split(paragraph_text, chr(10))) AS sentence_text
+        FROM list_paragraphs
+    """
+
+
+def _table_sentence_select_sql() -> str:
+    """A `content_type='table'` paragraph is NOT sentence-structured —
+    stays whole, as its own single "sentence" (sentence_index=1,
+    sentence_text=paragraph_text), so every paragraph — table included —
+    has at least one row in `sentences` and a query that just wants "all
+    the text, sentence-grain or not" doesn't need a UNION with
+    `paragraphs` to avoid silently dropping tables."""
+    return """
+        SELECT
+            form, country_code, accession_number, item_key, content_type, paragraph_index,
+            1 AS sentence_index, paragraph_text AS sentence_text
+        FROM paragraphs
+        WHERE content_type = 'table'
+    """
+
+
+def _sentence_select_sql() -> str:
+    """`sentences` = one row per PROSE sentence + one row per LIST item +
+    one row per TABLE (whole) — see the three _*_sentence_select_sql
+    functions above for why each content_type needs different handling.
+    Built directly on `paragraphs` (not re-derived from raw section text)
+    — paragraph_index (and, through it, content_type) comes along as
+    lineage, joinable back on (form, accession_number, item_key,
+    paragraph_index) rather than duplicated here."""
+    return (
+        f"({_prose_sentence_select_sql()})"
+        + "\n        UNION ALL BY NAME\n"
+        + f"({_list_sentence_select_sql()})"
+        + "\n        UNION ALL BY NAME\n"
+        + f"({_table_sentence_select_sql()})"
+    )
 
 
 def main(with_text_tables: bool = False):
