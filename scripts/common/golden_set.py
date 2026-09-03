@@ -419,14 +419,36 @@ async def label_rows(
     sigue; una interrupción hace flush de lo acumulado antes de salir.
     """
     from pydantic_ai import Agent
-    from pydantic_ai.models.openai import OpenAIChatModel
-    from pydantic_ai.providers.openrouter import OpenRouterProvider
+    from pydantic_ai.models.openrouter import OpenRouterModel
+    from pydantic_ai.providers.openrouter import OpenRouterModelProfile, OpenRouterProvider
 
-    # OpenRouter (OpenAI-compatible) instead of calling Google directly —
-    # one provider/key for every judge model instead of one integration per
-    # vendor. Verified live (2026-09-04) that "qwen/qwen3.7-flash" resolves
-    # fine on OpenRouter before wiring it in here.
-    model = OpenAIChatModel(judge_model, provider=OpenRouterProvider(api_key=os.environ["OPENROUTER_API_KEY"]))
+    # OpenRouterModel, not the generic OpenAIChatModel+OpenRouterProvider —
+    # only OpenRouterModel knows how to turn pydantic-ai's CachePoint /
+    # `openrouter_cache_instructions` setting into a real `cache_control`
+    # breakpoint. Even then, pydantic-ai hardcodes
+    # `openrouter_supports_cache_control = provider in ('anthropic', 'google')`
+    # (see pydantic_ai.providers.openrouter), which silently drops caching
+    # for every other vendor — including Alibaba/Qwen, even though
+    # OpenRouter's own model metadata for "qwen/qwen3.7-flash" DOES list
+    # `input_cache_read`/`input_cache_write` pricing, i.e. Alibaba really
+    # supports it. Forcing the flag via a profile override and verifying
+    # LIVE (2026-09-04) that it actually engages was necessary — cache
+    # support isn't guaranteed just because a model has cache pricing
+    # listed. Confirmed: first call `cache_write_tokens=1488`, every repeat
+    # call with the same system prompt `cache_read_tokens=1488`.
+    #
+    # If DEFAULT_JUDGE_MODEL ever changes, re-verify this the same way
+    # before assuming the override is still safe — a model OpenRouter/the
+    # vendor genuinely doesn't support caching for may just ignore
+    # `cache_control` (silently no-op) or may error; check the model's
+    # `input_cache_read`/`input_cache_write` fields at
+    # https://openrouter.ai/api/v1/models first.
+    model = OpenRouterModel(
+        judge_model,
+        provider=OpenRouterProvider(api_key=os.environ["OPENROUTER_API_KEY"]),
+        profile=OpenRouterModelProfile(openrouter_supports_cache_control=True),
+        settings={"openrouter_cache_instructions": True},
+    )
     agent = Agent(model, output_type=ParagraphLabel, system_prompt=SYSTEM_PROMPT, retries=2)
 
     written: list[Path] = []
@@ -543,8 +565,8 @@ def cmd_sample(args) -> None:
 
 def cmd_label(args) -> None:
     load_dotenv(REPO_ROOT / ".env")
-    if not os.environ.get("GOOGLE_API_KEY"):
-        sys.exit("Falta GOOGLE_API_KEY en .env")
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        sys.exit("Falta OPENROUTER_API_KEY en .env")
     args.output_dir.mkdir(parents=True, exist_ok=True)
     if not args.sample_path.exists():
         sys.exit(f"No existe {args.sample_path}; corré primero: golden_set.py sample")
@@ -553,7 +575,8 @@ def cmd_label(args) -> None:
     for bad in audit["unreadable"]:
         print(f"  parte ILEGIBLE ignorada: {bad['path']} ({bad['error']})", flush=True)
     for bad in audit["mismatched"]:
-        print(f"  parte de otra config ignorada: {Path(bad['path']).name} "
+        print(f"  parte de otro judge_model/prompt (igual cuenta como cobertura, "
+              f"ver [[golden-set-use-all-saved]]): {Path(bad['path']).name} "
               f"(modelo={bad['judge_model']}, prompt={bad['prompt_version']}, filas={bad['rows']})",
               flush=True)
 
@@ -561,12 +584,27 @@ def cmd_label(args) -> None:
     try:
         con.execute(f"CREATE OR REPLACE TEMP VIEW sample AS "
                     f"SELECT * FROM read_parquet('{args.sample_path}')")
-        if audit["usable"]:
-            files = ", ".join(f"'{p}'" for p in audit["usable"])
+        unreadable_paths = {bad["path"] for bad in audit["unreadable"]}
+        all_parts = sorted(
+            str(p) for p in args.output_dir.glob(LABEL_GLOB) if str(p) not in unreadable_paths
+        )
+        if all_parts:
+            files = ", ".join(f"'{p}'" for p in all_parts)
             # `error IS NULL`: una fila que falló en la API está escrita en la
             # parte para no perder el intento, pero NO es cobertura — si contara,
             # la corrida siguiente la saltearía y el párrafo quedaría sin etiqueta
             # para siempre. Así un corte por créditos o por red se reintenta solo.
+            #
+            # TODAS las partes legibles cuentan como cobertura, no solo las que
+            # matchean judge_model/prompt_version de esta corrida (eso es lo que
+            # `audit["usable"]` filtra, y sirve para OTRA cosa: decidir qué es
+            # seguro reusar/comparar dentro de esta config). Un párrafo ya
+            # etiquetado por un judge anterior (ej. gemini-3.8-flash antes de
+            # migrar a OpenRouter) sigue siendo cobertura real — decisión del
+            # proyecto: usar todo lo que se guarde, sin filtrar por tipo/judge
+            # (ver memoria golden-set-use-all-saved). Filtrar acá por
+            # judge_model haría que cambiar de modelo re-etiquete TODO el
+            # golden set de nuevo, gastando de más.
             con.execute(f"CREATE OR REPLACE TEMP VIEW labeled AS SELECT DISTINCT "
                         f"{', '.join(PARAGRAPH_KEY)} FROM read_parquet([{files}], union_by_name=True) "
                         f"WHERE error IS NULL")
