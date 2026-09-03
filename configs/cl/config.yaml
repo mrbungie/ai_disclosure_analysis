@@ -23,5 +23,6 @@ storage:
   # _country_configs() docstring on why these must never collide with
   # another country's paths.
   raw_documents: data/raw/filings_pdf_cl
+  raw_xbrl: data/raw/xbrl_cl
   interim_manifests: data/interim/manifests_cl
   interim_sections: data/interim/sections_cl
