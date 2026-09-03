@@ -47,7 +47,7 @@ SAMPLE_PATH = DEFAULT_DIR / "golden_set_sample.parquet"
 LABEL_GLOB = "golden_set_labels__session=*.parquet"
 
 PARAGRAPH_KEY = ("country_code", "form", "accession_number", "item_key", "paragraph_index")
-DEFAULT_JUDGE_MODEL = "gemini-3.8-flash"
+DEFAULT_JUDGE_MODEL = "qwen/qwen3.7-flash"
 PROMPT_VERSION = "v1"
 SAMPLING_VERSION = "v1"
 
@@ -419,13 +419,14 @@ async def label_rows(
     sigue; una interrupción hace flush de lo acumulado antes de salir.
     """
     from pydantic_ai import Agent
-    from pydantic_ai.models.google import GoogleModel
-    from pydantic_ai.providers.google import GoogleProvider
+    from pydantic_ai.models.openai import OpenAIChatModel
+    from pydantic_ai.providers.openrouter import OpenRouterProvider
 
-    # Modelo construido explícito en vez de "google-gla:<nombre>": la lista de
-    # nombres conocidos de pydantic-ai va por detrás de la API y rechaza modelos
-    # que la cuenta sí tiene (gemini-3.8-flash entre ellos).
-    model = GoogleModel(judge_model, provider=GoogleProvider(api_key=os.environ["GOOGLE_API_KEY"]))
+    # OpenRouter (OpenAI-compatible) instead of calling Google directly —
+    # one provider/key for every judge model instead of one integration per
+    # vendor. Verified live (2026-09-04) that "qwen/qwen3.7-flash" resolves
+    # fine on OpenRouter before wiring it in here.
+    model = OpenAIChatModel(judge_model, provider=OpenRouterProvider(api_key=os.environ["OPENROUTER_API_KEY"]))
     agent = Agent(model, output_type=ParagraphLabel, system_prompt=SYSTEM_PROMPT, retries=2)
 
     written: list[Path] = []
