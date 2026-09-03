@@ -54,10 +54,19 @@ import fitz  # pymupdf
 # fire confidently.
 _PAGE_HEADER_RE = re.compile(r"^Sociedad\s.*Rut\s.*Periodo\s.*Tipo de Balance", re.DOTALL)
 _PAGE_FOOTER_RE = re.compile(r"^Página\s+\d+\s+de\s+\d+")
+# A running header on glossy "Memoria Integrada" reports (e.g. Banco de
+# Chile 2024): "Memoria Anual 2024 • Estados Financieros Consolidados" on
+# one page, "Memoria Anual 2024 • Personas" on another — same running
+# header, but with the CURRENT SECTION NAME as a varying suffix, so it
+# never repeats often enough (same exact string) to trip
+# _find_repeated_boilerplate's frequency check below. Matched on the
+# fixed "Memoria Anual|Integrada <year> •" prefix alone, since that part
+# is genuinely constant regardless of which section title follows it.
+_RUNNING_HEADER_RE = re.compile(r"^Memoria (Anual|Integrada) \d{4}\s*[•·]")
 
 
 def _is_boilerplate(text: str) -> bool:
-    return bool(_PAGE_HEADER_RE.match(text) or _PAGE_FOOTER_RE.match(text))
+    return bool(_PAGE_HEADER_RE.match(text) or _PAGE_FOOTER_RE.match(text) or _RUNNING_HEADER_RE.match(text))
 
 
 def _normalize_for_repeat_check(text: str) -> str:
@@ -65,6 +74,28 @@ def _normalize_for_repeat_check(text: str) -> str:
     template with a different page number still counts as the same
     repeated text."""
     return re.sub(r"\d+", "#", text.strip())
+
+
+def _extract_text_blocks(page) -> list[tuple]:
+    """[(bbox, raw_text, font_names), ...] for one page's TEXT blocks
+    (type==0; image blocks are skipped, same content page.get_text("blocks")
+    would return but with each block's distinct span font NAMES kept
+    alongside — needed by _is_uniform_heavy_font_label. One get_text("dict")
+    call replaces what used to be a get_text("blocks") call; same
+    underlying PyMuPDF layout segmentation, just a richer return shape."""
+    out = []
+    for block in page.get_text("dict")["blocks"]:
+        if block.get("type") != 0:
+            continue
+        lines_text = []
+        font_names = set()
+        for line in block["lines"]:
+            line_text = "".join(span["text"] for span in line["spans"])
+            lines_text.append(line_text)
+            font_names.update(span["font"] for span in line["spans"] if span["text"].strip())
+        raw_text = "\n".join(lines_text)
+        out.append((tuple(block["bbox"]), raw_text, frozenset(font_names)))
+    return out
 
 
 def _find_repeated_boilerplate(pages_blocks: list[list[tuple]], min_page_fraction: float = 0.3) -> set[str]:
@@ -85,7 +116,7 @@ def _find_repeated_boilerplate(pages_blocks: list[list[tuple]], min_page_fractio
     n_pages = len(pages_blocks)
     for blocks in pages_blocks:
         seen_this_page = set()
-        for _bbox, raw_text in blocks:
+        for _bbox, raw_text, _fonts in blocks:
             norm = _normalize_for_repeat_check(raw_text)
             if norm and norm not in seen_this_page:
                 counts[norm] += 1
@@ -126,15 +157,89 @@ def _bbox_overlaps(bbox, table_bboxes, threshold: float = 0.4) -> bool:
 # place). Same principle as build_duckdb.py's isolated-dash fallback for
 # US: a structural signal first (find_tables), a content-shape signal to
 # catch what the structural one misses.
+#
+# Also matches bare dates ("01/01/2022", "29-mar-22") — verified needed
+# on a real Análisis Razonado where a table's date-header ROW leaked into
+# prose as "01/01/2022 01/01/2022 01/01/2022 01/01/2022", every token a
+# date so none matched the plain-numeric pattern below.
+_DATE_TOKEN_RE = re.compile(r"^\d{1,2}[/-][A-Za-zÀ-ÿ]{0,4}[/-]?\d{2,4}$")
 _NUMERIC_TOKEN_RE = re.compile(r"^\(?-?[\d.,]+%?\)?$")
 
 
-def _is_numeric_heavy(text: str, threshold: float = 0.5) -> bool:
+def _is_numeric_heavy(text: str, threshold: float = 0.4) -> bool:
+    """threshold=0.4, not >0.5: verified on a real leaked table row
+    ("Otras ganancias (pérdidas) 133.311 133.311 133.311") where exactly
+    half the tokens (3/6: the figures) are numeric and the other half
+    (2 words + one parenthesized word) are the row's own label — a
+    >0.5 threshold missed this by construction, since a label-plus-values
+    table row is close to a 50/50 split almost by definition."""
     tokens = text.split()
     if not tokens:
         return False
-    numeric = sum(1 for t in tokens if _NUMERIC_TOKEN_RE.match(t))
-    return numeric / len(tokens) > threshold
+    numeric = sum(1 for t in tokens if _NUMERIC_TOKEN_RE.match(t) or _DATE_TOKEN_RE.match(t))
+    return numeric / len(tokens) >= threshold
+
+
+# Section headings / table-of-contents / agenda entries that PyMuPDF's
+# block segmentation returns as their own "prose" block, verified on real
+# Memoria/Análisis Razonado pages sampled across ~10 filers while auditing
+# extraction quality (2026-09-03) — e.g. "PRINCIPALES INDICADORES",
+# "9. Elección de nuevo Directorio.", "23 Gobierno Corporativo". These
+# carry no disclosure narrative (no verb, no claim), just page furniture,
+# so they're dropped outright rather than kept or reclassified as
+# 'table' — reclassifying wouldn't help, since scripts/common/ai_embed.py
+# embeds every paragraph_index regardless of content_type.
+#
+# Deliberately NARROW (word count <=10) — a false positive here silently
+# drops real content, which is worse for a disclosure-detection corpus
+# than a false negative that leaves one heading unfiltered. Known
+# remaining gap, accepted rather than chased with more regexes: a
+# short Title-Case caption with no leading/trailing number and no
+# ALL-CAPS ("María Cecilia Facetti Presidente de Grupo Cintac") isn't
+# caught by either rule below.
+_ALL_CAPS_HEADING_RE = re.compile(r"^[^a-zà-ÿ]+$")  # no lowercase letters anywhere
+_NUMBERED_TOC_ENTRY_RE = re.compile(r"^\d{1,3}\.?\s+\S")  # "9. Elección..." / "23 Gobierno..."
+
+
+def _is_heading_or_toc_noise(text: str) -> bool:
+    words = text.split()
+    if not words or len(words) > 10:
+        return False
+    if not any(c.isalpha() for c in text):
+        return False  # pure numbers/dates are _is_numeric_heavy's job, not this one
+    return bool(_ALL_CAPS_HEADING_RE.match(text) or _NUMBERED_TOC_ENTRY_RE.match(text))
+
+
+# Font-weight signal for note/section sub-headings that _is_heading_or_toc_noise
+# can't catch by content alone — verified on real Banco de Chile 2024 EEFF
+# notes (2026-09-03) via page.get_text("dict") span data: "(b) Instrumentos
+# financieros de deuda:" renders ENTIRELY in one font, 'BCH_0515-Medium'
+# (a heavier weight than the body text's 'BCH_0515-Light') — while a REAL
+# sentence that merely starts with the same "(b)" marker, e.g. "(b) Con
+# fecha 25 de enero de 2024, el Directorio del Banco...", mixes
+# 'BCH_0515-Medium' (just the marker) with 'BCH_0515-Light' (the actual
+# sentence) in the SAME block. So "every span uses one single font, and
+# that font's name reads as a heavier weight" is the signal — not "any
+# bold span present", which the real-sentence case would also trigger.
+#
+# Font-NAME heuristic, not PyMuPDF's span `flags` bold bit: verified flags
+# was constant (4, the serif bit only) across BOTH the label and the real
+# sentence above — this PDF encodes weight purely in the font's PostScript
+# name, not the flags bitfield, so flags can't distinguish them here.
+#
+# Known gap, accepted: a template whose headings and body share ONE font
+# name (weight conveyed only by size) won't be caught by this — same
+# "narrow, evidence-backed rule over a broader risky one" tradeoff as
+# _is_heading_or_toc_noise's word-count cap.
+_HEAVY_WEIGHT_FONT_RE = re.compile(r"(bold|black|heavy|semibold|extrabold|medium)", re.IGNORECASE)
+_LIGHT_WEIGHT_FONT_RE = re.compile(r"(light|regular|book|thin|roman)", re.IGNORECASE)
+
+
+def _is_uniform_heavy_font_label(font_names: frozenset, word_count: int) -> bool:
+    if word_count > 20 or len(font_names) != 1:
+        return False
+    (font,) = font_names
+    return bool(_HEAVY_WEIGHT_FONT_RE.search(font)) and not _LIGHT_WEIGHT_FONT_RE.search(font)
 
 
 def _clean_prose_text(block_text: str) -> str:
@@ -244,6 +349,18 @@ def _reading_order_key(item_bbox: tuple, bounds: list[float]) -> tuple:
     return (bisect.bisect_right(bounds, x0), y0)
 
 
+def _sanitize_text(text: str) -> str:
+    """Some CMF PDFs decode through PyMuPDF with lone UTF-16 surrogate
+    codepoints (a broken font/cmap in the source PDF, not a bug in our
+    extraction) — verified on a real Análisis Razonado where this crashed
+    pandas/pyarrow's parquet write with UnicodeEncodeError ("surrogates
+    not allowed") only once ~1300 documents in, i.e. rare but real.
+    Round-tripping through utf-8 with errors='replace' swaps any such
+    codepoint for U+FFFD instead of failing the whole run over one
+    unrepresentable character in one paragraph."""
+    return text.encode("utf-8", errors="replace").decode("utf-8")
+
+
 def extract_paragraphs(pdf_bytes: bytes) -> list[dict]:
     """Returns [{content_type: 'prose'|'table', paragraph_index, page,
     paragraph_text}, ...] for one PDF. `paragraph_index` is a stable
@@ -259,8 +376,8 @@ def extract_paragraphs(pdf_bytes: bytes) -> list[dict]:
     with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
         # Cache every page's raw blocks once — needed twice (the repeated-
         # boilerplate frequency count below, then the real extraction
-        # pass) and get_text("blocks") isn't free to call twice per page.
-        pages_blocks = [[(b[:4], b[4]) for b in page.get_text("blocks")] for page in doc]
+        # pass) and get_text("dict") isn't free to call twice per page.
+        pages_blocks = [_extract_text_blocks(page) for page in doc]
         repeated_boilerplate = _find_repeated_boilerplate(pages_blocks)
 
         for page_no, page in enumerate(doc):
@@ -276,7 +393,7 @@ def extract_paragraphs(pdf_bytes: bytes) -> list[dict]:
                         "content_type": "table", "page": page_no, "paragraph_text": table_text,
                     }))
 
-            for bbox, raw_text in pages_blocks[page_no]:
+            for bbox, raw_text, font_names in pages_blocks[page_no]:
                 if _is_boilerplate(raw_text):
                     continue
                 if _normalize_for_repeat_check(raw_text) in repeated_boilerplate:
@@ -286,6 +403,7 @@ def extract_paragraphs(pdf_bytes: bytes) -> list[dict]:
                 text = _clean_prose_text(raw_text)
                 if not text:
                     continue
+                word_count = len(text.split())
                 if _is_numeric_heavy(text):
                     # find_tables() missed this one entirely (see
                     # _is_numeric_heavy's comment) — keep the ORIGINAL
@@ -295,6 +413,8 @@ def extract_paragraphs(pdf_bytes: bytes) -> list[dict]:
                     page_items.append((bbox, {
                         "content_type": "table", "page": page_no, "paragraph_text": raw_text.strip(),
                     }))
+                elif _is_heading_or_toc_noise(text) or _is_uniform_heavy_font_label(font_names, word_count):
+                    continue
                 else:
                     page_items.append((bbox, {
                         "content_type": "prose", "page": page_no, "paragraph_text": text,
@@ -304,6 +424,7 @@ def extract_paragraphs(pdf_bytes: bytes) -> list[dict]:
             page_items.sort(key=lambda pair: _reading_order_key(pair[0], column_bounds))
             for item in _merge_prose_fragments([item for _, item in page_items]):
                 item["paragraph_index"] = idx
+                item["paragraph_text"] = _sanitize_text(item["paragraph_text"])
                 paragraphs.append(item)
                 idx += 1
     return paragraphs
