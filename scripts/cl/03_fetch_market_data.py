@@ -37,7 +37,12 @@ def yahoo_symbol(nemo: str) -> str:
 def fetch_prices(nemo: str, start: str) -> pd.DataFrame | None:
     import yfinance as yf
     symbol = yahoo_symbol(nemo)
-    df = yf.download(symbol, start=start, auto_adjust=False, progress=False)
+    # tickers=[symbol], not a bare string: yf.download splits a plain string
+    # on whitespace into MULTIPLE tickers — bit a real nemo with a space in
+    # it ("AZUL AZUL" -> Yahoo "AZUL AZUL.SN"), which silently fetched two
+    # tickers' OHLCV into one MultiIndex and produced duplicate columns
+    # after flattening below.
+    df = yf.download(tickers=[symbol], start=start, auto_adjust=False, progress=False)
     if df is None or df.empty:
         return None
     if isinstance(df.columns, pd.MultiIndex):

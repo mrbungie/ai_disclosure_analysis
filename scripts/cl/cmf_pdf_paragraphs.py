@@ -76,6 +76,28 @@ def _normalize_for_repeat_check(text: str) -> str:
     return re.sub(r"\d+", "#", text.strip())
 
 
+def _extract_text_blocks(page) -> list[tuple]:
+    """[(bbox, raw_text, font_names), ...] for one page's TEXT blocks
+    (type==0; image blocks are skipped, same content page.get_text("blocks")
+    would return but with each block's distinct span font NAMES kept
+    alongside — needed by _is_uniform_heavy_font_label. One get_text("dict")
+    call replaces what used to be a get_text("blocks") call; same
+    underlying PyMuPDF layout segmentation, just a richer return shape."""
+    out = []
+    for block in page.get_text("dict")["blocks"]:
+        if block.get("type") != 0:
+            continue
+        lines_text = []
+        font_names = set()
+        for line in block["lines"]:
+            line_text = "".join(span["text"] for span in line["spans"])
+            lines_text.append(line_text)
+            font_names.update(span["font"] for span in line["spans"] if span["text"].strip())
+        raw_text = "\n".join(lines_text)
+        out.append((tuple(block["bbox"]), raw_text, frozenset(font_names)))
+    return out
+
+
 def _find_repeated_boilerplate(pages_blocks: list[list[tuple]], min_page_fraction: float = 0.3) -> set[str]:
     """General page-header/footer detector: a block whose normalized text
     appears on at least `min_page_fraction` of a document's pages is
@@ -94,7 +116,7 @@ def _find_repeated_boilerplate(pages_blocks: list[list[tuple]], min_page_fractio
     n_pages = len(pages_blocks)
     for blocks in pages_blocks:
         seen_this_page = set()
-        for _bbox, raw_text in blocks:
+        for _bbox, raw_text, _fonts in blocks:
             norm = _normalize_for_repeat_check(raw_text)
             if norm and norm not in seen_this_page:
                 counts[norm] += 1
@@ -186,6 +208,38 @@ def _is_heading_or_toc_noise(text: str) -> bool:
     if not any(c.isalpha() for c in text):
         return False  # pure numbers/dates are _is_numeric_heavy's job, not this one
     return bool(_ALL_CAPS_HEADING_RE.match(text) or _NUMBERED_TOC_ENTRY_RE.match(text))
+
+
+# Font-weight signal for note/section sub-headings that _is_heading_or_toc_noise
+# can't catch by content alone — verified on real Banco de Chile 2024 EEFF
+# notes (2026-09-03) via page.get_text("dict") span data: "(b) Instrumentos
+# financieros de deuda:" renders ENTIRELY in one font, 'BCH_0515-Medium'
+# (a heavier weight than the body text's 'BCH_0515-Light') — while a REAL
+# sentence that merely starts with the same "(b)" marker, e.g. "(b) Con
+# fecha 25 de enero de 2024, el Directorio del Banco...", mixes
+# 'BCH_0515-Medium' (just the marker) with 'BCH_0515-Light' (the actual
+# sentence) in the SAME block. So "every span uses one single font, and
+# that font's name reads as a heavier weight" is the signal — not "any
+# bold span present", which the real-sentence case would also trigger.
+#
+# Font-NAME heuristic, not PyMuPDF's span `flags` bold bit: verified flags
+# was constant (4, the serif bit only) across BOTH the label and the real
+# sentence above — this PDF encodes weight purely in the font's PostScript
+# name, not the flags bitfield, so flags can't distinguish them here.
+#
+# Known gap, accepted: a template whose headings and body share ONE font
+# name (weight conveyed only by size) won't be caught by this — same
+# "narrow, evidence-backed rule over a broader risky one" tradeoff as
+# _is_heading_or_toc_noise's word-count cap.
+_HEAVY_WEIGHT_FONT_RE = re.compile(r"(bold|black|heavy|semibold|extrabold|medium)", re.IGNORECASE)
+_LIGHT_WEIGHT_FONT_RE = re.compile(r"(light|regular|book|thin|roman)", re.IGNORECASE)
+
+
+def _is_uniform_heavy_font_label(font_names: frozenset, word_count: int) -> bool:
+    if word_count > 20 or len(font_names) != 1:
+        return False
+    (font,) = font_names
+    return bool(_HEAVY_WEIGHT_FONT_RE.search(font)) and not _LIGHT_WEIGHT_FONT_RE.search(font)
 
 
 def _clean_prose_text(block_text: str) -> str:
@@ -322,8 +376,8 @@ def extract_paragraphs(pdf_bytes: bytes) -> list[dict]:
     with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
         # Cache every page's raw blocks once — needed twice (the repeated-
         # boilerplate frequency count below, then the real extraction
-        # pass) and get_text("blocks") isn't free to call twice per page.
-        pages_blocks = [[(b[:4], b[4]) for b in page.get_text("blocks")] for page in doc]
+        # pass) and get_text("dict") isn't free to call twice per page.
+        pages_blocks = [_extract_text_blocks(page) for page in doc]
         repeated_boilerplate = _find_repeated_boilerplate(pages_blocks)
 
         for page_no, page in enumerate(doc):
@@ -339,7 +393,7 @@ def extract_paragraphs(pdf_bytes: bytes) -> list[dict]:
                         "content_type": "table", "page": page_no, "paragraph_text": table_text,
                     }))
 
-            for bbox, raw_text in pages_blocks[page_no]:
+            for bbox, raw_text, font_names in pages_blocks[page_no]:
                 if _is_boilerplate(raw_text):
                     continue
                 if _normalize_for_repeat_check(raw_text) in repeated_boilerplate:
@@ -349,6 +403,7 @@ def extract_paragraphs(pdf_bytes: bytes) -> list[dict]:
                 text = _clean_prose_text(raw_text)
                 if not text:
                     continue
+                word_count = len(text.split())
                 if _is_numeric_heavy(text):
                     # find_tables() missed this one entirely (see
                     # _is_numeric_heavy's comment) — keep the ORIGINAL
@@ -358,7 +413,7 @@ def extract_paragraphs(pdf_bytes: bytes) -> list[dict]:
                     page_items.append((bbox, {
                         "content_type": "table", "page": page_no, "paragraph_text": raw_text.strip(),
                     }))
-                elif _is_heading_or_toc_noise(text):
+                elif _is_heading_or_toc_noise(text) or _is_uniform_heavy_font_label(font_names, word_count):
                     continue
                 else:
                     page_items.append((bbox, {

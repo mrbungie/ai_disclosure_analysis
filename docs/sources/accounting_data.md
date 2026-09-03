@@ -82,3 +82,21 @@ Same annual/quarterly closes as `01_fetch_filings.py`
 4 banks aren't registered in. Expect the same 4-firm gap here as for the
 narrative filings; no manual-download path has been built for XBRL yet
 since it wasn't asked for.
+
+## Actual run results (2026-09-03)
+
+**US** (`scripts/us/03_fetch_accounting_data.py`, 516 tickers): 514
+fetched, 2 with no facts returned — `FRC` (First Republic Bank) and
+`SBNY` (Signature Bank), both failed/were seized in the 2023 banking
+crisis and stopped filing afterward. Not a fetch bug.
+
+**Chile** (`scripts/cl/04_fetch_accounting_data.py`, 100 firms ×
+5 years × 4 quarterly closes = 2,000 possible documents):
+- 1,478 `completed`
+- 509 `not_found` — same shape as the narrative-filing gaps (a firm
+  simply didn't file EEFF for that particular close), confirmed
+  including the 4 banks (not registered under RVEMI at all, per the
+  finding above)
+- 13 transient network failures (`Read timed out` / connection reset) —
+  resumable on a plain re-run, same idempotency contract as
+  `01_fetch_filings.py` (only rows without a local file get retried)

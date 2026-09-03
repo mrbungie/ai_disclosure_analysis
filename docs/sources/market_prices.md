@@ -30,3 +30,17 @@ name-only debt issuers with no real equity float) is unconfirmed — the
 fetch script logs a miss per ticker the same way the US one does, rather
 than failing the whole run, so this surfaces as a normal per-ticker gap
 to review after a first run, not a blocker to write around now.
+
+## Actual run results (2026-09-03)
+
+86/100 tickers fetched. 4 misses, all nemos with a SPACE in them —
+`AZUL AZUL`, `COLO COLO`, `LAS CONDES`, `ORO BLANCO` — which also
+tripped a real bug on the first run: `yf.download()` splits a bare
+string on whitespace into MULTIPLE tickers, so `"AZUL AZUL.SN"` as a
+plain string arg was parsed as two separate symbols and produced
+duplicate OHLCV columns on write. Fixed by passing `tickers=[symbol]`
+(a one-element list) instead of a bare string — after the fix these 4
+just come back as clean per-ticker misses ("possibly delisted; no
+timezone found"), not crashes. Worth checking by hand later whether
+Yahoo actually has these 4 under a different symbol (the space in the
+nemo itself might not be how Yahoo lists them).
