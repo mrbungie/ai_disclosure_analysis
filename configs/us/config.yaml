@@ -566,5 +566,6 @@ classification:
 storage:
   raw_submissions: data/raw/sec_submissions
   raw_html: data/raw/filings_html
+  raw_xbrl_facts: data/raw/xbrl_facts/us
   interim_manifests: data/interim/manifests
   interim_sections: data/interim/sections

@@ -54,10 +54,19 @@ import fitz  # pymupdf
 # fire confidently.
 _PAGE_HEADER_RE = re.compile(r"^Sociedad\s.*Rut\s.*Periodo\s.*Tipo de Balance", re.DOTALL)
 _PAGE_FOOTER_RE = re.compile(r"^Página\s+\d+\s+de\s+\d+")
+# A running header on glossy "Memoria Integrada" reports (e.g. Banco de
+# Chile 2024): "Memoria Anual 2024 • Estados Financieros Consolidados" on
+# one page, "Memoria Anual 2024 • Personas" on another — same running
+# header, but with the CURRENT SECTION NAME as a varying suffix, so it
+# never repeats often enough (same exact string) to trip
+# _find_repeated_boilerplate's frequency check below. Matched on the
+# fixed "Memoria Anual|Integrada <year> •" prefix alone, since that part
+# is genuinely constant regardless of which section title follows it.
+_RUNNING_HEADER_RE = re.compile(r"^Memoria (Anual|Integrada) \d{4}\s*[•·]")
 
 
 def _is_boilerplate(text: str) -> bool:
-    return bool(_PAGE_HEADER_RE.match(text) or _PAGE_FOOTER_RE.match(text))
+    return bool(_PAGE_HEADER_RE.match(text) or _PAGE_FOOTER_RE.match(text) or _RUNNING_HEADER_RE.match(text))
 
 
 def _normalize_for_repeat_check(text: str) -> str:
@@ -126,15 +135,57 @@ def _bbox_overlaps(bbox, table_bboxes, threshold: float = 0.4) -> bool:
 # place). Same principle as build_duckdb.py's isolated-dash fallback for
 # US: a structural signal first (find_tables), a content-shape signal to
 # catch what the structural one misses.
+#
+# Also matches bare dates ("01/01/2022", "29-mar-22") — verified needed
+# on a real Análisis Razonado where a table's date-header ROW leaked into
+# prose as "01/01/2022 01/01/2022 01/01/2022 01/01/2022", every token a
+# date so none matched the plain-numeric pattern below.
+_DATE_TOKEN_RE = re.compile(r"^\d{1,2}[/-][A-Za-zÀ-ÿ]{0,4}[/-]?\d{2,4}$")
 _NUMERIC_TOKEN_RE = re.compile(r"^\(?-?[\d.,]+%?\)?$")
 
 
-def _is_numeric_heavy(text: str, threshold: float = 0.5) -> bool:
+def _is_numeric_heavy(text: str, threshold: float = 0.4) -> bool:
+    """threshold=0.4, not >0.5: verified on a real leaked table row
+    ("Otras ganancias (pérdidas) 133.311 133.311 133.311") where exactly
+    half the tokens (3/6: the figures) are numeric and the other half
+    (2 words + one parenthesized word) are the row's own label — a
+    >0.5 threshold missed this by construction, since a label-plus-values
+    table row is close to a 50/50 split almost by definition."""
     tokens = text.split()
     if not tokens:
         return False
-    numeric = sum(1 for t in tokens if _NUMERIC_TOKEN_RE.match(t))
-    return numeric / len(tokens) > threshold
+    numeric = sum(1 for t in tokens if _NUMERIC_TOKEN_RE.match(t) or _DATE_TOKEN_RE.match(t))
+    return numeric / len(tokens) >= threshold
+
+
+# Section headings / table-of-contents / agenda entries that PyMuPDF's
+# block segmentation returns as their own "prose" block, verified on real
+# Memoria/Análisis Razonado pages sampled across ~10 filers while auditing
+# extraction quality (2026-09-03) — e.g. "PRINCIPALES INDICADORES",
+# "9. Elección de nuevo Directorio.", "23 Gobierno Corporativo". These
+# carry no disclosure narrative (no verb, no claim), just page furniture,
+# so they're dropped outright rather than kept or reclassified as
+# 'table' — reclassifying wouldn't help, since scripts/common/ai_embed.py
+# embeds every paragraph_index regardless of content_type.
+#
+# Deliberately NARROW (word count <=10) — a false positive here silently
+# drops real content, which is worse for a disclosure-detection corpus
+# than a false negative that leaves one heading unfiltered. Known
+# remaining gap, accepted rather than chased with more regexes: a
+# short Title-Case caption with no leading/trailing number and no
+# ALL-CAPS ("María Cecilia Facetti Presidente de Grupo Cintac") isn't
+# caught by either rule below.
+_ALL_CAPS_HEADING_RE = re.compile(r"^[^a-zà-ÿ]+$")  # no lowercase letters anywhere
+_NUMBERED_TOC_ENTRY_RE = re.compile(r"^\d{1,3}\.?\s+\S")  # "9. Elección..." / "23 Gobierno..."
+
+
+def _is_heading_or_toc_noise(text: str) -> bool:
+    words = text.split()
+    if not words or len(words) > 10:
+        return False
+    if not any(c.isalpha() for c in text):
+        return False  # pure numbers/dates are _is_numeric_heavy's job, not this one
+    return bool(_ALL_CAPS_HEADING_RE.match(text) or _NUMBERED_TOC_ENTRY_RE.match(text))
 
 
 def _clean_prose_text(block_text: str) -> str:
@@ -244,6 +295,18 @@ def _reading_order_key(item_bbox: tuple, bounds: list[float]) -> tuple:
     return (bisect.bisect_right(bounds, x0), y0)
 
 
+def _sanitize_text(text: str) -> str:
+    """Some CMF PDFs decode through PyMuPDF with lone UTF-16 surrogate
+    codepoints (a broken font/cmap in the source PDF, not a bug in our
+    extraction) — verified on a real Análisis Razonado where this crashed
+    pandas/pyarrow's parquet write with UnicodeEncodeError ("surrogates
+    not allowed") only once ~1300 documents in, i.e. rare but real.
+    Round-tripping through utf-8 with errors='replace' swaps any such
+    codepoint for U+FFFD instead of failing the whole run over one
+    unrepresentable character in one paragraph."""
+    return text.encode("utf-8", errors="replace").decode("utf-8")
+
+
 def extract_paragraphs(pdf_bytes: bytes) -> list[dict]:
     """Returns [{content_type: 'prose'|'table', paragraph_index, page,
     paragraph_text}, ...] for one PDF. `paragraph_index` is a stable
@@ -295,6 +358,8 @@ def extract_paragraphs(pdf_bytes: bytes) -> list[dict]:
                     page_items.append((bbox, {
                         "content_type": "table", "page": page_no, "paragraph_text": raw_text.strip(),
                     }))
+                elif _is_heading_or_toc_noise(text):
+                    continue
                 else:
                     page_items.append((bbox, {
                         "content_type": "prose", "page": page_no, "paragraph_text": text,
@@ -304,6 +369,7 @@ def extract_paragraphs(pdf_bytes: bytes) -> list[dict]:
             page_items.sort(key=lambda pair: _reading_order_key(pair[0], column_bounds))
             for item in _merge_prose_fragments([item for _, item in page_items]):
                 item["paragraph_index"] = idx
+                item["paragraph_text"] = _sanitize_text(item["paragraph_text"])
                 paragraphs.append(item)
                 idx += 1
     return paragraphs
