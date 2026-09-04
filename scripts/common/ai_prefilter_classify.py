@@ -15,18 +15,35 @@ Methodology (see §8.2 in the doc for the full writeup):
    never saw that row during training.
 3. Only THEN: refit on all 9,884 labeled rows (standard practice — CV is
    for validating/tuning, the deployed model uses every label it has) and
-   apply that final model + threshold to the full 3,281,038-paragraph
-   corpus (latest anchors run only — a different anchors_fingerprint is a
+   apply that final model + threshold to the corpus of UNIQUE paragraph
+   texts (latest anchors run only — a different anchors_fingerprint is a
    different, incompatible score population, see ai_prefilter.py's own
    anchors_fingerprint() docstring).
 
-Output: data/interim/prefilter_predictions/prefilter_predictions__run=<id>.parquet
-(one row per paragraph, every paragraph — not just the positives — so a
-downstream reader never has to treat "absent" as "negative" by assumption)
-plus a manifest JSON with the CV metrics, threshold, coefficients (plain
-JSON, not a pickle — this is an 11-feature linear model, no reason to carry
-a full sklearn object with its version-pinning risk), and the funnel counts
-at each stage (total corpus -> lexical gate -> this model's positives).
+DEDUP IS A PHASE, NOT A COLUMN (docs/prefilter_evaluation.md §8.8): this
+script used to score and apply the model to all 3,281,038 paragraph
+INSTANCES, then separately compute a `_unique_text` column on every funnel
+stage for reporting -- dedup was a report-time afterthought, recomputed
+per-consumer, which is exactly what caused §8.7's hash-mismatch bug. Now
+`ai_prefilter.py --source-relation unique_paragraphs` (build_duckdb.py's
+canonical dedup table) scores each of the 1,651,191 unique texts exactly
+ONCE, and this script trains/applies/reports over THAT population as the
+one and only unit of work. The funnel has one number per stage, not two;
+`duplicate_count` (carried through from `unique_paragraphs`) is the only
+place instance-level scale still shows up, as a single derived total.
+
+Output: data/interim/prefilter_predictions_unique/prefilter_predictions__run=<id>.parquet
+(one row per UNIQUE paragraph text, every one — not just the positives —
+so a downstream reader never has to treat "absent" as "negative" by
+assumption) plus a manifest JSON with the CV metrics, threshold,
+coefficients (plain JSON, not a pickle — this is an 11-feature linear
+model, no reason to carry a full sklearn object with its version-pinning
+risk), and the funnel counts at each stage (total corpus -> lexical gate ->
+this model's positives), all over unique texts.
+
+The earlier data/interim/prefilter_predictions/ (per-instance, superseded)
+is kept on disk, never deleted, per the project's data-retention rule --
+it is simply no longer what ai_classify.py reads.
 
 Usage:
     uv run python scripts/common/ai_prefilter_classify.py
@@ -47,8 +64,12 @@ from sklearn.model_selection import GroupKFold
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
-LATEST_PREFILTER_RUN = "20260902T225928Z"  # newest anchors_fingerprint, per manifest
-OUT_DIR = REPO_ROOT / "data" / "interim" / "prefilter_predictions"
+# Scores over unique_paragraphs (docs/prefilter_evaluation.md §8.8), NOT the
+# older per-instance run -- that population is superseded, not deleted.
+LATEST_PREFILTER_RUN = "20260904T132237Z"
+PREFILTER_SCORES_GLOB = (
+    f"data/interim/prefilter_scores_unique/prefilter_scores__run={LATEST_PREFILTER_RUN}__part=*.parquet")
+OUT_DIR = REPO_ROOT / "data" / "interim" / "prefilter_predictions_unique"
 
 # Deterministic override, independent of the learned model and of the
 # anchors-tracked strong/weak lexical lists in configs/ai_prefilter.yaml —
@@ -93,6 +114,16 @@ def _named_entity_sql(text_expr: str) -> str:
 
 
 def load_golden() -> pd.DataFrame:
+    """A golden-set label's OWN instance key is not necessarily
+    `unique_paragraphs`' chosen representative for its text (the golden
+    sampler picked its own dedup representative independently, per
+    docs/golden_set_sampling.md §5 -- verified to match §8.7's finding of
+    zero duplicate text_hash within the golden set, but that doesn't mean
+    every golden row's key equals `unique_paragraphs`' pick for the same
+    text). Since `prefilter_scores_unique` is only computed for
+    `unique_paragraphs`' representative keys, the join has to go through
+    `text_hash`, not the instance key, or most golden rows would silently
+    find no score row at all."""
     con = duckdb.connect(str(DB), read_only=True)
     try:
         return con.execute(f"""
@@ -101,9 +132,15 @@ def load_golden() -> pd.DataFrame:
                    {_named_entity_sql("lower(coalesce(par.paragraph_text, ''))")} AS named_entity_match
             FROM read_parquet('data/interim/golden_set/golden_set_labels__session=*__part=*.parquet',
                                union_by_name=True) l
-            JOIN read_parquet('data/interim/prefilter_scores/prefilter_scores__run={LATEST_PREFILTER_RUN}__part=*.parquet') p
-                USING (country_code, form, accession_number, item_key, paragraph_index)
-            JOIN paragraphs par USING (country_code, form, accession_number, item_key, paragraph_index)
+            JOIN paragraphs par
+                ON par.country_code = l.country_code AND par.form = l.form
+               AND par.accession_number = l.accession_number AND par.item_key = l.item_key
+               AND par.paragraph_index = l.paragraph_index
+            JOIN unique_paragraphs up ON up.text_hash = par.text_hash
+            JOIN read_parquet('{PREFILTER_SCORES_GLOB}') p
+                ON p.country_code = up.country_code AND p.form = up.form
+               AND p.accession_number = up.accession_number AND p.item_key = up.item_key
+               AND p.paragraph_index = up.paragraph_index
             WHERE l.error IS NULL
         """).df()
     finally:
@@ -189,31 +226,26 @@ def cv_threshold_and_metrics(X: np.ndarray, y: np.ndarray, weights: np.ndarray,
 
 
 def funnel_counts(con) -> dict:
-    """Every count here has TWO readings: the raw paragraph-INSTANCE count
-    (what's actually scored/deployed) and the unique-TEXT count (what a
-    reader should compare against, since ~50% of the corpus is literal
-    boilerplate repeated across filings -- see docs/prefilter_evaluation.md
-    §4.2/§8.7). Reporting only the instance count silently implies the
-    funnel is deduplicated when it isn't; ai_classify.py IS deduplicated
-    (one LLM call per unique text -- §8.7), but the funnel below never was."""
-    total = con.execute("SELECT COUNT(*) FROM paragraphs").fetchone()[0]
-    total_unique = con.execute("SELECT COUNT(DISTINCT paragraph_text) FROM paragraphs").fetchone()[0]
+    """One number per stage, over `unique_paragraphs` -- THE unit of work
+    for this whole script (docs/prefilter_evaluation.md §8.8). No more
+    parallel `_unique_text` column: since scoring itself now runs on
+    `unique_paragraphs`, every stage here already IS deduplicated by
+    construction, not by a report-time COUNT(DISTINCT). `*_instances`
+    (via `duplicate_count`) is reported once, at the end, as the single
+    place corpus scale still matters."""
+    total = con.execute("SELECT COUNT(*) FROM unique_paragraphs").fetchone()[0]
+    total_instances = con.execute("SELECT SUM(duplicate_count) FROM unique_paragraphs").fetchone()[0]
     lexical = con.execute(f"""
-        SELECT COUNT(*), COUNT(DISTINCT par.paragraph_text) FROM read_parquet(
-            'data/interim/prefilter_scores/prefilter_scores__run={LATEST_PREFILTER_RUN}__part=*.parquet') p
-        JOIN paragraphs par USING ({', '.join(PARAGRAPH_KEY)})
+        SELECT COUNT(*) FROM read_parquet('{PREFILTER_SCORES_GLOB}')
         WHERE strong_lexical_match OR weak_lexical_match
-    """).fetchone()
+    """).fetchone()[0]
     strong_only = con.execute(f"""
-        SELECT COUNT(*), COUNT(DISTINCT par.paragraph_text) FROM read_parquet(
-            'data/interim/prefilter_scores/prefilter_scores__run={LATEST_PREFILTER_RUN}__part=*.parquet') p
-        JOIN paragraphs par USING ({', '.join(PARAGRAPH_KEY)})
+        SELECT COUNT(*) FROM read_parquet('{PREFILTER_SCORES_GLOB}')
         WHERE strong_lexical_match
-    """).fetchone()
+    """).fetchone()[0]
     return {
-        "total_paragraphs": total, "total_paragraphs_unique_text": total_unique,
-        "lexical_strong_or_weak": lexical[0], "lexical_strong_or_weak_unique_text": lexical[1],
-        "lexical_strong_only": strong_only[0], "lexical_strong_only_unique_text": strong_only[1],
+        "total_unique_paragraphs": total, "total_paragraph_instances": int(total_instances),
+        "lexical_strong_or_weak": lexical, "lexical_strong_only": strong_only,
     }
 
 
@@ -280,40 +312,39 @@ def main() -> None:
     final_model.fit(X, y, sample_weight=fit_weights)
 
     con = duckdb.connect(str(DB), read_only=True)
-    print("Cargando el corpus completo (última corrida de anchors)...")
+    print("Cargando el corpus de textos únicos (última corrida de anchors)...")
     corpus = con.execute(f"""
-        SELECT p.{', p.'.join(PARAGRAPH_KEY)}, {', '.join(f'p.{c}' for c in SIGNAL_COLUMNS)},
-               par.paragraph_text,
-               {_named_entity_sql("lower(coalesce(par.paragraph_text, ''))")} AS named_entity_match
-        FROM read_parquet('data/interim/prefilter_scores/prefilter_scores__run={LATEST_PREFILTER_RUN}__part=*.parquet') p
-        JOIN paragraphs par USING ({', '.join(PARAGRAPH_KEY)})
+        SELECT p.{', p.'.join(PARAGRAPH_KEY)}, p.text_hash, up.duplicate_count,
+               {', '.join(f'p.{c}' for c in SIGNAL_COLUMNS)},
+               up.paragraph_text,
+               {_named_entity_sql("lower(coalesce(up.paragraph_text, ''))")} AS named_entity_match
+        FROM read_parquet('{PREFILTER_SCORES_GLOB}') p
+        JOIN unique_paragraphs up USING ({', '.join(PARAGRAPH_KEY)})
     """).df()
-    print(f"{len(corpus):,} párrafos")
+    print(f"{len(corpus):,} textos únicos ({int(corpus['duplicate_count'].sum()):,} instancias en el corpus)")
 
-    print("Aplicando el modelo final a todo el corpus...")
+    print("Aplicando el modelo final al corpus de textos únicos...")
     Xc = corpus[SIGNAL_COLUMNS].astype(float).values
     proba = final_model.predict_proba(Xc)[:, 1]
     named_entity_corpus = corpus["named_entity_match"].astype(bool).values
     model_positive = proba >= threshold
     is_positive = (model_positive | named_entity_corpus) if use_named_entity else model_positive
     rescued = int((named_entity_corpus & ~model_positive).sum()) if use_named_entity else 0
-    print(f"Marcados como IA-relevantes: {int(is_positive.sum()):,} / {len(corpus):,} "
-          f"({100 * is_positive.mean():.2f}%)"
-          + (f" — de los cuales {rescued:,} solo por named_entity_match" if use_named_entity else ""))
+    instances_positive = int(corpus.loc[is_positive, "duplicate_count"].sum())
+    print(f"Marcados como IA-relevantes: {int(is_positive.sum()):,} textos únicos / {len(corpus):,} "
+          f"({100 * is_positive.mean():.2f}%), representando {instances_positive:,} instancias del corpus"
+          + (f" — de los cuales {rescued:,} textos solo por named_entity_match" if use_named_entity else ""))
 
     print("Calculando el funnel...")
     funnel = funnel_counts(con)
     funnel["prefilter_model_only_positive"] = int(model_positive.sum())
-    funnel["prefilter_model_only_positive_unique_text"] = int(
-        corpus.loc[model_positive, "paragraph_text"].nunique())
     funnel["named_entity_rescued"] = rescued
     funnel["prefilter_model_positive"] = int(is_positive.sum())
-    funnel["prefilter_model_positive_unique_text"] = int(
-        corpus.loc[is_positive, "paragraph_text"].nunique())
+    funnel["prefilter_model_positive_instances"] = instances_positive
     con.close()
 
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out = corpus[list(PARAGRAPH_KEY)].copy()
+    out = corpus[[*PARAGRAPH_KEY, "text_hash", "duplicate_count"]].copy()
     out["predicted_proba"] = proba.astype("float32")
     out["named_entity_match"] = named_entity_corpus
     out["is_ai_prefiltered"] = is_positive

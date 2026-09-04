@@ -761,13 +761,14 @@ positivos, **9.663 clasificados** (11.560 instancias cubiertas), queda
 reintenta solo en la próxima corrida). Nunca más se paga la extracción
 de un mismo texto dos veces.
 
-**Corrección arquitectónica (2026-09-04): el dedup se mueve a la fuente.**
-El usuario objetó, con razón, que parchar la deduplicación adentro de
-`ai_classify.py` (calculando su propio hash, sus propios grupos) es el
-patrón equivocado — la limpieza debería vivir en la tabla `paragraphs`
-misma, no reimplementarse en cada script consumidor. Es exactamente lo
-que causó el bug del hash desincronizado de arriba: dos cálculos
-independientes del "mismo" hash, en dos lugares, que dejaron de coincidir.
+**Corrección arquitectónica inicial (2026-09-04): el dedup se mueve a la
+fuente.** El usuario objetó, con razón, que parchar la deduplicación
+adentro de `ai_classify.py` (calculando su propio hash, sus propios
+grupos) es el patrón equivocado — la limpieza debería vivir en la tabla
+`paragraphs` misma, no reimplementarse en cada script consumidor. Es
+exactamente lo que causó el bug del hash desincronizado de arriba: dos
+cálculos independientes del "mismo" hash, en dos lugares, que dejaron de
+coincidir.
 
 Corregido en `build_duckdb.py` (la ÚNICA fuente de la tabla `paragraphs`):
 
@@ -781,21 +782,7 @@ Corregido en `build_duckdb.py` (la ÚNICA fuente de la tabla `paragraphs`):
   superficie de deduplicación del proyecto — 1.651.191 filas, coincide
   exactamente con el 50% ya medido en §4.2.
 
-`ai_classify.py::fetch_pending` se reescribió para consultar
-`unique_paragraphs` directamente por SQL en vez de reconstruir sus
-propios grupos en pandas — la función quedó más corta y ya no puede volver
-a desincronizarse con la tabla fuente, porque no vuelve a calcular nada,
-solo lee.
-
-**Pendiente, fuera de alcance de esta corrección**: `ai_prefilter.py` (el
-paso de embeddings) y `ai_prefilter_classify.py` (el scoring) todavía
-procesan las 3.281.038 instancias completas, no las 1.651.191 únicas —
-el ahorro de cómputo (no de dinero: no hay LLM de por medio en esos dos
-pasos) de migrarlos a `unique_paragraphs` queda como mejora futura, no
-se hizo acá para no forzar un reproceso completo sin pedirlo
-explícitamente.
-
-**¿Es creíble 9.664/1.651.191 (0,59% de los textos únicos) con divulgación
+**¿Es creíble ~9.700/1.651.191 (0,59% de los textos únicos) con divulgación
 de IA?** El usuario dudó del orden de magnitud. Hay un chequeo directo,
 libre de cualquier sesgo del prefiltro: `stage3_random`, el único estrato
 del golden set sin ningún supuesto de diseño (docs/golden_set_sampling.md
@@ -805,19 +792,85 @@ prevalencia empírica 0,268% (IC 95% exacto de Clopper-Pearson: 0,073% a
 0,684%, ancho por lo poco que son 4 eventos). Aplicado al corpus completo:
 **8.779 positivos esperados, IC 95% [2.393, 22.430]**.
 
-Los 9.664 textos únicos que el modelo final marca caen justo dentro de
-ese intervalo, cerca del punto central. No es una coincidencia forzada:
-el diseño del golden set (§4 de ese mismo documento) YA anticipaba
-"~0,4% de prevalencia" antes de tener modelo ni prefiltro — es el motivo
-por el que se sobremuestreó tech en primer lugar (una muestra aleatoria
-simple daría ~40 positivos en 10.000 párrafos, insuficiente para medir
-nada por categoría). El recall ponderado del modelo (0,924, §8.6) tampoco
-sugiere que se esté perdiendo una fracción grande de positivos reales. El
-número bajo no es un error de conteo: es el resultado esperado de mirar
+Los textos únicos que el modelo final marca caen justo dentro de ese
+intervalo, cerca del punto central. No es una coincidencia forzada: el
+diseño del golden set (§4 de ese mismo documento) YA anticipaba "~0,4% de
+prevalencia" antes de tener modelo ni prefiltro — es el motivo por el que
+se sobremuestreó tech en primer lugar (una muestra aleatoria simple daría
+~40 positivos en 10.000 párrafos, insuficiente para medir nada por
+categoría). El recall ponderado del modelo (~0,93, §8.8) tampoco sugiere
+que se esté perdiendo una fracción grande de positivos reales. El número
+bajo no es un error de conteo: es el resultado esperado de mirar
 divulgación de IA a nivel de PÁRRAFO (no de filing) en un panel de 517
 empresas de TODOS los sectores y varios años — la mayoría de un 10-K, en
 la mayoría de las empresas, en la mayoría de los años, sencillamente no
 menciona IA para nada.
+
+---
+
+### 8.8 Deduplicación como FASE del pipeline, no como columna calculada en cada consumidor (2026-09-04)
+
+El usuario volvió a objetar, más fuerte: "no entiendo pq te fijas tanto en
+los unicos, la dedup deberia ser una fase no algo que calcules cada vez".
+Tenía razón otra vez — §8.7 arregló el dedup de `ai_classify.py`, pero
+`ai_prefilter.py` (embeddings + scoring) y `ai_prefilter_classify.py`
+(el modelo final + funnel) seguían corriendo sobre las 3.281.038
+instancias completas, reportando "único" como una columna
+`COUNT(DISTINCT ...)` calculada aparte en cada etapa — dedup como
+curiosidad de reporte, no como fase real del pipeline.
+
+**Corregido migrando el cómputo real, no solo el reporte:**
+
+- `ai_prefilter.py::run_prefilter` ahora acepta `--source-relation`
+  (default `paragraphs`, por compatibilidad). Corriendo con
+  `--source-relation unique_paragraphs` puntúa cada texto único UNA vez —
+  las 1.651.191 filas de `unique_paragraphs`, no 3.281.038 — reusando los
+  embeddings ya calculados (la instancia representante de cada grupo ya
+  tiene su propio vector de `ai_embed.py`, que embebió cada instancia).
+  Corrida real: **19 segundos** para las 1.651.191 filas (el paso caro,
+  embeddings, ya estaba pagado).
+- `ai_prefilter_classify.py` reentrenado y aplicado sobre esa nueva
+  corrida (`data/interim/prefilter_scores_unique/`). `load_golden()` ahora
+  une por `text_hash` (no por llave de instancia), porque el muestreo del
+  golden set eligió su PROPIO representante de deduplicación,
+  independiente del que `unique_paragraphs` elige — verificado que ambos
+  cubren el mismo texto, solo que no necesariamente con la misma llave.
+  Salida: `data/interim/prefilter_predictions_unique/` — **UNA fila por
+  texto único**, no por instancia, con `text_hash` y `duplicate_count`
+  incluidos.
+- `funnel_counts()` se simplificó a un número por etapa (ya no hay
+  columna `_unique_text` en ningún lado) porque la etapa misma ya está
+  deduplicada por construcción. `duplicate_count` se reporta UNA sola vez,
+  al final, como la única cifra de escala de instancias que queda.
+- `ai_classify.py::fetch_pending` se simplificó de nuevo: como
+  `prefilter_predictions_unique` YA es una fila por texto único, ya no
+  hace falta el JOIN intermedio contra `unique_paragraphs` que tenía la
+  primera corrección de §8.7 — solo lee la tabla de predicciones tal cual.
+  QUALIFY particiona por `text_hash` (no por llave de instancia), la
+  identidad estable del texto.
+
+**Resultado**, con las mismas 9.884 etiquetas del golden set: **C=3,0,
+threshold=0,51, F1 pond. 0,828** (vs. 0,826 de §8.6 — diferencia mínima,
+ruido de punto flotante fp16 entre corridas de scoring, no una regresión),
+**9.670 textos únicos positivos (0,59% de 1.651.191), representando
+11.567 instancias del corpus (0,35% de 3.281.038)**. `ai_classify.py`
+reclasificó solo 1 texto nuevo (el resto ya estaba cubierto por sesiones
+anteriores) y quedó en **9.670/9.670 (100%)**.
+
+**La corrida anterior** (`data/interim/prefilter_predictions/`,
+por-instancia, 3.281.038 filas) **queda en disco, no se borra** — es la
+regla del proyecto para datos derivados — pero ya no es lo que
+`ai_classify.py` lee; `data/interim/prefilter_predictions_unique/` la
+sucede como fuente de verdad.
+
+Funnel final (una sola lectura, sin columnas duplicadas):
+
+| etapa | textos únicos | instancias que representan |
+|---|---|---|
+| corpus | 1.651.191 | 3.281.038 |
+| match léxico (fuerte o débil) | 33.431 | — |
+| match léxico fuerte | 14.191 | — |
+| **positivo del modelo final** | **9.670** | **11.567** |
 
 ---
 

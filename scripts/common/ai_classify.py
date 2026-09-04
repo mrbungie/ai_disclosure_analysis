@@ -3,29 +3,34 @@ docs/classification_model.md for the full design (schema, worked examples,
 negation rule, downstream aggregation plan). This script is the extraction
 step only: paragraph text in, zero-or-more `AIFrame`s out.
 
-Population classified: paragraphs `scripts/common/ai_prefilter_classify.py`'s
-final logistic-regression model marked `is_ai_prefiltered=True` — see
-docs/prefilter_evaluation.md §8.6 for the funnel. This replaced an earlier
+Population classified: `scripts/common/ai_prefilter_classify.py`'s final
+logistic-regression model marked `is_ai_prefiltered=True` — see
+docs/prefilter_evaluation.md §8.8 for the funnel. This replaced an earlier
 version of this script that used the golden set's `is_ai_disclosure=True`
 labels as a stand-in population, back when no prefilter-scored candidate set
 existed yet in this environment — that subset is a subset of / mostly
 overlaps with the real population, so its results aren't discarded, just
 superseded as the source of truth for "what's pending."
 
-DEDUPED BY TEXT before spending any LLM call (docs/prefilter_evaluation.md
-§8.7) — ~50% of the corpus is literal boilerplate repeated across filings,
-and among the prefilter-positive population specifically 11,561 paragraph
-INSTANCES reduce to 9,664 unique TEXTS. Paying the LLM once per repetition
-of identical content is pure waste, so only ONE representative instance per
-unique `text_hash` (BLAKE2b of `paragraph_text`, same hash used everywhere
-else in this pipeline) is ever sent to the model. Consequently: **`ai_frames`
-is keyed by `text_hash`, NOT by paragraph instance.** The
-`(country_code, form, accession_number, item_key, paragraph_index)` columns
-on each row name only the ONE representative occurrence that was actually
-classified — `duplicate_count` says how many paragraph instances in the
-corpus share that text. A caller that wants the frames for a SPECIFIC
-paragraph must compute that paragraph's own `text_hash` (same BLAKE2b) and
-join on that column, never on the paragraph key.
+DEDUP IS A PHASE, NOT SOMETHING THIS SCRIPT COMPUTES (docs/
+prefilter_evaluation.md §8.8): `ai_prefilter_classify.py` now trains and
+applies the prefilter model over `unique_paragraphs` (build_duckdb.py's
+canonical dedup table) directly, so its output —
+`data/interim/prefilter_predictions_unique/` — is ALREADY one row per
+unique paragraph TEXT, never per instance. This script just reads that
+population as-is: no grouping, no independent hashing, no dedup logic of
+its own. `ai_frames` inherits the same shape — keyed by `text_hash`, with
+`(country_code, form, accession_number, item_key, paragraph_index)` naming
+only the one representative instance that was actually classified, and
+`duplicate_count` (carried straight through from `unique_paragraphs`)
+saying how many paragraph instances in the corpus share that text. A
+caller that wants the frames for a SPECIFIC paragraph instance must
+compute that paragraph's own `text_hash` (same BLAKE2b, now a column on
+`paragraphs` itself) and join on that, never on the paragraph key. An
+earlier version of this script (§8.7) computed its own hash from a
+sentence-reconstructed text and its own ad hoc dedup grouping — a real bug
+came from exactly that duplication; there is now exactly one place in the
+codebase that decides what a paragraph's text_hash is.
 
 Same operational contract as golden_set.py, deliberately kept close so the
 two don't drift: additive (nothing is ever overwritten or deleted), atomic
@@ -492,77 +497,38 @@ def fetch_pending(database: Path, output_dir: Path, limit: int) -> tuple[list[di
                         "SELECT CAST(NULL AS UBIGINT) AS text_hash WHERE false")
 
         # Población: el modelo final del prefiltro (scripts/common/
-        # ai_prefilter_classify.py) marcó is_ai_prefiltered=True — ver
-        # docs/prefilter_evaluation.md §8.6 para el funnel.
-        #
-        # BUG REAL corregido acá (2026-09-04, ver §8.7): filtrar
-        # `is_ai_prefiltered = true` ANTES del QUALIFY hace que el row_number()
-        # se calcule solo entre las filas ya positivas -- si la corrida MAS
-        # RECIENTE dice que una llave es negativa, esa fila queda fuera del
-        # WHERE y el rank 1 termina cayendo en una corrida VIEJA que sí la
-        # marcaba positiva, "resucitando" un positivo obsoleto de un modelo ya
-        # descartado. Verificado concretamente: con el filtro en el orden
-        # incorrecto la población salía 13.239 instancias; resolviendo primero
-        # la corrida más reciente por llave (sin filtrar) y RECIÉN AHÍ
-        # filtrando por is_ai_prefiltered, sale 11.561 -- exactamente el
-        # conteo de la corrida desplegada, como debe ser (todas las corridas
-        # puntúan el mismo corpus completo, así que la resolución "más
-        # reciente por llave" nunca debería divergir del último archivo solo).
-        con.execute("""
-            CREATE OR REPLACE TEMP VIEW latest_predictions AS
-            SELECT * FROM read_parquet(
-                'data/interim/prefilter_predictions/prefilter_predictions__run=*.parquet',
-                union_by_name=True)
-            QUALIFY row_number() OVER (
-                PARTITION BY country_code, form, accession_number, item_key, paragraph_index
-                ORDER BY model_version DESC
-            ) = 1
-        """)
+        # ai_prefilter_classify.py, §8.8) ya corre sobre `unique_paragraphs`
+        # y escribe UNA fila por texto único con `text_hash`+`duplicate_count`
+        # incluidos -- no hay ningún dedup que hacer acá, solo leer.
+        # QUALIFY particiona por `text_hash` (no por llave de instancia): es
+        # la identidad estable de "este texto", independiente de qué llave
+        # de instancia el prefiltro haya elegido como representante en cada
+        # corrida (evita revivir el bug de §8.7 si esa elección cambiara).
         con.execute("""
             CREATE OR REPLACE TEMP VIEW positives AS
-            SELECT country_code, form, accession_number, item_key, paragraph_index
-            FROM latest_predictions
-            WHERE is_ai_prefiltered = true
+            SELECT * FROM read_parquet(
+                'data/interim/prefilter_predictions_unique/prefilter_predictions__run=*.parquet',
+                union_by_name=True)
+            QUALIFY row_number() OVER (PARTITION BY text_hash ORDER BY model_version DESC) = 1
         """)
-        # `unique_paragraphs` (build_duckdb.py) is THE canonical dedup
-        # surface: one row per unique `text_hash`, a deterministic
-        # representative key, `paragraph_text`, and `duplicate_count`.
-        # Deduping here, against that table, instead of recomputing our own
-        # group-by-text logic (as an earlier version of this function did)
-        # is the actual fix for §8.7's bug -- there is now exactly ONE place
-        # in the whole codebase that decides what a paragraph's text_hash
-        # is, and every consumer reads it instead of rederiving it.
-        con.execute(f"""
-            CREATE OR REPLACE TEMP VIEW positive_hashes AS
-            SELECT DISTINCT up.text_hash
-            FROM positives p
-            JOIN unique_paragraphs up USING ({', '.join(PARAGRAPH_KEY)})
-        """)
-        # positives is per-instance keys, but a given text_hash's
-        # REPRESENTATIVE instance (unique_paragraphs' own pick) is not
-        # necessarily itself is_ai_prefiltered=True in `positives` -- the
-        # prefilter score is a deterministic function of paragraph_text
-        # alone, so in practice every instance sharing a text_hash gets the
-        # same is_ai_prefiltered value, but joining via positive_hashes
-        # (not directly filtering unique_paragraphs by instance membership)
-        # is what makes that assumption unnecessary rather than load-bearing.
         counts = con.execute("""
             SELECT
-                (SELECT count(*) FROM positives) AS total_positive_instances,
-                (SELECT count(*) FROM positive_hashes) AS unique_positive_texts,
-                (SELECT count(*) FROM positive_hashes ph
-                    JOIN classified_hashes c USING (text_hash)) AS already_classified_texts,
-                (SELECT COALESCE(sum(up.duplicate_count), 0) FROM unique_paragraphs up
-                    JOIN positive_hashes ph USING (text_hash)
-                    JOIN classified_hashes c USING (text_hash)) AS already_classified_instances
+                (SELECT COALESCE(sum(duplicate_count), 0) FROM positives WHERE is_ai_prefiltered) AS total_positive_instances,
+                (SELECT count(*) FROM positives WHERE is_ai_prefiltered) AS unique_positive_texts,
+                (SELECT count(*) FROM positives p JOIN classified_hashes c USING (text_hash)
+                    WHERE p.is_ai_prefiltered) AS already_classified_texts,
+                (SELECT COALESCE(sum(p.duplicate_count), 0) FROM positives p
+                    JOIN classified_hashes c USING (text_hash)
+                    WHERE p.is_ai_prefiltered) AS already_classified_instances
         """).df().iloc[0]
         stats = {k: int(v) for k, v in counts.items()}
 
         pending_df = con.execute(f"""
-            SELECT up.* FROM unique_paragraphs up
-            JOIN positive_hashes ph USING (text_hash)
-            WHERE NOT EXISTS (SELECT 1 FROM classified_hashes c WHERE c.text_hash = up.text_hash)
-            ORDER BY {', '.join(f'up.{c}' for c in PARAGRAPH_KEY)}
+            SELECT p.{', p.'.join(PARAGRAPH_KEY)}, p.text_hash, p.duplicate_count
+            FROM positives p
+            WHERE p.is_ai_prefiltered
+              AND NOT EXISTS (SELECT 1 FROM classified_hashes c WHERE c.text_hash = p.text_hash)
+            ORDER BY {', '.join(f'p.{c}' for c in PARAGRAPH_KEY)}
         """).df()
         stats["pending_texts"] = len(pending_df)
         stats["pending_instances_covered"] = int(pending_df["duplicate_count"].sum())
@@ -582,17 +548,13 @@ def fetch_pending(database: Path, output_dir: Path, limit: int) -> tuple[list[di
     finally:
         con.close()
 
-    # Nota importante: `paragraph_text` (y por lo tanto `text_hash`) viene de
-    # `reps`, es decir de la tabla `paragraphs` DIRECTAMENTE -- NO de volver a
-    # unir las oraciones reconstruidas más abajo con " ".join(). Verificado en
-    # producción (2026-09-04, §8.7): esas dos reconstrucciones NO coinciden
-    # byte a byte (separadores/espacios distintos entre `paragraph_text` y la
-    # concatenación de `sentences`), así que hashear el texto reconstruido
-    # rompía silenciosamente el join de deduplicación (de 721 hashes
-    # clasificados solo 7 coincidían con la población real). El texto
-    # reconstruido sigue siendo lo que se le manda al modelo como prompt
-    # (`build_prompt` solo necesita la lista de oraciones, no el párrafo
-    # entero), pero el hash que se persiste es siempre el canónico.
+    # `text_hash`/`duplicate_count` come straight from `reps` -- i.e. from
+    # `prefilter_predictions_unique`, which itself inherits them from
+    # `unique_paragraphs` (build_duckdb.py). Never recomputed from the
+    # sentence-reconstructed prompt text: an earlier version of this
+    # function did exactly that and the two didn't match byte-for-byte
+    # (§8.7's bug — 7/721 hashes matched). `build_prompt` only needs the
+    # sentence list, so the reconstructed text itself is never even kept.
     info_by_key = {tuple(r[c] for c in PARAGRAPH_KEY): r for r in reps}
     rows_by_key: dict[tuple, dict] = {}
     for record in sent_df.to_dict("records"):
@@ -600,7 +562,7 @@ def fetch_pending(database: Path, output_dir: Path, limit: int) -> tuple[list[di
         if key not in rows_by_key:
             info = info_by_key[key]
             rows_by_key[key] = {**{c: record[c] for c in PARAGRAPH_KEY},
-                                "paragraph_text": info["paragraph_text"], "text_hash": info["text_hash"],
+                                "text_hash": info["text_hash"],
                                 "sentences": [], "sentence_indices": [],
                                 "duplicate_count": info["duplicate_count"]}
         rows_by_key[key]["sentences"].append(record["sentence_text"])
