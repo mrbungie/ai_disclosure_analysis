@@ -109,3 +109,102 @@ GROUP BY 1,2 ORDER BY 3 DESC LIMIT 15;
   conteos directos sobre la población ya filtrada por el prefiltro, no
   estimaciones de prevalencia del corpus completo (para eso ver
   docs/prefilter_evaluation.md §8.9's estimador de `stage3_random`).
+
+---
+
+# Arquetipos de comportamiento (EE.UU.)
+
+Primera exploración de la pregunta central de la tesis
+(`docs/thesis_proposal.md`): ¿en qué arquetipos distintos se agrupan las
+empresas según CÓMO divulgan IA, no solo cuánto? Se agregó cada empresa
+(ticker) a partir de sus frames de `gold_ai_frames` en 9 métricas, y se
+agruparon con K-means.
+
+## Método
+
+- **Población**: 421 empresas de EE.UU. con ≥5 frames (filtro de volumen
+  mínimo para que el perfil agregado no sea ruido de 1-2 menciones).
+- **Métricas por empresa** (promedio sobre sus frames):
+  - `specificity_index`: promedio de las 5 banderas de especificidad
+    (proceso de negocio, producto/sistema, proveedor, métrica
+    cuantificada, fecha/cronograma) — "qué tan concreto" es el discurso.
+  - `quantified_rate`: fracción de frames con una métrica numérica
+    explícita (subconjunto de lo anterior, aislado porque es el
+    indicador más directo de "sustancia" vs. "promesa vacía").
+  - `promotional_rate` / `strategic_rate`: señales retóricas
+    (`rhetoric_promotional`, `rhetoric_strategic_importance`).
+  - `realized_share` / `hypothetical_share`: fracción de frames en cada
+    extremo de `temporal` (ya ocurrido vs. condicional/especulativo).
+  - `risk_share` / `gov_share`: fracción de frames con al menos un
+    concepto `risk_*` / `gov_*`.
+  - `firm_subject_share`: fracción de frames con `subject='firm'` (habla
+    de sí misma, no de clientes/competencia).
+- **Clustering**: K-means sobre las 9 métricas estandarizadas
+  (media 0, varianza 1). k=4 elegido por curva de codo (inercia baja
+  monótonamente sin quiebre marcado — 4 es el punto donde los clusters
+  siguen siendo interpretables sin fragmentarse en grupos triviales).
+
+## Los 4 arquetipos
+
+| Arquetipo | n empresas | Especificidad | % cuantificado | % promocional | % ya realizado | % riesgo | Empresas típicas |
+|---|---|---|---|---|---|---|---|
+| **A. Listadores de riesgo cautelosos** | 101 | 0,05 (mín.) | 0,5% | 0,7% (mín.) | 39% (mín.) | 77% (máx.) | BAX, IFF, IT, WELL, A, PRU, FTV, GPN |
+| **B. Adoptantes genéricos** | 200 | 0,09 | 0,8% | 1,0% | 61% | 60% | MA, NWS, ADSK, AXP, BKNG, MSCI, GEN, RHI |
+| **C. Cuantificadores concretos** | 7 | 0,27 (máx.) | 31% (máx.) | 6,6% | 66% | 24% (mín.) | NRG, AES, APH, APTV, ALLE, DUK, TSN |
+| **D. Líderes vocales de IA** | 113 | 0,16 | 3,3% | 10% (máx.) | 71% (máx.) | 31% | NVDA, MSFT, INTC, ADBE, SNOW, GOOGL, HPE, CRM |
+
+**A — Listadores de riesgo cautelosos** (101 empresas, salud/seguros/industrial
+diversificado). Mencionan IA casi exclusivamente como riesgo genérico
+futuro (77% de sus frames son de riesgo, 35% hipotético) — el patrón
+clásico de "boilerplate de risk factors" que enumera IA junto a otras
+amenazas tecnológicas sin describir uso propio. Especificidad y
+promoción prácticamente en cero. Es el grupo con MENOR riesgo de
+AI-washing simplemente porque casi no hace ninguna afirmación positiva
+que verificar.
+
+**B — Adoptantes genéricos** (200 empresas, el grupo más grande — la
+"empresa promedio"). Hablan de IA como algo ya en curso (61% realizado)
+pero de forma llana: baja especificidad, casi nada cuantificado, casi
+nada promocional. Ni sustancia fuerte ni bombo — el punto medio del
+espectro que la tesis quiere segmentar.
+
+**C — Cuantificadores concretos** (solo 7 empresas — NRG, AES, Amphenol,
+Aptiv, Allegion, Duke Energy, Tyson — energía/industrial). Grupo chico
+pero muy distinto: la especificidad y sobre todo la cuantificación
+(31%, ~40x el resto) son con diferencia las más altas, y el foco en
+riesgo/gobernanza el más bajo. No hablan de "adoptar IA" — hablan de IA
+como **motor de demanda externa** con cifras concretas (ej. demanda de
+centros de datos impulsada por IA), un patrón ya visto en el análisis de
+falsos negativos de `docs/prefilter_evaluation.md` §8.9. Metodológicamente
+interesante: es sustancia real, pero sobre el efecto de la IA en el
+NEGOCIO de un tercero, no sobre capacidad de IA propia — no encaja
+limpiamente en el eje "washing vs. creíble" tal como está planteado.
+
+**D — Líderes vocales de IA** (113 empresas, ~10x más frames por empresa
+que cualquier otro grupo — NVDA, MSFT, INTC, ADBE, SNOW, GOOGL, HPE,
+CRM). El grupo más interesante para la pregunta de la tesis: especificidad
+alta (segunda más alta) Y retórica promocional más alta (10%, el doble
+que el resto) AL MISMO TIEMPO — no es un trade-off. Son las empresas que
+más hablan de IA, con más sustancia real, pero también con el lenguaje
+más superlativo. La pregunta de "¿es AI-washing?" no se resuelve por
+volumen ni por tono solos — este grupo tiene ambos altos, lo que sugiere
+que dentro de él mismo hay variación real (algunos frames sustanciando
+las afirmaciones promocionales, otros no) que ninguna métrica agregada a
+nivel empresa puede separar. Candidato natural para el siguiente nivel de
+análisis: mirar frame por frame DENTRO de este cluster, no solo el
+promedio por empresa.
+
+## Notas metodológicas (arquetipos)
+
+- Exploratorio, no definitivo: k=4 es una elección razonable por la curva
+  de codo, no la única. Vale la pena repetir con k=3,5,6 y ver si C
+  (7 empresas) se sostiene como grupo propio o se disuelve — un cluster
+  tan chico es sensible a la semilla y al k elegido.
+- Ninguna métrica está ponderada por tamaño de filing ni por cuántas
+  veces se repite el mismo párrafo entre años (`duplicate_count`) — una
+  empresa que reusa el mismo texto de un año a otro cuenta cada aparición
+  como una observación independiente. Corregir esto es un paso pendiente
+  antes de cualquier resultado publicable.
+- No incluye Chile (todavía sin scoring, §8.9) ni pondera por
+  `inclusion_weight` — son arquetipos sobre la población ya filtrada por
+  el prefiltro (13.442 textos), no sobre el corpus completo.
