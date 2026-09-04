@@ -659,6 +659,18 @@ Funnel actualizado: 3.281.038 párrafos totales → 45.992 con match léxico
 (fuerte o débil) → 16.802 con match léxico fuerte → **11.561 marcados
 IA-relevantes por el modelo**.
 
+**Extracción de frames sobre la población corregida (2026-09-04)**: el
+diseño aditivo/idempotente de `ai_classify.py` significa que casi toda la
+población de 13.239 positivos del modelo corregido ya estaba clasificada
+(el conjunto de positivos apenas cambió: 11.561 vs 11.546 párrafos, más
+el resto ya cubierto por el golden set) — solo **394 párrafos** quedaron
+pendientes en esta sesión. Corrida: **383 clasificados con éxito, 11 con
+error persistente** (consistente con la tasa de error base ~6% del bug de
+pydantic-ai/Qwen ya documentado), 401 frames nuevos. Costo de esta
+corrida: **US$0,030** (uso total OpenRouter US$1,588 de 20 acreditados,
+quedan ~US$18,41). Total acumulado: **20.969 frames semánticos** sobre
+**13.512 párrafos** con al menos un frame.
+
 ---
 
 ## 9. Qué falta
