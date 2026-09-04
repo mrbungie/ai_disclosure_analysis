@@ -22,12 +22,18 @@ DEFAULT_CONFIG = REPO_ROOT / "configs" / "ai_prefilter.yaml"
 @functools.cache
 def load_config(path: Path | str = DEFAULT_CONFIG) -> dict:
     config = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    for section, keys in (("lexical", ("strong", "weak")), ("semantic", ("positive", "negative"))):
-        if section not in config:
-            raise ValueError(f"{path}: missing '{section}' section")
-        missing = [key for key in keys if key not in config[section]]
-        if missing:
-            raise ValueError(f"{path}: {section} is missing {missing}")
+    if "lexical" not in config:
+        raise ValueError(f"{path}: missing 'lexical' section")
+    if "concepts" not in config["lexical"]:
+        raise ValueError(f"{path}: lexical is missing 'concepts'")
+    missing = [key for key in ("strong", "weak") if key not in config["lexical"]["concepts"]]
+    if missing:
+        raise ValueError(f"{path}: lexical.concepts is missing {missing}")
+    if "semantic" not in config:
+        raise ValueError(f"{path}: missing 'semantic' section")
+    missing = [key for key in ("positive", "negative") if key not in config["semantic"]]
+    if missing:
+        raise ValueError(f"{path}: semantic is missing {missing}")
     if not config["semantic"]["positive"]:
         raise ValueError(f"{path}: semantic.positive has no categories")
     return config
@@ -39,12 +45,34 @@ def _normalize(text: str) -> str:
     return " ".join(str(text).split())
 
 
+def entity_terms(path: Path | str = DEFAULT_CONFIG) -> dict[str, dict[str, str]]:
+    """Flattens `lexical.entities` (geography -> modality -> [terms]) into
+    `{term: {"geo": ..., "modality": ...}}`. The hierarchy in the YAML IS the
+    metadata (2026-09-04, explicit design choice) -- no per-term geo/modality
+    fields to keep in sync by hand as the list grows. Not consumed by the
+    prefilter's own matching yet (every entity term flattens into `strong_terms`
+    below with no distinction), but ready for a future "model leaning"
+    (US/China/Europe) feature computed straight from an explicit entity match,
+    no second LLM pass needed."""
+    out: dict[str, dict[str, str]] = {}
+    for geo, modalities in load_config(path)["lexical"].get("entities", {}).items():
+        for modality, terms in modalities.items():
+            for term in terms:
+                out[str(term).lower()] = {"geo": geo, "modality": modality}
+    return out
+
+
 def strong_terms(path: Path | str = DEFAULT_CONFIG) -> tuple[str, ...]:
-    return tuple(str(term).lower() for term in load_config(path)["lexical"]["strong"])
+    """Generic AI vocabulary (`concepts.strong`) plus every entity term
+    (`entities.*.*`, flattened) -- an unambiguous product name is never as
+    ambiguous as "model" or "automation", so every entity counts as strong,
+    regardless of which geography/modality bucket it lives in."""
+    concepts = [str(term).lower() for term in load_config(path)["lexical"]["concepts"]["strong"]]
+    return tuple(concepts + list(entity_terms(path)))
 
 
 def weak_terms(path: Path | str = DEFAULT_CONFIG) -> tuple[str, ...]:
-    return tuple(str(term).lower() for term in load_config(path)["lexical"]["weak"])
+    return tuple(str(term).lower() for term in load_config(path)["lexical"]["concepts"]["weak"])
 
 
 def positive_anchors(path: Path | str = DEFAULT_CONFIG) -> dict[str, tuple[str, ...]]:

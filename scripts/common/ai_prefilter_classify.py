@@ -66,7 +66,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
 # Scores over unique_paragraphs (docs/prefilter_evaluation.md §8.8), NOT the
 # older per-instance run -- that population is superseded, not deleted.
-LATEST_PREFILTER_RUN = "20260904T132237Z"
+LATEST_PREFILTER_RUN = "20260904T144801Z"
 PREFILTER_SCORES_GLOB = (
     f"data/interim/prefilter_scores_unique/prefilter_scores__run={LATEST_PREFILTER_RUN}__part=*.parquet")
 OUT_DIR = REPO_ROOT / "data" / "interim" / "prefilter_predictions_unique"
@@ -92,13 +92,32 @@ NAMED_AI_ENTITIES = (
     "watsonx", "azure openai", "vertex ai", "hugging face", "huggingface",
     "mistral ai", "perplexity ai", "character.ai", "stability ai",
     "deepmind", "meta ai", "llama 2", "llama 3",
+    # No estadounidenses agregados 2026-09-04 (mismo criterio que
+    # configs/ai_prefilter.yaml: marca de producto, no conglomerado matriz).
+    "deepseek", "qwen", "ernie bot", "chatglm", "hunyuan", "kimi",
+    "moonshot ai", "aleph alpha", "ai21 labs", "doubao", "hyperclova",
 )
 
 SIGNAL_COLUMNS = [
     "score_ai_use", "score_ai_exploration", "score_ai_capability", "score_ai_outcome",
     "score_ai_risk", "score_ai_governance", "score_ai_strategy",
-    "negative_similarity", "semantic_margin", "strong_lexical_match", "weak_lexical_match",
+    "negative_similarity", "semantic_margin",
 ]
+# Escalones, no un booleano plano ni un conteo lineal (docs/prefilter_evaluation.md
+# §8.11): `strong_lexical_match`/`weak_lexical_match` colapsaban "0 términos" vs
+# "1+" a un solo bit, perdiendo que 2+ y 3+ términos matcheados son señal cada vez
+# más fuerte (medido en el golden set: 0 términos -> 0,5% positivo, 1 -> 59%, 2 ->
+# 72%, 3+ -> 89-100%). Un conteo LINEAL tampoco sirve -- probado y peor (F1 pond.
+# 0,745 vs 0,829 del booleano) porque la relación real no es lineal, satura rápido.
+# Dummies escalonadas SÍ dejan que la logística aprenda un salto distinto en cada
+# nivel: F1 pond. 0,829 -> 0,858 bajo el mismo CV anidado (más granularidad, ej.
+# strong>=4, no mejora más -- 3 escalones ya capturan casi toda la ganancia).
+LEXICAL_STEP_COLUMNS = [
+    ("strong_ge1", "len(p.strong_matched_terms) >= 1"),
+    ("strong_ge2", "len(p.strong_matched_terms) >= 2"),
+    ("weak_ge1", "len(p.weak_matched_terms) >= 1"),
+]
+ALL_SIGNAL_COLUMNS = SIGNAL_COLUMNS + [name for name, _ in LEXICAL_STEP_COLUMNS]
 PARAGRAPH_KEY = ("country_code", "form", "accession_number", "item_key", "paragraph_index")
 
 
@@ -129,6 +148,7 @@ def load_golden() -> pd.DataFrame:
         return con.execute(f"""
             SELECT l.is_ai_disclosure, l.inclusion_weight, l.accession_number,
                    {', '.join(f'p.{c}' for c in SIGNAL_COLUMNS)},
+                   {', '.join(f'{sql} AS {name}' for name, sql in LEXICAL_STEP_COLUMNS)},
                    {_named_entity_sql("lower(coalesce(par.paragraph_text, ''))")} AS named_entity_match
             FROM read_parquet('data/interim/golden_set/golden_set_labels__session=*__part=*.parquet',
                                union_by_name=True) l
@@ -284,7 +304,7 @@ def main() -> None:
     weights = golden["inclusion_weight"].astype(float).values
     fit_weights = np.sqrt(weights)
     groups = golden["accession_number"].values
-    X = golden[SIGNAL_COLUMNS].astype(float).values
+    X = golden[ALL_SIGNAL_COLUMNS].astype(float).values
 
     print("GroupKFold(5) anidado: eligiendo C y threshold SOLO con cada fold de entrenamiento...")
     deploy_c, threshold, cv_metrics = cv_threshold_and_metrics(X, y, weights, groups)
@@ -358,6 +378,7 @@ def main() -> None:
     corpus = con.execute(f"""
         SELECT p.{', p.'.join(PARAGRAPH_KEY)}, p.text_hash, up.duplicate_count,
                {', '.join(f'p.{c}' for c in SIGNAL_COLUMNS)},
+               {', '.join(f'{sql} AS {name}' for name, sql in LEXICAL_STEP_COLUMNS)},
                up.paragraph_text,
                {_named_entity_sql("lower(coalesce(up.paragraph_text, ''))")} AS named_entity_match
         FROM read_parquet('{PREFILTER_SCORES_GLOB}') p
@@ -367,7 +388,7 @@ def main() -> None:
     print(f"{len(corpus):,} textos únicos ({int(corpus['duplicate_count'].sum()):,} instancias en el corpus)")
 
     print("Aplicando el modelo final al corpus de textos únicos...")
-    Xc = corpus[SIGNAL_COLUMNS].astype(float).values
+    Xc = corpus[ALL_SIGNAL_COLUMNS].astype(float).values
     proba = final_model.predict_proba(Xc)[:, 1]
     named_entity_corpus = corpus["named_entity_match"].astype(bool).values
     model_positive = proba >= threshold
@@ -405,7 +426,7 @@ def main() -> None:
         "cv_metrics": cv_metrics, "cv_metrics_with_named_entity": combined_metrics,
         "named_entity_used_in_deployment": use_named_entity,
         "named_ai_entities": list(NAMED_AI_ENTITIES),
-        "coefficients": dict(zip(SIGNAL_COLUMNS, final_model.coef_[0].tolist())),
+        "coefficients": dict(zip(ALL_SIGNAL_COLUMNS, final_model.coef_[0].tolist())),
         "intercept": float(final_model.intercept_[0]),
         "funnel": funnel,
         "output": str(out_path),

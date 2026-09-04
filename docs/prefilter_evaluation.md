@@ -1013,6 +1013,89 @@ que lo motivó fuera real.
 
 ---
 
+### 8.10 XGBoost probado y rechazado; dummies escalonadas del léxico + léxico internacional desplegados (2026-09-04)
+
+**XGBoost, bajo el mismo CV anidado, pierde en todos los escenarios
+probados.** Grilla permisiva (hasta max_depth=6): F1 pond. 0,788, y los 5
+folds eligieron consistentemente el modelo más complejo de la grilla —
+sobreajuste. Grilla con regularización fuerte (max_depth≤2, `reg_lambda`
+alto, subsampling): peor todavía, F1 pond. 0,761, porque sacrifica recall
+sin ganar precisión. Con `inclusion_weight` crudo (en vez de `sqrt`) una
+configuración fija dio 0,845 — pero no sobrevivió a una búsqueda honesta
+de hiperparámetros por fold (la misma disciplina de siempre): con grilla
+real, 0,752-0,755. **Rechazado**: con solo 11 (ahora 12) señales ya
+bastante informativas y ~9.878 filas con desbalance extremo, un ensamble
+de árboles no tiene con qué aprender interacciones que valgan la pena —
+solo sobreajusta el ruido de la muestra estratificada. La regresión
+logística sigue siendo la mejor opción medida.
+
+**Dummies escalonadas en vez de booleano plano para el léxico — mejora
+real.** `strong_lexical_match`/`weak_lexical_match` colapsaban "0
+términos" vs "1 o más" a un bit — pero en el golden set, más términos
+matcheados es señal cada vez más fuerte y no lineal: 0 términos fuertes
+→ 0,5% positivo, 1 → 59%, 2 → 72%, 3+ → 89-100%. Un conteo LINEAL del
+número de términos matcheados es PEOR que el booleano (F1 pond. 0,745,
+porque la logística asume una relación lineal que no existe: el salto
+0→1 es enorme, 4→5 es chico). La solución es un escalón por nivel
+(`strong_ge1`, `strong_ge2`, `weak_ge1` — más granularidad, ej.
+`strong_ge4`, no mejora más): **F1 pond. 0,829 → 0,857-0,858**, estable
+en tres variantes de granularidad probadas, con mejor precisión Y mejor
+recall a la vez (no es un trade-off). Verificado contra los 3 casos de
+control: los tres se mantienen o mejoran.
+
+**Léxico internacional agregado, con la misma disciplina de verificación
+que "descartó" `named_entity_match` en su momento.** El usuario notó que
+la lista de marcas de IA (`configs/ai_prefilter.yaml`) era 100%
+estadounidense (chatgpt/openai/copilot/gemini/claude). Antes de agregar
+nombres, cada término ambiguo se verificó contra el corpus real:
+
+- Aceptados (nombre de PRODUCTO inequívoco, nunca la empresa matriz):
+  deepseek, qwen, ernie bot, chatglm, hunyuan, kimi, moonshot ai,
+  mistral ai, aleph alpha, ai21 labs, veo, windsurf, cursor, etc.
+- **Rechazados por colisión real verificada en el corpus**: "sora" (es
+  "Singapore Overnight Rate Average", una tasa financiera, y también el
+  nombre de una adquisición de ADP — cero relación con OpenAI Sora en
+  los 14 párrafos que matcheaban); "devin" (coincide con "Devin W.
+  Stockfish", CEO real de Weyerhaeuser, en cada firma de sus 10-K);
+  "pika" ("Pika Energy", empresa real de energía adquirida por Generac);
+  "runway" (jerga de negocios/aviación común, 58 párrafos, ninguno sobre
+  Runway ML); "flux" (palabra inglesa genérica, 93 párrafos, ninguno
+  sobre el modelo FLUX). También se excluyeron deliberadamente
+  conglomerados genéricos (baidu, alibaba, huawei, tencent) — verificado
+  que aparecen mayormente en contexto NO relacionado con IA (registradores
+  de dominio, proveedores de GPU/telecom).
+- Config reestructurado a `lexical.concepts` (vocabulario genérico) +
+  `lexical.entities` (geografía → modalidad → términos: text/image/video/
+  audio/three_d/coding), a pedido explícito para preservar PROVENANCE sin
+  repetir metadata por término — la jerarquía misma es la metadata.
+  `ai_prefilter_anchors.py::entity_terms()` expone esa metadata aplanada
+  (`{término: {geo, modalidad}}`) para un futuro cálculo de "model
+  leaning" (EE.UU./China/Europa) sin una segunda pasada de LLM — el
+  prefiltro hoy solo consume la lista aplanada sin distinción, no calcula
+  ningún leaning todavía.
+
+**Redesplegado** con ambos cambios juntos: **C=10,0, threshold=0,52, F1
+pond. 0,856**, **8.915 textos únicos marcados IA-relevantes (10.658
+instancias)** — bajó de 9.670/11.567 pese a que la métrica mejoró, lo
+cual generó dudas razonables ("¿no dijiste que mejoraba?"). Verificado
+con el diff completo contra la corrida anterior: 8.263 en común, 1.406
+removidos, 652 agregados.
+
+- Los 1.406 removidos: muestra leída a mano — boilerplate genérico de
+  riesgo competitivo, cadena de suministro, descripciones de producto sin
+  sustancia de IA, todos ya en el borde del umbral viejo (proba
+  0,51-0,58). Ninguno se leyó como divulgación sustantiva perdida.
+- Los 652 agregados: la muestra inicial preocupó (varios parecían
+  boilerplate de "forward-looking statements" con 2+ términos genéricos
+  como "artificial intelligence" + "machine learning" y margen semántico
+  negativo). Verificado contra el golden set: ese patrón exacto
+  (`strong_ge2` + margen semántico bajo) tiene **68,7% de precisión
+  cruda y ~83% ponderada** (peso positivo 1.572 vs negativo 327) — es
+  decir, es mayoritariamente positivo de verdad según las etiquetas
+  reales, no un artefacto de la muestra de lectura manual.
+
+---
+
 ## 9. Qué falta
 
 1. ~~**Completar el golden set.**~~ Resuelto 2026-09-04 (9.884 etiquetas
