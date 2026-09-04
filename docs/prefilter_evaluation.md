@@ -997,6 +997,20 @@ cuantificado del enfoque de un único threshold global, no como algo para
 como candidato a revisar si en algún momento el objetivo cambia de
 "mejor F1 ponderado" a "minimizar falsos negativos a cualquier costo".
 
+**Candidato de regla determinista probado y rechazado: `AI-<palabra>`.**
+Dado que varios de los falsos negativos leídos a mano eran compuestos con
+guión ("AI-powered", "AI-Driven Enterprise"), se probó un override
+determinista `(^|[^A-Za-z0-9])AI-[A-Za-z]+` — mismo patrón de evaluación
+que `named_entity_match` en §8.4. El patrón solo tiene **93,9% de
+precisión cruda** (215/229 en el golden set) pero **46,9% ponderada** —
+los falsos positivos del patrón caen otra vez en los estratos de peso
+alto, el mismo fenómeno de §8.4/§8.6. Combinado (OR) con el modelo bajo el
+mismo CV anidado: **F1 pond. empeora de 0,829 a 0,778** (precisión pond.
+0,745→0,664, ganancia de recall marginal 0,934→0,938). **Rechazado**, por
+el mismo criterio que ya se usa en este documento: no se despliega nada
+que empeore la métrica que se optimiza, por más que el ejemplo puntual
+que lo motivó fuera real.
+
 ---
 
 ## 9. Qué falta
