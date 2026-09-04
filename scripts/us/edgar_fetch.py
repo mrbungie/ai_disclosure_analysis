@@ -107,7 +107,11 @@ def _fetch_one_company(row, form, start_date, end_date, allow_amendments, html_d
         report_date_raw = getattr(f, "period_of_report", None)
         report_date = pd.to_datetime(report_date_raw).date() if report_date_raw else None
 
-        filename = f"{ticker}_{year}_{form}_{acc_num}.html.gz"
+        # form.replace(" ", "") -- "DEF 14A" has a space, which is otherwise
+        # a valid (if annoying) filename character; sanitized so every form
+        # gets a clean single-token filename, not just the hyphenated ones
+        # (10-K/10-Q) this originally shipped with.
+        filename = f"{ticker}_{year}_{form.replace(' ', '')}_{acc_num}.html.gz"
         local_path = html_dir / filename
 
         existing_row = None
@@ -170,12 +174,43 @@ def _fetch_one_company(row, form, start_date, end_date, allow_amendments, html_d
     return firm_info, manifest_rows
 
 
+def _safe_write_universe(universe_path: Path, full_universe_df: pd.DataFrame, updated_rows: list[dict]) -> None:
+    """Writes `universe_path` by MERGING `updated_rows` into the FULL
+    original universe (by ticker), never by replacing the file with just
+    `updated_rows` outright.
+
+    Real incident this fixes (2026-09-04): `universe_path` (firm_universe.
+    parquet) is a single SHARED file every fetch script (10-K/10-Q/proxy/
+    8-K) reads AND writes -- unlike every other output in this pipeline
+    (prefilter_scores, ai_frames, golden_set labels, ...), which is
+    append-only `__run=...__part=...parquet`. The periodic checkpoint used
+    to `pd.DataFrame(updated_universe).to_parquet(universe_path)` with
+    `updated_universe` containing only the tickers processed SO FAR in
+    THIS run -- a killed/interrupted run (Ctrl-C, an exception escaping
+    the checkpoint window) truncated the shared 517-firm universe down to
+    however many tickers had been processed at that point (confirmed:
+    517 -> 150 from one interrupted run). Recovered from the last B2 push,
+    but the file being a single mutable target made that recovery
+    necessary at all. Merging against the full baseline means an
+    interrupted run can only ever update a subset of rows, never drop the
+    rest."""
+    updated_by_ticker = {row["ticker"]: row for row in updated_rows}
+    merged = [updated_by_ticker.get(row["ticker"], row) for row in full_universe_df.to_dict("records")]
+    # A ticker in updated_rows but NOT in the original baseline (shouldn't
+    # happen -- fetch_filings only ever iterates full_universe_df -- but
+    # checked rather than silently dropped if it ever does).
+    known_tickers = {row["ticker"] for row in full_universe_df.to_dict("records")}
+    merged.extend(row for row in updated_rows if row["ticker"] not in known_tickers)
+    pd.DataFrame(merged).to_parquet(universe_path, index=False)
+
+
 def fetch_filings(universe_df, form, start_date, end_date, allow_amendments, html_dir, manifest_path, universe_path):
     """Fetches `form` filings for every (ticker, cik) in universe_df between
     start_date/end_date, writes gzip'd HTML to html_dir, and builds/updates
     manifest_path. Idempotent: rerun skips any filing whose gzip file
     already exists — no re-fetch, no re-write."""
     html_dir.mkdir(parents=True, exist_ok=True)
+    full_universe_df = universe_df.copy()  # see _safe_write_universe
 
     # _fully_done(ticker) below matches manifest rows by TICKER alone (not
     # CIK) — if universe_df ever contains the same ticker twice (found once,
@@ -275,11 +310,11 @@ def fetch_filings(universe_df, form, start_date, end_date, allow_amendments, htm
             # lose everything fetched so far in THIS run either.
             completed_since_checkpoint += 1
             if completed_since_checkpoint >= 25:
-                pd.DataFrame(updated_universe).to_parquet(universe_path, index=False)
+                _safe_write_universe(universe_path, full_universe_df, updated_universe)
                 pd.DataFrame(manifest_data).to_parquet(manifest_path, index=False)
                 completed_since_checkpoint = 0
 
-    pd.DataFrame(updated_universe).to_parquet(universe_path, index=False)
+    _safe_write_universe(universe_path, full_universe_df, updated_universe)
 
     if manifest_data:
         manifest_df = pd.DataFrame(manifest_data)
