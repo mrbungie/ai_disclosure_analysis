@@ -28,6 +28,7 @@ Usage:
 """
 
 import glob
+import hashlib
 from pathlib import Path
 
 import duckdb
@@ -36,6 +37,20 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB_PATH = REPO_ROOT / "duckdb" / "thesis.duckdb"
 PREFILTER_SCORES_DIR = REPO_ROOT / "data" / "interim" / "prefilter_scores"
+
+
+def _text_hash8(text: str | None) -> int:
+    """BLAKE2b-8 of paragraph text — THE single canonical definition. Every
+    other script that ever needs "the hash of this paragraph's text"
+    (ai_embed.py, golden_set.py, ai_classify.py) should read `paragraphs.
+    text_hash` / `unique_paragraphs.text_hash`, not recompute this
+    themselves: a real bug (docs/prefilter_evaluation.md §8.7) came from
+    ai_classify.py independently reconstructing paragraph text slightly
+    differently and hashing THAT, silently breaking a dedup join. Computing
+    it once, here, at the source, removes that entire class of bug."""
+    return int.from_bytes(
+        hashlib.blake2b((text or "").encode("utf-8"), digest_size=8).digest(),
+        "big", signed=False)
 
 # Everything else here is a live VIEW (re-evaluated on every query, always
 # current with whatever's on disk). paragraphs/sentences are the
@@ -46,7 +61,7 @@ PREFILTER_SCORES_DIR = REPO_ROOT / "data" / "interim" / "prefilter_scores"
 # machine, not just "slow". Tradeoff: these two go stale after a new
 # extraction run until build_duckdb.py is rerun (every other view here
 # doesn't); worth it for queries against them to actually be fast.
-MATERIALIZED_TABLES = {"paragraphs", "sentences"}
+MATERIALIZED_TABLES = {"paragraphs", "sentences", "unique_paragraphs"}
 
 
 def _country_configs() -> list[tuple[str, dict]]:
@@ -90,6 +105,31 @@ def _existing(path_pattern: str) -> bool:
     view) the moment ANY one country is mid-rollout — exactly the
     multi-country design this file's docstring promises should be safe."""
     return len(glob.glob(path_pattern)) > 0
+
+
+def _filing_manifest_selects(countries: list[tuple[str, dict]], dirs) -> list[str]:
+    """One SELECT per country for the `filing_manifest` view, UNIONing in
+    `filing_manifest_proxy.parquet` (and, later, 8-K/comment-letter
+    manifests the same way) alongside the 10-K manifest -- unlike 10-Q,
+    a deliberately separate INSTRUMENT never pooled with the 10-K panel
+    (the project's data-scope decision), proxy/8-K aren't competing
+    analytical panels, just more form types feeding the same
+    paragraph-level AI-disclosure pipeline. Sharing one lookup means a
+    proxy paragraph's accession_number resolves ticker/filing_date the
+    same way a 10-K's already does -- `form_type`/`form` still
+    distinguishes them for anything that needs to."""
+    selects = []
+    for country, cfg in countries:
+        manifests_dir = dirs(cfg)[0]
+        base_path = f"{manifests_dir}/filing_manifest.parquet"
+        if not _existing(base_path):
+            continue
+        parts = [f"SELECT '{country}' AS country_code, * FROM read_parquet('{base_path}')"]
+        proxy_path = f"{manifests_dir}/filing_manifest_proxy.parquet"
+        if _existing(proxy_path):
+            parts.append(f"SELECT '{country}' AS country_code, * FROM read_parquet('{proxy_path}')")
+        selects.append("\n            UNION ALL BY NAME\n            ".join(parts))
+    return selects
 
 
 # Every raw LINE of section_text (see _paragraph_select_sql) is classified
@@ -305,6 +345,7 @@ def _paragraph_select_sql(form: str, source_view: str) -> str:
             line_type AS content_type,
             MIN(line_index) AS paragraph_index,
             string_agg(line_text, chr(10) ORDER BY line_index) AS paragraph_text,
+            text_hash8(string_agg(line_text, chr(10) ORDER BY line_index)) AS text_hash,
             -- `is_scorable`: descarta lo que la extracción deja como párrafo
             -- pero no tiene contenido. Medido sobre el corpus: 235.935 filas
             -- (7,2%) tienen 3 caracteres o menos — viñetas sueltas, espacios de
@@ -326,6 +367,58 @@ def _paragraph_select_sql(form: str, source_view: str) -> str:
                                    '[A-Za-z0-9]') AS is_scorable
         FROM grouped
         GROUP BY form, country_code, accession_number, item_key, group_id, line_type
+    """
+
+
+CL_PARAGRAPHS_GLOB = str(
+    REPO_ROOT / "data" / "interim" / "sections_cl" / "filing_paragraphs__run=*__part=*.parquet")
+
+
+def _cl_paragraph_select_sql(source_glob: str) -> str:
+    """Chile's PDF pipeline (scripts/cl/cmf_pdf_paragraphs.py) extracts
+    PARAGRAPHS directly from Memoria Anual / Análisis Razonado PDFs — there
+    is no raw "section text" intermediate the way US 10-K/10-Q HTML has, so
+    this does NOT go through `_paragraph_select_sql`'s line-merging (gaps-
+    and-islands) logic at all; it's already paragraph-grained on disk.
+
+    Column mapping to the shared `paragraphs` contract (this is what was
+    MISSING before: this function didn't exist, so `filing_paragraphs_cl`
+    just sat on disk, unUNIONed, and every downstream table — paragraphs,
+    unique_paragraphs, the prefilter, the golden set, ai_classify — was
+    silently US-only despite 1,077,595 Chilean paragraphs already being
+    ready):
+      - `country_code` = 'cl' (literal — this glob only ever holds CL data)
+      - `form` = `filing_type` ('annual'/'quarterly') — CL's own vocabulary,
+        deliberately NOT forced into '10-K'/'10-Q': those are SEC forms,
+        Chile doesn't file them. `annual` is CL's 10-K-equivalent panel
+        core, `quarterly` its 10-Q-equivalent shock series (see the
+        project's two-instruments data-scope decision) — same ROLE,
+        different label, on purpose.
+      - `accession_number` = `document_id` — verified unique per filing
+        (1,948 distinct values, and (document_id, paragraph_index) is
+        already globally unique with zero extra work).
+      - `item_key` = constant '0' — Memorias/Análisis Razonado have no
+        SEC-style Item 1/1A/7 structure to preserve; a constant is honest
+        about that rather than fabricating false section semantics. Every
+        uniqueness/grouping property the rest of the pipeline relies on
+        (PARAGRAPH_KEY, GroupKFold by accession_number) still holds because
+        (document_id, paragraph_index) alone is already unique.
+      - `is_scorable`: same length/alnum rule as the US branch, computed
+        here since CL's own extractor doesn't emit it.
+    """
+    return f"""
+        SELECT
+            'cl' AS country_code,
+            filing_type AS form,
+            document_id AS accession_number,
+            '0' AS item_key,
+            content_type,
+            paragraph_index,
+            paragraph_text,
+            text_hash8(paragraph_text) AS text_hash,
+            length(trim(paragraph_text)) > 3
+                AND regexp_matches(paragraph_text, '[A-Za-z0-9]') AS is_scorable
+        FROM read_parquet('{source_glob}')
     """
 
 
@@ -467,6 +560,17 @@ def main(with_text_tables: bool = False):
 
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect(str(DB_PATH))
+    con.create_function("text_hash8", _text_hash8, ["VARCHAR"], "UBIGINT")
+    # `paragraphs`' window functions (LAG/LEAD per accession_number) OOM'd
+    # (2026-09-04) once DEF 14A -- large, table-heavy documents -- joined
+    # 10-K/10-Q in the UNION: default thread count multiplies the working
+    # set per-partition across cores faster than a single machine's RAM
+    # grows. `preserve_insertion_order=false` lets DuckDB spill/stream
+    # instead of buffering the whole ordered result, and fewer threads
+    # means fewer copies of that working set alive at once -- both cheap
+    # to try before reaching for a bigger memory_limit.
+    con.execute("SET preserve_insertion_order=false")
+    con.execute("SET threads=4")
 
     def dirs(config):
         return (
@@ -481,11 +585,16 @@ def main(with_text_tables: bool = False):
             for country, cfg in countries
             if _existing(f"{dirs(cfg)[0]}/firm_universe.parquet")
         ]),
-        "filing_manifest": _union([
-            f"SELECT '{country}' AS country_code, * FROM read_parquet('{dirs(cfg)[0]}/filing_manifest.parquet')"
-            for country, cfg in countries
-            if _existing(f"{dirs(cfg)[0]}/filing_manifest.parquet")
-        ]),
+        # UNIONs in filing_manifest_proxy.parquet (and, later, 8-K/comment-
+        # letter manifests) alongside the 10-K manifest -- unlike 10-Q,
+        # which is a deliberately separate INSTRUMENT never pooled with the
+        # 10-K panel (see the project's data-scope decision), proxy/8-K are
+        # not competing analytical panels, just more form types feeding the
+        # same paragraph-level AI-disclosure pipeline. Sharing one lookup
+        # means a proxy paragraph's accession_number resolves ticker/
+        # filing_date the same way a 10-K's already does -- `form_type`/
+        # `form` still distinguishes them for anything that needs to.
+        "filing_manifest": _union(_filing_manifest_selects(countries, dirs)),
         # 10-Q shock series — a SEPARATE instrument, never pooled with
         # filing_manifest above (see the project's data-scope decision) —
         # hence its own manifest AND its own extraction_trace/
@@ -535,6 +644,20 @@ def main(with_text_tables: bool = False):
             if _existing(f"{dirs(cfg)[1]}/filing_sections_10q__run=*__part=*.parquet")
         ]),
         "filing_sections_10q": "SELECT * FROM extraction_trace_10q WHERE found",
+        # DEF 14A — the whole document as one "section" (item_key='0', see
+        # scripts/us/proxy/proxy_segmenter.py for why there's no real
+        # per-heading segmenter yet). Not a separate instrument the way
+        # 10-Q is -- just another form type, same paragraph pipeline.
+        "extraction_trace_proxy": _union([
+            f"""
+            SELECT '{country}' AS country_code, *
+            FROM read_parquet('{dirs(cfg)[1]}/filing_sections_proxy__run=*__part=*.parquet', union_by_name=True)
+            QUALIFY row_number() OVER (PARTITION BY accession_number, item_key ORDER BY run_date DESC) = 1
+            """
+            for country, cfg in countries
+            if _existing(f"{dirs(cfg)[1]}/filing_sections_proxy__run=*__part=*.parquet")
+        ]),
+        "filing_sections_proxy": "SELECT * FROM extraction_trace_proxy WHERE found",
         # --- 03_market_data: prices + Fama-French factors ---
         "market_prices": f"""
             SELECT * FROM read_parquet('{market_prices_dir}/*.parquet', filename = true)
@@ -562,14 +685,48 @@ def main(with_text_tables: bool = False):
         # `make duckdb-text`): took ~52s standalone, real cost on a real
         # machine, not worth paying on every `make duckdb` when most
         # rebuilds just need the fast views refreshed.
-        views["paragraphs"] = (
-            f"({_paragraph_select_sql('10-K', 'filing_sections')})"
-            + "\n            UNION ALL BY NAME\n"
-            + f"({_paragraph_select_sql('10-Q', 'filing_sections_10q')})"
-        )
+        paragraph_branches = [
+            f"({_paragraph_select_sql('10-K', 'filing_sections')})",
+            f"({_paragraph_select_sql('10-Q', 'filing_sections_10q')})",
+        ]
+        if "filing_sections_proxy" in views:
+            paragraph_branches.append(f"({_paragraph_select_sql('DEF 14A', 'filing_sections_proxy')})")
+        else:
+            print("  skipping DEF 14A paragraphs (no filing_sections_proxy files yet)")
+        if _existing(CL_PARAGRAPHS_GLOB):
+            paragraph_branches.append(f"({_cl_paragraph_select_sql(CL_PARAGRAPHS_GLOB)})")
+        else:
+            print(f"  skipping CL paragraphs (no files matching {CL_PARAGRAPHS_GLOB})")
+        views["paragraphs"] = "\n            UNION ALL BY NAME\n".join(paragraph_branches)
         # Built ON `paragraphs` (not re-derived from raw section text) —
         # see _sentence_select_sql's docstring.
         views["sentences"] = _sentence_select_sql()
+        # THE canonical dedup surface (docs/prefilter_evaluation.md §8.7):
+        # ~50% of `paragraphs` is literal boilerplate repeated across
+        # filings. One row per unique `text_hash`, naming a single
+        # deterministic representative instance (smallest natural key) plus
+        # `duplicate_count` (how many paragraph instances share this text).
+        # Any downstream step whose cost scales with corpus size (LLM
+        # classification chief among them, but conceptually also embedding/
+        # scoring) should compute over THIS table, then broadcast back to
+        # instances via `text_hash` if it needs per-instance output — not
+        # reimplement its own group-by-text dedup (that's exactly how
+        # ai_classify.py's dedup broke: a second, independently-computed
+        # hash of a slightly different text reconstruction).
+        views["unique_paragraphs"] = """
+            WITH ranked AS (
+                SELECT *,
+                    row_number() OVER (
+                        PARTITION BY text_hash
+                        ORDER BY country_code, form, accession_number, item_key, paragraph_index
+                    ) AS rn,
+                    count(*) OVER (PARTITION BY text_hash) AS duplicate_count
+                FROM paragraphs
+            )
+            SELECT country_code, form, accession_number, item_key, paragraph_index,
+                   text_hash, paragraph_text, content_type, is_scorable, duplicate_count
+            FROM ranked WHERE rn = 1
+        """
     else:
         print("  skipping paragraphs/sentences (pass --with-text-tables to build them)")
 
@@ -599,6 +756,61 @@ def main(with_text_tables: bool = False):
         """
     else:
         print("  skipping ai_prefilter_scores (run scripts/common/ai_prefilter.py first)")
+
+    # --- Gold tables: LLM frame extraction and lexical entity mentions,
+    # broadcast from `unique_paragraphs`' one-row-per-text back out to every
+    # real paragraph INSTANCE via `text_hash` (docs/prefilter_evaluation.md
+    # §8.8/§8.12) — a downstream reader wants "which filings/paragraphs",
+    # not "which distinct texts". Both are COUNTRY-AGNOSTIC by construction:
+    # neither filters by country_code anywhere, they just broadcast whatever
+    # is in `paragraphs` — Chile (or any later country) starts appearing the
+    # moment its own paragraphs enter the underlying is_ai_prefiltered
+    # population or get an entity-mention run, no view change needed here.
+    frames_glob = "data/interim/ai_classify/ai_frames__session=*.parquet"
+    if with_text_tables and _existing(frames_glob):
+        views["gold_ai_frames"] = f"""
+            WITH latest_frames AS (
+                SELECT * FROM read_parquet('{frames_glob}', union_by_name=True)
+                WHERE error IS NULL
+                QUALIFY row_number() OVER (
+                    PARTITION BY text_hash, frame_index ORDER BY session_id DESC
+                ) = 1
+            )
+            SELECT p.country_code, p.form, p.accession_number, p.item_key, p.paragraph_index,
+                   f.text_hash, up.duplicate_count, f.frame_index, f.has_frame,
+                   f.subject, f.ai_type, f.temporal, f.domain, f.concepts,
+                   f.specificity_business_process, f.specificity_product_or_system,
+                   f.specificity_vendor_or_partner, f.specificity_quantified_metric,
+                   f.specificity_date_or_timeline,
+                   f.rhetoric_promotional, f.rhetoric_strategic_importance,
+                   f.evidence_sentence_ids, f.sentence_indices,
+                   f.judge_model, f.prompt_version, f.classified_at
+            FROM paragraphs p
+            JOIN latest_frames f ON f.text_hash = p.text_hash
+            JOIN unique_paragraphs up ON up.text_hash = f.text_hash
+        """
+    elif with_text_tables:
+        print(f"  skipping gold_ai_frames (no files matching {frames_glob} — "
+              f"run scripts/common/ai_classify.py first)")
+
+    entity_mentions_glob = "data/interim/ai_entity_mentions/ai_entity_mentions__run=*.parquet"
+    if with_text_tables and _existing(entity_mentions_glob):
+        views["gold_ai_entity_mentions"] = f"""
+            WITH latest_mentions AS (
+                SELECT * FROM read_parquet('{entity_mentions_glob}', union_by_name=True)
+                QUALIFY row_number() OVER (
+                    PARTITION BY text_hash, term ORDER BY run_id DESC
+                ) = 1
+            )
+            SELECT p.country_code, p.form, p.accession_number, p.item_key, p.paragraph_index,
+                   m.text_hash, up.duplicate_count, m.term, m.geo, m.modality, m.run_id
+            FROM paragraphs p
+            JOIN latest_mentions m ON m.text_hash = p.text_hash
+            JOIN unique_paragraphs up ON up.text_hash = m.text_hash
+        """
+    elif with_text_tables:
+        print(f"  skipping gold_ai_entity_mentions (no files matching {entity_mentions_glob} — "
+              f"run scripts/common/ai_entity_mentions.py first)")
 
     for name, query in views.items():
         kind = "TABLE" if name in MATERIALIZED_TABLES else "VIEW"

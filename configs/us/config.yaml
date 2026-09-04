@@ -19,6 +19,35 @@ corpus:
       from: '2021-01-01'
       to: '2026-09-01'
     amendments: false
+  # docs/document_expansion_plan.md Fase 3 — gobernanza (Board Committees,
+  # Risk Oversight, CD&A), un DEF 14A por empresa por año, volumen bajo.
+  filings_proxy:
+    forms:
+    - DEF 14A
+    filing_date:
+      from: '2021-01-01'
+      to: '2026-09-01'
+    amendments: false
+  # docs/document_expansion_plan.md Fase 1 — comunicados/anuncios, mucho
+  # mayor volumen por empresa que 10-K/10-Q/proxy (decenas por año).
+  filings_8k:
+    forms:
+    - 8-K
+    filing_date:
+      from: '2021-01-01'
+      to: '2026-09-01'
+    amendments: false
+  # docs/document_expansion_plan.md Fase 2 — cartas de comentario de la SEC
+  # (UPLOAD) y respuestas de la empresa (CORRESP). Volumen muy bajo,
+  # ground truth externo de que la SEC cuestionó una divulgación.
+  filings_correspondence:
+    forms:
+    - UPLOAD
+    - CORRESP
+    filing_date:
+      from: '2021-01-01'
+      to: '2026-09-01'
+    amendments: false
   universe:
     tickers:
     - A
@@ -566,6 +595,9 @@ classification:
 storage:
   raw_submissions: data/raw/sec_submissions
   raw_html: data/raw/filings_html
+  raw_html_proxy: data/raw/filings_proxy
+  raw_html_8k: data/raw/filings_8k
+  raw_sec_letters: data/raw/sec_letters
   raw_xbrl_facts: data/raw/xbrl_facts/us
   interim_manifests: data/interim/manifests
   interim_sections: data/interim/sections

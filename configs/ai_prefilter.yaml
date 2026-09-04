@@ -28,51 +28,165 @@ lexical:
   # mayúsculas — medido sobre el corpus, `AI` sensible a mayúsculas da 11.963
   # párrafos y `ai` insensible da 11.992: 29 de diferencia en 3 millones.
   #
-  # Las siglas importan más que los términos largos. Antes de incluirlas, la
-  # lista capturaba 8.347 párrafos; con ellas, 16.608. Microsoft escribe "AI" y
-  # casi nunca "artificial intelligence": tiene 409 párrafos sobre IA y la lista
-  # sin siglas atrapaba 56, el 14%.
+  # Dos categorías de término, con roles distintos:
   #
-  # Strong nombra la IA directamente; weak es ambiguo por sí solo ("model" cae
-  # en cada párrafo de valuación del corpus) y se conserva como señal aparte.
-  strong:
-    - ai
-    - ml
-    - llm
-    - llms
-    - agi
-    - nlp
-    - gen ai
-    - artificial intelligence
-    - generative ai
-    - genai
-    - machine learning
-    - deep learning
-    - large language model
-    - large language models
-    - foundation model
-    - foundation models
-    - neural network
-    - neural networks
-    - chatgpt
-    - openai
-    - gpt-4
-    - copilot
-    - gemini
-    - claude
-  weak:
-    - algorithm
-    - predictive
-    - prediction
-    - recommendation
-    - classifier
-    - automation
-    - automated decision
-    - computer vision
-    - natural language processing
-    - model
-    - adas
-    - rpa
+  # `concepts` — vocabulario GENÉRICO de IA (ai, ml, llm, machine learning...).
+  # Las siglas importan más que los términos largos: antes de incluirlas, la
+  # lista capturaba 8.347 párrafos; con ellas, 16.608 (Microsoft escribe "AI"
+  # y casi nunca "artificial intelligence": 409 párrafos sobre IA, la lista
+  # sin siglas atrapaba solo 56, el 14%). `strong` nombra la IA directamente;
+  # `weak` es ambiguo por sí solo ("model" cae en cada párrafo de valuación
+  # del corpus) y se conserva como señal aparte.
+  #
+  # `entities` — marcas de PRODUCTO de IA específicas (nunca la empresa matriz/
+  # conglomerado que las publica: verificado en el corpus real que "baidu" y
+  # "huawei" aparecen mayormente en contexto NO relacionado con IA —
+  # registradores de dominio, proveedores de GPU/telecom genéricos— mientras
+  # que "deepseek" aparece SIEMPRE en contexto de IA, listado junto a ChatGPT/
+  # Anthropic/Gemini/Llama). Todas cuentan como señal `strong` al aplanarse
+  # (ver ai_prefilter_anchors.py::strong_terms) — un nombre de producto
+  # inequívoco nunca es ambiguo del modo en que "model" o "automation" sí lo
+  # son. Estructuradas geografía -> modalidad -> [términos] (2026-09-04,
+  # a pedido explícito: preservar PROVENANCE, no solo la lista plana) para
+  # que la jerarquía misma sea la metadata — sin repetir geo/modalidad por
+  # término. El prefiltro hoy solo consume la lista aplanada (no hay
+  # "leaning" geográfico ni por modalidad calculado todavía; ver
+  # ai_prefilter_anchors.py::entity_terms para la versión con metadata, lista
+  # para cuando se necesite sin tener que rehacer esta estructura).
+  concepts:
+    strong:
+      - ai
+      - ml
+      - llm
+      - llms
+      - agi
+      - nlp
+      - gen ai
+      - artificial intelligence
+      - generative ai
+      - genai
+      - machine learning
+      - deep learning
+      - large language model
+      - large language models
+      - foundation model
+      - foundation models
+      - neural network
+      - neural networks
+    weak:
+      - algorithm
+      - predictive
+      - prediction
+      - recommendation
+      - classifier
+      - automation
+      - automated decision
+      - computer vision
+      - natural language processing
+      - model
+      - adas
+      - rpa
+
+  entities:
+    usa:
+      text:
+        - chatgpt
+        - openai
+        - gpt-4
+        - claude
+        - gemini
+        - copilot
+        - anthropic
+        - meta ai
+        - llama 2
+        - llama 3
+        - vertex ai
+        - azure openai
+        - watsonx
+        - hugging face
+        - huggingface
+        - grok
+      image:
+        - midjourney
+        - dall-e
+        - dalle-2
+        - dalle-3
+        - ideogram
+      video:
+        # "sora", "runway", "pika" y "gen-3/gen-4" quedaron AFUERA (probados
+        # y descartados 2026-09-04): "SORA" es una tasa de referencia de
+        # Singapur ("Singapore Overnight Rate Average") y también el nombre
+        # de una adquisición de ADP sin relación con OpenAI; "runway" es
+        # jerga de negocios/aviación común (67 párrafos, ninguno sobre
+        # Runway ML); "pika" es "Pika Energy", una empresa real de energía
+        # sin relación con Pika Labs. "veo" (Google) sí se verificó correcto
+        # (1/1 mención real de IA) y queda.
+        - veo
+        - dream machine
+      audio:
+        - elevenlabs
+        - suno
+        - udio
+      coding:
+        # "devin" quedó AFUERA (probado y descartado 2026-09-04): coincide
+        # con "Devin W. Stockfish", CEO real de Weyerhaeuser, en cada firma
+        # de 10-K de esa empresa -- falso positivo garantizado. "cursor" y
+        # "windsurf" sí se verificaron correctos (matches reales listados
+        # junto a Copilot/Anthropic/OpenAI), aunque "cursor" en particular
+        # sigue siendo una palabra común de UI -- vale la pena revisar de
+        # nuevo si empieza a aparecer en contextos no relacionados con IA.
+        - github copilot
+        - cursor
+        - windsurf
+        - codeium
+      other:
+        - deepmind
+        - character.ai
+        - perplexity ai
+    china:
+      text:
+        - deepseek
+        - qwen
+        - tongyi qianwen
+        - ernie bot
+        - wenxin yiyan
+        - chatglm
+        - glm-4
+        - hunyuan
+        - kimi
+        - moonshot ai
+        - doubao
+        - baichuan
+      video:
+        - kling
+        - kling ai
+        - seedance
+      three_d:
+        - hunyuan3d
+    europe:
+      text:
+        - mistral ai
+        - mixtral
+        - le chat
+        - aleph alpha
+        - pharia
+      image:
+        - stability ai
+        - stable diffusion
+        # "flux" (Black Forest Labs) quedó AFUERA (probado y descartado
+        # 2026-09-04): es una palabra inglesa genérica de uso técnico común
+        # (93 párrafos, ninguno sobre el modelo FLUX) -- demasiado ambigua
+        # para incluir sin calificador, y "flux ai" / "black forest labs" no
+        # aparecen todavía en el corpus como para justificar la forma larga.
+    other:
+      text:
+        - cohere
+        - ai21 labs
+        - hyperclova
+      three_d:
+        - meshy
+        - meshy ai
+        - tripo
 
 semantic:
   # CÓMO ESCRIBIR UN ANCHOR

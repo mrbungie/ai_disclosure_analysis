@@ -21,6 +21,7 @@ dependencies = [
     "pymupdf>=1.28.2",
     "sentence-transformers>=6.0.1",
     "xlrd>=2.0.2",
+    "pydantic-ai>=2.38.0",
 ]
 
 [dependency-groups]

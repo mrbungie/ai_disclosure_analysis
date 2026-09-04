@@ -302,6 +302,7 @@ def run_prefilter(
     part_rows: int = 250_000,
     resume: bool = True,
     verify_only: bool = False,
+    source_relation: str = "paragraphs",
 ) -> tuple[list[Path], Path]:
     """Score stored paragraph vectors against the anchors — no re-embedding.
 
@@ -313,6 +314,16 @@ def run_prefilter(
     are skipped, and paragraphs whose vector has not been written yet are simply
     reported as pending rather than silently dropped — so this can be run
     against a half-finished embedding pass and re-run later to pick up the rest.
+
+    `source_relation` (docs/prefilter_evaluation.md §8.7/§8.8): pass
+    "unique_paragraphs" (build_duckdb.py) instead of the default "paragraphs"
+    to score each unique paragraph TEXT exactly once instead of once per
+    corpus instance — ~50% of the corpus is literal boilerplate repeated
+    across filings, so scoring `paragraphs` directly duplicates work for no
+    reason once a real dedup surface exists. Embeddings need no rechange:
+    `unique_paragraphs`' representative key already has a vector from
+    ai_embed.py (it embedded every instance, representative included), this
+    just skips scoring every OTHER instance sharing that same text.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -341,7 +352,7 @@ def run_prefilter(
 
     con = duckdb.connect(str(database), read_only=True)
     try:
-        row_count = con.sql("SELECT count(*) FROM paragraphs").fetchone()[0]
+        row_count = con.sql(f"SELECT count(*) FROM {source_relation}").fetchone()[0]
         scored_keys = register_scored_keys(con, output_dir, usable)
         files = ", ".join(f"'{part}'" for part in embedding_audit["usable"])
         con.execute(f"CREATE OR REPLACE TEMP VIEW paragraph_vectors AS "
@@ -354,7 +365,7 @@ def run_prefilter(
             SELECT p.country_code, p.form, count(*) AS paragraphs,
                    count(*) FILTER (WHERE EXISTS (SELECT 1 FROM paragraph_vectors v WHERE {key_join})) AS embedded,
                    count(*) FILTER (WHERE EXISTS (SELECT 1 FROM prefilter_scored_keys s WHERE {scored_join})) AS scored
-            FROM paragraphs AS p GROUP BY 1, 2 ORDER BY 1, 2
+            FROM {source_relation} AS p GROUP BY 1, 2 ORDER BY 1, 2
         """).df().to_dict("records")
         print(f"Anchors {fingerprint} | {len(embedding_audit['usable'])} embedding part(s), "
               f"{vector_count:,} vectors | {scored_keys:,} paragraphs already scored", flush=True)
@@ -363,7 +374,7 @@ def run_prefilter(
                   f"embedded, {int(row['scored']):,} scored", flush=True)
 
         pending = con.execute(f"""
-            SELECT count(*) FROM paragraphs p
+            SELECT count(*) FROM {source_relation} p
             WHERE EXISTS (SELECT 1 FROM paragraph_vectors v WHERE {key_join})
               AND NOT EXISTS (SELECT 1 FROM prefilter_scored_keys s WHERE {scored_join})
         """).fetchone()[0]
@@ -400,7 +411,7 @@ def run_prefilter(
                    regexp_matches({text}, {_term_regex(STRONG_AI_TERMS)}) AS strong_lexical_match,
                    regexp_matches({text}, {_term_regex(WEAK_AI_TERMS)}) AS weak_lexical_match,
                    v.embedding, v.text_hash
-            FROM paragraphs AS p
+            FROM {source_relation} AS p
             JOIN paragraph_vectors AS v ON {key_join}
             WHERE NOT EXISTS (SELECT 1 FROM prefilter_scored_keys s WHERE {scored_join})
             ORDER BY p.form, p.country_code, p.accession_number, p.item_key, p.paragraph_index
@@ -463,6 +474,9 @@ def main() -> None:
     parser.add_argument("--part-rows", type=int, default=250_000, help="Rows per parquet part file")
     parser.add_argument("--no-resume", dest="resume", action="store_false")
     parser.add_argument("--verify-only", action="store_true")
+    parser.add_argument("--source-relation", default="paragraphs",
+                        help="'unique_paragraphs' scores each unique paragraph text once "
+                             "instead of once per corpus instance (see docs/prefilter_evaluation.md §8.8)")
     args = parser.parse_args()
     parts, manifest_path = run_prefilter(**vars(args))
     print(f"Parts written: {len(parts)}")
