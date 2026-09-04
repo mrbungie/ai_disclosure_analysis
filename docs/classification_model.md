@@ -134,6 +134,54 @@ Por tanto:
 
 ---
 
+## 3.1 Negación
+
+Una proposición **negada** no es evidencia positiva de adopción, capacidad,
+resultado, riesgo o gobernanza de IA, aun cuando mencione esos mismos
+conceptos.
+
+```text
+[0] We do not currently use generative AI in our operations.
+```
+
+Esta oración **no debe producir un frame con `temporal = realized`** (ni
+`planned`/`expected`) implicando uso — sería literalmente lo opuesto de lo
+que dice el texto.
+
+Regla: **no crear un frame que interprete una proposición negada como
+evidencia positiva de un concepto.** En la práctica, la oración de arriba
+por sí sola produce **cero frames** (igual que un párrafo sin contenido
+relevante — ver `ParagraphExtraction`, "zero frames is valid").
+
+No se agrega un campo `negated` nuevo al schema: no hace falta un valor
+para algo que, por definición, no genera un frame. Si en el futuro se
+necesita medir explícitamente *disclaimers* de no-uso como su propia
+señal (distinto de "no hay información"), eso es una extensión posterior,
+no parte de este diseño.
+
+Ojo con negaciones parciales dentro de un párrafo con múltiples
+proposiciones — cada cláusula se evalúa por separado:
+
+```text
+[0] We do not currently use generative AI, but we are piloting
+    predictive ML models for fraud detection.
+```
+
+produce **un solo frame** (no dos, y no un frame para la parte negada):
+
+```text
+subject = firm
+ai_type = predictive_ml
+temporal = planned
+concepts = [pilot_or_testing]
+```
+
+la cláusula negada ("we do not currently use generative AI") no aporta
+frame propio — solo acota qué NO se está afirmando, y esa acotación no
+es en sí misma una proposición a extraer.
+
+---
+
 # 4. Schema Pydantic
 
 ```python
@@ -151,7 +199,8 @@ from pydantic import BaseModel, Field
 Subject = Literal[
     "firm",
     "suppliers_or_partners",
-    "customers_or_market",
+    "customers",
+    "competitors_or_industry",
 ]
 
 AIType = Literal[
@@ -392,12 +441,42 @@ class AIFrame(BaseModel):
         generative <-> expected
 
     are separate semantic pairings.
+
+    Example 3 (negation):
+
+        [0] We do not currently use generative AI in our operations.
+
+    Zero frames. A negated proposition is NOT positive evidence of
+    adoption, capability, outcome, risk, or governance, even though it
+    mentions those same concepts. Do not create a frame with
+    temporal=realized/planned/expected (or any concept) to represent a
+    negated claim — that would assert the opposite of what the text says.
+    If a paragraph mixes a negated clause with a real proposition, only
+    extract the real one:
+
+        [0] We do not currently use generative AI, but we are piloting
+            predictive ML models for fraud detection.
+
+    One frame (for the piloting claim only):
+
+        subject = firm
+        ai_type = predictive_ml
+        temporal = planned
+        concepts = [pilot_or_testing]
     """
 
     subject: Subject = Field(
         description=(
             "Whose AI activity, capability, outcome, risk, or governance "
-            "arrangement is being described."
+            "arrangement is being described. "
+            "'customers' is the firm's own customers/users adopting or reacting to AI "
+            "(e.g. 'our customers are increasingly adopting AI'). "
+            "'competitors_or_industry' is adoption, capability, or pressure "
+            "attributed to competitors or the industry at large (e.g. 'our "
+            "competitors are investing heavily in AI', 'the industry is moving "
+            "toward AI-driven underwriting') — kept separate from 'customers' "
+            "because customer adoption and competitive pressure are distinct "
+            "phenomena for this thesis (market-pull vs. competitive-push)."
         )
     )
 
@@ -501,7 +580,8 @@ Permite distinguir entre afirmaciones sobre la propia empresa y afirmaciones sob
 ```text
 firm
 suppliers_or_partners
-customers_or_market
+customers
+competitors_or_industry
 ```
 
 Esto es importante para evitar interpretar:
@@ -509,6 +589,16 @@ Esto es importante para evitar interpretar:
 > “Our customers are increasingly adopting AI”
 
 como evidencia de adopción de IA por parte de la firma.
+
+`customers` y `competitors_or_industry` se separan (en vez de un único
+`customers_or_market`) porque mezclan actores distintos con implicancias
+distintas para la tesis: adopción por parte de clientes (market-pull) no es
+lo mismo que presión o adopción competitiva (competitive-push). Por ejemplo:
+
+> “Our competitors are investing heavily in AI-driven underwriting”
+
+es `competitors_or_industry`, no `customers` — describe presión competitiva,
+no comportamiento de clientes.
 
 ---
 
