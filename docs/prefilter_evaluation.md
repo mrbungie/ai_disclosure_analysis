@@ -549,6 +549,11 @@ el 0,744 de §8.3 (que a su vez ya había reemplazado el 0,838 leakeado de
 §8.2). El pipeline completo (§8.2 → §8.3 → §8.5) queda como registro de
 cómo se llegó ahí, no se reescribe retroactivamente.
 
+**ADVERTENCIA: la cifra 0,814 y el modelo C=0,01/threshold=0,45 de esta
+sección quedaron obsoletos el mismo día — ver §8.6. El bug no era la
+idea (usar `sample_weight` sí es correcto), era la escala del peso
+crudo.
+
 **Extracción de frames sobre los 12.840 (2026-09-04)**: corrida completa vía
 `scripts/common/ai_classify.py` (qwen/qwen3.7-flash por OpenRouter) —
 13.116 párrafos clasificados con éxito (incluye el subconjunto ya hecho
@@ -573,6 +578,86 @@ sutil que el clásico porque sólo aparece al reponderar.
 El **prototipo** (centroide de los positivos como anchor aprendido) falla
 (0,542): promedia siete categorías muy distintas — riesgo, uso, gobernanza — en
 un vector que no se parece a ninguna.
+
+### 8.6 `inclusion_weight` crudo colapsaba el tamaño efectivo de muestra — corregido con `sqrt` (2026-09-04)
+
+El usuario desconfió del conteo de §8.5 (11.546, comparado con 12.840 del
+modelo anterior) y pidió revisar con ejemplos concretos en vez de solo la
+métrica agregada — buena decisión, porque el modelo de §8.5 estaba roto.
+
+**Diagnóstico.** `inclusion_weight` (ver docs/golden_set_sampling.md)
+abarca ~5 órdenes de magnitud entre estratos:
+
+| estrato | filas | media | min | max |
+|---|---|---|---|---|
+| stage1_tech_oversample | 3.950 | 0,009114 | 0,005025 | 0,03125 |
+| stage2_max_variation | 4.439 | 275,690246 | 1,0 | 6572,25 |
+| stage3_random | 1.495 | 1100,794 (constante) | — | — |
+
+Al ajustar `.fit(..., sample_weight=inclusion_weight)` con el peso crudo,
+el tamaño de muestra efectivo (`(Σw)² / Σw²`) es **1.964 de 9.884 filas**
+— el ajuste queda dominado por stage2/stage3 e ignora casi todo
+stage1_tech_oversample, que es justo donde viven los positivos limpios e
+inequívocos.
+
+**Verificación concreta** con 3 párrafos del golden set, todos
+`is_ai_disclosure=True`, todos de stage1_tech_oversample (peso
+≈0,005–0,008): IBM watsonx (`0000051143-23-000032`, item `2`, párrafo
+`913`), herramientas de IA de Microsoft (`0001564590-22-026876`, item
+`1`, párrafo `33`), FactSet AI Blueprint (`0001013237-24-000141`, item
+`1`, párrafo `34`).
+
+| modelo | IBM watsonx | Microsoft AI tools | FactSet AI Blueprint |
+|---|---|---|---|
+| §8.3 (sin peso) | 0,794 | 0,812 | 0,885 |
+| §8.5 (peso crudo, C=0,01) | **0,105** | **0,117** | **0,111** |
+
+Los tres casos, positivos inequívocos usados para entrenar el propio
+modelo, quedan **excluidos** por §8.5 (threshold 0,45) pese a que la
+métrica agregada de esa sección decía que había mejorado. La métrica no
+detecta el problema porque está calculada con los mismos pesos sesgados.
+
+**Corrección probada** en `scripts/verif/prefilter_model_variants_eval.py`
+(mismo CV anidado de §8.3/§8.5; el ajuste usa el peso transformado, la
+evaluación siempre usa `inclusion_weight` crudo):
+
+| variante de peso para el fit | F1 estrato | prec pond. | recall pond. | **F1 pond.** | 3 casos de control |
+|---|---|---|---|---|---|
+| sin peso (§8.3) | 0,780 | 0,708 | 0,786 | 0,745 | 0,79 / 0,81 / 0,89 |
+| `inclusion_weight` crudo (§8.5) | 0,631 | 0,745 | 0,898 | 0,814 | 0,11 / 0,12 / 0,11 ❌ |
+| **`sqrt(inclusion_weight)`** | 0,753 | 0,747 | 0,924 | **0,826** | 0,65 / 0,69 / 0,82 ✓ |
+| `log1p(inclusion_weight)` | 0,761 | 0,721 | 0,759 | 0,740 | 0,74 / 0,80 / 0,89 |
+| `inclusion_weight` recortado a percentil 95 | 0,604 | 0,743 | 0,723 | 0,733 | 0,13 / 0,17 / 0,33 ❌ |
+
+`sqrt(inclusion_weight)` gana en ambos frentes: mejor F1 ponderado que
+cualquier otra variante probada (0,826, incluida la de §8.5) Y los 3
+casos de control se mantienen correctamente clasificados con margen
+cómodo sobre cualquier threshold razonable. El recorte a percentil 95 y
+el peso crudo fallan el chequeo de sanidad pese a tener F1 pond.
+razonable — la lección general: **nunca aceptar una métrica agregada
+mejor sin además revisar casos concretos ya verificados.**
+
+**F1 pond. 0,826 es la cifra a citar de acá en adelante**, reemplazando
+el 0,814 de §8.5 (que queda como registro de un bug real y su
+diagnóstico, no como resultado válido).
+
+**Redesplegado** (`ai_prefilter_classify.py` actualizado para ajustar con
+`sqrt(inclusion_weight)` en vez del peso crudo, en las tres pasadas: CV
+anidado, búsqueda de C/threshold de despliegue, y el modelo final).
+Resultado: **C=3,0, threshold=0,51**, **11.561 párrafos marcados
+IA-relevantes** (0,35% del corpus). Los 3 casos de control quedan
+correctamente incluidos (`is_ai_prefiltered=True`) en el corpus
+desplegado. El conteo bruto (11.561) queda cerca del de §8.5 (11.546)
+por coincidencia — la cifra ya no es sospechosa porque esta vez está
+verificada contra ejemplos concretos, no solo contra su propia métrica.
+
+`named_entity_match` (§8.4) sigue sin mejorar la métrica bajo este
+modelo (F1 pond. 0,825 vs 0,826 combinado) y sigue descartado del
+despliegue.
+
+Funnel actualizado: 3.281.038 párrafos totales → 45.992 con match léxico
+(fuerte o débil) → 16.802 con match léxico fuerte → **11.561 marcados
+IA-relevantes por el modelo**.
 
 ---
 

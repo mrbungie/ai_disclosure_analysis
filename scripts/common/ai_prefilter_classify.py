@@ -131,6 +131,19 @@ def cv_threshold_and_metrics(X: np.ndarray, y: np.ndarray, weights: np.ndarray,
     The deployment C/threshold come from a second, non-nested pass over ALL
     the data (standard hyperparameter selection, not a performance claim) —
     `oof_metrics` from the nested loop above is what's actually cited."""
+    # §8.6: raw inclusion_weight spans ~5 orders of magnitude (0.005 to
+    # 1,100.79), so fitting with it directly collapses effective sample
+    # size to ~1,964/9,884 rows and lets a tiny high-weight stratum
+    # dominate the fit -- verified concretely: 3 known-good, unambiguous
+    # golden-set positives (all from the low-weight stage1_tech_oversample
+    # stratum) dropped from predicted_proba ~0.8-0.9 under the unweighted
+    # model to ~0.1-0.2 under a raw-weight fit. sqrt(inclusion_weight)
+    # compresses that range enough to fix the stratification bias without
+    # this collapse: better nested-CV F1 pond. (0.745 -> 0.826) AND the 3
+    # sanity cases stay correctly classified (~0.65-0.82). Fitting uses the
+    # sqrt-compressed weight; every metric below still uses the RAW weight,
+    # since that is what makes a metric here mean "corpus-representative".
+    fit_weights = np.sqrt(weights)
     gkf = GroupKFold(n_splits=5)
     oof_pred = np.zeros(len(y), dtype=int)
     fold_cs = []
@@ -138,7 +151,7 @@ def cv_threshold_and_metrics(X: np.ndarray, y: np.ndarray, weights: np.ndarray,
         best_c, best_t, best_f1 = C_GRID[0], 0.5, -1.0
         for c in C_GRID:
             clf = LogisticRegression(max_iter=2000, C=c)
-            clf.fit(X[train_idx], y[train_idx], sample_weight=weights[train_idx])
+            clf.fit(X[train_idx], y[train_idx], sample_weight=fit_weights[train_idx])
             proba_train = clf.predict_proba(X[train_idx])[:, 1]
             for t in np.arange(0.05, 0.96, 0.02):
                 f1w = f1_score(y[train_idx], (proba_train >= t).astype(int),
@@ -147,7 +160,7 @@ def cv_threshold_and_metrics(X: np.ndarray, y: np.ndarray, weights: np.ndarray,
                     best_c, best_t, best_f1 = c, float(t), f1w
         fold_cs.append(best_c)
         clf = LogisticRegression(max_iter=2000, C=best_c)
-        clf.fit(X[train_idx], y[train_idx], sample_weight=weights[train_idx])
+        clf.fit(X[train_idx], y[train_idx], sample_weight=fit_weights[train_idx])
         proba_test = clf.predict_proba(X[test_idx])[:, 1]
         oof_pred[test_idx] = (proba_test >= best_t).astype(int)
 
@@ -165,7 +178,7 @@ def cv_threshold_and_metrics(X: np.ndarray, y: np.ndarray, weights: np.ndarray,
     deploy_c, deploy_t, deploy_f1 = C_GRID[0], 0.5, -1.0
     for c in C_GRID:
         clf = LogisticRegression(max_iter=2000, C=c)
-        clf.fit(X, y, sample_weight=weights)
+        clf.fit(X, y, sample_weight=fit_weights)
         proba = clf.predict_proba(X)[:, 1]
         for t in np.arange(0.05, 0.96, 0.01):
             f1w = f1_score(y, (proba >= t).astype(int), sample_weight=weights, zero_division=0)
@@ -198,6 +211,7 @@ def main() -> None:
 
     y = golden["is_ai_disclosure"].astype(int).values
     weights = golden["inclusion_weight"].astype(float).values
+    fit_weights = np.sqrt(weights)
     groups = golden["accession_number"].values
     X = golden[SIGNAL_COLUMNS].astype(float).values
 
@@ -223,7 +237,7 @@ def main() -> None:
         best_c, best_t, best_f1 = C_GRID[0], 0.5, -1.0
         for c in C_GRID:
             clf = LogisticRegression(max_iter=2000, C=c)
-            clf.fit(X[train_idx], y[train_idx], sample_weight=weights[train_idx])
+            clf.fit(X[train_idx], y[train_idx], sample_weight=fit_weights[train_idx])
             proba_train = clf.predict_proba(X[train_idx])[:, 1]
             for t in np.arange(0.05, 0.96, 0.02):
                 f1w = f1_score(y[train_idx], (proba_train >= t).astype(int),
@@ -231,7 +245,7 @@ def main() -> None:
                 if f1w > best_f1:
                     best_c, best_t, best_f1 = c, float(t), f1w
         clf = LogisticRegression(max_iter=2000, C=best_c)
-        clf.fit(X[train_idx], y[train_idx], sample_weight=weights[train_idx])
+        clf.fit(X[train_idx], y[train_idx], sample_weight=fit_weights[train_idx])
         proba_test = clf.predict_proba(X[test_idx])[:, 1]
         combined_oof[test_idx] = ((proba_test >= best_t) | named_entity[test_idx]).astype(int)
     combined_metrics = {
@@ -249,7 +263,7 @@ def main() -> None:
 
     print("\nReajustando el modelo final sobre TODO el golden set...")
     final_model = LogisticRegression(max_iter=2000, C=deploy_c)
-    final_model.fit(X, y, sample_weight=weights)
+    final_model.fit(X, y, sample_weight=fit_weights)
 
     con = duckdb.connect(str(DB), read_only=True)
     print("Cargando el corpus completo (última corrida de anchors)...")
