@@ -1146,6 +1146,64 @@ US$1,834 → US$2,038 de 20 acreditados, quedan ~US$17,96).
 
 ---
 
+### 8.12 Dos tablas gold + detector de menciones de entidad (2026-09-04)
+
+A pedido explícito, se construyeron:
+
+- **`scripts/common/ai_entity_mentions.py`**: sobre la población
+  IA-relevante (13.373 textos), matchea los términos de `lexical.entities`
+  (§8.10) con la misma técnica de límite de palabra que el prefiltro,
+  agregando `geo`/`modality` por mención. Sin LLM, se recalcula entero
+  cada corrida. Salida: `data/interim/ai_entity_mentions/`.
+- **`gold_ai_frames`** y **`gold_ai_entity_mentions`** (vistas en
+  `build_duckdb.py`): expanden `ai_frames`/`ai_entity_mentions` (una fila
+  por texto único) de vuelta a una fila por INSTANCIA real de párrafo vía
+  `text_hash` — el mismo criterio de "dedup como fase" de §8.8.
+  Deliberadamente sin filtro por `country_code` en ningún lado, para que
+  Chile aparezca solo cuando entre a la población `is_ai_prefiltered`,
+  sin tocar código.
+
+### 8.13 named_entity_match forzado a incluir — el criterio automático rechazaba casos reales de OpenAI (2026-09-04)
+
+El usuario dudó de que solo 205/13.373 textos IA-relevantes tuvieran una
+mención de entidad específica y pidió comparar contra el corpus completo.
+Verificado: "openai" aparece en **59 textos únicos de todo el corpus**,
+pero solo **42 estaban en la población IA-relevante** — 17 quedaban
+afuera, varios financieramente sustanciales: *"the Company issued to
+OpenAI OpCo, LLC... a warrant to purchase up to 160 million shares"*,
+*"exclude net losses from investments in OpenAI"*. Sus `predicted_proba`
+caían en 0,34-0,69 — por debajo del nuevo threshold 0,75 (§8.11 subió el
+threshold óptimo al cambiar el target), pese a que `openai` SÍ está en la
+lista léxica fuerte (`strong_ge1=True`).
+
+El mecanismo para rescatar esto ya existe: `named_entity_match` (OR
+determinista, §8.4) incluye `"openai"`. Pero el criterio automático de
+`ai_prefilter_classify.py` lo estaba descartando por una diferencia de
+**0,001 en F1 pond.** (0,946 vs 0,947) medida sobre solo 76 filas del
+golden set con `named_entity_match` — una muestra demasiado chica y no
+representativa: el patrón real que el override rescata (boilerplate
+financiero genérico con una sola mención nombrada) casi no aparece en el
+golden set, pero sí en el corpus real.
+
+**Forzado a `True`** (ya no depende del criterio automático), documentado
+en el código con la evidencia concreta. Resultado: **69 textos
+rescatados** (antes 0, con el criterio automático descartándolo), 59/59
+menciones de OpenAI ahora incluidas (100%, antes 42/59 = 71%). Corpus:
+**13.442 textos únicos (15.945 instancias)**, subiendo levemente de
+13.373/15.868. `ai_classify.py` re-corrido: solo 3 textos genuinamente
+nuevos (el resto de los 69 ya estaba clasificado de corridas previas),
+costo despreciable.
+
+**Lección para el resto del pipeline**: el criterio "¿mejora la métrica
+agregada?" puede fallar cuando la muestra que lo mide es chica frente al
+fenómeno real que se está evaluando — ya pasó con el peso de entrenamiento
+(§8.6) y ahora con este override. Un margen de 0,001 en 76 filas no es
+evidencia suficiente para descartar un mecanismo cuya premisa de diseño
+(un nombre propio de IA específico casi nunca es ruido) sigue siendo
+válida y verificable directamente contra el corpus.
+
+---
+
 ## 9. Qué falta
 
 1. ~~**Completar el golden set.**~~ Resuelto 2026-09-04 (9.884 etiquetas

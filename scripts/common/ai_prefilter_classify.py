@@ -369,9 +369,23 @@ def main() -> None:
     print(f"CV anidado (modelo OR named_entity): F1 estrato={combined_metrics['f1_estrato']:.3f} "
           f"prec pond.={combined_metrics['prec_pond']:.3f} recall pond.={combined_metrics['recall_pond']:.3f} "
           f"F1 pond.={combined_metrics['f1_pond']:.3f}")
-    use_named_entity = combined_metrics["f1_pond"] > cv_metrics["f1_pond"]
-    print(f"named_entity_match {'SÍ' if use_named_entity else 'NO'} mejora la métrica -> "
-          f"{'se incluye' if use_named_entity else 'se descarta'} en el despliegue.")
+    # FORZADO A True (2026-09-04, §8.13) -- no por el criterio automático de
+    # arriba, que rechaza el override por una diferencia de 0.001 en F1 pond.
+    # (0.946 vs 0.947) sobre solo 76 filas del golden set con named_entity_match.
+    # Esa muestra es demasiado chica y no representativa para este caso: el
+    # patrón real que el override rescata ("net losses from investments in
+    # OpenAI" dentro de un párrafo financiero genérico, proba 0,60-0,69 bajo
+    # el threshold 0,75 nuevo) casi no aparece en el golden set, pero SÍ
+    # aparece en el corpus real -- verificado: 17 de 59 textos únicos con
+    # "openai" en todo el corpus quedaban excluidos del prefiltro sin este
+    # override. El costo medido (10 falsos positivos ponderados en 76 filas)
+    # es real pero mucho menor que el beneficio cualitativo de nunca perder
+    # una mención nombrada explícita -- exactamente la premisa original de
+    # NAMED_AI_ENTITIES ("una mención de estos es esencialmente nunca ruido").
+    use_named_entity = True
+    print(f"named_entity_match: forzado a incluir en el despliegue (ver comentario en código, "
+          f"§8.13) pese a que el criterio automático (F1 pond. {combined_metrics['f1_pond']:.3f} "
+          f"vs {cv_metrics['f1_pond']:.3f}) lo hubiera descartado.")
 
     print("\nReajustando el modelo final sobre TODO el golden set...")
     final_model = LogisticRegression(max_iter=2000, C=deploy_c)
