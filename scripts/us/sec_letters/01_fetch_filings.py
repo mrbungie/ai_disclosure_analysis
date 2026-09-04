@@ -30,6 +30,8 @@ Usage:
 """
 
 import gzip
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -41,6 +43,9 @@ from tqdm import tqdm
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "common"))
 import pipeline_logger
+
+MAX_WORKERS = 8
+_seen_lock = threading.Lock()
 
 
 def _fetch_company_threads(cik: int, ticker: str, start_date: str, end_date: str,
@@ -65,10 +70,26 @@ def _fetch_company_threads(cik: int, ticker: str, start_date: str, end_date: str
                 ticker=ticker, cik=cik, accession_number=f.accession_number)
             continue
 
+        # `.correspondence()` returns None (not an exception) for some
+        # filings -- verified 82/517 companies hit this and, before this
+        # check, crashed the WHOLE company's processing (the AttributeError
+        # on the next line propagated past this function's try/except,
+        # caught only by main()'s outer "Unhandled error, skip company"
+        # handler, discarding any OTHER good UPLOAD filings that same
+        # company had already found). Skipping just this one filing, not
+        # the company, is the actual fix.
+        if thread is None:
+            pipeline_logger.log_event(
+                pipeline_step="sec_letters_fetch", level="WARNING",
+                message=f"correspondence() returned None for {ticker} {f.accession_number}, skipping this filing",
+                ticker=ticker, cik=cik, accession_number=f.accession_number)
+            continue
+
         for entry in thread.entries:
-            if entry.accession_no in seen_accessions:
-                continue
-            seen_accessions.add(entry.accession_no)
+            with _seen_lock:
+                if entry.accession_no in seen_accessions:
+                    continue
+                seen_accessions.add(entry.accession_no)
 
             body = entry.body or ""
             filename = f"{ticker}_{entry.accession_no}.txt.gz"
@@ -77,6 +98,17 @@ def _fetch_company_threads(cik: int, ticker: str, start_date: str, end_date: str
                 with gzip.open(local_path, "wt", encoding="utf-8") as out:
                     out.write(body)
 
+            # `errors="coerce"` -- verified real, not hypothetical: edgartools
+            # sometimes parses `response_date` out of the letter's own body
+            # text, and gets a whole sentence instead of a date (e.g. "May 11,
+            # 2022, to the Staff's comment letter dated April 27, 2022. To
+            # assist your review, we have included..."). Without coercion,
+            # pd.to_datetime raises and crashes the WHOLE company (6/517 hit
+            # this before the fix, same "one bad entry costs everyone else's
+            # progress" failure mode as the None-thread bug above).
+            filing_date_parsed = pd.to_datetime(entry.filing_date, errors="coerce") if entry.filing_date else None
+            response_date_parsed = pd.to_datetime(
+                getattr(entry, "response_date", None), errors="coerce") if getattr(entry, "response_date", None) else None
             rows.append({
                 "document_id": entry.accession_no,
                 "cik": cik,
@@ -85,8 +117,8 @@ def _fetch_company_threads(cik: int, ticker: str, start_date: str, end_date: str
                 "source": "SEC_EDGAR",
                 "form_type": entry.form,
                 "correspondence_type": str(entry.correspondence_type),
-                "filing_date": pd.to_datetime(entry.filing_date).date() if entry.filing_date else None,
-                "response_date": pd.to_datetime(entry.response_date).date() if getattr(entry, "response_date", None) else None,
+                "filing_date": filing_date_parsed.date() if pd.notna(filing_date_parsed) else None,
+                "response_date": response_date_parsed.date() if pd.notna(response_date_parsed) else None,
                 "referenced_form": getattr(entry, "referenced_form", None),
                 "accession_number": entry.accession_no,
                 "local_path": str(local_path),
@@ -130,18 +162,32 @@ def main():
     filing_date = corr_cfg["filing_date"]
 
     all_rows = list(existing.to_dict("records")) if existing is not None else []
+    pending = [row for _, row in universe_df.iterrows() if row["ticker"] not in fully_done_tickers]
+    if len(pending) < len(universe_df):
+        print(f"Skipping {len(universe_df) - len(pending)} companies already fetched (no network call).")
+
     completed_since_checkpoint = 0
-    for _, row in tqdm(universe_df.iterrows(), total=len(universe_df), desc="SEC comment-letter threads"):
-        ticker, cik = row["ticker"], row["cik"]
-        if ticker in fully_done_tickers:
-            continue
-        new_rows = _fetch_company_threads(
-            int(cik), ticker, filing_date["from"], filing_date["to"], text_dir, seen_accessions)
-        all_rows.extend(new_rows)
-        completed_since_checkpoint += 1
-        if completed_since_checkpoint >= 25:
-            pd.DataFrame(all_rows).to_parquet(manifest_path, index=False)
-            completed_since_checkpoint = 0
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {
+            executor.submit(_fetch_company_threads, int(row["cik"]), row["ticker"],
+                             filing_date["from"], filing_date["to"], text_dir, seen_accessions): row["ticker"]
+            for row in pending
+        }
+        for future in tqdm(as_completed(futures), total=len(futures), desc="SEC comment-letter threads"):
+            ticker = futures[future]
+            try:
+                new_rows = future.result()
+            except Exception as e:
+                pipeline_logger.log_event(
+                    pipeline_step="sec_letters_fetch", level="ERROR",
+                    message=f"Unhandled error processing {ticker}, skipping company: {e}",
+                    ticker=ticker, details={"error": str(e)})
+                continue
+            all_rows.extend(new_rows)
+            completed_since_checkpoint += 1
+            if completed_since_checkpoint >= 25:
+                pd.DataFrame(all_rows).to_parquet(manifest_path, index=False)
+                completed_since_checkpoint = 0
 
     manifest_df = pd.DataFrame(all_rows)
     manifest_df.to_parquet(manifest_path, index=False)
