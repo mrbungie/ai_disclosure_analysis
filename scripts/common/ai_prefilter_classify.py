@@ -1,7 +1,15 @@
-"""Trains the final AI-relevance classifier (logistic regression on the
-prefilter's 11 signals — see docs/prefilter_evaluation.md §8/§8.1) and
+"""Trains the final AI-MENTION classifier (logistic regression on the
+prefilter's 12 signals — see docs/prefilter_evaluation.md §8/§8.1) and
 applies it to the FULL scored corpus to produce the AI-candidate set that
 scripts/common/ai_classify.py's frame extraction should actually run over.
+
+Target is "does this paragraph mention AI at all" (`relevance != 'none'`
+in the golden set), NOT "is this a substantive AI disclosure" (see §8.11).
+This project's focus is AI-WASHING -- whether a mention is concrete or
+vague/promotional IS the signal to study downstream, so filtering out
+non-concrete mentions at this stage would throw away exactly the cases
+that matter. Judging "substantive vs. vague" belongs to a later stage,
+never to this prefilter.
 
 Methodology (see §8.2 in the doc for the full writeup):
 1. GroupKFold(5) by accession_number over the complete golden set (9,884
@@ -142,11 +150,24 @@ def load_golden() -> pd.DataFrame:
     text). Since `prefilter_scores_unique` is only computed for
     `unique_paragraphs`' representative keys, the join has to go through
     `text_hash`, not the instance key, or most golden rows would silently
-    find no score row at all."""
+    find no score row at all.
+
+    Target is `relevance != 'none'` (`is_ai_mention`), NOT `is_ai_disclosure`
+    (docs/prefilter_evaluation.md §8.11). `is_ai_disclosure` was defined by
+    golden_set.py's judge prompt as true IFF relevance is "substantive" --
+    an "incidental" AI mention (786 rows in the golden set, real, non-noise
+    mentions of AI that just don't assert anything concrete) was always
+    trained as a NEGATIVE. That is backwards for this project's actual
+    question: whether a mention is concrete or vague IS the AI-washing
+    signal to study downstream, not something to filter out here. This
+    stage's job is "does this paragraph mention AI at all", not "is this
+    substantive" -- that judgment belongs to a later stage, not the
+    prefilter."""
     con = duckdb.connect(str(DB), read_only=True)
     try:
         return con.execute(f"""
-            SELECT l.is_ai_disclosure, l.inclusion_weight, l.accession_number,
+            SELECT l.is_ai_disclosure, l.relevance, l.relevance != 'none' AS is_ai_mention,
+                   l.inclusion_weight, l.accession_number,
                    {', '.join(f'p.{c}' for c in SIGNAL_COLUMNS)},
                    {', '.join(f'{sql} AS {name}' for name, sql in LEXICAL_STEP_COLUMNS)},
                    {_named_entity_sql("lower(coalesce(par.paragraph_text, ''))")} AS named_entity_match
@@ -300,7 +321,7 @@ def main() -> None:
     golden = load_golden()
     print(f"{len(golden):,} etiquetas")
 
-    y = golden["is_ai_disclosure"].astype(int).values
+    y = golden["is_ai_mention"].astype(int).values
     weights = golden["inclusion_weight"].astype(float).values
     fit_weights = np.sqrt(weights)
     groups = golden["accession_number"].values

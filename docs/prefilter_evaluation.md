@@ -1096,6 +1096,56 @@ removidos, 652 agregados.
 
 ---
 
+### 8.11 El target estaba mal definido: "sustantivo" no es lo mismo que "menciona IA" — y el foco del proyecto es AI-washing (2026-09-04)
+
+El usuario preguntó si el pipeline no estaba perdiendo señal, específicamente
+menciones de IA que "no son concretas". La respuesta fue que sí, y el
+motivo es de diseño, no de ajuste fino: `golden_set.py`'s `SYSTEM_PROMPT`
+define `is_ai_disclosure = true` **si y solo si** `relevance == "substantive"`
+— una mención "incidental" (la IA aparece pero el párrafo no afirma nada
+concreto) se etiquetaba `is_ai_disclosure = False`, es decir, se entrenaba
+como NEGATIVO. Eso es exactamente lo contrario de lo que este proyecto
+necesita: el foco es detectar **AI-washing** (divulgación de IA vaga o
+promocional sin sustancia real detrás), así que si una mención no es
+concreta ESA ES LA SEÑAL a estudiar río abajo, no algo para filtrar en el
+prefiltro. La responsabilidad de juzgar "sustantivo vs. vago" le
+corresponde a una etapa posterior (el propio análisis de AI-washing), no
+a esta.
+
+**Corrección, sin gastar un peso de LLM más**: el juez del golden set
+siempre guardó `relevance` (`none`/`incidental`/`substantive`) además del
+binario — el dato ya estaba ahí. Nuevo target: **`is_ai_mention = relevance
+!= 'none'`**, reemplazando `is_ai_disclosure` en `ai_prefilter_classify.py`
+(`load_golden()` y el `y` de entrenamiento). Efecto sobre las 9.878
+etiquetas: 786 filas "incidental" (mención real de IA, sin afirmación
+concreta) pasan de negativo a positivo — el conteo de positivos sube de
+1.731 a **2.517** (+45%).
+
+**Resultado**, mismo CV anidado de siempre: **C=10,0, threshold=0,75, F1
+pond. 0,947** (vs 0,856 del target anterior — la tarea "¿menciona IA?" es
+genuinamente más fácil de separar que "¿es sustantivo?", con menos
+ambigüedad en el borde). Corpus: **13.373 textos únicos marcados
+IA-relevantes (0,81% de 1.650.145), representando 15.868 instancias**
+— sube de 8.915/10.658, +50%, consistente con recuperar las menciones
+incidentales que antes se descartaban.
+
+Verificado con los 3 casos de control (ahora triviales, 0,997-0,9998,
+eran ya sustantivos) y con ejemplos reales `relevance=incidental` del
+golden set que antes el modelo hubiera aprendido a rechazar — ahora
+correctamente positivos (0,97-0,99), ej.: "*The Intelligent Edge is
+characterized by ubiquitous sensing, hyper-scale and edge computing,
+artificial intelligence (AI) and pervasive connectivity*" — una mención
+real pero genérica/promocional, exactamente el tipo de caso que el
+análisis de AI-washing necesita ver, no perder.
+
+`ai_classify.py` corrido sobre la población expandida: **2.159 textos
+nuevos, 2.089 clasificados con éxito en la primera pasada (2.324 frames),
+70 con error; un reintento bajó el error persistente a 1/13.374 (99,99%
+cobertura)**. Costo real: **US$0,204** (uso acumulado OpenRouter
+US$1,834 → US$2,038 de 20 acreditados, quedan ~US$17,96).
+
+---
+
 ## 9. Qué falta
 
 1. ~~**Completar el golden set.**~~ Resuelto 2026-09-04 (9.884 etiquetas
