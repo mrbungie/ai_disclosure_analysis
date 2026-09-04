@@ -365,6 +365,37 @@ pipeline ya calcula (7 scores por categoría + `negative_similarity` +
 de la mejor regla: +8,3 puntos, y sube precisión de 0,545 a 0,717 perdiendo 8
 puntos de recall.
 
+### 8.1 Reajuste con el golden set completo (2026-09-04)
+
+El golden set ya está completo: 9.884 etiquetas legibles (vs 6.038 arriba),
+incluyendo por fin `stage3_random` — el estrato del que dependía toda
+reponderación confiable (ver §9 punto 1 de la versión anterior de este
+documento). Reajustando el mismo modelo (`scripts/verif/prefilter_logit_refit.py`,
+mismas 11 señales, mismo `GroupKFold(5)` por `accession_number`, sin volver a
+embeber nada) sobre el set completo:
+
+| modelo | F1 estrato | prec pond. | recall pond. | **F1 pond.** |
+|---|---|---|---|---|
+| léxico fuerte (referencia, 9.884) | 0,793 | 0,523 | 0,995 | 0,686 |
+| **logit sobre las 11 señales (9.884)** | 0,807 | 0,736 | 0,971 | **0,837** |
+
+**La ventaja del modelo se hace más clara, no desaparece**: +8 puntos de F1
+ponderado sobre la corrida anterior (0,837 vs 0,757) y +15 puntos sobre la
+regla léxica en el mismo set completo (0,837 vs 0,686). Las cifras del §8
+original quedan como referencia histórica, no como recomendación — **usar
+0,837 / la fila de 9.884 etiquetas** para cualquier decisión de threshold o
+comparación futura.
+
+Advertencia metodológica encontrada al reajustar: `LogisticRegression(...,
+class_weight="balanced")` sobre el corpus completo (muy desbalanceado)
+colapsa el modelo en una copia casi exacta de `strong_lexical_match` —F1
+ponderado idéntico a 3 decimales a la regla léxica pura, perdiendo toda la
+señal semántica. `class_weight=None` (default de sklearn) es lo que
+produce la fila de arriba; no está confirmado si el §8 original usó
+`balanced` o no, así que sus cifras de 6.038 podrían estar afectadas por el
+mismo efecto — otra razón para tratar §8 como histórico y no recalcularlo
+hacia atrás.
+
 **El modelo de 1024 dims sobreajusta al diseño muestral, no a los datos.**
 Out-of-fold anda bien (0,824 en el estrato), pero al reponderar cae a 0,704, y
 con menos regularización se desploma a 0,502. La curva de aprendizaje lo delata:
@@ -387,12 +418,14 @@ un vector que no se parece a ninguna.
 
 ## 9. Qué falta
 
-1. **Completar el golden set.** Faltan 3.862 (3.472 sin intentar + 390 fallidos
-   por créditos). Sin `stage3_random` no hay reponderación confiable, y todas
-   las cifras ponderadas de acá son provisorias en valor absoluto.
-2. **Decidir regla vs modelo.** El logit de 11 señales gana por 8 puntos pero es
-   un modelo con coeficientes; la regla es explicable. Es una decisión de tesis,
-   no técnica.
+1. ~~**Completar el golden set.**~~ Resuelto 2026-09-04 (9.884 etiquetas
+   legibles, `stage3_random` incluido) — ver §8.1. Las cifras ponderadas ya
+   no son provisorias.
+2. **Decidir regla vs modelo.** Con el golden set completo el logit de 11
+   señales gana por 15 puntos de F1 ponderado (0,837 vs 0,686), no 8 — la
+   brecha se agrandó, no se achicó. Sigue siendo una decisión de tesis
+   (coeficientes vs regla explicable), pero con el modelo más claramente
+   adelante.
 3. **Contexto en el embedding.** Hoy cada párrafo se puntúa aislado: un
    encabezado "Risks Related to Artificial Intelligence" y su contenido son dos
    filas sin relación. Concatenar el encabezado de sección antes de embeber es
