@@ -345,6 +345,58 @@ def _paragraph_select_sql(form: str, source_view: str) -> str:
     """
 
 
+CL_PARAGRAPHS_GLOB = str(
+    REPO_ROOT / "data" / "interim" / "sections_cl" / "filing_paragraphs__run=*__part=*.parquet")
+
+
+def _cl_paragraph_select_sql(source_glob: str) -> str:
+    """Chile's PDF pipeline (scripts/cl/cmf_pdf_paragraphs.py) extracts
+    PARAGRAPHS directly from Memoria Anual / Análisis Razonado PDFs — there
+    is no raw "section text" intermediate the way US 10-K/10-Q HTML has, so
+    this does NOT go through `_paragraph_select_sql`'s line-merging (gaps-
+    and-islands) logic at all; it's already paragraph-grained on disk.
+
+    Column mapping to the shared `paragraphs` contract (this is what was
+    MISSING before: this function didn't exist, so `filing_paragraphs_cl`
+    just sat on disk, unUNIONed, and every downstream table — paragraphs,
+    unique_paragraphs, the prefilter, the golden set, ai_classify — was
+    silently US-only despite 1,077,595 Chilean paragraphs already being
+    ready):
+      - `country_code` = 'cl' (literal — this glob only ever holds CL data)
+      - `form` = `filing_type` ('annual'/'quarterly') — CL's own vocabulary,
+        deliberately NOT forced into '10-K'/'10-Q': those are SEC forms,
+        Chile doesn't file them. `annual` is CL's 10-K-equivalent panel
+        core, `quarterly` its 10-Q-equivalent shock series (see the
+        project's two-instruments data-scope decision) — same ROLE,
+        different label, on purpose.
+      - `accession_number` = `document_id` — verified unique per filing
+        (1,948 distinct values, and (document_id, paragraph_index) is
+        already globally unique with zero extra work).
+      - `item_key` = constant '0' — Memorias/Análisis Razonado have no
+        SEC-style Item 1/1A/7 structure to preserve; a constant is honest
+        about that rather than fabricating false section semantics. Every
+        uniqueness/grouping property the rest of the pipeline relies on
+        (PARAGRAPH_KEY, GroupKFold by accession_number) still holds because
+        (document_id, paragraph_index) alone is already unique.
+      - `is_scorable`: same length/alnum rule as the US branch, computed
+        here since CL's own extractor doesn't emit it.
+    """
+    return f"""
+        SELECT
+            'cl' AS country_code,
+            filing_type AS form,
+            document_id AS accession_number,
+            '0' AS item_key,
+            content_type,
+            paragraph_index,
+            paragraph_text,
+            text_hash8(paragraph_text) AS text_hash,
+            length(trim(paragraph_text)) > 3
+                AND regexp_matches(paragraph_text, '[A-Za-z0-9]') AS is_scorable
+        FROM read_parquet('{source_glob}')
+    """
+
+
 # Cheap, "decent" (not linguistically perfect) sentence-boundary heuristic:
 # split after a run of .!? that's followed by whitespace and then a
 # CAPITAL letter — the capital-letter gate is what keeps "the U.S. and
@@ -579,11 +631,15 @@ def main(with_text_tables: bool = False):
         # `make duckdb-text`): took ~52s standalone, real cost on a real
         # machine, not worth paying on every `make duckdb` when most
         # rebuilds just need the fast views refreshed.
-        views["paragraphs"] = (
-            f"({_paragraph_select_sql('10-K', 'filing_sections')})"
-            + "\n            UNION ALL BY NAME\n"
-            + f"({_paragraph_select_sql('10-Q', 'filing_sections_10q')})"
-        )
+        paragraph_branches = [
+            f"({_paragraph_select_sql('10-K', 'filing_sections')})",
+            f"({_paragraph_select_sql('10-Q', 'filing_sections_10q')})",
+        ]
+        if _existing(CL_PARAGRAPHS_GLOB):
+            paragraph_branches.append(f"({_cl_paragraph_select_sql(CL_PARAGRAPHS_GLOB)})")
+        else:
+            print(f"  skipping CL paragraphs (no files matching {CL_PARAGRAPHS_GLOB})")
+        views["paragraphs"] = "\n            UNION ALL BY NAME\n".join(paragraph_branches)
         # Built ON `paragraphs` (not re-derived from raw section text) —
         # see _sentence_select_sql's docstring.
         views["sentences"] = _sentence_select_sql()

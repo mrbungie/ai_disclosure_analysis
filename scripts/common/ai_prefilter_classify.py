@@ -141,7 +141,7 @@ def load_golden() -> pd.DataFrame:
                 ON p.country_code = up.country_code AND p.form = up.form
                AND p.accession_number = up.accession_number AND p.item_key = up.item_key
                AND p.paragraph_index = up.paragraph_index
-            WHERE l.error IS NULL
+            WHERE l.error IS NULL AND up.is_scorable
         """).df()
     finally:
         con.close()
@@ -232,16 +232,41 @@ def funnel_counts(con) -> dict:
     `unique_paragraphs`, every stage here already IS deduplicated by
     construction, not by a report-time COUNT(DISTINCT). `*_instances`
     (via `duplicate_count`) is reported once, at the end, as the single
-    place corpus scale still matters."""
-    total = con.execute("SELECT COUNT(*) FROM unique_paragraphs").fetchone()[0]
-    total_instances = con.execute("SELECT SUM(duplicate_count) FROM unique_paragraphs").fetchone()[0]
+    place corpus scale still matters.
+
+    Scoped to `is_scorable` (junk paragraphs were never real candidates,
+    see §8.9) AND to texts actually present in `PREFILTER_SCORES_GLOB` --
+    `unique_paragraphs` itself now also holds Chile (docs/
+    prefilter_evaluation.md §8.9: wired into the schema, deliberately NOT
+    yet scored/embedded), and counting the full table here would silently
+    imply Chile was part of this funnel when nothing downstream has
+    touched it.
+
+    Joined by `text_hash`, NOT the instance key (also §8.9): a handful of
+    universally-generic short strings ("", a bullet, "100%", bare numbers)
+    are byte-identical between US and CL text, so once CL entered
+    `unique_paragraphs` some of those groups' representative KEY flipped
+    to a Chilean instance ('cl' sorts before 'us' as a tie-break) even
+    though the group is 99.99% US paragraphs. Joining on the instance key
+    against the (pre-CL-merge) US-only score file would silently drop
+    ~214,710 US paragraph instances that share those hashes -- joining on
+    `text_hash`, the actual content identity, doesn't care which specific
+    instance a later rebuild happens to pick as representative."""
+    total, total_instances = con.execute(f"""
+        SELECT count(*), COALESCE(sum(up.duplicate_count), 0)
+        FROM unique_paragraphs up
+        JOIN read_parquet('{PREFILTER_SCORES_GLOB}') p ON p.text_hash = up.text_hash
+        WHERE up.is_scorable
+    """).fetchone()
     lexical = con.execute(f"""
-        SELECT COUNT(*) FROM read_parquet('{PREFILTER_SCORES_GLOB}')
-        WHERE strong_lexical_match OR weak_lexical_match
+        SELECT COUNT(*) FROM read_parquet('{PREFILTER_SCORES_GLOB}') p
+        JOIN unique_paragraphs up ON up.text_hash = p.text_hash
+        WHERE up.is_scorable AND (strong_lexical_match OR weak_lexical_match)
     """).fetchone()[0]
     strong_only = con.execute(f"""
-        SELECT COUNT(*) FROM read_parquet('{PREFILTER_SCORES_GLOB}')
-        WHERE strong_lexical_match
+        SELECT COUNT(*) FROM read_parquet('{PREFILTER_SCORES_GLOB}') p
+        JOIN unique_paragraphs up ON up.text_hash = p.text_hash
+        WHERE up.is_scorable AND strong_lexical_match
     """).fetchone()[0]
     return {
         "total_unique_paragraphs": total, "total_paragraph_instances": int(total_instances),
@@ -313,13 +338,31 @@ def main() -> None:
 
     con = duckdb.connect(str(DB), read_only=True)
     print("Cargando el corpus de textos únicos (última corrida de anchors)...")
+    # `is_scorable` (build_duckdb.py) descarta párrafos sin contenido real
+    # (<=3 caracteres útiles, o sin ningún alfanumérico) -- verificado en
+    # producción (docs/prefilter_evaluation.md §8.9) que sin este filtro el
+    # modelo puede marcar basura como positiva: el párrafo literal "AI" (2
+    # caracteres, is_scorable=false) salía con predicted_proba=0.86 solo por
+    # matchear el término léxico fuerte, sin nada de contenido detrás.
+    #
+    # JOIN por text_hash, no por llave de instancia (docs/
+    # prefilter_evaluation.md §8.9): un puñado de strings basura ("", un
+    # bullet, "100%", números sueltos) son idénticos entre US y CL, así que
+    # al entrar CL a `unique_paragraphs` el representante de esos grupos
+    # saltó a una instancia chilena ('cl' ordena antes que 'us') aunque el
+    # grupo sea ~100% párrafos de EE.UU. Uniendo por llave de instancia
+    # contra la corrida de scores (pre-fusión con CL, solo US) esos grupos
+    # desaparecían del corpus enteros -- ~214.710 instancias de EE.UU.
+    # perdidas silenciosamente. El text_hash es la identidad real del
+    # contenido y no cambia aunque el representante elegido sí lo haga.
     corpus = con.execute(f"""
         SELECT p.{', p.'.join(PARAGRAPH_KEY)}, p.text_hash, up.duplicate_count,
                {', '.join(f'p.{c}' for c in SIGNAL_COLUMNS)},
                up.paragraph_text,
                {_named_entity_sql("lower(coalesce(up.paragraph_text, ''))")} AS named_entity_match
         FROM read_parquet('{PREFILTER_SCORES_GLOB}') p
-        JOIN unique_paragraphs up USING ({', '.join(PARAGRAPH_KEY)})
+        JOIN unique_paragraphs up ON up.text_hash = p.text_hash
+        WHERE up.is_scorable
     """).df()
     print(f"{len(corpus):,} textos únicos ({int(corpus['duplicate_count'].sum()):,} instancias en el corpus)")
 

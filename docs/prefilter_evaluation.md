@@ -874,6 +874,90 @@ Funnel final (una sola lectura, sin columnas duplicadas):
 
 ---
 
+### 8.9 Chile entra al esquema de `paragraphs` (sin correr nada todavía) + dos bugs más encontrados al debuggear
+
+Se le pidió al modelo que revisara más a fondo si los resultados tenían
+sentido. Encontró que **todo el pipeline de clasificación de IA (prefiltro,
+golden set, `ai_classify`) era US-only**, pese a haber 1.077.595 párrafos
+de Chile ya extraídos (`data/interim/sections_cl/filing_paragraphs__run=*.
+parquet`, de `scripts/cl/cmf_pdf_paragraphs.py`) que nunca entraban a
+`paragraphs`: el pipeline de PDF de Chile extrae párrafos directo, sin el
+paso intermedio de "texto de sección cruda" que `build_duckdb.py` espera
+del pipeline HTML de EE.UU. (`filing_sections__run=*.parquet`) — un nombre
+de archivo y esquema distintos que `_existing()` nunca matcheaba.
+
+**Corregido en `build_duckdb.py`** con una nueva `_cl_paragraph_select_sql()`
+que mapea el esquema de Chile al contrato compartido de `paragraphs`:
+
+| columna de `paragraphs` | origen en Chile |
+|---|---|
+| `country_code` | literal `'cl'` |
+| `form` | `filing_type` (`'annual'`/`'quarterly'` — vocabulario propio de Chile, deliberadamente NO forzado a `'10-K'`/`'10-Q'`: son formularios de la SEC, Chile no los presenta. `annual` cumple el mismo ROL que el panel 10-K, `quarterly` el de la serie de shocks 10-Q — mismo rol, etiqueta distinta, a propósito) |
+| `accession_number` | `document_id` (verificado único: 1.948 valores distintos, y `(document_id, paragraph_index)` ya es único sin trabajo extra) |
+| `item_key` | constante `'0'` — las Memorias/Análisis Razonado no tienen estructura de Item 1/1A/7 como el 10-K; una constante es honesta en vez de inventar secciones falsas |
+| `is_scorable` | misma regla que EE.UU. (>3 caracteres útiles Y al menos un alfanumérico), calculada acá porque el extractor de Chile no la emite |
+
+**IMPORTANTE — por instrucción explícita, no se corrió nada de Chile.**
+`paragraphs`/`unique_paragraphs`/`sentences` ya incluyen Chile (1.077.595
+párrafos, 818.709 textos únicos, 1.745.203 oraciones) porque están
+construidas con SQL puro sobre lo que ya hay en disco — pero `ai_embed.py`
+(embeddings), `ai_prefilter.py` (scoring) y `ai_prefilter_classify.py`
+(el modelo) NO se ejecutaron sobre Chile: no hay embeddings para esos
+818.709 textos, así que no pueden puntuarse todavía. Motivo explícito del
+usuario: no confía aún en el parsing de documentos de Chile y prefiere
+revisarlo antes de gastar cómputo en clasificarlo. El funnel de este
+documento sigue siendo 100% EE.UU.
+
+**Dos bugs reales encontrados exactamente por fusionar Chile al esquema**
+(ninguno de los dos tiene que ver con clasificar contenido de Chile — son
+sobre cómo `unique_paragraphs` se comporta al tener más de un país):
+
+1. **`is_scorable` nunca se aplicaba.** El párrafo literal `"AI"` (2
+   caracteres, `is_scorable=false`) salía con `predicted_proba=0,86` —
+   matchea el término léxico fuerte "ai" sin tener ningún contenido
+   detrás. Ni `ai_prefilter_classify.py` ni `ai_classify.py` filtraban por
+   esa columna en ningún lado, pese a que existe desde antes (`build_
+   duckdb.py`) exactamente para descartar esto. Corregido: `load_golden()`
+   y la consulta del corpus en `ai_prefilter_classify.py` ahora exigen
+   `up.is_scorable`. Efecto: 6 etiquetas basura salen del golden set
+   (9.884 → 9.878), y las 785 instancias basura del corpus dejan de poder
+   ser positivas nunca.
+2. **Colisión de hash entre países escondía ~214.710 instancias de
+   EE.UU.** Strings universales ("", un bullet "•", "100%", números
+   sueltos como "(1)") son byte-idénticos entre el texto extraído de
+   EE.UU. y el de Chile. Al fusionar Chile, el representante elegido para
+   esos grupos (la llave natural más chica) saltó a una instancia
+   **chilena** simplemente porque `'cl'` ordena antes que `'us'` — aunque
+   el grupo sea ~99,99% párrafos de EE.UU. (ej.: el string vacío tiene
+   139.157 miembros de EE.UU. y 1 de Chile, pero quedó etiquetado
+   `country_code='cl'`). Como la corrida de scores existente se calculó
+   ANTES de fusionar Chile (solo cubre representantes de EE.UU.), unir por
+   **llave de instancia** contra esa corrida hacía que esos grupos
+   desaparecieran enteros del corpus — verificado: el total de instancias
+   del funnel cayó de los ~3.281.038 esperados a 3.012.397, mucho más de
+   lo que explica solo el filtro de `is_scorable`. Corregido: todos los
+   `JOIN` entre `unique_paragraphs` y la corrida de scores ahora son por
+   **`text_hash`** (la identidad real del contenido), no por llave de
+   instancia — el representante elegido puede cambiar entre reconstrucciones
+   de la tabla sin que eso rompa nada. Resultado tras el fix:
+   **3.016.700 instancias** en el funnel, que coincide casi exacto con las
+   3.016.097 instancias reales de EE.UU. que pasan `is_scorable` (la
+   diferencia de 603 es el sliver negligible de miembros chilenos que
+   viajan colgando en esos mismos grupos basura — ninguno de ellos puede
+   ser positivo).
+
+Ninguno de los dos bugs cambió qué párrafos reales quedan marcados
+IA-relevantes (**9.670 textos únicos, 11.567 instancias** — prácticamente
+igual a antes): todo lo afectado era basura sin señal de IA. Pero ambos
+eran reales, y el segundo en particular es una advertencia útil para
+cuando Chile sí se puntúe: `unique_paragraphs.country_code` describe SOLO
+al representante elegido, no a todos los miembros del grupo — cualquier
+consulta futura que filtre `unique_paragraphs` por país debe unir por
+`text_hash` contra la población real, nunca confiar en esa columna como
+si describiera el grupo completo.
+
+---
+
 ## 9. Qué falta
 
 1. ~~**Completar el golden set.**~~ Resuelto 2026-09-04 (9.884 etiquetas
