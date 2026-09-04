@@ -125,6 +125,23 @@ def register_anchors(connection, table_name: str = "ai_prefilter_anchors") -> Se
     return rows
 
 
+def register_entity_terms(connection, table_name: str = "ai_prefilter_entity_terms",
+                           path: Path | str = DEFAULT_CONFIG) -> dict[str, dict[str, str]]:
+    """Create a DuckDB table from `entity_terms()` so scripts/common/
+    ai_entity_mentions.py can join against it in SQL instead of looping over
+    the dict in Python -- same pattern as `register_anchors`. Country-agnostic
+    on purpose: this table has no country_code column, it is one row per
+    (term, geo, modality) regardless of which corpus mentions it."""
+    terms = entity_terms(path)
+    connection.execute(f"DROP TABLE IF EXISTS {table_name}")
+    connection.execute(f"CREATE TABLE {table_name} (term VARCHAR, geo VARCHAR, modality VARCHAR)")
+    connection.executemany(
+        f"INSERT INTO {table_name} VALUES (?, ?, ?)",
+        [(term, meta["geo"], meta["modality"]) for term, meta in terms.items()],
+    )
+    return terms
+
+
 # Back-compat aliases: score_embeddings iterates POSITIVE_ANCHORS to fix the
 # category column order.
 POSITIVE_ANCHORS = positive_anchors()

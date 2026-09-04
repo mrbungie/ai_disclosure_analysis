@@ -699,6 +699,61 @@ def main(with_text_tables: bool = False):
     else:
         print("  skipping ai_prefilter_scores (run scripts/common/ai_prefilter.py first)")
 
+    # --- Gold tables: LLM frame extraction and lexical entity mentions,
+    # broadcast from `unique_paragraphs`' one-row-per-text back out to every
+    # real paragraph INSTANCE via `text_hash` (docs/prefilter_evaluation.md
+    # §8.8/§8.12) — a downstream reader wants "which filings/paragraphs",
+    # not "which distinct texts". Both are COUNTRY-AGNOSTIC by construction:
+    # neither filters by country_code anywhere, they just broadcast whatever
+    # is in `paragraphs` — Chile (or any later country) starts appearing the
+    # moment its own paragraphs enter the underlying is_ai_prefiltered
+    # population or get an entity-mention run, no view change needed here.
+    frames_glob = "data/interim/ai_classify/ai_frames__session=*.parquet"
+    if with_text_tables and _existing(frames_glob):
+        views["gold_ai_frames"] = f"""
+            WITH latest_frames AS (
+                SELECT * FROM read_parquet('{frames_glob}', union_by_name=True)
+                WHERE error IS NULL
+                QUALIFY row_number() OVER (
+                    PARTITION BY text_hash, frame_index ORDER BY session_id DESC
+                ) = 1
+            )
+            SELECT p.country_code, p.form, p.accession_number, p.item_key, p.paragraph_index,
+                   f.text_hash, up.duplicate_count, f.frame_index, f.has_frame,
+                   f.subject, f.ai_type, f.temporal, f.domain, f.concepts,
+                   f.specificity_business_process, f.specificity_product_or_system,
+                   f.specificity_vendor_or_partner, f.specificity_quantified_metric,
+                   f.specificity_date_or_timeline,
+                   f.rhetoric_promotional, f.rhetoric_strategic_importance,
+                   f.evidence_sentence_ids, f.sentence_indices,
+                   f.judge_model, f.prompt_version, f.classified_at
+            FROM paragraphs p
+            JOIN latest_frames f ON f.text_hash = p.text_hash
+            JOIN unique_paragraphs up ON up.text_hash = f.text_hash
+        """
+    elif with_text_tables:
+        print(f"  skipping gold_ai_frames (no files matching {frames_glob} — "
+              f"run scripts/common/ai_classify.py first)")
+
+    entity_mentions_glob = "data/interim/ai_entity_mentions/ai_entity_mentions__run=*.parquet"
+    if with_text_tables and _existing(entity_mentions_glob):
+        views["gold_ai_entity_mentions"] = f"""
+            WITH latest_mentions AS (
+                SELECT * FROM read_parquet('{entity_mentions_glob}', union_by_name=True)
+                QUALIFY row_number() OVER (
+                    PARTITION BY text_hash, term ORDER BY run_id DESC
+                ) = 1
+            )
+            SELECT p.country_code, p.form, p.accession_number, p.item_key, p.paragraph_index,
+                   m.text_hash, up.duplicate_count, m.term, m.geo, m.modality, m.run_id
+            FROM paragraphs p
+            JOIN latest_mentions m ON m.text_hash = p.text_hash
+            JOIN unique_paragraphs up ON up.text_hash = m.text_hash
+        """
+    elif with_text_tables:
+        print(f"  skipping gold_ai_entity_mentions (no files matching {entity_mentions_glob} — "
+              f"run scripts/common/ai_entity_mentions.py first)")
+
     for name, query in views.items():
         kind = "TABLE" if name in MATERIALIZED_TABLES else "VIEW"
         # DROP before CREATE OR REPLACE: a prior run may have created this
