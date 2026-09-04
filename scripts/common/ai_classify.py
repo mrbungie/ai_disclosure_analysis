@@ -339,18 +339,43 @@ async def classify_rows(
     from pydantic_ai.models.openrouter import OpenRouterModel
     from pydantic_ai.providers.openrouter import OpenRouterModelProfile, OpenRouterProvider
 
+    # Qwen-via-Alibaba workaround for a real, closed-as-not-planned pydantic-ai
+    # bug (github.com/pydantic/pydantic-ai/issues/5287, verified against this
+    # project's own runs 2026-09-04: same paragraph, same settings, ~20%
+    # non-deterministic 400 "The content field is a required field", always
+    # and only when a prior assistant turn had only tool calls and no text).
+    # OpenAI's spec allows `content: null` on a tool-call-only assistant
+    # message and every other provider accepts it — Alibaba's endpoint alone
+    # requires a non-null string. OpenRouter forwards the body verbatim, so
+    # nothing short of coercing the field ourselves fixes it; this is the
+    # exact subclass workaround pydantic-ai's own maintainer posted on that
+    # issue before closing it.
+    class QwenSafeOpenRouterModel(OpenRouterModel):
+        async def _map_messages(self, messages, model_request_parameters, *, model_settings=None):
+            mapped = await super()._map_messages(
+                messages, model_request_parameters, model_settings=model_settings)
+            for m in mapped:
+                if m.get("role") == "assistant" and m.get("content") is None:
+                    m["content"] = ""
+            return mapped
+
     # Same OpenRouter caching setup as golden_set.py's label_rows() — see
     # that function's comment for why the profile override is necessary
     # (pydantic-ai only auto-enables cache_control for Anthropic/Google,
     # not Alibaba/Qwen, even though OpenRouter itself supports it for this
     # model). SYSTEM_PROMPT here is longer than golden_set's, so caching
     # matters more, not less.
-    model = OpenRouterModel(
+    model = QwenSafeOpenRouterModel(
         judge_model,
         provider=OpenRouterProvider(api_key=os.environ["OPENROUTER_API_KEY"]),
         profile=OpenRouterModelProfile(openrouter_supports_cache_control=True),
         settings={"openrouter_cache_instructions": True},
     )
+    # retries=2 (pydantic-ai's structured-output self-correction) is back on
+    # now that the crash it used to trigger is fixed above — measured
+    # (2026-09-04) that retries=0 alone traded the ~18% crash rate for a ~21%
+    # "Exceeded maximum output retries (0)" rate instead (no chance to
+    # self-correct a first-pass schema miss), which is worse, not better.
     agent = Agent(model, output_type=ParagraphExtraction, system_prompt=SYSTEM_PROMPT, retries=2)
 
     written: list[Path] = []
