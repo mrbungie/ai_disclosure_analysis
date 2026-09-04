@@ -189,18 +189,32 @@ def cv_threshold_and_metrics(X: np.ndarray, y: np.ndarray, weights: np.ndarray,
 
 
 def funnel_counts(con) -> dict:
+    """Every count here has TWO readings: the raw paragraph-INSTANCE count
+    (what's actually scored/deployed) and the unique-TEXT count (what a
+    reader should compare against, since ~50% of the corpus is literal
+    boilerplate repeated across filings -- see docs/prefilter_evaluation.md
+    §4.2/§8.7). Reporting only the instance count silently implies the
+    funnel is deduplicated when it isn't; ai_classify.py IS deduplicated
+    (one LLM call per unique text -- §8.7), but the funnel below never was."""
     total = con.execute("SELECT COUNT(*) FROM paragraphs").fetchone()[0]
+    total_unique = con.execute("SELECT COUNT(DISTINCT paragraph_text) FROM paragraphs").fetchone()[0]
     lexical = con.execute(f"""
-        SELECT COUNT(*) FROM read_parquet(
-            'data/interim/prefilter_scores/prefilter_scores__run={LATEST_PREFILTER_RUN}__part=*.parquet')
+        SELECT COUNT(*), COUNT(DISTINCT par.paragraph_text) FROM read_parquet(
+            'data/interim/prefilter_scores/prefilter_scores__run={LATEST_PREFILTER_RUN}__part=*.parquet') p
+        JOIN paragraphs par USING ({', '.join(PARAGRAPH_KEY)})
         WHERE strong_lexical_match OR weak_lexical_match
-    """).fetchone()[0]
+    """).fetchone()
     strong_only = con.execute(f"""
-        SELECT COUNT(*) FROM read_parquet(
-            'data/interim/prefilter_scores/prefilter_scores__run={LATEST_PREFILTER_RUN}__part=*.parquet')
+        SELECT COUNT(*), COUNT(DISTINCT par.paragraph_text) FROM read_parquet(
+            'data/interim/prefilter_scores/prefilter_scores__run={LATEST_PREFILTER_RUN}__part=*.parquet') p
+        JOIN paragraphs par USING ({', '.join(PARAGRAPH_KEY)})
         WHERE strong_lexical_match
-    """).fetchone()[0]
-    return {"total_paragraphs": total, "lexical_strong_or_weak": lexical, "lexical_strong_only": strong_only}
+    """).fetchone()
+    return {
+        "total_paragraphs": total, "total_paragraphs_unique_text": total_unique,
+        "lexical_strong_or_weak": lexical[0], "lexical_strong_or_weak_unique_text": lexical[1],
+        "lexical_strong_only": strong_only[0], "lexical_strong_only_unique_text": strong_only[1],
+    }
 
 
 def main() -> None:
@@ -269,6 +283,7 @@ def main() -> None:
     print("Cargando el corpus completo (última corrida de anchors)...")
     corpus = con.execute(f"""
         SELECT p.{', p.'.join(PARAGRAPH_KEY)}, {', '.join(f'p.{c}' for c in SIGNAL_COLUMNS)},
+               par.paragraph_text,
                {_named_entity_sql("lower(coalesce(par.paragraph_text, ''))")} AS named_entity_match
         FROM read_parquet('data/interim/prefilter_scores/prefilter_scores__run={LATEST_PREFILTER_RUN}__part=*.parquet') p
         JOIN paragraphs par USING ({', '.join(PARAGRAPH_KEY)})
@@ -289,8 +304,12 @@ def main() -> None:
     print("Calculando el funnel...")
     funnel = funnel_counts(con)
     funnel["prefilter_model_only_positive"] = int(model_positive.sum())
+    funnel["prefilter_model_only_positive_unique_text"] = int(
+        corpus.loc[model_positive, "paragraph_text"].nunique())
     funnel["named_entity_rescued"] = rescued
     funnel["prefilter_model_positive"] = int(is_positive.sum())
+    funnel["prefilter_model_positive_unique_text"] = int(
+        corpus.loc[is_positive, "paragraph_text"].nunique())
     con.close()
 
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

@@ -5,14 +5,27 @@ step only: paragraph text in, zero-or-more `AIFrame`s out.
 
 Population classified: paragraphs `scripts/common/ai_prefilter_classify.py`'s
 final logistic-regression model marked `is_ai_prefiltered=True` — see
-docs/prefilter_evaluation.md §8.2 for the funnel (12,840 of 3,281,038
-paragraphs, 0.39%, threshold chosen via GroupKFold CV, not eyeballed). This
-replaced an earlier version of this script that used the golden set's
-`is_ai_disclosure=True` labels as a stand-in population, back when no
-prefilter-scored candidate set existed yet in this environment — that
-subset (1,719 paragraphs) is a subset of / mostly overlaps with the real
-12,840, so its results aren't discarded, just superseded as the source of
-truth for "what's pending."
+docs/prefilter_evaluation.md §8.6 for the funnel. This replaced an earlier
+version of this script that used the golden set's `is_ai_disclosure=True`
+labels as a stand-in population, back when no prefilter-scored candidate set
+existed yet in this environment — that subset is a subset of / mostly
+overlaps with the real population, so its results aren't discarded, just
+superseded as the source of truth for "what's pending."
+
+DEDUPED BY TEXT before spending any LLM call (docs/prefilter_evaluation.md
+§8.7) — ~50% of the corpus is literal boilerplate repeated across filings,
+and among the prefilter-positive population specifically 11,561 paragraph
+INSTANCES reduce to 9,664 unique TEXTS. Paying the LLM once per repetition
+of identical content is pure waste, so only ONE representative instance per
+unique `text_hash` (BLAKE2b of `paragraph_text`, same hash used everywhere
+else in this pipeline) is ever sent to the model. Consequently: **`ai_frames`
+is keyed by `text_hash`, NOT by paragraph instance.** The
+`(country_code, form, accession_number, item_key, paragraph_index)` columns
+on each row name only the ONE representative occurrence that was actually
+classified — `duplicate_count` says how many paragraph instances in the
+corpus share that text. A caller that wants the frames for a SPECIFIC
+paragraph must compute that paragraph's own `text_hash` (same BLAKE2b) and
+join on that column, never on the paragraph key.
 
 Same operational contract as golden_set.py, deliberately kept close so the
 two don't drift: additive (nothing is ever overwritten or deleted), atomic
@@ -20,7 +33,10 @@ part files every `--part-rows` rows, a failed API call is written as an
 error row (not skipped) so a credit/network cutoff retries itself next
 run, and "already classified" is judge-model-agnostic (any prior
 successful run counts as coverage — see golden_set.py's cmd_label for why:
-switching judge models must never silently reprocess everything).
+switching judge models must never silently reprocess everything). Coverage
+is checked by `text_hash`, so a text already classified under one
+paragraph's identity is never resent even if a NEW duplicate instance of it
+shows up in a later prefilter run.
 
 Grounding: each paragraph is split into its constituent `sentences` (the
 materialized DuckDB table scripts/common/build_duckdb.py already builds)
@@ -49,6 +65,7 @@ from pathlib import Path
 from typing import Literal
 
 import duckdb
+import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from dotenv import load_dotenv
@@ -232,9 +249,15 @@ def build_prompt(sentences: list[str]) -> str:
 # --------------------------------------------------------------------------
 
 FRAME_SCHEMA = pa.schema([
+    # NOTE: (country_code, form, accession_number, item_key, paragraph_index)
+    # name only the ONE representative paragraph instance that was actually
+    # sent to the model for this text_hash -- see the module docstring.
+    # text_hash is the real join key; duplicate_count is how many paragraph
+    # instances in the corpus share this exact text.
     ("country_code", pa.string()), ("form", pa.string()),
     ("accession_number", pa.string()), ("item_key", pa.string()),
     ("paragraph_index", pa.int64()), ("text_hash", pa.uint64()),
+    ("duplicate_count", pa.int64()),
     ("frame_index", pa.int64()), ("has_frame", pa.bool_()),
     ("subject", pa.string()), ("ai_type", pa.string()),
     ("temporal", pa.string()), ("domain", pa.string()),
@@ -272,12 +295,23 @@ def commit_part(rows: list[dict], directory: Path, session_id: str, index: int) 
     return final
 
 
+def _text_hash(text: str) -> int:
+    """Same BLAKE2b-8 as ai_embed.py / golden_set.py — the corpus-wide join
+    key for "same paragraph content", independent of any specific instance's
+    (country_code, form, accession_number, item_key, paragraph_index)."""
+    return int.from_bytes(hashlib.blake2b(text.encode("utf-8"), digest_size=8).digest(),
+                           "big", signed=False)
+
+
 def _base_record(row: dict, judge_model: str, session_id: str) -> dict:
     return {
         **{key: row[key] for key in PARAGRAPH_KEY},
-        "text_hash": int.from_bytes(
-            hashlib.blake2b(row["paragraph_text"].encode("utf-8"), digest_size=8).digest(),
-            "big", signed=False),
+        # `row["text_hash"]` is the CANONICAL hash, computed from the
+        # `paragraphs` table's own `paragraph_text` -- NOT recomputed here
+        # from " ".join(row["sentences"]), which does not reproduce the
+        # original text byte-for-byte (see fetch_pending's comment).
+        "text_hash": row["text_hash"],
+        "duplicate_count": row["duplicate_count"],
         "sentence_indices": list(row["sentence_indices"]),
         "judge_model": judge_model, "prompt_version": PROMPT_VERSION,
         "session_id": session_id, "classified_at": datetime.now(timezone.utc).isoformat(),
@@ -447,66 +481,127 @@ async def classify_rows(
 # Población pendiente
 # --------------------------------------------------------------------------
 
-def fetch_pending(database: Path, output_dir: Path, limit: int) -> tuple[list[dict], int]:
+def fetch_pending(database: Path, output_dir: Path, limit: int) -> tuple[list[dict], dict]:
+    """Returns (representative_rows_to_classify, stats). See the module
+    docstring: population is deduped by `text_hash` BEFORE any LLM call —
+    only one representative paragraph instance per unique text is ever
+    classified; `stats` reports both the instance-level and text-level
+    counts so the console/manifest never implies more (or fewer) LLM calls
+    happened than actually did."""
     con = duckdb.connect(str(database), read_only=True)
     try:
         existing_parts = sorted(str(p) for p in frame_parts(output_dir))
         if existing_parts:
             files = ", ".join(f"'{p}'" for p in existing_parts)
-            con.execute(f"CREATE OR REPLACE TEMP VIEW classified AS SELECT DISTINCT "
-                        f"{', '.join(PARAGRAPH_KEY)} FROM read_parquet([{files}], union_by_name=True) "
+            con.execute(f"CREATE OR REPLACE TEMP VIEW classified_hashes AS SELECT DISTINCT "
+                        f"text_hash FROM read_parquet([{files}], union_by_name=True) "
                         f"WHERE error IS NULL")
         else:
-            con.execute(f"CREATE OR REPLACE TEMP VIEW classified AS SELECT "
-                        f"{', '.join(PARAGRAPH_KEY)} FROM paragraphs WHERE false")
-        already = con.execute("SELECT count(*) FROM classified").fetchone()[0]
+            con.execute("CREATE OR REPLACE TEMP VIEW classified_hashes AS "
+                        "SELECT CAST(NULL AS UBIGINT) AS text_hash WHERE false")
 
         # Población: el modelo final del prefiltro (scripts/common/
         # ai_prefilter_classify.py) marcó is_ai_prefiltered=True — ver
-        # docs/prefilter_evaluation.md §8.2 (12,840/3,281,038, threshold
-        # elegido por GroupKFold CV). QUALIFY se queda con la corrida más
-        # reciente si alguna vez hay más de una (mismo patrón que
-        # extraction_trace en build_duckdb.py).
+        # docs/prefilter_evaluation.md §8.6 para el funnel.
+        #
+        # BUG REAL corregido acá (2026-09-04, ver §8.7): filtrar
+        # `is_ai_prefiltered = true` ANTES del QUALIFY hace que el row_number()
+        # se calcule solo entre las filas ya positivas -- si la corrida MAS
+        # RECIENTE dice que una llave es negativa, esa fila queda fuera del
+        # WHERE y el rank 1 termina cayendo en una corrida VIEJA que sí la
+        # marcaba positiva, "resucitando" un positivo obsoleto de un modelo ya
+        # descartado. Verificado concretamente: con el filtro en el orden
+        # incorrecto la población salía 13.239 instancias; resolviendo primero
+        # la corrida más reciente por llave (sin filtrar) y RECIÉN AHÍ
+        # filtrando por is_ai_prefiltered, sale 11.561 -- exactamente el
+        # conteo de la corrida desplegada, como debe ser (todas las corridas
+        # puntúan el mismo corpus completo, así que la resolución "más
+        # reciente por llave" nunca debería divergir del último archivo solo).
         con.execute("""
-            CREATE OR REPLACE TEMP VIEW positives AS
-            SELECT country_code, form, accession_number, item_key, paragraph_index
-            FROM read_parquet('data/interim/prefilter_predictions/prefilter_predictions__run=*.parquet',
-                               union_by_name=True)
-            WHERE is_ai_prefiltered = true
+            CREATE OR REPLACE TEMP VIEW latest_predictions AS
+            SELECT * FROM read_parquet(
+                'data/interim/prefilter_predictions/prefilter_predictions__run=*.parquet',
+                union_by_name=True)
             QUALIFY row_number() OVER (
                 PARTITION BY country_code, form, accession_number, item_key, paragraph_index
                 ORDER BY model_version DESC
             ) = 1
         """)
-        keys = " AND ".join(f"c.{c} IS NOT DISTINCT FROM p.{c}" for c in PARAGRAPH_KEY)
-        pending_df = con.execute(f"""
-            SELECT p.*, s.sentence_index, s.sentence_text
-            FROM positives p
-            JOIN paragraphs par USING ({', '.join(PARAGRAPH_KEY)})
-            JOIN sentences s USING ({', '.join(PARAGRAPH_KEY)})
-            WHERE NOT EXISTS (SELECT 1 FROM classified c WHERE {keys})
-            ORDER BY hash({' || '.join(f'p.{c}' for c in PARAGRAPH_KEY)}), s.sentence_index
-            {f'LIMIT {int(limit) * 200}' if limit else ''}
+        con.execute("""
+            CREATE OR REPLACE TEMP VIEW positives AS
+            SELECT country_code, form, accession_number, item_key, paragraph_index
+            FROM latest_predictions
+            WHERE is_ai_prefiltered = true
+        """)
+        pos_df = con.execute(f"""
+            SELECT p.*, par.paragraph_text
+            FROM positives p JOIN paragraphs par USING ({', '.join(PARAGRAPH_KEY)})
+        """).df()
+        pos_df["text_hash"] = pos_df["paragraph_text"].map(_text_hash)
+        already_hashes = set(con.execute("SELECT text_hash FROM classified_hashes")
+                              .df()["text_hash"].tolist())
+
+        already_instance_mask = pos_df["text_hash"].isin(already_hashes)
+        stats = {
+            "total_positive_instances": int(len(pos_df)),
+            "unique_positive_texts": int(pos_df["text_hash"].nunique()),
+            "already_classified_texts": len(already_hashes & set(pos_df["text_hash"])),
+            "already_classified_instances": int(already_instance_mask.sum()),
+        }
+
+        # Un representante por text_hash pendiente (orden determinista: la
+        # llave de párrafo más chica del grupo), + duplicate_count para que
+        # quede registrado cuántas instancias del corpus comparten ese texto.
+        reps = []
+        for text_hash, group in (pos_df[~already_instance_mask]
+                                  .sort_values(list(PARAGRAPH_KEY))
+                                  .groupby("text_hash", sort=False)):
+            rep = group.iloc[0]
+            reps.append({**{c: rep[c] for c in PARAGRAPH_KEY}, "text_hash": int(text_hash),
+                         "paragraph_text": rep["paragraph_text"], "duplicate_count": int(len(group))})
+        reps.sort(key=lambda r: tuple(r[c] for c in PARAGRAPH_KEY))
+        stats["pending_texts"] = len(reps)
+        stats["pending_instances_covered"] = int(sum(r["duplicate_count"] for r in reps))
+        if limit:
+            reps = reps[: int(limit)]
+
+        if not reps:
+            return [], stats
+
+        con.register("reps", pd.DataFrame(reps)[list(PARAGRAPH_KEY)])
+        sent_df = con.execute(f"""
+            SELECT r.{', r.'.join(PARAGRAPH_KEY)}, s.sentence_index, s.sentence_text
+            FROM reps r JOIN sentences s USING ({', '.join(PARAGRAPH_KEY)})
+            ORDER BY {', '.join(f'r.{c}' for c in PARAGRAPH_KEY)}, s.sentence_index
         """).df()
     finally:
         con.close()
 
-    # Reconstruye párrafos completos desde las filas de sentences (una fila
-    # por oración) — igual que build_prompt necesita, en orden.
+    # Nota importante: `paragraph_text` (y por lo tanto `text_hash`) viene de
+    # `reps`, es decir de la tabla `paragraphs` DIRECTAMENTE -- NO de volver a
+    # unir las oraciones reconstruidas más abajo con " ".join(). Verificado en
+    # producción (2026-09-04, §8.7): esas dos reconstrucciones NO coinciden
+    # byte a byte (separadores/espacios distintos entre `paragraph_text` y la
+    # concatenación de `sentences`), así que hashear el texto reconstruido
+    # rompía silenciosamente el join de deduplicación (de 721 hashes
+    # clasificados solo 7 coincidían con la población real). El texto
+    # reconstruido sigue siendo lo que se le manda al modelo como prompt
+    # (`build_prompt` solo necesita la lista de oraciones, no el párrafo
+    # entero), pero el hash que se persiste es siempre el canónico.
+    info_by_key = {tuple(r[c] for c in PARAGRAPH_KEY): r for r in reps}
     rows_by_key: dict[tuple, dict] = {}
-    for record in pending_df.to_dict("records"):
+    for record in sent_df.to_dict("records"):
         key = tuple(record[c] for c in PARAGRAPH_KEY)
         if key not in rows_by_key:
+            info = info_by_key[key]
             rows_by_key[key] = {**{c: record[c] for c in PARAGRAPH_KEY},
-                                "paragraph_text": "", "sentences": [], "sentence_indices": []}
+                                "paragraph_text": info["paragraph_text"], "text_hash": info["text_hash"],
+                                "sentences": [], "sentence_indices": [],
+                                "duplicate_count": info["duplicate_count"]}
         rows_by_key[key]["sentences"].append(record["sentence_text"])
         rows_by_key[key]["sentence_indices"].append(int(record["sentence_index"]))
     rows = list(rows_by_key.values())
-    for r in rows:
-        r["paragraph_text"] = " ".join(r["sentences"])
-    if limit:
-        rows = rows[:int(limit)]
-    return rows, already
+    return rows, stats
 
 
 def main() -> None:
@@ -527,10 +622,16 @@ def main() -> None:
         sys.exit("Falta OPENROUTER_API_KEY en .env")
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    pending, already = fetch_pending(args.database, args.output_dir, args.limit)
-    print(f"Modelo: {args.judge_model} | prompt {PROMPT_VERSION} | "
-          f"{already:,} ya clasificados", flush=True)
-    print(f"Pendientes en esta sesión: {len(pending):,}", flush=True)
+    pending, pop_stats = fetch_pending(args.database, args.output_dir, args.limit)
+    print(f"Modelo: {args.judge_model} | prompt {PROMPT_VERSION}", flush=True)
+    print(f"Población positiva del prefiltro: {pop_stats['total_positive_instances']:,} instancias "
+          f"({pop_stats['unique_positive_texts']:,} textos únicos)", flush=True)
+    print(f"Ya clasificados: {pop_stats['already_classified_texts']:,} textos "
+          f"({pop_stats['already_classified_instances']:,} instancias que los comparten)", flush=True)
+    print(f"Pendientes en total: {pop_stats['pending_texts']:,} textos únicos "
+          f"({pop_stats['pending_instances_covered']:,} instancias que quedarán cubiertas)", flush=True)
+    if args.limit and pop_stats["pending_texts"] > len(pending):
+        print(f"Se clasifican {len(pending):,} de esos textos en ESTA corrida (--limit)", flush=True)
     if not pending:
         print("Nada pendiente.")
         return
@@ -543,7 +644,7 @@ def main() -> None:
 
     manifest = {
         "session_id": session_id, "judge_model": args.judge_model, "prompt_version": PROMPT_VERSION,
-        "requested": len(pending), "already_classified": already,
+        "requested_texts": len(pending), "population_stats": pop_stats,
         "parts_written": [str(p) for p in written],
         **stats, "finished_at": datetime.now(timezone.utc).isoformat(),
     }

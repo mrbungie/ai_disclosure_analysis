@@ -661,15 +661,105 @@ IA-relevantes por el modelo**.
 
 **Extracción de frames sobre la población corregida (2026-09-04)**: el
 diseño aditivo/idempotente de `ai_classify.py` significa que casi toda la
-población de 13.239 positivos del modelo corregido ya estaba clasificada
-(el conjunto de positivos apenas cambió: 11.561 vs 11.546 párrafos, más
-el resto ya cubierto por el golden set) — solo **394 párrafos** quedaron
-pendientes en esta sesión. Corrida: **383 clasificados con éxito, 11 con
-error persistente** (consistente con la tasa de error base ~6% del bug de
+población de 13.239 positivos ya estaba clasificada (el conjunto de
+positivos apenas cambió: 11.561 vs 11.546 párrafos, más el resto ya
+cubierto por el golden set) — solo **394 párrafos** quedaron pendientes en
+esta sesión. Corrida: **383 clasificados con éxito, 11 con error
+persistente** (consistente con la tasa de error base ~6% del bug de
 pydantic-ai/Qwen ya documentado), 401 frames nuevos. Costo de esta
 corrida: **US$0,030** (uso total OpenRouter US$1,588 de 20 acreditados,
 quedan ~US$18,41). Total acumulado: **20.969 frames semánticos** sobre
 **13.512 párrafos** con al menos un frame.
+
+**ADVERTENCIA: el "13.239" de arriba estaba mal — era un artefacto de un bug
+real, corregido y explicado en §8.7. La cifra correcta de población es
+11.561/9.664 (instancias/textos únicos).**
+
+---
+
+### 8.7 El corpus tiene ~50% de párrafos duplicados; `ai_classify.py` los pagaba todos — corregido (2026-09-04)
+
+El usuario preguntó si el funnel y la extracción de frames ya estaban
+libres de duplicados y "texto raro". Respuesta corta: el filtrado de
+basura de línea sí corre (§2/§3, más fuerte en Chile vía
+`cmf_pdf_paragraphs.py`), pero **nunca hubo deduplicación de texto entre
+filings** — y sí la hay, siempre, en el golden set (`docs/
+golden_set_sampling.md` §5, "Deduplicación previa": deduplica por
+`text_hash` antes de repartir cuotas; verificado empíricamente, 0 grupos
+de `text_hash` repetido en las 9.884 etiquetas).
+
+**Magnitud del problema.** De 3.281.038 párrafos del corpus, solo
+1.651.191 (50%) son textos únicos (ya medido en §4.2) — el resto es
+boilerplate literal repetido entre filings (disclaimers, secciones de
+riesgo estándar, encabezados). Entre los 11.561 párrafos que el prefiltro
+marca positivos, solo **9.664 son textos únicos** — 1.897 instancias son
+repeticiones exactas de otro positivo ya visto.
+
+**Corrección del funnel** (`ai_prefilter_classify.py::funnel_counts`):
+cada etapa ahora reporta las dos lecturas, instancia y texto único:
+
+| etapa | instancias | textos únicos |
+|---|---|---|
+| corpus total | 3.281.038 | 1.651.191 |
+| match léxico (fuerte o débil) | 45.992 | 33.431 |
+| match léxico fuerte | 16.802 | 14.191 |
+| **positivo del modelo final** | **11.561** | **9.664** |
+
+**Corrección de `ai_classify.py`: deduplicar ANTES de gastar LLM.**
+Rediseñado para que la población de extracción de frames sea por
+`text_hash` (BLAKE2b-8, el mismo de `ai_embed.py`/`golden_set.py`), no por
+instancia de párrafo: se elige UN representante por texto único, se
+clasifica una sola vez, y `ai_frames` queda **keyed by `text_hash`**, no
+por `(country_code, form, accession_number, item_key, paragraph_index)` —
+esas columnas ahora nombran solo la instancia representante que
+efectivamente se mandó al modelo; `duplicate_count` registra cuántas
+instancias del corpus comparten ese texto. Cualquier consumidor futuro
+que necesite los frames de un párrafo específico debe calcular su propio
+`text_hash` y unir por esa columna, no por la llave de párrafo.
+
+**Dos bugs reales encontrados al implementar esto**, ambos corregidos:
+
+1. **`QUALIFY` después de `WHERE` "resucitaba" positivos obsoletos.** La
+   población se construía con `WHERE is_ai_prefiltered = true` seguido de
+   `QUALIFY row_number() ... ORDER BY model_version DESC = 1` — pero el
+   `WHERE` corre ANTES de la ventana, así que el ranking se calculaba solo
+   entre filas YA positivas. Si la corrida más reciente marcaba una llave
+   como negativa, esa fila quedaba fuera del `WHERE` y el rank 1 caía en
+   una corrida vieja que sí la marcaba positiva — revivendo un positivo de
+   un modelo ya descartado. Verificado concretamente: con el orden
+   incorrecto la población salía **13.239** instancias; resolviendo
+   primero la corrida más reciente por llave (sin filtrar) y recién ahí
+   filtrando por `is_ai_prefiltered`, sale **11.561** — exactamente el
+   conteo de la corrida desplegada, como debe ser (todas las corridas
+   puntúan el corpus completo, así que nunca deberían divergir). El
+   "13.239" citado en §8.6 arriba era este bug, no un número real.
+2. **El `text_hash` persistido no coincidía con el texto real del
+   párrafo.** Se calculaba sobre `" ".join(sentences)` (la reconstrucción
+   usada para armar el prompt), que no reproduce byte a byte el
+   `paragraph_text` real de la tabla `paragraphs` (separadores distintos).
+   Efecto: de 721 párrafos recién clasificados, solo 7 hashes coincidían
+   con la población real — la deduplicación por texto quedaba
+   silenciosamente rota. Corregido para que el hash persistido salga
+   siempre del `paragraph_text` canónico (traído en la misma consulta que
+   arma la población), nunca de la reconstrucción usada solo para el
+   prompt.
+
+**Costo de la corrección**: el bug de `text_hash` obligó a reclasificar
+~721 párrafos que ya se habían pagado con el hash equivocado (no se
+pueden recuperar como "cubiertos" retroactivamente sin volver a llamar al
+modelo, porque su hash guardado no sirve para el join). Costo total de
+todo este episodio de depuración: **US$0,177** (de US$1,588 a US$1,765 de
+uso acumulado). Los datos ya clasificados con hash incorrecto (de
+sesiones anteriores a este fix) NO se borraron — siguen siendo frames
+válidos para su propio párrafo, solo su columna `text_hash` es ruido; se
+dejan como están (`data/`, nunca se borra sin archivar) y simplemente no
+cuentan para deduplicación futura.
+
+**Estado final tras la corrección**: de los 9.664 textos únicos
+positivos, **9.631 clasificados** (11.522 instancias cubiertas), quedan
+**33 pendientes** (errores persistentes del bug de pydantic-ai/Qwen, se
+reintentan solos en la próxima corrida). Nunca más se paga la extracción
+de un mismo texto dos veces.
 
 ---
 
