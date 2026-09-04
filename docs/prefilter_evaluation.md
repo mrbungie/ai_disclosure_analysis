@@ -436,6 +436,13 @@ distintos. Los 12.840 párrafos son la población real que
 consumir — no la muestra del golden set, que era un sustituto provisorio
 mientras este paso no existía.
 
+**Extracción de frames sobre los 12.840 (2026-09-04)**: corrida completa vía
+`scripts/common/ai_classify.py` (qwen/qwen3.7-flash por OpenRouter) —
+13.116 párrafos clasificados con éxito (incluye el subconjunto ya hecho
+antes vía el golden set, que quedó cubierto por el diseño aditivo), 22
+con error persistente (reintentables, no bloqueantes), **18.511 frames
+semánticos** extraídos en total. Costo: **US$1,56**.
+
 **El modelo de 1024 dims sobreajusta al diseño muestral, no a los datos.**
 Out-of-fold anda bien (0,824 en el estrato), pero al reponderar cae a 0,704, y
 con menos regularización se desploma a 0,502. La curva de aprendizaje lo delata:
