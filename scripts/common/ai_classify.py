@@ -3,14 +3,16 @@ docs/classification_model.md for the full design (schema, worked examples,
 negation rule, downstream aggregation plan). This script is the extraction
 step only: paragraph text in, zero-or-more `AIFrame`s out.
 
-Population classified: paragraphs the golden set (scripts/common/
-golden_set.py) already judged `is_ai_disclosure=True`. Not the full
-corpus, not a prefilter-scored candidate set (data/interim/prefilter_scores/
-doesn't exist in this environment yet) — the golden set is what's actually
-available and already curated for AI-relevance, which also makes it a good
-first place to sanity-check frame quality against known-positive examples.
-Swap the population query in `pending_sql()` once a prefilter-scored
-candidate set exists.
+Population classified: paragraphs `scripts/common/ai_prefilter_classify.py`'s
+final logistic-regression model marked `is_ai_prefiltered=True` — see
+docs/prefilter_evaluation.md §8.2 for the funnel (12,840 of 3,281,038
+paragraphs, 0.39%, threshold chosen via GroupKFold CV, not eyeballed). This
+replaced an earlier version of this script that used the golden set's
+`is_ai_disclosure=True` labels as a stand-in population, back when no
+prefilter-scored candidate set existed yet in this environment — that
+subset (1,719 paragraphs) is a subset of / mostly overlaps with the real
+12,840, so its results aren't discarded, just superseded as the source of
+truth for "what's pending."
 
 Same operational contract as golden_set.py, deliberately kept close so the
 two don't drift: additive (nothing is ever overwritten or deleted), atomic
@@ -459,19 +461,22 @@ def fetch_pending(database: Path, output_dir: Path, limit: int) -> tuple[list[di
                         f"{', '.join(PARAGRAPH_KEY)} FROM paragraphs WHERE false")
         already = con.execute("SELECT count(*) FROM classified").fetchone()[0]
 
-        # Población: párrafos que el golden set ya etiquetó is_ai_disclosure=True
-        # Y relevance='substantive' (no 'incidental' — una mención de pasada casi
-        # nunca sustenta un frame con actor/tipo/temporalidad bien fundados; era
-        # justo el patrón del párrafo mal atribuido en la validación manual del
-        # primer batch: "growth in AI-related applications" en una tabla de
-        # ventas por segmento). Ver el docstring del módulo — no hay todavía un
-        # conjunto de candidatos scoreado por el prefiltro en este ambiente.
-        con.execute(f"""
+        # Población: el modelo final del prefiltro (scripts/common/
+        # ai_prefilter_classify.py) marcó is_ai_prefiltered=True — ver
+        # docs/prefilter_evaluation.md §8.2 (12,840/3,281,038, threshold
+        # elegido por GroupKFold CV). QUALIFY se queda con la corrida más
+        # reciente si alguna vez hay más de una (mismo patrón que
+        # extraction_trace en build_duckdb.py).
+        con.execute("""
             CREATE OR REPLACE TEMP VIEW positives AS
-            SELECT DISTINCT {', '.join(f'g.{c}' for c in PARAGRAPH_KEY)}
-            FROM read_parquet('data/interim/golden_set/golden_set_labels__session=*__part=*.parquet',
-                               union_by_name=True) AS g
-            WHERE g.is_ai_disclosure = true AND g.relevance = 'substantive' AND g.error IS NULL
+            SELECT country_code, form, accession_number, item_key, paragraph_index
+            FROM read_parquet('data/interim/prefilter_predictions/prefilter_predictions__run=*.parquet',
+                               union_by_name=True)
+            WHERE is_ai_prefiltered = true
+            QUALIFY row_number() OVER (
+                PARTITION BY country_code, form, accession_number, item_key, paragraph_index
+                ORDER BY model_version DESC
+            ) = 1
         """)
         keys = " AND ".join(f"c.{c} IS NOT DISTINCT FROM p.{c}" for c in PARAGRAPH_KEY)
         pending_df = con.execute(f"""

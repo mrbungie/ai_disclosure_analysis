@@ -396,6 +396,46 @@ produce la fila de arriba; no está confirmado si el §8 original usó
 mismo efecto — otra razón para tratar §8 como histórico y no recalcularlo
 hacia atrás.
 
+### 8.2 Modelo final desplegado + funnel del corpus (2026-09-04)
+
+`scripts/common/ai_prefilter_classify.py` es el paso que faltaba: §8.1 solo
+evaluaba el modelo (out-of-fold), esto lo **despliega** — elige threshold,
+reajusta sobre todo el golden set, y marca el corpus completo.
+
+**Metodología** (evita el error clásico de elegir threshold y evaluar con
+los mismos datos):
+1. `GroupKFold(5)` por `accession_number` sobre las 9.884 etiquetas,
+   guardando las PROBABILIDADES out-of-fold (no solo la predicción con
+   corte 0,5 default).
+2. El threshold (barrido en pasos de 0,01) es el que maximiza F1
+   ponderado sobre esas probabilidades out-of-fold — nunca se mira una
+   fila usada para elegir el corte con un modelo que la vio en
+   entrenamiento.
+3. Con threshold ya fijo, el modelo FINAL se reajusta sobre las 9.884
+   etiquetas completas (estándar: CV es para validar/afinar, el modelo que
+   se despliega usa todas las etiquetas disponibles) y se aplica a los
+   3.281.038 párrafos del corpus.
+
+**Resultado**: threshold **0,56**. CV out-of-fold: F1 estrato 0,788 | prec
+pond. 0,750 | recall pond. 0,950 | **F1 pond. 0,838** (consistente con el
+0,837 de §8.1, que no había optimizado el threshold).
+
+**Funnel del corpus completo** (`data/interim/prefilter_predictions/`):
+
+| etapa | párrafos | % del corpus |
+|---|---|---|
+| corpus completo | 3.281.038 | 100% |
+| pasa léxico fuerte o débil (determinista) | 45.992 | 1,40% |
+| pasa léxico fuerte (determinista, más estricto) | 16.802 | 0,51% |
+| **positivo del modelo logit (clasificador final)** | **12.840** | **0,39%** |
+
+0,39% coincide con la estimación de §5 ("en el corpus, uno de cada 250") —
+consistencia entre dos análisis hechos en momentos distintos con métodos
+distintos. Los 12.840 párrafos son la población real que
+`scripts/common/ai_classify.py` (extracción de frames semánticos) debe
+consumir — no la muestra del golden set, que era un sustituto provisorio
+mientras este paso no existía.
+
 **El modelo de 1024 dims sobreajusta al diseño muestral, no a los datos.**
 Out-of-fold anda bien (0,824 en el estrato), pero al reponderar cae a 0,704, y
 con menos regularización se desploma a 0,502. La curva de aprendizaje lo delata:
