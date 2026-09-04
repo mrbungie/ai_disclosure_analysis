@@ -756,10 +756,68 @@ dejan como están (`data/`, nunca se borra sin archivar) y simplemente no
 cuentan para deduplicación futura.
 
 **Estado final tras la corrección**: de los 9.664 textos únicos
-positivos, **9.631 clasificados** (11.522 instancias cubiertas), quedan
-**33 pendientes** (errores persistentes del bug de pydantic-ai/Qwen, se
-reintentan solos en la próxima corrida). Nunca más se paga la extracción
+positivos, **9.663 clasificados** (11.560 instancias cubiertas), queda
+**1 pendiente** (error persistente del bug de pydantic-ai/Qwen, se
+reintenta solo en la próxima corrida). Nunca más se paga la extracción
 de un mismo texto dos veces.
+
+**Corrección arquitectónica (2026-09-04): el dedup se mueve a la fuente.**
+El usuario objetó, con razón, que parchar la deduplicación adentro de
+`ai_classify.py` (calculando su propio hash, sus propios grupos) es el
+patrón equivocado — la limpieza debería vivir en la tabla `paragraphs`
+misma, no reimplementarse en cada script consumidor. Es exactamente lo
+que causó el bug del hash desincronizado de arriba: dos cálculos
+independientes del "mismo" hash, en dos lugares, que dejaron de coincidir.
+
+Corregido en `build_duckdb.py` (la ÚNICA fuente de la tabla `paragraphs`):
+
+- `text_hash` (BLAKE2b-8, vía un UDF de DuckDB registrado una sola vez)
+  ahora es una **columna de `paragraphs` misma**, calculada al construir la
+  tabla — no un cálculo aparte en `ai_embed.py`/`golden_set.py`/
+  `ai_classify.py`.
+- Nueva tabla materializada **`unique_paragraphs`**: una fila por
+  `text_hash` único, con una instancia representante determinística
+  (la llave natural más chica del grupo) y `duplicate_count`. Es LA
+  superficie de deduplicación del proyecto — 1.651.191 filas, coincide
+  exactamente con el 50% ya medido en §4.2.
+
+`ai_classify.py::fetch_pending` se reescribió para consultar
+`unique_paragraphs` directamente por SQL en vez de reconstruir sus
+propios grupos en pandas — la función quedó más corta y ya no puede volver
+a desincronizarse con la tabla fuente, porque no vuelve a calcular nada,
+solo lee.
+
+**Pendiente, fuera de alcance de esta corrección**: `ai_prefilter.py` (el
+paso de embeddings) y `ai_prefilter_classify.py` (el scoring) todavía
+procesan las 3.281.038 instancias completas, no las 1.651.191 únicas —
+el ahorro de cómputo (no de dinero: no hay LLM de por medio en esos dos
+pasos) de migrarlos a `unique_paragraphs` queda como mejora futura, no
+se hizo acá para no forzar un reproceso completo sin pedirlo
+explícitamente.
+
+**¿Es creíble 9.664/1.651.191 (0,59% de los textos únicos) con divulgación
+de IA?** El usuario dudó del orden de magnitud. Hay un chequeo directo,
+libre de cualquier sesgo del prefiltro: `stage3_random`, el único estrato
+del golden set sin ningún supuesto de diseño (docs/golden_set_sampling.md
+§5, "el único libre de cualquier supuesto ... da un estimador insesgado
+de prevalencia"). Sobre sus 1.495 párrafos, **4 son positivos** —
+prevalencia empírica 0,268% (IC 95% exacto de Clopper-Pearson: 0,073% a
+0,684%, ancho por lo poco que son 4 eventos). Aplicado al corpus completo:
+**8.779 positivos esperados, IC 95% [2.393, 22.430]**.
+
+Los 9.664 textos únicos que el modelo final marca caen justo dentro de
+ese intervalo, cerca del punto central. No es una coincidencia forzada:
+el diseño del golden set (§4 de ese mismo documento) YA anticipaba
+"~0,4% de prevalencia" antes de tener modelo ni prefiltro — es el motivo
+por el que se sobremuestreó tech en primer lugar (una muestra aleatoria
+simple daría ~40 positivos en 10.000 párrafos, insuficiente para medir
+nada por categoría). El recall ponderado del modelo (0,924, §8.6) tampoco
+sugiere que se esté perdiendo una fracción grande de positivos reales. El
+número bajo no es un error de conteo: es el resultado esperado de mirar
+divulgación de IA a nivel de PÁRRAFO (no de filing) en un panel de 517
+empresas de TODOS los sectores y varios años — la mayoría de un 10-K, en
+la mayoría de las empresas, en la mayoría de los años, sencillamente no
+menciona IA para nada.
 
 ---
 

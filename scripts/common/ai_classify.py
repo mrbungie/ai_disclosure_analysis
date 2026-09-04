@@ -54,7 +54,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import hashlib
 import json
 import os
 import signal
@@ -295,19 +294,11 @@ def commit_part(rows: list[dict], directory: Path, session_id: str, index: int) 
     return final
 
 
-def _text_hash(text: str) -> int:
-    """Same BLAKE2b-8 as ai_embed.py / golden_set.py — the corpus-wide join
-    key for "same paragraph content", independent of any specific instance's
-    (country_code, form, accession_number, item_key, paragraph_index)."""
-    return int.from_bytes(hashlib.blake2b(text.encode("utf-8"), digest_size=8).digest(),
-                           "big", signed=False)
-
-
 def _base_record(row: dict, judge_model: str, session_id: str) -> dict:
     return {
         **{key: row[key] for key in PARAGRAPH_KEY},
-        # `row["text_hash"]` is the CANONICAL hash, computed from the
-        # `paragraphs` table's own `paragraph_text` -- NOT recomputed here
+        # `row["text_hash"]` comes straight from `unique_paragraphs.text_hash`
+        # (build_duckdb.py) -- THE single canonical hash, never recomputed here
         # from " ".join(row["sentences"]), which does not reproduce the
         # original text byte-for-byte (see fetch_pending's comment).
         "text_hash": row["text_hash"],
@@ -533,35 +524,49 @@ def fetch_pending(database: Path, output_dir: Path, limit: int) -> tuple[list[di
             FROM latest_predictions
             WHERE is_ai_prefiltered = true
         """)
-        pos_df = con.execute(f"""
-            SELECT p.*, par.paragraph_text
-            FROM positives p JOIN paragraphs par USING ({', '.join(PARAGRAPH_KEY)})
+        # `unique_paragraphs` (build_duckdb.py) is THE canonical dedup
+        # surface: one row per unique `text_hash`, a deterministic
+        # representative key, `paragraph_text`, and `duplicate_count`.
+        # Deduping here, against that table, instead of recomputing our own
+        # group-by-text logic (as an earlier version of this function did)
+        # is the actual fix for §8.7's bug -- there is now exactly ONE place
+        # in the whole codebase that decides what a paragraph's text_hash
+        # is, and every consumer reads it instead of rederiving it.
+        con.execute(f"""
+            CREATE OR REPLACE TEMP VIEW positive_hashes AS
+            SELECT DISTINCT up.text_hash
+            FROM positives p
+            JOIN unique_paragraphs up USING ({', '.join(PARAGRAPH_KEY)})
+        """)
+        # positives is per-instance keys, but a given text_hash's
+        # REPRESENTATIVE instance (unique_paragraphs' own pick) is not
+        # necessarily itself is_ai_prefiltered=True in `positives` -- the
+        # prefilter score is a deterministic function of paragraph_text
+        # alone, so in practice every instance sharing a text_hash gets the
+        # same is_ai_prefiltered value, but joining via positive_hashes
+        # (not directly filtering unique_paragraphs by instance membership)
+        # is what makes that assumption unnecessary rather than load-bearing.
+        counts = con.execute("""
+            SELECT
+                (SELECT count(*) FROM positives) AS total_positive_instances,
+                (SELECT count(*) FROM positive_hashes) AS unique_positive_texts,
+                (SELECT count(*) FROM positive_hashes ph
+                    JOIN classified_hashes c USING (text_hash)) AS already_classified_texts,
+                (SELECT COALESCE(sum(up.duplicate_count), 0) FROM unique_paragraphs up
+                    JOIN positive_hashes ph USING (text_hash)
+                    JOIN classified_hashes c USING (text_hash)) AS already_classified_instances
+        """).df().iloc[0]
+        stats = {k: int(v) for k, v in counts.items()}
+
+        pending_df = con.execute(f"""
+            SELECT up.* FROM unique_paragraphs up
+            JOIN positive_hashes ph USING (text_hash)
+            WHERE NOT EXISTS (SELECT 1 FROM classified_hashes c WHERE c.text_hash = up.text_hash)
+            ORDER BY {', '.join(f'up.{c}' for c in PARAGRAPH_KEY)}
         """).df()
-        pos_df["text_hash"] = pos_df["paragraph_text"].map(_text_hash)
-        already_hashes = set(con.execute("SELECT text_hash FROM classified_hashes")
-                              .df()["text_hash"].tolist())
-
-        already_instance_mask = pos_df["text_hash"].isin(already_hashes)
-        stats = {
-            "total_positive_instances": int(len(pos_df)),
-            "unique_positive_texts": int(pos_df["text_hash"].nunique()),
-            "already_classified_texts": len(already_hashes & set(pos_df["text_hash"])),
-            "already_classified_instances": int(already_instance_mask.sum()),
-        }
-
-        # Un representante por text_hash pendiente (orden determinista: la
-        # llave de párrafo más chica del grupo), + duplicate_count para que
-        # quede registrado cuántas instancias del corpus comparten ese texto.
-        reps = []
-        for text_hash, group in (pos_df[~already_instance_mask]
-                                  .sort_values(list(PARAGRAPH_KEY))
-                                  .groupby("text_hash", sort=False)):
-            rep = group.iloc[0]
-            reps.append({**{c: rep[c] for c in PARAGRAPH_KEY}, "text_hash": int(text_hash),
-                         "paragraph_text": rep["paragraph_text"], "duplicate_count": int(len(group))})
-        reps.sort(key=lambda r: tuple(r[c] for c in PARAGRAPH_KEY))
-        stats["pending_texts"] = len(reps)
-        stats["pending_instances_covered"] = int(sum(r["duplicate_count"] for r in reps))
+        stats["pending_texts"] = len(pending_df)
+        stats["pending_instances_covered"] = int(pending_df["duplicate_count"].sum())
+        reps = pending_df.to_dict("records")
         if limit:
             reps = reps[: int(limit)]
 

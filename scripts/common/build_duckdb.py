@@ -28,6 +28,7 @@ Usage:
 """
 
 import glob
+import hashlib
 from pathlib import Path
 
 import duckdb
@@ -36,6 +37,20 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB_PATH = REPO_ROOT / "duckdb" / "thesis.duckdb"
 PREFILTER_SCORES_DIR = REPO_ROOT / "data" / "interim" / "prefilter_scores"
+
+
+def _text_hash8(text: str | None) -> int:
+    """BLAKE2b-8 of paragraph text — THE single canonical definition. Every
+    other script that ever needs "the hash of this paragraph's text"
+    (ai_embed.py, golden_set.py, ai_classify.py) should read `paragraphs.
+    text_hash` / `unique_paragraphs.text_hash`, not recompute this
+    themselves: a real bug (docs/prefilter_evaluation.md §8.7) came from
+    ai_classify.py independently reconstructing paragraph text slightly
+    differently and hashing THAT, silently breaking a dedup join. Computing
+    it once, here, at the source, removes that entire class of bug."""
+    return int.from_bytes(
+        hashlib.blake2b((text or "").encode("utf-8"), digest_size=8).digest(),
+        "big", signed=False)
 
 # Everything else here is a live VIEW (re-evaluated on every query, always
 # current with whatever's on disk). paragraphs/sentences are the
@@ -46,7 +61,7 @@ PREFILTER_SCORES_DIR = REPO_ROOT / "data" / "interim" / "prefilter_scores"
 # machine, not just "slow". Tradeoff: these two go stale after a new
 # extraction run until build_duckdb.py is rerun (every other view here
 # doesn't); worth it for queries against them to actually be fast.
-MATERIALIZED_TABLES = {"paragraphs", "sentences"}
+MATERIALIZED_TABLES = {"paragraphs", "sentences", "unique_paragraphs"}
 
 
 def _country_configs() -> list[tuple[str, dict]]:
@@ -305,6 +320,7 @@ def _paragraph_select_sql(form: str, source_view: str) -> str:
             line_type AS content_type,
             MIN(line_index) AS paragraph_index,
             string_agg(line_text, chr(10) ORDER BY line_index) AS paragraph_text,
+            text_hash8(string_agg(line_text, chr(10) ORDER BY line_index)) AS text_hash,
             -- `is_scorable`: descarta lo que la extracción deja como párrafo
             -- pero no tiene contenido. Medido sobre el corpus: 235.935 filas
             -- (7,2%) tienen 3 caracteres o menos — viñetas sueltas, espacios de
@@ -467,6 +483,7 @@ def main(with_text_tables: bool = False):
 
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect(str(DB_PATH))
+    con.create_function("text_hash8", _text_hash8, ["VARCHAR"], "UBIGINT")
 
     def dirs(config):
         return (
@@ -570,6 +587,32 @@ def main(with_text_tables: bool = False):
         # Built ON `paragraphs` (not re-derived from raw section text) —
         # see _sentence_select_sql's docstring.
         views["sentences"] = _sentence_select_sql()
+        # THE canonical dedup surface (docs/prefilter_evaluation.md §8.7):
+        # ~50% of `paragraphs` is literal boilerplate repeated across
+        # filings. One row per unique `text_hash`, naming a single
+        # deterministic representative instance (smallest natural key) plus
+        # `duplicate_count` (how many paragraph instances share this text).
+        # Any downstream step whose cost scales with corpus size (LLM
+        # classification chief among them, but conceptually also embedding/
+        # scoring) should compute over THIS table, then broadcast back to
+        # instances via `text_hash` if it needs per-instance output — not
+        # reimplement its own group-by-text dedup (that's exactly how
+        # ai_classify.py's dedup broke: a second, independently-computed
+        # hash of a slightly different text reconstruction).
+        views["unique_paragraphs"] = """
+            WITH ranked AS (
+                SELECT *,
+                    row_number() OVER (
+                        PARTITION BY text_hash
+                        ORDER BY country_code, form, accession_number, item_key, paragraph_index
+                    ) AS rn,
+                    count(*) OVER (PARTITION BY text_hash) AS duplicate_count
+                FROM paragraphs
+            )
+            SELECT country_code, form, accession_number, item_key, paragraph_index,
+                   text_hash, paragraph_text, content_type, is_scorable, duplicate_count
+            FROM ranked WHERE rn = 1
+        """
     else:
         print("  skipping paragraphs/sentences (pass --with-text-tables to build them)")
 
