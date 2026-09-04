@@ -107,6 +107,31 @@ def _existing(path_pattern: str) -> bool:
     return len(glob.glob(path_pattern)) > 0
 
 
+def _filing_manifest_selects(countries: list[tuple[str, dict]], dirs) -> list[str]:
+    """One SELECT per country for the `filing_manifest` view, UNIONing in
+    `filing_manifest_proxy.parquet` (and, later, 8-K/comment-letter
+    manifests the same way) alongside the 10-K manifest -- unlike 10-Q,
+    a deliberately separate INSTRUMENT never pooled with the 10-K panel
+    (the project's data-scope decision), proxy/8-K aren't competing
+    analytical panels, just more form types feeding the same
+    paragraph-level AI-disclosure pipeline. Sharing one lookup means a
+    proxy paragraph's accession_number resolves ticker/filing_date the
+    same way a 10-K's already does -- `form_type`/`form` still
+    distinguishes them for anything that needs to."""
+    selects = []
+    for country, cfg in countries:
+        manifests_dir = dirs(cfg)[0]
+        base_path = f"{manifests_dir}/filing_manifest.parquet"
+        if not _existing(base_path):
+            continue
+        parts = [f"SELECT '{country}' AS country_code, * FROM read_parquet('{base_path}')"]
+        proxy_path = f"{manifests_dir}/filing_manifest_proxy.parquet"
+        if _existing(proxy_path):
+            parts.append(f"SELECT '{country}' AS country_code, * FROM read_parquet('{proxy_path}')")
+        selects.append("\n            UNION ALL BY NAME\n            ".join(parts))
+    return selects
+
+
 # Every raw LINE of section_text (see _paragraph_select_sql) is classified
 # into one of three content types:
 # - 'table': contains "|" (a markdown table cell/row) or is a bare
@@ -536,6 +561,16 @@ def main(with_text_tables: bool = False):
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect(str(DB_PATH))
     con.create_function("text_hash8", _text_hash8, ["VARCHAR"], "UBIGINT")
+    # `paragraphs`' window functions (LAG/LEAD per accession_number) OOM'd
+    # (2026-09-04) once DEF 14A -- large, table-heavy documents -- joined
+    # 10-K/10-Q in the UNION: default thread count multiplies the working
+    # set per-partition across cores faster than a single machine's RAM
+    # grows. `preserve_insertion_order=false` lets DuckDB spill/stream
+    # instead of buffering the whole ordered result, and fewer threads
+    # means fewer copies of that working set alive at once -- both cheap
+    # to try before reaching for a bigger memory_limit.
+    con.execute("SET preserve_insertion_order=false")
+    con.execute("SET threads=4")
 
     def dirs(config):
         return (
@@ -550,11 +585,16 @@ def main(with_text_tables: bool = False):
             for country, cfg in countries
             if _existing(f"{dirs(cfg)[0]}/firm_universe.parquet")
         ]),
-        "filing_manifest": _union([
-            f"SELECT '{country}' AS country_code, * FROM read_parquet('{dirs(cfg)[0]}/filing_manifest.parquet')"
-            for country, cfg in countries
-            if _existing(f"{dirs(cfg)[0]}/filing_manifest.parquet")
-        ]),
+        # UNIONs in filing_manifest_proxy.parquet (and, later, 8-K/comment-
+        # letter manifests) alongside the 10-K manifest -- unlike 10-Q,
+        # which is a deliberately separate INSTRUMENT never pooled with the
+        # 10-K panel (see the project's data-scope decision), proxy/8-K are
+        # not competing analytical panels, just more form types feeding the
+        # same paragraph-level AI-disclosure pipeline. Sharing one lookup
+        # means a proxy paragraph's accession_number resolves ticker/
+        # filing_date the same way a 10-K's already does -- `form_type`/
+        # `form` still distinguishes them for anything that needs to.
+        "filing_manifest": _union(_filing_manifest_selects(countries, dirs)),
         # 10-Q shock series — a SEPARATE instrument, never pooled with
         # filing_manifest above (see the project's data-scope decision) —
         # hence its own manifest AND its own extraction_trace/
@@ -604,6 +644,20 @@ def main(with_text_tables: bool = False):
             if _existing(f"{dirs(cfg)[1]}/filing_sections_10q__run=*__part=*.parquet")
         ]),
         "filing_sections_10q": "SELECT * FROM extraction_trace_10q WHERE found",
+        # DEF 14A — the whole document as one "section" (item_key='0', see
+        # scripts/us/proxy/proxy_segmenter.py for why there's no real
+        # per-heading segmenter yet). Not a separate instrument the way
+        # 10-Q is -- just another form type, same paragraph pipeline.
+        "extraction_trace_proxy": _union([
+            f"""
+            SELECT '{country}' AS country_code, *
+            FROM read_parquet('{dirs(cfg)[1]}/filing_sections_proxy__run=*__part=*.parquet', union_by_name=True)
+            QUALIFY row_number() OVER (PARTITION BY accession_number, item_key ORDER BY run_date DESC) = 1
+            """
+            for country, cfg in countries
+            if _existing(f"{dirs(cfg)[1]}/filing_sections_proxy__run=*__part=*.parquet")
+        ]),
+        "filing_sections_proxy": "SELECT * FROM extraction_trace_proxy WHERE found",
         # --- 03_market_data: prices + Fama-French factors ---
         "market_prices": f"""
             SELECT * FROM read_parquet('{market_prices_dir}/*.parquet', filename = true)
@@ -635,6 +689,10 @@ def main(with_text_tables: bool = False):
             f"({_paragraph_select_sql('10-K', 'filing_sections')})",
             f"({_paragraph_select_sql('10-Q', 'filing_sections_10q')})",
         ]
+        if "filing_sections_proxy" in views:
+            paragraph_branches.append(f"({_paragraph_select_sql('DEF 14A', 'filing_sections_proxy')})")
+        else:
+            print("  skipping DEF 14A paragraphs (no filing_sections_proxy files yet)")
         if _existing(CL_PARAGRAPHS_GLOB):
             paragraph_branches.append(f"({_cl_paragraph_select_sql(CL_PARAGRAPHS_GLOB)})")
         else:
