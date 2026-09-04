@@ -436,6 +436,55 @@ distintos. Los 12.840 párrafos son la población real que
 consumir — no la muestra del golden set, que era un sustituto provisorio
 mientras este paso no existía.
 
+### 8.3 ¿El modelo pierde positivos reales? Sí, un poco — y no vale la pena perseguirlo (2026-09-04)
+
+Pregunta que motivó esto: por qué el modelo final marca MENOS párrafos
+(12.840) que el léxico fuerte solo (16.802). Verificado
+(`data/interim/prefilter_predictions/` cruzado con `strong_lexical_match`):
+**el modelo nunca predice positivo cuando `strong_lexical_match=False`**
+— su coeficiente (+5,31, ver §8.2) domina tanto la combinación lineal que
+ninguna señal semántica alcanza a compensarlo. El modelo funciona como un
+filtro de PRECISIÓN dentro de lo que el léxico ya atrapa (saca 3.962 falsos
+positivos léxicos), pero no rescata nada fuera de él.
+
+Contra el golden set: **39 de 1.731 positivos reales (2,25%) tienen
+`strong_lexical_match=False`** — ~0,46% de la masa ponderada positiva. Son
+casos que el modelo pierde garantizado.
+
+**Dos formas de rescatarlos, probadas con CV anidado real**
+(`scripts/verif/prefilter_rescue_eval.py` — el threshold de cada candidato
+se elige SOLO con el fold de entrenamiento, nunca con el fold que después
+se evalúa, a diferencia de §8.2 — ver la advertencia metodológica abajo):
+
+| candidato | F1 estrato | prec pond. | recall pond. | **F1 pond.** |
+|---|---|---|---|---|
+| baseline (solo modelo principal) | 0,779 | 0,709 | 0,782 | **0,744** |
+| A: regla (`weak_lexical` Y `semantic_margin`≥t) en el subgrupo sin léxico fuerte | 0,660 | 0,313 | 0,784 | 0,448 |
+| B: modelo chico (mismas señales semánticas) en ese mismo subgrupo | 0,779 | 0,709 | 0,782 | 0,744 |
+
+**Ninguno mejora sobre no hacer nada.** La regla (A) dispara demasiados
+falsos positivos y hunde la precisión. El modelo chico (B) empata exacto
+con el baseline — con solo ~31 positivos de entrenamiento por fold (39
+en todo el golden set, repartidos en 5 folds), no hay señal suficiente
+para aprender nada generalizable; en la práctica nunca dispara sobre el
+fold de test. **Decisión: se mantiene el modelo de §8.2 tal cual**, sin
+mecanismo de rescate — el hueco (0,46% de masa positiva) queda como
+limitación conocida y documentada, no como algo a seguir persiguiendo con
+tan pocos casos de entrenamiento disponibles.
+
+**Advertencia metodológica encontrada de paso** (importante para leer §8.2
+correctamente): ese threshold (0,56) se eligió agrupando las probabilidades
+out-of-fold de los 5 folds y maximizando F1 ponderado sobre ESE MISMO
+conjunto agrupado — una fuga sutil, porque el threshold queda optimizado
+sobre los mismos datos con los que después se reporta la métrica. El CV
+anidado de este experimento (threshold elegido dentro de cada fold de
+entrenamiento, nunca sobre el fold de test) da una estimación más honesta:
+**F1 ponderado 0,744, no 0,838**. La diferencia (~10 puntos) es el costo de
+elegir threshold sin anidar el CV. §8.2 se deja como está (el modelo y el
+threshold desplegados no cambian, ya están fijados y aplicados al corpus),
+pero **0,744 es la cifra a citar** como estimación de performance
+out-of-sample, no 0,838.
+
 **Extracción de frames sobre los 12.840 (2026-09-04)**: corrida completa vía
 `scripts/common/ai_classify.py` (qwen/qwen3.7-flash por OpenRouter) —
 13.116 párrafos clasificados con éxito (incluye el subconjunto ya hecho
