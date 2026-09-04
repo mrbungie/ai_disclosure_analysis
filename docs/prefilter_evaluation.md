@@ -485,6 +485,70 @@ threshold desplegados no cambian, ya están fijados y aplicados al corpus),
 pero **0,744 es la cifra a citar** como estimación de performance
 out-of-sample, no 0,838.
 
+### 8.4 Entidades nombradas de IA: override determinista probado y descartado (2026-09-04)
+
+Idea: una lista de nombres propios inequívocos de IA (OpenAI, ChatGPT,
+Anthropic, Claude, Gemini, Copilot, Midjourney, Stable Diffusion, watsonx,
+Hugging Face, etc. — `NAMED_AI_ENTITIES` en
+`scripts/common/ai_prefilter_classify.py`) que fuercen `is_ai_prefiltered
+=True` sin pasar por el modelo, para casos como un párrafo real encontrado
+en §8.3 ("net losses from investments in OpenAI", `strong_lexical_match
+=True` pero igual filtrado por el modelo).
+
+**Probado contra el golden set, no ayuda por la métrica.** De 76 filas con
+`named_entity_match=True`, 30 (39%) son negativos reales — ejemplos:
+"Search and news advertising, comprising Bing and Copilot..." (nombre de
+segmento de negocio, no divulgación) y una nota de estados financieros que
+excluye "net gains and losses from investments in OpenAI" (contable, no
+divulgación). CV anidado (mismo threshold/C que el modelo solo, entidad
+OR-combinada solo en el fold de test): F1 pond. 0,813 vs 0,814 sin el
+override — un empate/leve retroceso, no una mejora. **`ai_prefilter_classify.py`
+decide automáticamente por métrica** (`use_named_entity = combined > baseline`)
+y en esta corrida quedó descartado. El código queda listo por si algún
+cambio futuro en los signals hace que sí ayude — se reevalúa cada vez que
+el script corre, no es una decisión congelada.
+
+### 8.5 El modelo no se entrenaba con `inclusion_weight` — corregido, mejora real (2026-09-04)
+
+Encontrado al buscar más mejoras: `ai_prefilter_classify.py` usaba
+`inclusion_weight` para EVALUAR (correcto, es como se leen todas las
+cifras ponderadas de este documento) pero nunca para **entrenar** — el
+`.fit()` corría sin `sample_weight`, aprendiendo sobre la proporción de
+positivos de la muestra estratificada (deliberadamente inflada, ver
+docs/golden_set_sampling.md), no la del corpus real.
+
+`scripts/verif/prefilter_model_variants_eval.py` prueba, con el mismo CV
+anidado de §8.3 (threshold y ahora también `C` elegidos solo con el fold
+de entrenamiento):
+
+| variante | F1 estrato | prec pond. | recall pond. | **F1 pond.** |
+|---|---|---|---|---|
+| 0. baseline (como en §8.3: sin `sample_weight`, C=1,0) | 0,780 | 0,708 | 0,786 | 0,745 |
+| 1. `sample_weight=inclusion_weight` en el fit, C=1,0 | 0,633 | 0,721 | 0,744 | 0,732 |
+| **2. (1) + grid de C** | 0,631 | 0,745 | 0,898 | **0,814** |
+| 3. (2) + `max_semantic_score` como señal 12 | 0,611 | 0,882 | 0,726 | 0,796 |
+
+**Gana (2) por 7 puntos sobre el baseline honesto de §8.3** (0,814 vs
+0,745) — recall pond. sube de 0,786 a 0,898 con precisión similar (0,745
+vs 0,708). Agregar `max_semantic_score` (variante 3) empeora: sube
+precisión pero hunde recall, peor F1 pond. neto.
+
+**Desplegado** (`ai_prefilter_classify.py` actualizado): `C` y threshold
+de despliegue se eligen en una pasada final sobre TODO el golden set
+(esto es selección de hiperparámetros, no la cifra de performance — esa
+es la de la tabla, obtenida con datos que el modelo desplegado nunca
+usó para elegir su propia configuración). Resultado en esta corrida:
+**C=0,01, threshold=0,45**, **11.546 párrafos marcados IA-relevantes**
+(0,35% del corpus — antes 12.840/0,39% con el modelo sin corregir).
+Menos en cantidad bruta, pero mejor calibrado: la regularización fuerte
+(C=0,01) con pesos correctos generaliza a la proporción real del corpus
+en vez de sobreajustar el conteo de la muestra estratificada.
+
+**F1 pond. 0,814 es la cifra a citar de acá en adelante**, reemplazando
+el 0,744 de §8.3 (que a su vez ya había reemplazado el 0,838 leakeado de
+§8.2). El pipeline completo (§8.2 → §8.3 → §8.5) queda como registro de
+cómo se llegó ahí, no se reescribe retroactivamente.
+
 **Extracción de frames sobre los 12.840 (2026-09-04)**: corrida completa vía
 `scripts/common/ai_classify.py` (qwen/qwen3.7-flash por OpenRouter) —
 13.116 párrafos clasificados con éxito (incluye el subconjunto ya hecho
