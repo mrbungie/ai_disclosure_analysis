@@ -956,6 +956,47 @@ consulta futura que filtre `unique_paragraphs` por país debe unir por
 `text_hash` contra la población real, nunca confiar en esa columna como
 si describiera el grupo completo.
 
+**Verificación explícita de falsos negativos en EE.UU. (pedida por el
+usuario, "pero estas leyendo tonto weon"):** comparar el set de positivos
+antes/después de los fixes de esta sección solo confirma que no se rompió
+nada RELATIVO a la corrida anterior — no dice nada sobre falsos negativos
+reales contra el corpus. Leyendo texto real de párrafos con match léxico
+fuerte que el modelo NO marca positivo, aparece un hallazgo genuino:
+**~110 párrafos justo debajo del threshold (predicted_proba entre 0,505 y
+0,510, threshold=0,51)**, varios de ellos divulgación sustantiva real, no
+ruido — ejemplos leídos a mano: "*continued customer interest in our new
+generative AI product, watsonx Code Assistant for Z*" (0,50986), "*Cortex
+XSIAM. Our cloud-based AI-powered security operations platform harnesses
+the power of AI*" (0,50778), "*Microsoft Cloud gross margin... driven by
+scaling our AI infrastructure*" (0,50752), "*investments in modern
+technology including artificial intelligence and machine learning*"
+(0,50917).
+
+**Esto SÍ es un falso negativo real — pero es un trade-off cuantificado,
+no un bug.** Sobre las etiquetas del golden set, variando el threshold:
+
+| threshold | F1 pond. | precisión pond. | recall pond. | positivos (golden set) |
+|---|---|---|---|---|
+| **0,51 (desplegado)** | **0,852** | 0,786 | 0,929 | 1.644 |
+| 0,45 | 0,825 | 0,732 | 0,947 | 1.912 |
+| 0,40 | 0,829 | 0,726 | 0,968 | 2.102 |
+| 0,35 | 0,773 | 0,640 | 0,975 | 2.300 |
+
+Bajar el threshold SÍ recuperaría esos casos (recall 0,929→0,947 a 0,45),
+pero empeora el F1 ponderado (0,852→0,825): en esa banda, sin ponderar,
+el golden set tiene más positivos que negativos (148 vs 120 entre 0,45 y
+0,51) — pero por PESO real de corpus, los negativos dominan largamente
+(678 vs 128), justo el fenómeno que §4 ya advertía ("la proporción de
+positivos en el golden set no dice nada sobre la proporción en el
+corpus"). El threshold de 0,51 no está mal elegido — es el punto que
+honestamente maximiza F1 ponderado — pero eso significa aceptar, a
+propósito, perder una fracción real y no trivial de divulgaciones
+genuinas de IA que caen justo en el borde. Queda como límite conocido y
+cuantificado del enfoque de un único threshold global, no como algo para
+"arreglar" subiendo el recall a costa de la métrica que se optimizó — sí
+como candidato a revisar si en algún momento el objetivo cambia de
+"mejor F1 ponderado" a "minimizar falsos negativos a cualquier costo".
+
 ---
 
 ## 9. Qué falta
