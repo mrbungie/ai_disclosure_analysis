@@ -208,3 +208,97 @@ promedio por empresa.
 - No incluye Chile (todavía sin scoring, §8.9) ni pondera por
   `inclusion_weight` — son arquetipos sobre la población ya filtrada por
   el prefiltro (13.442 textos), no sobre el corpus completo.
+
+## Evolución temporal — y por qué el agregado engaña
+
+Pregunta directa: ¿los arquetipos cambian en el tiempo? Sí, pero el
+resultado agregado es casi lo opuesto de lo esperable a primera vista, y
+la explicación real es composicional, no de comportamiento individual.
+
+### La tendencia agregada (todos los frames, por año de filing)
+
+| año | frames | % promocional | % cuantificado | especificidad | % hipotético |
+|---|---|---|---|---|---|
+| 2021 | 755 | 12,7% | 6,6% | 0,206 | 4,8% |
+| 2022 | 873 | 14,1% | 5,5% | 0,201 | 4,6% |
+| 2023 | 1.327 | 11,0% | 4,3% | 0,168 | 6,0% |
+| 2024 | 3.397 | 7,9% | 2,8% | 0,130 | 11,6% |
+| 2025 | 5.254 | 6,1% | 2,6% | 0,130 | 11,5% |
+
+A primera vista esto sugiere lo contrario de "más AI-washing": la
+retórica promocional CAE a la mitad (12,7%→6,1%) y la especificidad
+también cae (0,206→0,130), mientras el volumen se multiplica por 7. Sería
+tentador leer esto como "las empresas se volvieron más cautelosas
+después del escrutinio de la SEC en 2024" — pero la caída ya viene desde
+2021, sin quiebre visible justo en 2024, así que esa lectura causal no
+se sostiene con este solo dato.
+
+### La explicación real: es composición, no comportamiento individual
+
+Asignando cada empresa a un arquetipo usando SOLO los frames de ESE año
+(no el pool completo), y proyectando sobre los mismos 4 centroides:
+
+| año | empresas con perfil ese año | % líderes vocales (D) | % adoptantes genéricos (B) | % riesgo cauteloso (A) |
+|---|---|---|---|---|
+| 2022 | 87 | **63%** (55) | 23% (20) | 7% (6) |
+| 2024 | 247 | 27% (66) | 42% (103) | 28% (70) |
+| 2025 | 337 | 23% (77) | 48% (163) | 27% (92) |
+
+En 2022, la mayoría de las empresas con volumen suficiente para tener un
+perfil YA eran "líderes vocales" — el grupo que habla mucho, con
+especificidad y promoción altas. Para 2024-2025, el número de empresas
+con volumen suficiente casi se cuadruplicó (87→337), pero ese crecimiento
+es casi todo de empresas "genéricas" y "cautelosas" que recién empiezan a
+mencionar IA a escala — probablemente presión regulatoria/de mercado
+para tener AL MENOS un párrafo de riesgo sobre IA, no adopción real nueva.
+**El grupo de líderes vocales, mirado por separado, cae mucho menos**
+(15,1%→17,3%→13,7%→12,7%→10,4% de retórica promocional en su propio
+arquetipo, año a año — ver tabla completa abajo) que el agregado
+(12,7%→6,1%). La "caída" en el promedio general es sobre todo dilución:
+muchas más empresas de baja intensidad entrando al denominador, no las
+mismas empresas volviéndose menos promocionales.
+
+<details>
+<summary>Tendencia por arquetipo (pool completo, no solo el año de asignación)</summary>
+
+| arquetipo | año | frames | % promocional | % cuantificado |
+|---|---|---|---|---|
+| A. Riesgo cauteloso | 2021→2025 | 7→585 | 0%→1,5% | 0%→0,9% |
+| B. Adoptante genérico | 2021→2025 | 155→1.900 | 4,5%→1,3% | 0,7%→1,4% |
+| C. Cuantificador concreto | 2021→2025 | 2→44 | 0%→4,6% | 100%→22,7% (n muy chico en 2021-2022, no confiable) |
+| D. Líder vocal | 2021→2025 | 591→2.725 | 15,1%→10,4% | 8,0%→3,6% |
+
+</details>
+
+**Lectura para las preguntas extendidas de la tesis**:
+- *SEC 2024*: no hay un quiebre discreto visible en 2024 en ningún
+  arquetipo — la caída es gradual desde 2021 en todos. Si el escrutinio
+  de la SEC tuvo efecto, no se ve como un salto en este corte anual; haría
+  falta granularidad trimestral y una ventana más angosta alrededor del
+  anuncio para no confundirlo con la tendencia composicional de fondo.
+- *DeepSeek (2025)*: el volumen de menciones de China en
+  `gold_ai_entity_mentions` sigue siendo mínimo (2 textos, tabla #10 de
+  arriba) — no hay señal todavía de que el "shock DeepSeek" haya cambiado
+  cómo las empresas de EE.UU. describen su posicionamiento competitivo.
+  Puede ser demasiado reciente para el corpus actual (2026 parcial).
+- El hallazgo más sólido no es "menos washing con el tiempo" sino **"el
+  universo de empresas que hablan de IA se amplió mucho más rápido de lo
+  que cambió el discurso de las que ya hablaban"** — un resultado en sí
+  mismo relevante para el framework de benchmarking que propone la tesis.
+
+### Notas metodológicas (evolución)
+
+- 2025 (y 2026 en la tabla temporal de más arriba) son años fiscales
+  parciales para muchas empresas — la comparación año a año no es
+  limpia hasta que termine el año calendario.
+- El arquetipo por año usa un umbral de volumen más bajo (≥3 frames en
+  el año) que el arquetipo "de vida" (≥5 frames pooled) para no perder
+  casi todas las empresas en los años tempranos — los conteos de
+  empresas por año NO son directamente comparables al conteo total de
+  421 de la sección anterior.
+- Proyectar perfiles anuales sobre los centroides ya entrenados (en vez
+  de re-clusterizar cada año) es deliberado: permite comparar "qué tan
+  cerca de cada arquetipo original está esta empresa este año", pero
+  asume que los 4 arquetipos de referencia siguen siendo la partición
+  correcta en años tempranos con mucha menos data — otra razón para no
+  sobre-interpretar 2021-2022 (n=87 empresas).
