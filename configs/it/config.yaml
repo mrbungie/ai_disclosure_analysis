@@ -45,5 +45,11 @@ storage:
   # that two countries' storage paths differ, so a collision would
   # silently overwrite rather than fail.
   raw_documents: data/raw/filings_xhtml_it
+  # The iXBRL facts that ship INSIDE the same annual report. Italy is the
+  # only country here where the accounting data and the narrative arrive in
+  # one document — the US needs a separate XBRL fetch (data/raw/xbrl_facts)
+  # and Chile another (data/raw/xbrl_cl). Fetched as the aggregator's
+  # already-extracted xBRL-JSON rather than re-parsed out of the XHTML.
+  raw_xbrl: data/raw/xbrl_it
   interim_manifests: data/interim/manifests_it
   interim_sections: data/interim/sections_it
