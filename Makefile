@@ -1,4 +1,4 @@
-.PHONY: test install-deps tickers-tui build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market duckdb duckdb-text prefilter help
+.PHONY: test install-deps tickers-tui build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market duckdb duckdb-text prefilter analytics analytics-text analytics-financials analytics-panels help
 
 # Default target
 all: test
@@ -88,6 +88,33 @@ prefilter:
 	@echo "Scoring paragraphs with DuckDB lexical matching + BGE-M3 embeddings..."
 	.venv/bin/python scripts/common/ai_prefilter.py $(ARGS)
 
+# ---- scripts/analytics: el panel empresa-año que leen docs/analytics/ ----
+# Todo determinístico: ni una llamada a LLM, ni un peso de API. Lee
+# gold_ai_frames (que SÍ costó llamadas y nunca se toca), el XBRL crudo, los
+# precios y los factores, y produce data/processed/clusters/.
+#
+# El orden importa y por eso `analytics` los encadena: los clusters de texto
+# no dependen de nada financiero, los ratios sí dependen del manifest de
+# 10-K, el mercado depende de los ratios (necesita shares_out/EPS/equity),
+# ROIC/WACC depende de ambos, y el merge final depende de todo lo anterior.
+
+analytics-text:
+	@echo "Arquetipos de voz, clusters de comportamiento y panel empresa-año (build_firm_clusters)..."
+	.venv/bin/python scripts/analytics/build_firm_clusters.py $(ARGS)
+
+analytics-financials:
+	@echo "Contables desde XBRL, mercado/beta/CAR y ROIC-WACC (build_firm_financials -> build_market_factors -> build_roic_wacc)..."
+	.venv/bin/python scripts/analytics/build_firm_financials.py $(ARGS)
+	.venv/bin/python scripts/analytics/build_market_factors.py $(ARGS)
+	.venv/bin/python scripts/analytics/build_roic_wacc.py $(ARGS)
+
+analytics-panels:
+	@echo "Merge texto x finanzas + score de AI-washing (build_firm_panels, washing_score)..."
+	.venv/bin/python scripts/analytics/build_firm_panels.py $(ARGS)
+	.venv/bin/python scripts/analytics/washing_score.py $(ARGS)
+
+analytics: analytics-text analytics-financials analytics-panels
+
 # ---- 10_fusion: merging the 10-K text pipeline with market data — not built yet ----
 
 help:
@@ -106,6 +133,12 @@ help:
 	@echo "  make fetch-10q                Manifest+fetch for 10-Q (raw filings)"
 	@echo "  make extract-sections-10q ARGS='--comment my-run'   Extract Item 2 (MD&A) + Item 1A from 10-Qs"
 	@echo "  make collect-data-10q         fetch-10q -> extract-sections-10q (resumable)"
+	@echo ""
+	@echo "  scripts/analytics (determinístico, sin LLM — reconstruye data/processed/clusters/):"
+	@echo "  make analytics                analytics-text -> analytics-financials -> analytics-panels"
+	@echo "  make analytics-text           Clusters de voz/comportamiento + panel empresa-año"
+	@echo "  make analytics-financials     XBRL -> ratios, precios -> beta/CAR, ROIC-WACC"
+	@echo "  make analytics-panels         Merge texto x finanzas + score de AI-washing"
 	@echo ""
 	@echo "  scripts/03_market_data:"
 	@echo "  make collect-market           Snapshot prices (per-ticker parquet) + Fama-French factors"

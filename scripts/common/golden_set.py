@@ -605,9 +605,25 @@ def cmd_label(args) -> None:
             # (ver memoria golden-set-use-all-saved). Filtrar acá por
             # judge_model haría que cambiar de modelo re-etiquete TODO el
             # golden set de nuevo, gastando de más.
+            # `--coverage-judge current` restringe la cobertura a las filas que
+            # etiquetó ESTE juez. Es lo que permite RE-etiquetar con un modelo
+            # distinto sin borrar nada: las filas del juez viejo siguen en
+            # disco (población propia, identificable por `judge_model`) y esta
+            # corrida las trata como pendientes.
+            #
+            # Existe porque el golden set terminó siendo una MEZCLA de dos
+            # jueces correlacionada con el estrato — gemini-3.8-flash etiquetó
+            # stage1 completo y parte de stage2; qwen3.7-flash el resto de
+            # stage2 y TODO stage3_random. Dentro del mismo estrato y el mismo
+            # keyword_tier los dos no miden lo mismo (tier fuerte: 100,0% vs
+            # 81,8% de positivos), así que el target del prefiltro era una
+            # mezcla de dos reglas de decisión, y la que ancla la
+            # reponderación al corpus (stage3) era la de un solo juez.
+            judge_filter = ("" if args.coverage_judge == "any"
+                            else f" AND judge_model = '{args.judge_model}'")
             con.execute(f"CREATE OR REPLACE TEMP VIEW labeled AS SELECT DISTINCT "
                         f"{', '.join(PARAGRAPH_KEY)} FROM read_parquet([{files}], union_by_name=True) "
-                        f"WHERE error IS NULL")
+                        f"WHERE error IS NULL{judge_filter}")
         else:
             con.execute(f"CREATE OR REPLACE TEMP VIEW labeled AS SELECT "
                         f"{', '.join(PARAGRAPH_KEY)} FROM sample WHERE false")
@@ -680,6 +696,13 @@ def main() -> None:
 
     labeler = sub.add_parser("label", help="etiquetar con el juez (aditivo)")
     labeler.add_argument("--judge-model", default=DEFAULT_JUDGE_MODEL)
+    labeler.add_argument("--coverage-judge", choices=("any", "current"), default="any",
+                         help="Qué cuenta como ya etiquetado. 'any' (default): cualquier "
+                              "juez — no re-etiquetar lo que ya tiene etiqueta de otro "
+                              "modelo. 'current': sólo lo que etiquetó --judge-model, de "
+                              "modo que un cambio de juez re-etiquete el set completo y "
+                              "quede una sola población de etiquetas (las viejas no se "
+                              "borran, quedan identificadas por judge_model).")
     labeler.add_argument("--limit", type=int, default=0, help="Etiquetar sólo N pendientes")
     labeler.add_argument("--concurrency", type=int, default=8)
     labeler.add_argument("--part-rows", type=int, default=250,

@@ -1,0 +1,55 @@
+source:
+  name: filings.xbrl.org
+  api: https://filings.xbrl.org/api
+  # The public ESEF aggregator, not CONSOB or a storage operator. See
+  # scripts/it/xbrl_filings_client.py's docstring for why: eMarket Storage
+  # has more (half-year reports, price-sensitive releases) but no API and
+  # PDF documents, which would put Italy on the scanned-PDF path this
+  # project measured and found lossy (docs/analytics/pdf-backend-poc.md).
+  country_filter: IT
+
+corpus:
+  snapshot_date: '2026-09-05'
+  filings:
+    # ESEF covers the ANNUAL financial report only. There is no half-year
+    # and nothing before FY2021 in this source — the mandate starts with
+    # financial years beginning 2021-01-01. Italy's `half_year` and
+    # `quarterly` rows in the instrument mapping
+    # (docs/international_expansion_plan.md) therefore stay empty until a
+    # second source is added; that is a scope statement, not a gap in
+    # coverage of what this source holds.
+    period_end:
+      from: '2021-01-01'
+      to: '2025-12-31'
+
+universe:
+  # ALL Italian ESEF filers (225 issuers), not FTSE MIB's ~40.
+  #
+  # This deviates from docs/international_expansion_plan.md, which said
+  # "start with FTSE MIB, widen only if the pipeline proves out". That
+  # reasoning was about download cost and about needing a constituent list
+  # to define the universe at all. Neither survived contact with the
+  # source: the whole Italian population is ONE query filter, ~5 GB
+  # gzipped, and taking it needs no index-membership data that this
+  # project does not already have to go find elsewhere. It is the same
+  # call Chile's config makes for the same reason — the universe is small
+  # enough that narrowing loses issuers without saving meaningful time.
+  #
+  # Narrowing to FTSE MIB later is a WHERE clause over the manifest, not a
+  # re-fetch, so the wide default costs nothing that the narrow one saves.
+  scope: all_esef_filers
+
+storage:
+  # Suffixed with _it, never nested under a shared folder — same rule as
+  # Chile's config: build_duckdb.py's _country_configs() does not enforce
+  # that two countries' storage paths differ, so a collision would
+  # silently overwrite rather than fail.
+  raw_documents: data/raw/filings_xhtml_it
+  # The iXBRL facts that ship INSIDE the same annual report. Italy is the
+  # only country here where the accounting data and the narrative arrive in
+  # one document — the US needs a separate XBRL fetch (data/raw/xbrl_facts)
+  # and Chile another (data/raw/xbrl_cl). Fetched as the aggregator's
+  # already-extracted xBRL-JSON rather than re-parsed out of the XHTML.
+  raw_xbrl: data/raw/xbrl_it
+  interim_manifests: data/interim/manifests_it
+  interim_sections: data/interim/sections_it
