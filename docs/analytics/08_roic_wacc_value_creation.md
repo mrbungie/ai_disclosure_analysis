@@ -1,5 +1,12 @@
 # ROIC − WACC: ¿los segmentos de "sustancia" realmente crean valor económico?
 
+> **Recalculado con builders versionados (ver `10_builders_y_recalculo.md`).**
+> El lado contable/mercado ya no viene de un script perdido: lo producen
+> `build_firm_financials.py`, `build_market_factors.py` y `build_roic_wacc.py`
+> (`make analytics`). Con mejor cobertura XBRL y el ERP corregido, varias
+> cifras de este documento se movieron — las tablas de abajo son las de la
+> corrida anterior; los deltas están listados en `10_...md`.
+
 > **Recalculado 2026-09-05 con DEF 14A y 8-K.** Los insumos financieros
 > (ROIC, WACC) no cambiaron; las etiquetas de segmento sí. En el camino se
 > corrigió un bug de reproducibilidad en `gold_ai_frames` (ver `01_...md`).

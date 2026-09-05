@@ -1,5 +1,12 @@
 # Ratios contables, factores de mercado y estudio de volatilidad/beta (EE.UU.)
 
+> **Recalculado con builders versionados (ver `10_builders_y_recalculo.md`).**
+> El lado contable/mercado ya no viene de un script perdido: lo producen
+> `build_firm_financials.py`, `build_market_factors.py` y `build_roic_wacc.py`
+> (`make analytics`). Con mejor cobertura XBRL y el ERP corregido, varias
+> cifras de este documento se movieron — las tablas de abajo son las de la
+> corrida anterior; los deltas están listados en `10_...md`.
+
 > **Recalculado 2026-09-05 con DEF 14A y 8-K.** Los ratios, factores y
 > betas no cambiaron; las etiquetas de arquetipo sí (K-means re-ajustado
 > sobre la población ampliada). En el camino se corrigió un bug de

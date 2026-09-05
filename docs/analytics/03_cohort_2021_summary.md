@@ -1,5 +1,12 @@
 # Cohorte 2021: empresas presentes desde el primer año del panel
 
+> **Recalculado con builders versionados (ver `10_builders_y_recalculo.md`).**
+> El lado contable/mercado ya no viene de un script perdido: lo producen
+> `build_firm_financials.py`, `build_market_factors.py` y `build_roic_wacc.py`
+> (`make analytics`). Con mejor cobertura XBRL y el ERP corregido, varias
+> cifras de este documento se movieron — las tablas de abajo son las de la
+> corrida anterior; los deltas están listados en `10_...md`.
+
 > **Recalculado 2026-09-05 con DEF 14A y 8-K.** La cohorte pasó de 77 a
 > 85 empresas y de 411 a 465 filas empresa-año: con proxies y 8-K, más
 > empresas superan el umbral de ≥3 frames ya en 2021. Los insumos

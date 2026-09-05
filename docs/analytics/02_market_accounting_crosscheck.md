@@ -1,5 +1,12 @@
 # Cruce con mercado y contabilidad (EE.UU.)
 
+> **Recalculado con builders versionados (ver `10_builders_y_recalculo.md`).**
+> El lado contable/mercado ya no viene de un script perdido: lo producen
+> `build_firm_financials.py`, `build_market_factors.py` y `build_roic_wacc.py`
+> (`make analytics`). Con mejor cobertura XBRL y el ERP corregido, varias
+> cifras de este documento se movieron — las tablas de abajo son las de la
+> corrida anterior; los deltas están listados en `10_...md`.
+
 > **Recalculado 2026-09-05 con DEF 14A y 8-K.** El panel pasó de 1.229 a
 > 1.363 empresas-año (429 → 454 empresas). Los insumos financieros y de
 > mercado NO cambiaron — mismo XBRL, mismos precios; lo que se movió son
