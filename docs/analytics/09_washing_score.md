@@ -1,215 +1,220 @@
-# AI-washing como score continuo: reemplazo del cruce de clusters
+# AI-washing como score continuo: exceso promocional sobre comportamiento y mezcla documental
 
-Este documento reemplaza la definición operativa de AI-washing de
-`06_voice_vs_behavior_clustering.md` ("arquetipo de voz D × cluster de
-comportamiento 1"). Esa definición no era medible, y la sección siguiente
-explica por qué con números antes de proponer nada.
-
-Producido por `scripts/analytics/washing_score.py`. Determinístico, sin
-LLM, sobre `gold_ai_frames`.
+Reemplaza la definición de `06_voice_vs_behavior_clustering.md` ("arquetipo de
+voz D × cluster de comportamiento 1"), que no era medible. Producido por
+`scripts/analytics/washing_score.py` y validado por
+`scripts/analytics/validate_washing_score.py`. Determinístico, sin LLM.
 
 ## Por qué el cruce de clusters no servía
 
-Los 4 arquetipos de voz se construyen sobre 9 **tasas** cuyo denominador
-va de 5 a 500 frames según la empresa, y K-means trata una tasa estimada
-con 5 frames como igual de confiable que una estimada con 500. Medido
-sobre este corpus:
+Los 4 arquetipos de voz se construyen sobre 9 **tasas** cuyo denominador va de
+5 a 500 frames según la empresa, y K-means trata una tasa estimada con 5 frames
+como igual de confiable que una estimada con 500.
 
 | Diagnóstico | Valor |
 |---|---|
-| Tasa promocional del corpus | 9,6% |
+| Tasa promocional del corpus | 9,7% |
 | P(cero frames promocionales por azar) con 4 frames | **67%** |
-| Ídem con 50 frames | 0,6% |
 | Empresas-año con 3-5 frames y tasa promocional exactamente 0 | **84,6%** |
 | Ídem con 50+ frames | 1,1% |
 | Mediana de frames totales, arquetipo A / B / C / D | 17 / 26 / 36 / 59 |
-| Estabilidad de la etiqueta año a año, 3-5 frames | 55,9% |
-| Ídem, 50+ frames | 74,2% |
 
-**La escalera A<B<C<D es también una escalera de volumen de texto.** Las
-nueve métricas son mayoritariamente ceros estructurales con denominador
-chico, y esos ceros empujan a las empresas de poco texto hacia los
-rincones extremos del espacio de features, que es donde viven A y C.
+**La escalera A<B<C<D es también una escalera de volumen de texto.** El caso que
+lo deja fuera de discusión: cuatro empresas con CERO frames promocionales (CMS,
+FE, CHD, TFC, todas con 5-9 frames) quedaban etiquetadas "líderes vocales de
+IA", porque D también se define por `realized_share` alto y `risk_share` bajo.
 
-El caso que lo deja fuera de discusión: **cuatro empresas con CERO frames
-promocionales quedaban etiquetadas "líderes vocales de IA".**
-
-| ticker | frames | promocionales | cuantificados | deployed | arquetipo |
-|---|---:|---:|---:|---:|---|
-| CMS | 5 | **0** | 0 | 0 | D |
-| FE | 6 | **0** | 0 | 1 | D |
-| CHD | 8 | **0** | 0 | 3 | D |
-| TFC | 9 | **0** | 0 | 4 | D |
-
-Pasa porque D no se define sólo por promoción: también por
-`realized_share` alto y `risk_share` bajo. Una empresa con 5 frames que
-resultan ser todos afirmaciones en pasado y ninguna de riesgo cae en el
-rincón D sin haber dicho una palabra promocional.
-
-Y el grupo de washing resultante mezclaba dos cosas incompatibles: seis
-empresas de ≤9 frames cuya etiqueta era artefacto puro, y cinco (AAPL,
-ADI, JPM, ALL, ECL) con lenguaje promocional genuino. No era una
-categoría.
-
-**Ningún umbral de volumen arregla esto**, y conviene decirlo porque fue
-el primer arreglo que se intentó: exigir ≥10 frames/año selecciona a las
-tecnológicas grandes, que son justamente el *resto* de D, y elimina por
-construcción a las empresas sobre las que trata la hipótesis. Es un
-filtro de selección disfrazado de filtro de calidad.
+Ningún umbral de volumen lo arregla: exigir ≥10 frames/año selecciona a las
+tecnológicas grandes, que son el *resto* de D, y elimina por construcción a las
+empresas sobre las que trata la hipótesis.
 
 ## El modelo
 
-En vez de estimar una tasa por empresa y compararla contra una frontera,
-se modelan los **conteos** y se pregunta si el exceso de lenguaje
-promocional de una empresa supera lo que explica el muestreo.
+En vez de estimar una tasa por empresa y compararla contra una frontera, se
+modelan los **conteos** y se pregunta si el exceso promocional de una empresa
+supera lo que explican el muestreo, su comportamiento declarado y **la mezcla
+de documentos en la que habla**.
 
-1. **Nivel frame**: regresión logística de `rhetoric_promotional` sobre el
-   índice de comportamiento de su empresa. Cada frame es una observación,
-   así que una empresa con 500 frames pesa 100 veces más que una con 5 —
-   el peso que corresponde.
-2. **Nivel empresa**: test binomial **exacto** de *k* frames promocionales
-   observados contra `Binomial(n, p̂)`, donde p̂ es lo que el modelo predice
-   dado el comportamiento de esa empresa.
-3. **Benjamini-Hochberg** al 5% sobre las 446 empresas, porque son 446
-   tests simultáneos.
+1. **Unidad: frame único.** `gold_ai_frames` expande cada texto clasificado a
+   una fila por instancia de párrafo, así que un boilerplate repetido entra
+   varias veces: 24.328 instancias → **22.643 frames únicos**.
+2. **Nivel frame**: logística de `rhetoric_promotional` sobre el índice de
+   comportamiento de la empresa **más efectos fijos de formulario**. Cada frame
+   es una observación, así que una empresa con 500 frames pesa 100 veces más
+   que una con 5.
+3. **Nivel empresa**: el conteo nulo es una **Poisson-binomial** (cada frame
+   tiene su propia probabilidad según su formulario), corregida por
+   **dependencia intra-documento**.
+4. **Benjamini-Hochberg** al 5% sobre las 439 empresas, en las dos colas.
 
-Con *n* chico el test simplemente no rechaza. **No hace falta ningún
-umbral arbitrario: la potencia estadística se encarga**, y la ausencia de
-evidencia queda registrada como ausencia de evidencia en vez de como una
-etiqueta.
-
-### Control de la dependencia mecánica
-
-Voz y comportamiento se miden sobre los mismos frames, y la dependencia a
-nivel frame es grande:
-
-- P(describe comportamiento | frame promocional) = **92,6%**
-- P(describe comportamiento | frame NO promocional) = **54,7%**
-
-Por eso el índice de comportamiento se calcula **sólo sobre los frames no
-promocionales** de cada empresa. Eso rompe el lazo sin sesgar el
-predictor: sigue midiendo cuánto comportamiento describe la empresa, en la
-parte de su texto que no está en discusión.
-
-**Robustez**: con la especificación ingenua (comportamiento sobre todos
-los frames) salen 16 empresas en la cola de washing; con la limpia, 22, y
-**las 16 están contenidas en las 22**. El resultado no depende de esa
-decisión.
-
-El modelo ajustado, especificación limpia:
+Modelo ajustado:
 
 ```
-logit(P(promocional)) = -3,78 + 2,63 × índice_comportamiento
+logit(P(promocional)) = −4,297 + 2,913 × índice_comportamiento
+                        + 0,970 × [DEF 14A] + 0,054 × [8-K]
 ```
 
-La pendiente positiva importa: **a más comportamiento descrito, más
-lenguaje promocional.** Promoción y sustancia van juntas en general, no
-son sustitutos. El washing no es "promocionar en vez de hacer" sino
-"promocionar más de lo que incluso esa relación positiva predice".
+**El coeficiente del proxy es la mitad del efecto que antes se atribuía a la
+empresa.** La DEF 14A tiene 16,1% de frames promocionales contra 7,2% del 10-K,
+así que una empresa cuyo proxy aporta la mitad de sus frames parecía
+promocional por composición documental. Sin ese control la cola de washing
+tiene 41% de frames de proxy contra 23% del resto del corpus.
+
+La pendiente del comportamiento sigue siendo **positiva y grande**: a más
+comportamiento descrito, más lenguaje promocional. Promoción y sustancia van
+juntas; el washing es una desviación de esa relación, no la relación misma.
+
+### Dependencia entre frames, y a qué nivel corregirla
+
+El test binomial supone frames independientes. No lo son: los de un mismo
+filing comparten párrafo, sección y decisiones de redacción. Se estima la
+correlación intra-documento con un ANOVA de una vía sobre los residuos del
+modelo (**ICC = 0,043**, mediana de 5,3 frames por filing → efecto de diseño
+1,18) y se testea con una beta-binomial equivalente.
+
+**El nivel del clustering es una decisión sustantiva.** Estimar la dispersión a
+nivel EMPRESA (`--dispersion firm`) trata la heterogeneidad entre empresas como
+ruido — y esa heterogeneidad es el fenómeno que se quiere medir. Con esa
+especificación el test **no marca a nadie**, en ninguna de las dos colas. No
+es que no haya washing: es que ese estimador se lo comió.
+
+### Control de la dependencia mecánica voz-comportamiento
+
+P(describe comportamiento | frame promocional) = 92,6%, contra 54,7% en los no
+promocionales. Por eso el índice de comportamiento se calcula **sólo sobre los
+frames no promocionales** de cada empresa: rompe el lazo sin sesgar el
+predictor.
 
 ## Resultados
 
-Sobre 446 empresas con ≥5 frames, FDR 5%:
+439 empresas con ≥5 frames, FDR 5%: **8 en la cola de washing, 2 en la de
+sustancia callada, 429 indistinguibles.**
 
-| | empresas |
-|---|---:|
-| Habla MÁS de lo que su comportamiento justifica (washing) | **22** |
-| Habla MENOS (sustancia callada) | **10** |
-| Indistinguibles del modelo | 414 |
+| ticker | frames | promo. obs. | esperados | tasa obs. | tasa esperada | z |
+|---|---:|---:|---:|---:|---:|---:|
+| GOOGL | 551 | 106 | 52,6 | 19,2% | 9,5% | 7,7 |
+| PANW | 230 | 68 | 35,1 | 29,6% | 15,2% | 6,0 |
+| INTU | 220 | 51 | 21,1 | 23,2% | 9,6% | 6,9 |
+| CDNS | 167 | 50 | 22,2 | 29,9% | 13,3% | 6,3 |
+| CRWD | 159 | 44 | 15,3 | 27,7% | 9,6% | 7,7 |
+| ADP | 198 | 38 | 15,4 | 19,2% | 7,8% | 6,0 |
+| JCI | 44 | 13 | 4,3 | 29,5% | 9,9% | 4,4 |
+| YUM | 35 | 9 | 1,7 | 25,7% | 5,0% | 5,6 |
 
-### Cola de washing (por exceso de frames promocionales)
+Sustancia callada: **MSI** (5 promocionales de 169, esperados 21,8) y **STX**
+(0 de 68, esperados 10,0).
 
-| ticker | frames | promo. observados | esperados | tasa obs. | tasa esperada |
-|---|---:|---:|---:|---:|---:|
-| GOOGL | 561 | 108 | 42,5 | 19,3% | 7,6% |
-| ADBE | 486 | 97 | 69,5 | 20,0% | 14,3% |
-| MSFT | 595 | 102 | 68,4 | 17,1% | 11,5% |
-| PANW | 263 | 72 | 33,5 | 27,4% | 12,7% |
-| CRM | 348 | 66 | 36,5 | 19,0% | 10,5% |
-| CRWD | 204 | 57 | 26,0 | 27,9% | 12,7% |
-| INTU | 237 | 53 | 22,5 | 22,4% | 9,5% |
-| AMZN | 436 | 52 | 29,2 | 11,9% | 6,7% |
-| CDNS | 180 | 51 | 21,6 | 28,3% | 12,0% |
-| WDAY | 291 | 47 | 25,3 | 16,2% | 8,7% |
-| IBM | 238 | 43 | 23,9 | 18,1% | 10,0% |
-| EFX | 250 | 41 | 25,5 | 16,4% | 10,2% |
-| ADP | 216 | 40 | 18,3 | 18,5% | 8,5% |
-| IQV | 190 | 39 | 21,5 | 20,5% | 11,3% |
-| LUMN | 112 | 25 | 12,0 | 22,3% | 10,7% |
+**Con la especificación anterior (instancias, sin control de formulario, sin
+dispersión) eran 22 y 10.** Caen AAPL, ADBE, AMZN, IBM, EFX, GILD, IQV, LUMN,
+SNPS — casi todas por composición documental — y de la cola callada
+desaparecen META, AXP, AVGO, KLAC, NET, ICE y FTNT.
 
-### Cola de sustancia callada (por déficit)
+### Potencia
 
-| ticker | frames | promo. observados | esperados | tasa obs. |
-|---|---:|---:|---:|---:|
-| META | 308 | 13 | 28,9 | 4,2% |
-| MSI | 197 | 6 | 21,4 | 3,0% |
-| AVGO | 141 | 9 | 22,7 | 6,4% |
-| MSCI | 175 | 4 | 15,8 | 2,3% |
-| STX | 94 | **0** | 13,7 | 0,0% |
-| FTNT | 112 | 4 | 15,7 | 3,6% |
-| AXP | 131 | **0** | 10,5 | 0,0% |
-| KLAC | 89 | **0** | 7,2 | 0,0% |
-| NET | 77 | **0** | 8,1 | 0,0% |
-| ICE | 48 | **0** | 6,4 | 0,0% |
-
-Cinco empresas con volumen sustancial de divulgación de IA y **cero
-frames promocionales**: STX (94 frames), AXP (131), KLAC (89), NET (77),
-ICE (48). Describen despliegue de IA sin una sola afirmación superlativa.
-
-## Cómo leer esto, y qué NO dice
-
-**El resultado se invirtió respecto del cruce de clusters, y la razón es
-metodológica, no sustantiva.** El método viejo señalaba empresas
-pequeñas y no-tech (CMS, FE, CHD, TFC); este señala grandes tecnológicas
-(GOOGL, MSFT, ADBE, AMZN). No es que antes estuviera mirando al grupo
-equivocado y ahora al correcto en un sentido sustantivo: es que **sólo se
-puede detectar un exceso donde hay suficientes frames para detectarlo.**
-
-La tabla de potencia lo hace explícito:
-
-| frames por empresa | empresas | washing detectados | callada |
+| frames por empresa | empresas | washing | callada |
 |---|---:|---:|---:|
-| 5-10 | 76 | 0 | 0 |
-| 11-25 | 131 | 2 | 0 |
-| 26-50 | 113 | 2 | 1 |
-| 51-100 | 72 | 2 | 3 |
-| 100+ | 54 | 16 | 6 |
+| 5-10 | 80 | 0 | 0 |
+| 11-25 | 130 | 0 | 0 |
+| 26-50 | 113 | 2 | 0 |
+| 51-100 | 67 | 0 | 1 |
+| 100+ | 49 | 6 | 1 |
 
-**No se puede concluir que las tecnológicas grandes hagan más
-AI-washing.** Se puede concluir que son las únicas empresas sobre las que
-este corpus permite afirmar algo. De las 207 empresas con ≤25 frames, el
-test no rechaza en ninguna dirección para 205 — y eso es la respuesta
-correcta, no una falla: no hay evidencia suficiente.
+**No se puede concluir que las tecnológicas grandes hagan más AI-washing.** Se
+puede concluir que son las únicas empresas sobre las que este corpus permite
+afirmar algo. De 210 empresas con ≤25 frames, el test no rechaza en ninguna.
 
-Lo que sí se sostiene:
+## Validación
 
-- **Entre las empresas medibles, el exceso promocional es real y grande.**
-  GOOGL usa lenguaje promocional en 19,3% de sus frames cuando su propio
-  perfil de comportamiento predice 7,6% — 2,5x, sobre 561 frames.
-- **La cola opuesta existe y es igual de nítida.** Cinco empresas con
-  decenas de frames y cero promoción.
-- **Promoción y comportamiento son complementarios, no sustitutos**
-  (pendiente +2,63). La intuición de "el que habla no hace" es falsa como
-  regla general en este corpus; el washing es una desviación de esa
-  relación, no la relación misma.
+`validate_washing_score.py`, cinco chequeos. No hay gold standard de "esta
+empresa hace washing", así que se valida como cualquier instrumento sin
+criterio externo: calibración, confiabilidad, persistencia y sensibilidad.
+
+### 1. Placebo — ¿está bien calibrado?
+
+Permutando la etiqueta promocional **dentro de cada formulario** (preserva la
+tasa de cada forma y la mezcla documental de cada empresa, destruye sólo la
+asociación empresa-retórica), 5 corridas:
+
+**0 falsos positivos en las 5, en ambas colas**, contra 8 y 2 observados. El
+test no está inflando: si acaso, es conservador.
+
+### 2. Split-half — ¿es un rasgo de la empresa o ruido?
+
+Partiendo los frames de cada empresa en dos mitades al azar (243 empresas con
+≥10 frames en ambas): **Spearman(z) = 0,456** (p=7e-14), solapamiento del decil
+superior **46%**.
+
+Hay señal real y estable, pero **moderada**: la mitad del ordenamiento no se
+reproduce con otra mitad de los mismos datos. El score ordena bien los
+extremos y mal el medio.
+
+### 3. Persistencia — filings ≤2023 contra ≥2024
+
+88 empresas con ≥10 frames en ambas épocas: **Spearman(z) = 0,407**
+(p=8e-05), solapamiento del decil superior 38%. **Una sola empresa (CRWD)
+queda marcada en el pool y en las dos épocas por separado.**
+
+Es la misma prueba que hundió la definición de clusters, y este score la pasa
+mejor pero no la pasa con holgura: el exceso promocional es persistente como
+ordenamiento, no como etiqueta binaria.
+
+### 4. Sensibilidad de especificación
+
+| unidad | controles | dispersión | washing | callada | Jaccard vs. referencia |
+|---|---|---|---:|---:|---:|
+| único | comportamiento+forma | documento | **8** | **2** | — |
+| único | comportamiento+forma | ninguna | 16 | 3 | 50% |
+| único | comportamiento | documento | 7 | 1 | 88% |
+| único | comportamiento+forma+sector | documento | 3 | 5 | 38% |
+| instancia | comportamiento | ninguna (v1) | 22 | 10 | 36% |
+
+**Sólo tres empresas están en la cola bajo TODAS las especificaciones: CDNS,
+CRWD y PANW.** Ese es el resultado honesto: hay tres casos que no dependen de
+cómo se calcule, y cinco más que sí.
+
+Agregar efectos fijos de sector deja 3 — la cola es casi toda software, así que
+controlar por industria consume casi toda la variación. Cuál de las dos es la
+pregunta correcta ("¿habla más que el corpus?" vs. "¿habla más que su propia
+industria?") es una decisión de tesis, no técnica.
+
+### 5. Criterio externo
+
+Los únicos casos con evidencia independiente son las cartas de comentario de la
+SEC (`01_...md`):
+
+| ticker | percentil | z | promocionales | marcado | caso |
+|---|---:|---:|---|---|---|
+| WELL | 71,2 | −0,26 | 1/41 (esp. 1,3) | no | carta SEC sobre disclosure de IA (abril 2025) |
+| ANET | 84,9 | +0,92 | 28/218 (esp. 23,8) | no | falso positivo (segmentos) |
+| HPE | 26,5 | −1,18 | 25/284 (esp. 31,2) | no | falso positivo (segmentos) |
+| NVDA | 96,6 | +3,53 | 84/501 (esp. 58,6) | no | falso positivo (ingresos) |
+
+**Welltower —el único caso real— no lo detecta el score, y no es un bug del
+estimador sino una diferencia de constructo.** La SEC no le objetó su 10-K por
+promocional: le objetó lo contrario, que la empresa dijera "industry-leading" y
+"competitive advantage" en el earnings call y el press release **sin respaldo
+proporcional en el 10-K**. Este score mide exceso promocional DENTRO del
+filing; el mecanismo que persigue el regulador es una BRECHA entre canales.
+
+Es la limitación más importante del instrumento y marca el próximo paso
+concreto: medir el mismo score sobre transcripciones de earnings calls y
+comparar el exceso de cada empresa entre canales. El corpus de earnings calls
+no está construido (`docs/document_expansion_plan.md`, fase 4).
 
 ## Limitaciones
 
 - **Voz y comportamiento salen del mismo texto.** Se acota midiendo el
-  comportamiento en frames no promocionales, y el resultado es robusto a
-  esa decisión, pero no se elimina. Un diseño limpio mediría el
-  comportamiento contra una fuente externa —capex, I+D, contrataciones—
-  que es lo que intentan `02_...md` y `04_...md` con resultados débiles.
-- **Potencia concentrada en empresas de mucho texto.** Ver arriba. Es una
-  limitación del corpus, no del estimador.
-- **`rhetoric_promotional` es una etiqueta de un LLM** (qwen/qwen3.7-flash,
-  ver `docs/classification_model.md`), no una medida validada contra
-  anotación humana a escala. Todo el score hereda esa dependencia.
-- **Sin dimensión temporal.** El score es pooled por empresa. La versión
-  empresa-año es directa (mismo test por año) y no está hecha; permitiría
-  preguntar si el exceso promocional de una empresa cambia tras el
-  escrutinio de la SEC, que es la pregunta de `01_...md` §SEC 2024.
-- **Sin control sectorial.** La cola de washing es casi toda software; la
-  de sustancia callada mezcla semis, seguros y redes. Repetir el ajuste
-  con efectos fijos de SIC-2 diría si el exceso es sobre el promedio del
-  corpus o sobre el de su propia industria.
+  comportamiento en frames no promocionales; no se elimina. Un diseño limpio lo
+  mediría contra capex/I+D/contrataciones — lo que intentan `02_...md` y
+  `04_...md`, hoy sin ninguna correlación que sobreviva FDR
+  (`10_builders_y_recalculo.md`).
+- **Potencia concentrada en empresas de mucho texto.** Es limitación del
+  corpus, no del estimador, y la tabla de potencia la deja explícita.
+- **`rhetoric_promotional` es una etiqueta de un LLM** (`qwen3.7-flash`), sin
+  validación contra anotación humana a escala. Todo el score hereda esa
+  dependencia. Es el hueco de medición más grande del proyecto.
+- **Sin dimensión temporal en el score publicado**: es pooled por empresa. La
+  versión empresa-año es el mismo test por año y permitiría preguntar si el
+  exceso cambia tras el escrutinio de la SEC.
+- **La cola depende de si se controla por sector.** Con SIC-2 quedan 3
+  empresas. Hay que elegir y declarar cuál es la pregunta.

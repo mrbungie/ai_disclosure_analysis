@@ -57,7 +57,9 @@ mayor riesgo está donde uno lo esperaría a priori: en el cluster 2.
 
 ## 2. Candidatos a washing (voz D + comportamiento mínimo)
 
-> **La definición del grupo está superada** por `09_washing_score.md`.
+> **La definición del grupo está superada** por `09_washing_score.md`, cuya
+> versión validada deja 8 empresas en la cola de washing (ninguna de ellas
+> AAPL/CL) y muestra que 9 de las 20 de acá salían de la mezcla documental.
 > Los perfiles financieros de abajo describen un grupo cuya construcción
 > resultó ser en buena parte un artefacto de volumen de texto.
 

@@ -103,7 +103,10 @@ escrito para hacer visible.
 
 ### Candidatos a AI-washing: voz de "líder vocal" (D) + comportamiento MÍNIMO
 
-> **SUPERADO por `09_washing_score.md` (2026-09-05).** Esta definición
+> **SUPERADO por `09_washing_score.md`** (score continuo con control de
+> formulario, dependencia intra-documento y validación — 8 empresas en la cola,
+> no 20).
+> **Versión previa de esta nota (2026-09-05):** Esta definición
 > —el cruce de dos etiquetas de cluster— no es medible: los arquetipos de
 > voz se construyen sobre tasas con denominadores de 5 a 500 frames, y
 > cuatro de las empresas que caen acá tienen CERO frames promocionales.

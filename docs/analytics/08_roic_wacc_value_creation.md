@@ -94,7 +94,9 @@ mínima.
 
 ## Resultados: washing vs. resto de D — el resultado se dio vuelta
 
-> **La definición del grupo está superada** por `09_washing_score.md`.
+> **La definición del grupo está superada** por `09_washing_score.md` (versión
+> validada: 8 empresas, no 20). Las comparaciones ROIC-WACC de esta sección
+> describen un grupo que ya no existe.
 
 
 | | Washing (D + comportamiento mínimo) | Resto de D |
