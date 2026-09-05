@@ -76,6 +76,10 @@ DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
 # older per-instance run -- that population is superseded, not deleted.
 PREFILTER_SCORES_GLOB = (
     "data/interim/prefilter_scores_unique/prefilter_scores__run=*__part=*.parquet")
+# El juez por defecto es el mismo que etiqueta el golden set: si cambia allá,
+# cambia acá, y no queda un string duplicado que se desincronice.
+DEFAULT_JUDGE_MODEL = "qwen/qwen3.7-flash"
+
 OUT_DIR = REPO_ROOT / "data" / "interim" / "prefilter_predictions_unique"
 
 
@@ -169,7 +173,7 @@ def _named_entity_sql(text_expr: str, entities=None) -> str:
     return f"regexp_matches({text_expr}, '{boundary_before}({alt}){boundary_after}')"
 
 
-def load_golden() -> pd.DataFrame:
+def load_golden(judge_model: str | None = None) -> pd.DataFrame:
     """A golden-set label's OWN instance key is not necessarily
     `unique_paragraphs`' chosen representative for its text (the golden
     sampler picked its own dedup representative independently, per
@@ -191,10 +195,22 @@ def load_golden() -> pd.DataFrame:
     signal to study downstream, not something to filter out here. This
     stage's job is "does this paragraph mention AI at all", not "is this
     substantive" -- that judgment belongs to a later stage, not the
-    prefilter."""
+    prefilter.
+
+    `judge_model` restringe las etiquetas a UN juez. No es higiene opcional: el
+    golden set fue etiquetado por dos modelos y no coinciden. gemini-3.8-flash
+    etiquetó stage1 y parte de stage2; qwen3.7-flash el resto de stage2 y TODO
+    stage3_random — el estrato que ancla la reponderación a la prevalencia del
+    corpus. Dentro del MISMO estrato y el mismo keyword tier llaman IA a cosas
+    distintas: en el tier léxico fuerte gemini dice "menciona IA" el 100,0% de
+    las veces y qwen el 81,8% (tier débil: 13,3% vs 7,4%). Mezclarlos convierte
+    el target en una mezcla de dos reglas de decisión correlacionada con la
+    etapa de muestreo, y tanto el threshold como toda cifra ponderada heredan
+    esa mezcla. Las filas del otro juez se conservan en disco (sirven para medir
+    acuerdo); lo que no puede seguir es entrenar con las dos a la vez."""
     con = duckdb.connect(str(DB), read_only=True)
     try:
-        return con.execute(f"""
+        query = f"""
             SELECT l.is_ai_disclosure, l.relevance, l.relevance != 'none' AS is_ai_mention,
                    l.inclusion_weight, l.accession_number,
                    {', '.join(f'p.{c}' for c in SIGNAL_COLUMNS)},
@@ -212,7 +228,11 @@ def load_golden() -> pd.DataFrame:
                AND p.accession_number = up.accession_number AND p.item_key = up.item_key
                AND p.paragraph_index = up.paragraph_index
             WHERE l.error IS NULL AND up.is_scorable
-        """).df()
+              JUDGE_CLAUSE
+        """
+        return con.execute(query.replace(
+            "JUDGE_CLAUSE",
+            f"AND l.judge_model = '{judge_model}'" if judge_model else "")).df()
     finally:
         con.close()
 
@@ -504,10 +524,10 @@ def apply_only(manifest_path: Path) -> None:
               f"{int(row['instances']):,} instancias")
 
 
-def main() -> None:
+def main(judge_model: str | None = DEFAULT_JUDGE_MODEL) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    print("Cargando golden set completo...")
-    golden = load_golden()
+    print(f"Cargando golden set (juez: {judge_model or 'TODOS — mezcla, ver load_golden'})...")
+    golden = load_golden(judge_model)
     print(f"{len(golden):,} etiquetas")
 
     y = golden["is_ai_mention"].astype(int).values
@@ -674,6 +694,10 @@ if __name__ == "__main__":
                         help="Apply an already-trained model to the current corpus instead of "
                              "refitting. Use when new documents joined the corpus and the "
                              "decision rule must stay identical across forms.")
+    parser.add_argument("--judge-model", default=DEFAULT_JUDGE_MODEL,
+                        help="Ajustar SÓLO con las etiquetas de este juez. 'all' mezcla los "
+                             "dos jueces del golden set, que es lo que hacía la versión "
+                             "anterior y no es defendible (ver load_golden).")
     parser.add_argument("--from-manifest", type=Path, default=None,
                         help="Which deployed model --apply-only uses (default: newest manifest "
                              "in data/interim/prefilter_predictions_unique/).")
@@ -683,4 +707,4 @@ if __name__ == "__main__":
     elif cli.from_manifest is not None:
         parser.error("--from-manifest only means something with --apply-only")
     else:
-        main()
+        main(None if cli.judge_model == "all" else cli.judge_model)
