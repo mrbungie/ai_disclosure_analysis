@@ -74,10 +74,43 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
 # Scores over unique_paragraphs (docs/prefilter_evaluation.md §8.8), NOT the
 # older per-instance run -- that population is superseded, not deleted.
-LATEST_PREFILTER_RUN = "20260904T144801Z"
 PREFILTER_SCORES_GLOB = (
-    f"data/interim/prefilter_scores_unique/prefilter_scores__run={LATEST_PREFILTER_RUN}__part=*.parquet")
+    "data/interim/prefilter_scores_unique/prefilter_scores__run=*__part=*.parquet")
+# El juez por defecto es el mismo que etiqueta el golden set: si cambia allá,
+# cambia acá, y no queda un string duplicado que se desincronice.
+DEFAULT_JUDGE_MODEL = "qwen/qwen3.7-flash"
+
 OUT_DIR = REPO_ROOT / "data" / "interim" / "prefilter_predictions_unique"
+
+
+def scores_relation() -> str:
+    """Every score part written under the CURRENT (model, anchors, dtype),
+    across however many runs produced them — not one hardcoded run id.
+
+    ai_prefilter.py is additive: it scores only the texts that don't have a
+    row yet and writes them under a NEW run id, so one score population is
+    normally spread over several runs (DEF 14A + 8-K arriving after 10-K/
+    10-Q is exactly that case). Pinning a single run id silently froze the
+    corpus at whatever had been scored that day.
+
+    Unioning the whole directory blindly is the opposite mistake, and the
+    reason the pin existed: score parts are append-only and never deleted,
+    so after retuning the anchors the directory holds several COMPLETE
+    populations of the same texts at incompatible score scales. The newest
+    run's configuration wins and older ones are ignored — the same rule,
+    and the same SQL, as build_duckdb.py's `ai_prefilter_scores` view."""
+    return f"""(
+        WITH all_scores AS (
+            SELECT * FROM read_parquet('{PREFILTER_SCORES_GLOB}', union_by_name=True)
+        ), current AS (
+            SELECT model, anchors_fingerprint, dtype
+            FROM all_scores ORDER BY run_id DESC LIMIT 1
+        )
+        SELECT s.* FROM all_scores s JOIN current c
+          ON s.model = c.model
+         AND s.anchors_fingerprint = c.anchors_fingerprint
+         AND s.dtype = c.dtype
+    )"""
 
 # Deterministic override, independent of the learned model and of the
 # anchors-tracked strong/weak lexical lists in configs/ai_prefilter.yaml —
@@ -129,18 +162,18 @@ ALL_SIGNAL_COLUMNS = SIGNAL_COLUMNS + [name for name, _ in LEXICAL_STEP_COLUMNS]
 PARAGRAPH_KEY = ("country_code", "form", "accession_number", "item_key", "paragraph_index")
 
 
-def _named_entity_sql(text_expr: str) -> str:
+def _named_entity_sql(text_expr: str, entities=None) -> str:
     """Same word-boundary regex technique as ai_prefilter.py's _term_regex,
     kept independent of that module's anchors-tracked strong/weak lists on
     purpose — this override must survive an anchors/lexical-config change
     without needing a full corpus rescore (see module docstring)."""
     boundary_before, boundary_after = "(^|[^a-z0-9])", "([^a-z0-9]|$)"
     alt = "|".join(term.replace("'", "''").replace(".", "\\.").replace(" ", "[ ]")
-                   for term in NAMED_AI_ENTITIES)
+                   for term in (NAMED_AI_ENTITIES if entities is None else entities))
     return f"regexp_matches({text_expr}, '{boundary_before}({alt}){boundary_after}')"
 
 
-def load_golden() -> pd.DataFrame:
+def load_golden(judge_model: str | None = None) -> pd.DataFrame:
     """A golden-set label's OWN instance key is not necessarily
     `unique_paragraphs`' chosen representative for its text (the golden
     sampler picked its own dedup representative independently, per
@@ -162,10 +195,22 @@ def load_golden() -> pd.DataFrame:
     signal to study downstream, not something to filter out here. This
     stage's job is "does this paragraph mention AI at all", not "is this
     substantive" -- that judgment belongs to a later stage, not the
-    prefilter."""
+    prefilter.
+
+    `judge_model` restringe las etiquetas a UN juez. No es higiene opcional: el
+    golden set fue etiquetado por dos modelos y no coinciden. gemini-3.8-flash
+    etiquetó stage1 y parte de stage2; qwen3.7-flash el resto de stage2 y TODO
+    stage3_random — el estrato que ancla la reponderación a la prevalencia del
+    corpus. Dentro del MISMO estrato y el mismo keyword tier llaman IA a cosas
+    distintas: en el tier léxico fuerte gemini dice "menciona IA" el 100,0% de
+    las veces y qwen el 81,8% (tier débil: 13,3% vs 7,4%). Mezclarlos convierte
+    el target en una mezcla de dos reglas de decisión correlacionada con la
+    etapa de muestreo, y tanto el threshold como toda cifra ponderada heredan
+    esa mezcla. Las filas del otro juez se conservan en disco (sirven para medir
+    acuerdo); lo que no puede seguir es entrenar con las dos a la vez."""
     con = duckdb.connect(str(DB), read_only=True)
     try:
-        return con.execute(f"""
+        query = f"""
             SELECT l.is_ai_disclosure, l.relevance, l.relevance != 'none' AS is_ai_mention,
                    l.inclusion_weight, l.accession_number,
                    {', '.join(f'p.{c}' for c in SIGNAL_COLUMNS)},
@@ -178,12 +223,16 @@ def load_golden() -> pd.DataFrame:
                AND par.accession_number = l.accession_number AND par.item_key = l.item_key
                AND par.paragraph_index = l.paragraph_index
             JOIN unique_paragraphs up ON up.text_hash = par.text_hash
-            JOIN read_parquet('{PREFILTER_SCORES_GLOB}') p
+            JOIN {scores_relation()} p
                 ON p.country_code = up.country_code AND p.form = up.form
                AND p.accession_number = up.accession_number AND p.item_key = up.item_key
                AND p.paragraph_index = up.paragraph_index
             WHERE l.error IS NULL AND up.is_scorable
-        """).df()
+              JUDGE_CLAUSE
+        """
+        return con.execute(query.replace(
+            "JUDGE_CLAUSE",
+            f"AND l.judge_model = '{judge_model}'" if judge_model else "")).df()
     finally:
         con.close()
 
@@ -296,16 +345,16 @@ def funnel_counts(con) -> dict:
     total, total_instances = con.execute(f"""
         SELECT count(*), COALESCE(sum(up.duplicate_count), 0)
         FROM unique_paragraphs up
-        JOIN read_parquet('{PREFILTER_SCORES_GLOB}') p ON p.text_hash = up.text_hash
+        JOIN {scores_relation()} p ON p.text_hash = up.text_hash
         WHERE up.is_scorable
     """).fetchone()
     lexical = con.execute(f"""
-        SELECT COUNT(*) FROM read_parquet('{PREFILTER_SCORES_GLOB}') p
+        SELECT COUNT(*) FROM {scores_relation()} p
         JOIN unique_paragraphs up ON up.text_hash = p.text_hash
         WHERE up.is_scorable AND (strong_lexical_match OR weak_lexical_match)
     """).fetchone()[0]
     strong_only = con.execute(f"""
-        SELECT COUNT(*) FROM read_parquet('{PREFILTER_SCORES_GLOB}') p
+        SELECT COUNT(*) FROM {scores_relation()} p
         JOIN unique_paragraphs up ON up.text_hash = p.text_hash
         WHERE up.is_scorable AND strong_lexical_match
     """).fetchone()[0]
@@ -315,10 +364,170 @@ def funnel_counts(con) -> dict:
     }
 
 
-def main() -> None:
+def latest_manifest(out_dir: Path = OUT_DIR) -> Path:
+    """Newest TRAINED model's manifest (filenames carry a UTC timestamp, so
+    lexical order is chronological).
+
+    Manifests written by --apply-only are skipped: they are copies of a
+    model, not a model. Taking the newest file blindly means the second
+    apply cites the first apply as its origin, the third cites the second,
+    and `trained_run` decays into a chain of re-applications with the real
+    training run buried at the end — same numbers, useless provenance."""
+    manifests = [m for m in sorted(out_dir.glob("prefilter_predictions_manifest__run=*.json"))
+                 if not json.loads(m.read_text()).get("applied_only")]
+    if not manifests:
+        raise FileNotFoundError(
+            f"no trained model to apply in {out_dir} — run this script without "
+            f"--apply-only once to train one")
+    return manifests[-1]
+
+
+def load_deployed_model(manifest_path: Path) -> dict:
+    """The coefficients/intercept/threshold of an ALREADY-TRAINED run.
+
+    Applying a stored model instead of refitting is not a shortcut, it is
+    the point: new documents (DEF 14A, 8-K) joining the corpus must be
+    judged by the SAME decision rule the earlier corpus was, or the funnel
+    counts and every analysis built on them stop being comparable across
+    the forms. Refitting would also move the threshold, silently
+    reclassifying 10-K/10-Q paragraphs that nothing about them changed.
+
+    The manifest stores a plain JSON linear model on purpose (see the
+    module docstring), so this reconstructs `proba` arithmetically rather
+    than unpickling a sklearn object: coefficients are keyed BY NAME and
+    reordered to ALL_SIGNAL_COLUMNS here, so a future reordering of that
+    list can't silently pair a coefficient with the wrong signal."""
+    manifest = json.loads(manifest_path.read_text())
+    coefficients = manifest["coefficients"]
+    missing = [c for c in ALL_SIGNAL_COLUMNS if c not in coefficients]
+    extra = [c for c in coefficients if c not in ALL_SIGNAL_COLUMNS]
+    if missing or extra:
+        raise ValueError(
+            f"{manifest_path.name} was trained on a different signal set than this script "
+            f"builds (missing={missing}, unexpected={extra}); it cannot be applied as-is")
+    return {
+        "run_id": manifest["run_id"],
+        "coef": np.array([coefficients[c] for c in ALL_SIGNAL_COLUMNS], dtype=float),
+        "intercept": float(manifest["intercept"]),
+        "threshold": float(manifest["threshold"]),
+        "use_named_entity": bool(manifest["named_entity_used_in_deployment"]),
+        "named_ai_entities": tuple(manifest["named_ai_entities"]),
+        "deploy_c": manifest.get("deploy_c"),
+        "cv_metrics": manifest.get("cv_metrics"),
+        "cv_metrics_with_named_entity": manifest.get("cv_metrics_with_named_entity"),
+        "golden_set_labels": manifest.get("golden_set_labels"),
+        "manifest_path": str(manifest_path),
+    }
+
+
+def apply_only(manifest_path: Path) -> None:
+    """Score the current corpus with a stored model. No golden set is read
+    and nothing is fitted."""
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    print("Cargando golden set completo...")
-    golden = load_golden()
+    deployed = load_deployed_model(manifest_path)
+    print(f"Modelo desplegado: {manifest_path.name} (entrenado en run {deployed['run_id']})")
+    print(f"  threshold={deployed['threshold']:.2f} C={deployed['deploy_c']} "
+          f"named_entity={deployed['use_named_entity']} "
+          f"({len(deployed['named_ai_entities'])} entidades)")
+    if tuple(deployed["named_ai_entities"]) != NAMED_AI_ENTITIES:
+        print("  AVISO: NAMED_AI_ENTITIES cambió desde ese entrenamiento; se usa la lista "
+              "del manifiesto para no alterar la regla de decisión desplegada.")
+
+    con = duckdb.connect(str(DB), read_only=True)
+    print("Cargando el corpus de textos únicos (misma config de anchors)...")
+    corpus = con.execute(f"""
+        SELECT p.{', p.'.join(PARAGRAPH_KEY)}, p.text_hash, up.duplicate_count,
+               {', '.join(f'p.{c}' for c in SIGNAL_COLUMNS)},
+               {', '.join(f'{sql} AS {name}' for name, sql in LEXICAL_STEP_COLUMNS)},
+               {_named_entity_sql("lower(coalesce(up.paragraph_text, ''))",
+                                  deployed["named_ai_entities"])} AS named_entity_match
+        FROM {scores_relation()} p
+        JOIN unique_paragraphs up ON up.text_hash = p.text_hash
+        WHERE up.is_scorable
+    """).df()
+    print(f"{len(corpus):,} textos únicos ({int(corpus['duplicate_count'].sum()):,} instancias)")
+
+    Xc = corpus[ALL_SIGNAL_COLUMNS].astype(float).values
+    logit = Xc @ deployed["coef"] + deployed["intercept"]
+    proba = 1.0 / (1.0 + np.exp(-logit))
+    named_entity_corpus = corpus["named_entity_match"].astype(bool).values
+    model_positive = proba >= deployed["threshold"]
+    is_positive = ((model_positive | named_entity_corpus)
+                   if deployed["use_named_entity"] else model_positive)
+    rescued = int((named_entity_corpus & ~model_positive).sum()) if deployed["use_named_entity"] else 0
+    instances_positive = int(corpus.loc[is_positive, "duplicate_count"].sum())
+    print(f"Marcados como IA-relevantes: {int(is_positive.sum()):,} textos únicos / {len(corpus):,} "
+          f"({100 * is_positive.mean():.2f}%), representando {instances_positive:,} instancias"
+          + (f" — {rescued:,} solo por named_entity_match" if deployed["use_named_entity"] else ""))
+
+    print("Calculando el funnel...")
+    funnel = funnel_counts(con)
+    funnel["prefilter_model_only_positive"] = int(model_positive.sum())
+    funnel["named_entity_rescued"] = rescued
+    funnel["prefilter_model_positive"] = int(is_positive.sum())
+    funnel["prefilter_model_positive_instances"] = instances_positive
+    # Per-form funnel: the whole reason to re-apply is that new document
+    # types entered the corpus, so "how many candidates did each form
+    # contribute" is the number a reader will ask for first.
+    by_form = con.execute(f"""
+        SELECT up.country_code, up.form, count(*) AS unique_texts,
+               sum(up.duplicate_count) AS instances
+        FROM {scores_relation()} p
+        JOIN unique_paragraphs up ON up.text_hash = p.text_hash
+        WHERE up.is_scorable GROUP BY 1, 2 ORDER BY 1, 2
+    """).df()
+    con.close()
+
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    out = corpus[[*PARAGRAPH_KEY, "text_hash", "duplicate_count"]].copy()
+    out["predicted_proba"] = proba.astype("float32")
+    out["named_entity_match"] = named_entity_corpus
+    out["is_ai_prefiltered"] = is_positive
+    out["threshold"] = deployed["threshold"]
+    # `model_version` stays THIS run's id, because that is what downstream
+    # orders by: ai_classify.py resolves a text present in several
+    # prediction files with `QUALIFY ... ORDER BY model_version DESC`, so
+    # stamping the training run's id here would make a fresh apply TIE with
+    # the deployment it supersedes instead of winning. The model's own
+    # identity is not lost — it rides along in `trained_run`.
+    out["model_version"] = run_id
+    out["trained_run"] = deployed["run_id"]
+    out_path = OUT_DIR / f"prefilter_predictions__run={run_id}.parquet"
+    pq.write_table(pa.Table.from_pandas(out, preserve_index=False), out_path, compression="zstd")
+
+    manifest = {
+        "run_id": run_id, "applied_only": True,
+        "trained_run": deployed["run_id"], "trained_manifest": deployed["manifest_path"],
+        "golden_set_labels": deployed["golden_set_labels"],
+        "deploy_c": deployed["deploy_c"], "threshold": deployed["threshold"],
+        "cv_metrics": deployed["cv_metrics"],
+        "cv_metrics_with_named_entity": deployed["cv_metrics_with_named_entity"],
+        "named_entity_used_in_deployment": deployed["use_named_entity"],
+        "named_ai_entities": list(deployed["named_ai_entities"]),
+        "coefficients": dict(zip(ALL_SIGNAL_COLUMNS, deployed["coef"].tolist())),
+        "intercept": deployed["intercept"],
+        "funnel": funnel,
+        "funnel_by_form": by_form.to_dict("records"),
+        "output": str(out_path),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    manifest_path = OUT_DIR / f"prefilter_predictions_manifest__run={run_id}.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True, default=str) + "\n")
+    print(f"\nParquet -> {out_path}")
+    print(f"Manifiesto -> {manifest_path}")
+    print("\nFunnel:")
+    for stage, count in funnel.items():
+        print(f"  {stage}: {count:,}")
+    print("\nPor formulario:")
+    for row in by_form.to_dict("records"):
+        print(f"  {row['country_code']}/{row['form']}: {int(row['unique_texts']):,} textos únicos, "
+              f"{int(row['instances']):,} instancias")
+
+
+def main(judge_model: str | None = DEFAULT_JUDGE_MODEL) -> None:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"Cargando golden set (juez: {judge_model or 'TODOS — mezcla, ver load_golden'})...")
+    golden = load_golden(judge_model)
     print(f"{len(golden):,} etiquetas")
 
     y = golden["is_ai_mention"].astype(int).values
@@ -416,7 +625,7 @@ def main() -> None:
                {', '.join(f'{sql} AS {name}' for name, sql in LEXICAL_STEP_COLUMNS)},
                up.paragraph_text,
                {_named_entity_sql("lower(coalesce(up.paragraph_text, ''))")} AS named_entity_match
-        FROM read_parquet('{PREFILTER_SCORES_GLOB}') p
+        FROM {scores_relation()} p
         JOIN unique_paragraphs up ON up.text_hash = p.text_hash
         WHERE up.is_scorable
     """).df()
@@ -478,4 +687,24 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--apply-only", action="store_true",
+                        help="Apply an already-trained model to the current corpus instead of "
+                             "refitting. Use when new documents joined the corpus and the "
+                             "decision rule must stay identical across forms.")
+    parser.add_argument("--judge-model", default=DEFAULT_JUDGE_MODEL,
+                        help="Ajustar SÓLO con las etiquetas de este juez. 'all' mezcla los "
+                             "dos jueces del golden set, que es lo que hacía la versión "
+                             "anterior y no es defendible (ver load_golden).")
+    parser.add_argument("--from-manifest", type=Path, default=None,
+                        help="Which deployed model --apply-only uses (default: newest manifest "
+                             "in data/interim/prefilter_predictions_unique/).")
+    cli = parser.parse_args()
+    if cli.apply_only:
+        apply_only(cli.from_manifest or latest_manifest())
+    elif cli.from_manifest is not None:
+        parser.error("--from-manifest only means something with --apply-only")
+    else:
+        main(None if cli.judge_model == "all" else cli.judge_model)

@@ -128,6 +128,9 @@ def _filing_manifest_selects(countries: list[tuple[str, dict]], dirs) -> list[st
         proxy_path = f"{manifests_dir}/filing_manifest_proxy.parquet"
         if _existing(proxy_path):
             parts.append(f"SELECT '{country}' AS country_code, * FROM read_parquet('{proxy_path}')")
+        eightk_path = f"{manifests_dir}/filing_manifest_8k.parquet"
+        if _existing(eightk_path):
+            parts.append(f"SELECT '{country}' AS country_code, * FROM read_parquet('{eightk_path}')")
         selects.append("\n            UNION ALL BY NAME\n            ".join(parts))
     return selects
 
@@ -570,7 +573,14 @@ def main(with_text_tables: bool = False):
     # means fewer copies of that working set alive at once -- both cheap
     # to try before reaching for a bigger memory_limit.
     con.execute("SET preserve_insertion_order=false")
-    con.execute("SET threads=4")
+    con.execute("SET threads=2")
+    # (2026-09-05) 8-K joining the same UNION pushed total row volume past
+    # what 4 threads' working sets fit in this machine's 16GB even with
+    # insertion-order preservation off -- dropping to 2 threads plus an
+    # explicit temp_directory (letting DuckDB spill intermediates to disk
+    # instead of OOMing) fixed it without needing a bigger machine.
+    con.execute(f"SET temp_directory='{REPO_ROOT / 'duckdb' / '.tmp_spill'}'")
+    con.execute("SET memory_limit='10GB'")
 
     def dirs(config):
         return (
@@ -658,6 +668,19 @@ def main(with_text_tables: bool = False):
             if _existing(f"{dirs(cfg)[1]}/filing_sections_proxy__run=*__part=*.parquet")
         ]),
         "filing_sections_proxy": "SELECT * FROM extraction_trace_proxy WHERE found",
+        # 8-K — same "whole document as one section" choice, see
+        # scripts/us/8k/segmenter_8k.py. Also not a separate instrument,
+        # just another form type sharing the filing_manifest lookup.
+        "extraction_trace_8k": _union([
+            f"""
+            SELECT '{country}' AS country_code, *
+            FROM read_parquet('{dirs(cfg)[1]}/filing_sections_8k__run=*__part=*.parquet', union_by_name=True)
+            QUALIFY row_number() OVER (PARTITION BY accession_number, item_key ORDER BY run_date DESC) = 1
+            """
+            for country, cfg in countries
+            if _existing(f"{dirs(cfg)[1]}/filing_sections_8k__run=*__part=*.parquet")
+        ]),
+        "filing_sections_8k": "SELECT * FROM extraction_trace_8k WHERE found",
         # --- 03_market_data: prices + Fama-French factors ---
         "market_prices": f"""
             SELECT * FROM read_parquet('{market_prices_dir}/*.parquet', filename = true)
@@ -685,19 +708,67 @@ def main(with_text_tables: bool = False):
         # `make duckdb-text`): took ~52s standalone, real cost on a real
         # machine, not worth paying on every `make duckdb` when most
         # rebuilds just need the fast views refreshed.
-        paragraph_branches = [
-            f"({_paragraph_select_sql('10-K', 'filing_sections')})",
-            f"({_paragraph_select_sql('10-Q', 'filing_sections_10q')})",
+        # (2026-09-05) One giant UNION ALL of every form's window-function-
+        # heavy branch, planned and executed as a SINGLE CREATE TABLE
+        # statement, OOM'd once 8-K (34k more documents) joined 10-K/10-Q/
+        # DEF14A: DuckDB's planner kept every branch's line-level CTE chain
+        # (unnest of every raw line, LAG/LEAD per accession_number) alive
+        # at once rather than freeing one branch's working set before
+        # starting the next. Materializing each form's branch into its own
+        # physical staging table FIRST (sequential con.execute calls, each
+        # one's memory released once its CREATE TABLE finishes) and THEN
+        # doing a cheap UNION ALL BY NAME over the now-small staging tables
+        # fixed it -- same total rows, same window-function semantics
+        # (still partitioned by accession_number, still per-form), just
+        # not all resident in memory simultaneously.
+        paragraph_stage_names = []
+        paragraph_stage_specs = [
+            ("_paragraphs_stage_10k", _paragraph_select_sql("10-K", "filing_sections")),
+            ("_paragraphs_stage_10q", _paragraph_select_sql("10-Q", "filing_sections_10q")),
         ]
         if "filing_sections_proxy" in views:
-            paragraph_branches.append(f"({_paragraph_select_sql('DEF 14A', 'filing_sections_proxy')})")
+            paragraph_stage_specs.append(
+                ("_paragraphs_stage_proxy", _paragraph_select_sql("DEF 14A", "filing_sections_proxy"))
+            )
         else:
             print("  skipping DEF 14A paragraphs (no filing_sections_proxy files yet)")
+        if "filing_sections_8k" in views:
+            paragraph_stage_specs.append(
+                ("_paragraphs_stage_8k", _paragraph_select_sql("8-K", "filing_sections_8k"))
+            )
+        else:
+            print("  skipping 8-K paragraphs (no filing_sections_8k files yet)")
         if _existing(CL_PARAGRAPHS_GLOB):
-            paragraph_branches.append(f"({_cl_paragraph_select_sql(CL_PARAGRAPHS_GLOB)})")
+            paragraph_stage_specs.append(
+                ("_paragraphs_stage_cl", _cl_paragraph_select_sql(CL_PARAGRAPHS_GLOB))
+            )
         else:
             print(f"  skipping CL paragraphs (no files matching {CL_PARAGRAPHS_GLOB})")
-        views["paragraphs"] = "\n            UNION ALL BY NAME\n".join(paragraph_branches)
+
+        # The staging tables' own dependency views (filing_sections_proxy,
+        # filing_sections_8k, ...) must already exist in the DB before
+        # these CREATE TABLE statements run -- flush every view/table
+        # queued in `views` so far (all the fast views built above) before
+        # materializing paragraph branches against them.
+        for name, query in views.items():
+            for drop_kind in ("VIEW", "TABLE"):
+                try:
+                    con.execute(f"DROP {drop_kind} IF EXISTS {name}")
+                except duckdb.CatalogException:
+                    pass
+            con.execute(f"CREATE OR REPLACE VIEW {name} AS {query}")
+            print(f"  view {name} OK")
+        views.clear()
+
+        for stage_name, stage_sql in paragraph_stage_specs:
+            con.execute(f"DROP TABLE IF EXISTS {stage_name}")
+            con.execute(f"CREATE TABLE {stage_name} AS {stage_sql}")
+            print(f"  table {stage_name} OK")
+            paragraph_stage_names.append(stage_name)
+
+        views["paragraphs"] = "\n            UNION ALL BY NAME\n".join(
+            f"SELECT * FROM {name}" for name in paragraph_stage_names
+        )
         # Built ON `paragraphs` (not re-derived from raw section text) —
         # see _sentence_select_sql's docstring.
         views["sentences"] = _sentence_select_sql()
@@ -768,13 +839,41 @@ def main(with_text_tables: bool = False):
     # population or get an entity-mention run, no view change needed here.
     frames_glob = "data/interim/ai_classify/ai_frames__session=*.parquet"
     if with_text_tables and _existing(frames_glob):
+        # Dedup por LLAMADA al juez, no por (text_hash, frame_index).
+        #
+        # La versión anterior particionaba por (text_hash, frame_index) y
+        # ordenaba sólo por session_id. Dos problemas, ambos reales sobre
+        # este corpus: (a) un mismo texto se clasifica varias veces DENTRO
+        # de una sesión, porque instancias de párrafo distintas
+        # (accession_number distinto) comparten text_hash -- 1.225 grupos
+        # empatados, y en 976 de ellos las filas empatadas traen valores
+        # DISTINTOS, así que `row_number()` desempataba al azar y la vista
+        # devolvía números diferentes en cada consulta (medido: el conteo
+        # de `rhetoric_promotional` oscilaba entre 2.903 y 2.911 sobre las
+        # mismas filas). Nada aguas abajo era reproducible.
+        # (b) aun desempatando, particionar por frame_index puede quedarse
+        # con el frame 0 de una llamada y el frame 1 de otra, mezclando dos
+        # lecturas distintas del mismo párrafo en un juego incoherente.
+        #
+        # `classified_at` identifica la llamada y es único por texto
+        # (verificado: cero grupos empatados lo comparten), así que elegir
+        # la última LLAMADA y traer todos sus frames arregla las dos cosas.
         views["gold_ai_frames"] = f"""
-            WITH latest_frames AS (
+            WITH all_frames AS (
                 SELECT * FROM read_parquet('{frames_glob}', union_by_name=True)
                 WHERE error IS NULL
+            ), latest_call AS (
+                SELECT text_hash, session_id, classified_at
+                FROM (SELECT DISTINCT text_hash, session_id, classified_at FROM all_frames)
                 QUALIFY row_number() OVER (
-                    PARTITION BY text_hash, frame_index ORDER BY session_id DESC
+                    PARTITION BY text_hash ORDER BY session_id DESC, classified_at DESC
                 ) = 1
+            ), latest_frames AS (
+                SELECT f.* FROM all_frames f
+                JOIN latest_call c
+                  ON c.text_hash = f.text_hash
+                 AND c.session_id = f.session_id
+                 AND c.classified_at = f.classified_at
             )
             SELECT p.country_code, p.form, p.accession_number, p.item_key, p.paragraph_index,
                    f.text_hash, up.duplicate_count, f.frame_index, f.has_frame,
@@ -830,6 +929,14 @@ def main(with_text_tables: bool = False):
                 pass
         con.execute(f"CREATE OR REPLACE {kind} {name} AS {query}")
         print(f"  {kind.lower()} {name} OK")
+
+    if with_text_tables:
+        # Staging tables only existed to keep each branch's window-function
+        # working set out of memory at the same time as the others (see
+        # the paragraphs-materialization comment above) -- once the real
+        # `paragraphs` table is built from them, they're dead weight.
+        for stage_name in paragraph_stage_names:
+            con.execute(f"DROP TABLE IF EXISTS {stage_name}")
 
     print(f"\nCountries: {', '.join(c for c, _ in countries)}")
     print(f"Wrote -> {DB_PATH}")

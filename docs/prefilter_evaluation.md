@@ -1202,6 +1202,62 @@ evidencia suficiente para descartar un mecanismo cuya premisa de diseño
 (un nombre propio de IA específico casi nunca es ruido) sigue siendo
 válida y verificable directamente contra el corpus.
 
+### 8.14 8-K entra al esquema de `paragraphs` (sin correr embeddings/scoring) + fix de OOM al materializar; hallazgo de AI-washing en cartas de comentario SEC (2026-09-05)
+
+**Fetch + extracción de 8-K.** 517/517 tickers, 35.829 filings (2021-01-01
+a 2026-09-01), sin errores, ~3h47m. Extracción de secciones (documento
+completo como `item_key='0'`, mismo criterio pragmático que DEF 14A y la
+Memoria chilena — ver `scripts/us/8k/segmenter_8k.py`) sobre 34.421
+archivos completados, ~6 min. `firm_universe.parquet` verificado en 517
+filas después del fetch — el fix aditivo de §incidente-firm_universe
+(`_safe_write_universe`) sostuvo la corrida completa sin truncar nada.
+
+**Resultado en `paragraphs`:** 1.623.906 filas nuevas (407.350 textos
+únicos), 86% prosa (avg 110 caracteres), 14% tablas. Conteos totales por
+form tras el rebuild: DEF 14A 3.679.553 (2.276.339 únicos), 10-Q
+1.736.542, 8-K 1.623.906, 10-K 1.544.496, annual(CL) 874.385,
+quarterly(CL) 203.210. `unique_paragraphs`: 5.138.210 filas.
+
+**Segundo OOM al materializar `paragraphs`** (el de §8.9/8.13 con
+`preserve_insertion_order=false`+`threads=4` ya no alcanzaba): el volumen
+agregado de 8-K sumado a DEF 14A hizo que DuckDB planeara el `UNION ALL`
+completo de las 5 ramas (10-K/10-Q/DEF14A/8-K/CL) como una sola sentencia
+`CREATE TABLE`, manteniendo vivas simultáneamente las CTEs de
+línea-a-línea (unnest + LAG/LEAD por `accession_number`) de TODAS las
+ramas a la vez. Ni bajar threads a 2 ni fijar `memory_limit`/
+`temp_directory` explícito lo resolvió — seguía OOMeando a 9-10GB en una
+máquina de 16GB.
+
+**Fix real:** materializar cada rama por separado como tabla física
+(`_paragraphs_stage_10k`, `..._10q`, `..._proxy`, `..._8k`, `..._cl`) con
+sentencias `CREATE TABLE` secuenciales — cada una libera su memoria de
+trabajo antes de que empiece la siguiente — y solo al final unir esas
+tablas ya pequeñas en `paragraphs` con un `UNION ALL BY NAME` trivial (sin
+funciones de ventana). Mismo resultado exacto (la partición de
+LAG/LEAD sigue siendo por `accession_number` dentro de cada forma, nunca
+cruza formas), pero sin picos de memoria simultáneos. Costo total del
+rebuild completo: 2:53 (antes ~2:02 sin 8-K). Las tablas de staging se
+borran automáticamente al final de cada corrida (no quedan huérfanas).
+
+**Hallazgo de cartas de comentario de la SEC — sección aparte en
+`docs/analytics/01_ai_disclosure_analytics.md`** ("Cartas de comentario de
+la SEC: ¿hay evidencia directa de escrutinio por AI-washing?"): de 5.057
+cartas (371/517 empresas), solo **1 caso limpio de AI-washing genuino**
+(Welltower, abril 2025 — lenguaje promocional "industry-leading" en
+earnings call/press release sin respaldo proporcional en el 10-K,
+solicitud SEC de revisar filings futuros, la empresa lo admite y agrega
+disclosure). Los otros 22+ candidatos leídos manualmente son ruido
+(contabilidad de segmentos ASC 280-10-50, disputas de proxy contest,
+falsos positivos de substring). No es un hallazgo nulo: el mecanismo
+existe y es identificable, solo es de muy baja frecuencia en este canal
+específico — la carta de comentario no es un instrumento de alto volumen
+para medir AI-washing sistemáticamente, pero valida que la hipótesis de
+tesis no está mal planteada.
+
+**Pendiente, no ejecutado:** embeddings/prefilter scoring sobre los
+1.623.906 párrafos nuevos de 8-K (igual que DEF 14A en §8.9, requiere
+confirmación explícita antes de correr el paso GPU).
+
 ---
 
 ## 9. Qué falta

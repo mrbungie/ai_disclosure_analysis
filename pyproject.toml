@@ -28,6 +28,27 @@ dependencies = [
 dev = [
     "pytest>=9.0.3",
 ]
+# GPU document-parsing backends for scripts/common/pdf/backends/. Optional
+# and NOT in the default install: they pull torch/paddle and multi-GB model
+# weights, and the pymupdf backend (which is in the base dependencies) runs
+# the whole Chilean pipeline without them. See
+# docs/analytics/pdf-backend-poc.md for which one to install and why.
+#
+# paddlepaddle-gpu is deliberately absent: its wheel must match the CUDA
+# arch of the card in the machine and is not on PyPI. On the RTX 5090
+# (Blackwell, sm_120) that is the cu129 build, NOT the cu126 one the model
+# card suggests:
+#   uv pip install paddlepaddle-gpu==3.3.1 \
+#     --index-url https://www.paddlepaddle.org.cn/packages/stable/cu129/
+pdf-vlm = [
+    "paddleocr[doc-parser]>=3.6.0",
+    "opencv-python-headless>=4.10",   # opencv-python needs libGL; headless doesn't
+]
+pdf-vlm-mineru = [
+    "mineru-vl-utils[transformers]>=0.1.0",
+    "torch>=2.7",
+    "accelerate>=1.0",
+]
 
 [tool.pytest.ini_options]
 pythonpath = [".", "scripts/01_10k", "scripts/03_market_data", "scripts/common"]

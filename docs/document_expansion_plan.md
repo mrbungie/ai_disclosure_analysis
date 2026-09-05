@@ -3,7 +3,7 @@
 El pipeline actual solo cubre 10-K/10-Q. Esos son, por diseño, el peor
 lugar para encontrar AI-washing real: legal los revisa específicamente
 para minimizar riesgo de litigio, así que tienden a lenguaje cauteloso y
-genérico (ver `docs/ai_disclosure_analytics.md`, sección "Evolución
+genérico (ver `docs/analytics/01_ai_disclosure_analytics.md`, sección "Evolución
 temporal"). El AI-washing que le preocupa a la SEC vive en otros
 documentos — algunos ya están en EDGAR con la misma infraestructura que
 `scripts/us/` ya usa, otros requieren una fuente nueva.
@@ -62,7 +62,7 @@ de una empresa, queda en el expediente público de EDGAR como
 **ground truth de un tercero independiente**: un caso donde ya se sabe,
 sin depender del propio clasificador, que hubo un problema real de
 divulgación de IA. Sirve para VALIDAR si los arquetipos de
-`docs/ai_disclosure_analytics.md` realmente separan washing de
+`docs/analytics/01_ai_disclosure_analytics.md` realmente separan washing de
 divulgación creíble, no solo para describir más variación.
 
 **Por qué es fácil pese a ser una fuente nueva**: EDGAR expone estas
@@ -90,7 +90,7 @@ scraping nuevo.
    IA, y cuál?"), no en pasarla por el pipeline de frames diseñado para
    párrafos de 10-K.
 4. Cruzar: de las empresas con carta, ¿cuál es su arquetipo (A/B/C/D) en
-   `docs/ai_disclosure_analytics.md`? Si las cartas caen
+   `docs/analytics/01_ai_disclosure_analytics.md`? Si las cartas caen
    desproporcionadamente en el cluster D (líderes vocales), es evidencia
    fuerte de que el arquetipo captura señal real.
 
@@ -102,7 +102,7 @@ scraping nuevo.
 comités de riesgo tecnológico, compensación ejecutiva ligada a
 "transformación con IA". El esquema de frames ya tiene 6 conceptos
 `gov_*` (`docs/classification_model.md`) que en el 10-K probablemente
-están casi vacíos (`docs/ai_disclosure_analytics.md` #6 no midió
+están casi vacíos (`docs/analytics/01_ai_disclosure_analytics.md` #6 no midió
 gobernanza directamente, pero el 10-K rara vez detalla esto) — el proxy
 es donde ese eje del esquema de clasificación finalmente tendría con qué
 trabajar.
