@@ -1,5 +1,7 @@
 # Project-wide directives
 
+COMMIT TO B2 AND GIT OFTEN.
+
 ## Never delete LLM-labeled or pre-classified data
 
 Any file under `data/` that required an LLM call to produce — judge labels
