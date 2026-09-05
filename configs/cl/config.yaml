@@ -22,17 +22,22 @@ corpus:
 #   pymupdf — text-layer heuristics. ~2 ms/page, CPU, parallel across
 #             processes. Blind to pages with no text layer, and measurably
 #             lossy on tables and multi-column pages.
-#   paddleocr_vl — PaddleOCR-VL 1.6. Reads pixels, returns typed blocks,
-#             and ships its own furniture policy. The POC's winner: same
-#             table-cell recall as the others, no chrome leakage, ~2x
-#             faster (5.95 s/page steady state on this GPU).
-#   mineru  — MinerU2.5-Pro VLM. Same corpus quality, half the speed.
+#   mineru  — MinerU2.5-Pro VLM. Reads pixels, returns typed blocks. The
+#             DEFAULT: slower than paddleocr_vl but it completed 50/50
+#             at-risk pages with no hang, which paddleocr_vl did not.
+#   paddleocr_vl — PaddleOCR-VL 1.6. Best quality-per-second measured
+#             (5.95 s/page vs ~11), and it won the 6-page POC — but its
+#             local runtime hung on ~2% of pages attempted, and its
+#             internal VLM worker does not recover ("VLM worker did not
+#             terminate in time"): once wedged the whole pipeline object
+#             is dead, so a hang costs the rest of the run, not one page.
+#             Fine for a short run you are watching; not for 120k pages.
 #   dots    — dots.mocr VLM. Richer table markup, but no block type for
 #             gutter/margin notes, which this corpus has on every page.
 # `triage` sends only the pages that need it to the VLM and lets the CPU
 # backend keep the rest — without it, a full-corpus VLM run is ~300k pages.
 pdf:
-  backend: paddleocr_vl
+  backend: mineru
   fallback_backend: pymupdf
   triage:
     enabled: true
@@ -40,13 +45,17 @@ pdf:
     vlm_if_tables: true
     vlm_if_multi_column: true
   dpi: 200
-  # transformers/local runs anywhere; vllm needs the model served (for
-  # paddleocr_vl: `paddleocr genai_server`, then set server_url) and is the
-  # only path with a tolerable corpus-scale wall clock — a single stream is
-  # ~350 h for the Chilean corpus even with triage on. See the POC doc's
-  # throughput section.
+  # transformers/local runs anywhere; vllm needs the model served and is
+  # the only path with a tolerable corpus-scale wall clock. Measured from
+  # 12,381 real pages: the corpus is ~171,000 pages, ~120,000 of which the
+  # triage sends to the VLM, so a single stream is ~200 h (mineru: ~340 h).
+  # See the POC doc's throughput section — that arithmetic is the reason
+  # any full re-extraction needs vllm, not the backend choice.
   runtime: transformers
   server_url: ''
+  # Per-page deadline. A hung page must cost one page, not the run — see
+  # scripts/common/pdf/watchdog.py for the incident that motivated it.
+  page_timeout: 240
 storage:
   # Suffixed, not nested under a cl/ subfolder — matches the existing
   # _10q suffix convention (filing_manifest_10q.parquet) rather than

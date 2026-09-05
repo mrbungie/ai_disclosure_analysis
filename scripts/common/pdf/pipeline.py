@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from scripts.common.pdf import blocks as B
 from scripts.common.pdf.backends import get_backend
 from scripts.common.pdf.render import iter_pages, read_pdf_parts, text_layer_chars
+from scripts.common.pdf.watchdog import PageTimeout
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,11 @@ class PdfExtractor:
         #: logging at the end of a run: it's the only direct read on whether
         #: triage is paying for itself.
         self.pages_by_backend: dict[str, int] = {}
+        #: Pages whose primary-backend call blew its deadline (see
+        #: scripts/common/pdf/watchdog.py). Non-zero is not fatal but is
+        #: worth looking at: it means pages went through the cheap backend
+        #: that the triage had decided needed a better one.
+        self.timed_out_pages: list[int] = []
 
     @property
     def max_workers(self) -> int:
@@ -126,9 +132,20 @@ class PdfExtractor:
                 signals = self.cheap.layout_signals(ref.page_obj)
                 if not self.triage.needs_vlm(ref.page_obj, signals):
                     engine = self.cheap
-            self.pages_by_backend[engine.name] = self.pages_by_backend.get(engine.name, 0) + 1
             part_of_page[ref.page] = ref.source_part
-            for block in engine.parse_page(ref.page_obj, ref.page):
+            try:
+                blocks = engine.parse_page(ref.page_obj, ref.page)
+            except PageTimeout:
+                # One page is not worth losing a 120,000-page run over.
+                # Fall back to the cheap backend if there is one — a
+                # degraded page beats a missing page — and record it.
+                self.timed_out_pages.append(ref.page)
+                engine = self.cheap or self.primary
+                if engine is self.primary:
+                    continue
+                blocks = engine.parse_page(ref.page_obj, ref.page)
+            self.pages_by_backend[engine.name] = self.pages_by_backend.get(engine.name, 0) + 1
+            for block in blocks:
                 block.meta["backend"] = engine.name
                 all_blocks.append(block)
 

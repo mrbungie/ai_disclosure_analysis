@@ -21,6 +21,7 @@ them apart.
 import os
 
 from scripts.common.pdf import blocks as B
+from scripts.common.pdf.watchdog import page_deadline
 
 DEFAULT_MODEL = os.environ.get("MINERU_MODEL", "opendatalab/MinerU2.5-Pro-2605-1.2B")
 
@@ -47,8 +48,12 @@ class MinerUBackend:
     max_workers = 1
 
     def __init__(self, model: str = DEFAULT_MODEL, dpi: int | None = None,
-                 runtime: str = "transformers", server_url: str = "", **_):
+                 runtime: str = "transformers", server_url: str = "",
+                 page_timeout: int = 240, **_):
         self.model_id = model
+        #: See PaddleOcrVlBackend.page_timeout. Higher here because this
+        #: backend's measured steady state is ~2x slower.
+        self.page_timeout = page_timeout
         self.runtime = runtime
         self.server_url = server_url
         self.dpi = dpi
@@ -100,7 +105,9 @@ class MinerUBackend:
         # regions come back already sorted into reading order, which is the
         # single biggest thing the PyMuPDF backend gets wrong on multi-column
         # Memoria pages.
-        for item in self._client.two_step_extract(image):
+        with page_deadline(self.page_timeout):
+            items = self._client.two_step_extract(image)
+        for item in items:
             raw_type = item.get("type", "")
             out.append(B.Block(
                 type=_TYPE_MAP.get(raw_type, B.BODY),

@@ -72,3 +72,37 @@ def test_unknown_country_still_gets_the_general_detector():
     profile = get_profile("br")
     assert profile.is_furniture("Página 12 de 40") is False   # no CMF patterns
     assert profile.repeat_page_fraction == 0.3                # frequency rule still applies
+
+
+def test_page_deadline_fires_and_restores_the_previous_handler():
+    """The watchdog exists because a VLM page call hung indefinitely while
+    the backends were being benchmarked (see scripts/common/pdf/watchdog.py).
+    Both halves matter: it must fire, and it must not leave a SIGALRM
+    handler installed that some later part of the run trips over."""
+    import signal
+    import time
+
+    import pytest
+
+    from scripts.common.pdf.watchdog import PageTimeout, page_deadline
+
+    sentinel = signal.getsignal(signal.SIGALRM)
+    with pytest.raises(PageTimeout):
+        with page_deadline(1):
+            time.sleep(3)
+    assert signal.getsignal(signal.SIGALRM) is sentinel
+
+    # A call that finishes in time must cancel the timer, not leave it armed.
+    with page_deadline(5):
+        pass
+    time.sleep(0.2)
+    assert signal.getsignal(signal.SIGALRM) is sentinel
+
+
+def test_page_deadline_is_a_noop_when_disabled():
+    import time
+
+    from scripts.common.pdf.watchdog import page_deadline
+
+    with page_deadline(0):
+        time.sleep(0.05)   # no timer armed, no exception

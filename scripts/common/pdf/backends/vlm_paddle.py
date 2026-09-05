@@ -24,6 +24,7 @@ card suggests. `opencv-python-headless` is required in place of
 import os
 
 from scripts.common.pdf import blocks as B
+from scripts.common.pdf.watchdog import page_deadline
 
 DEFAULT_PIPELINE_VERSION = os.environ.get("PADDLEOCR_VL_VERSION", "v1.6")
 
@@ -46,9 +47,14 @@ class PaddleOcrVlBackend:
     max_workers = 1
 
     def __init__(self, pipeline_version: str = DEFAULT_PIPELINE_VERSION, dpi: int | None = None,
-                 runtime: str = "transformers", server_url: str = "", **_):
+                 runtime: str = "transformers", server_url: str = "",
+                 page_timeout: int = 120, **_):
         self.pipeline_version = pipeline_version
         self.dpi = dpi
+        #: Seconds one page may take before it's abandoned. 120 is ~20x the
+        #: 5.95 s/page measured steady state, so it only ever fires on a
+        #: genuine hang, never on a merely slow page.
+        self.page_timeout = page_timeout
         self.runtime = runtime
         self.server_url = server_url
         self._pipeline = None
@@ -78,10 +84,16 @@ class PaddleOcrVlBackend:
         # BGR: paddle's pipeline takes OpenCV-convention arrays, and handing
         # it RGB silently degrades recognition on colour-on-colour text
         # rather than raising.
-        array = np.asarray(image)[:, :, ::-1]
+        # ascontiguousarray, not just the [::-1] reversed view: paddle
+        # takes OpenCV-convention BGR, and handing it a negative-stride
+        # view is asking a C extension to deal with a layout numpy is only
+        # pretending to have.
+        array = np.ascontiguousarray(np.asarray(image)[:, :, ::-1])
 
         out = []
-        for result in self._pipeline.predict(array):
+        with page_deadline(self.page_timeout):
+            results = list(self._pipeline.predict(array))
+        for result in results:
             payload = result.json
             if not isinstance(payload, dict):
                 import json

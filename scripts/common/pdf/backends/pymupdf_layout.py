@@ -6,17 +6,23 @@ moved here and made country-agnostic (its CMF-specific regexes now live in
 scripts/common/pdf/profiles.py) — the heuristics themselves were never
 Chilean, they were about what PDF text extraction does to any document.
 
-Its known limits, measured against ground truth on Banco de Chile's
-Memoria Anual 2024 (see docs/analytics/pdf-backend-poc.md) and NOT fixable
-with more regexes, are why the VLM backends exist:
-  - it recovered 42 of 52 numeric cells on a 4-table liquidity page,
-    silently dropping a whole column,
-  - it has no notion of page furniture beyond these heuristics, so a
-    margin marker at the same height as a paragraph gets spliced INTO
-    that paragraph's text,
-  - it cannot see a page that has no text layer at all.
-It is kept, not replaced, because it is ~150x faster per page and is the
-right tool for the pages that don't need more (see pipeline.py's triage).
+ITS LIMITS, measured over 12,381 real pages rather than inferred from a
+handful (docs/analytics/pdf-backend-poc.md):
+  - 2.5% of pages produce NO paragraphs at all — they have no text layer,
+    so this backend cannot see them and the document loses them with no
+    error. About an eighth of those carry real content (scanned
+    responsibility declarations, audit opinions).
+  - 9.9% of the table paragraphs it emits have lost cells: rows shorter
+    than their own table's widest row, with no record of which column a
+    surviving value belonged to.
+  - 0.2% of prose paragraphs are page furniture, and 0.1% have a gutter
+    marker spliced INTO a sentence.
+What it does NOT do is lose prose wholesale: on a 50-page head-to-head
+over multi-column and table pages it was missing only 2.8% of the numbers
+a VLM read, and captured MORE tokens overall. Its failure is structural —
+reading order and column assignment — not coverage. That is why it stays
+the default for the pages triage says are simple, and why replacing it
+corpus-wide is not obviously worth the GPU-hours.
 """
 
 import bisect
