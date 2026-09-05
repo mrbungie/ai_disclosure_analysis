@@ -10,9 +10,12 @@ complete, y borrarlo de aquí.
 **Por qué**: `06_voice_vs_behavior_clustering.md` y `07_...md`/`08_...md`
 construyeron el cluster de comportamiento sobre el POOL de todos los
 años por empresa, y luego se descubrió (ver corrección en `06_...md`)
-que la lista de "candidatos a washing" (CCL, FE, GPC, HII, IQV, NEM)
-no persiste bien cuando se mira el ARQUETIPO DE VOZ año a año — la
-mayoría tiene 1-2 años de datos o migra de arquetipo. Pero esa
+que la lista de "candidatos a washing" no persiste bien cuando se mira
+el ARQUETIPO DE VOZ año a año — la mayoría tiene 1-2 años de datos o
+migra de arquetipo. (Actualizado 2026-09-05: con DEF 14A y 8-K la lista
+pasó a 20 empresas y sólo 2 —AAPL, CL— sostienen la etiqueta en todos
+sus años con ≥3 años de panel, así que el problema empeoró en vez de
+resolverse. Ver `06_...md`.) Pero esa
 verificación solo miró la voz por año; el CLUSTER DE COMPORTAMIENTO
 nunca se proyectó por año — sigue siendo pooled. Falta hacer el mismo
 ejercicio para comportamiento: proyectar cada firma-año sobre los

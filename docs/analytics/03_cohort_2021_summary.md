@@ -1,11 +1,18 @@
 # Cohorte 2021: empresas presentes desde el primer año del panel
 
-Resumen autocontenido de las 77 empresas cuyo primer año en el panel
+> **Recalculado 2026-09-05 con DEF 14A y 8-K.** La cohorte pasó de 77 a
+> 85 empresas y de 411 a 465 filas empresa-año: con proxies y 8-K, más
+> empresas superan el umbral de ≥3 frames ya en 2021. Los insumos
+> financieros no cambiaron; las etiquetas de arquetipo sí. En el camino se
+> corrigió un bug de reproducibilidad en `gold_ai_frames` — ver `01_...md`.
+
+
+Resumen autocontenido de las 85 empresas cuyo primer año en el panel
 empresa-año (`data/processed/clusters/firm_year_archetype_behaviors.parquet`)
 es 2021 — es decir, empresas con divulgación de IA detectable desde el
 inicio de la ventana de datos (2021-2026), presentes en 6 de 6 años
-posibles (58-77 empresas por año, variando por umbral de volumen mínimo
-de frames). 411 filas empresa-año en total.
+posibles (76-85 empresas por año, variando por umbral de volumen mínimo
+de frames). 465 filas empresa-año en total.
 
 ```python
 p = pd.read_parquet('data/processed/clusters/firm_year_archetype_behaviors.parquet')
@@ -18,85 +25,116 @@ c = p[p['ticker'].isin(cohort)]
 
 | Año | A cauteloso | B genérico | C cuantificador | D vocal |
 |---|---|---|---|---|
-| 2021 | 7,8% | 16,9% | 10,4% | 64,9% |
-| 2022 | 5,9% | 23,5% | 5,9% | 64,7% |
-| 2023 | 3,0% | 24,2% | 4,5% | 68,2% |
-| 2024 | 7,1% | 32,9% | 2,9% | 57,1% |
-| 2025 | 1,4% | 40,3% | 2,8% | 55,6% |
-| 2026 | 5,2% | 36,2% | 1,7% | 56,9% |
+| 2021 | 4,7% | 20,0% | 27,1% | 48,2% |
+| 2022 | 1,3% | 27,6% | 23,7% | 47,4% |
+| 2023 | 4,1% | 27,4% | 21,9% | 46,6% |
+| 2024 | 11,7% | 26,0% | 11,7% | 50,6% |
+| 2025 | 8,8% | 28,7% | 12,5% | 50,0% |
+| 2026 | 4,1% | 32,4% | 14,9% | 48,6% |
 
-Esta cohorte arranca con dos tercios de sus empresas en D (líder vocal)
-en 2021 y se mantiene mayoritariamente ahí (55-68%) los 6 años. B crece
-de forma sostenida (16,9%→36,2%), a expensas casi exclusivamente de C
-(que cae de 10,4% a 1,7%). A se mantiene chico y sin tendencia clara
-(entre 1,4% y 7,8%, sin monotonía).
+**D se mantiene notablemente plano: 46-51% los seis años.** Las empresas
+que hablaban de IA desde el principio y con voz de líder siguen ahí. Lo
+que se mueve es el resto: C cae de 27,1% a 14,9% y B sube de 20,0% a
+32,4%.
+
+Esa caída de C dentro de una cohorte FIJA es el dato más incómodo del
+documento. No es composición: son las mismas 85 empresas. **Un cuarto de
+la cohorte cuantificaba sus afirmaciones sobre IA en 2021 y sólo un
+séptimo lo hace en 2026**, mientras la proporción que habla en registro
+genérico crece. Es consistente con la fuga C→D de 39,2% en la matriz de
+transición de abajo.
 
 ## Comportamiento agregado, año a año
 
 | Año | n empresas | n frames | % promocional | especificidad | % hipotético | % deployed | % riesgo |
 |---|---|---|---|---|---|---|---|
-| 2021 | 77 | 676 | 11,5% | 0,199 | 4,7% | 50,0% | 17,0% |
-| 2022 | 68 | 699 | 11,5% | 0,189 | 4,8% | 49,7% | 18,5% |
-| 2023 | 66 | 951 | 9,2% | 0,165 | 3,6% | 49,1% | 22,9% |
-| 2024 | 70 | 1.886 | 8,0% | 0,140 | 8,3% | 40,0% | 33,4% |
-| 2025 | 72 | 2.471 | 7,2% | 0,141 | 7,0% | 37,6% | 37,2% |
-| 2026 | 58 | 2.391 | 6,4% | 0,140 | 10,0% | 33,9% | 42,5% |
+| 2021 | 85 | 878 | 14,7% | 0,21 | 3,2% | 49,3% | 14,0% |
+| 2022 | 83 | 976 | 15,6% | 0,20 | 3,6% | 49,3% | 14,0% |
+| 2023 | 81 | 1.281 | 14,8% | 0,18 | 3,7% | 45,9% | 20,0% |
+| 2024 | 82 | 2.643 | 13,7% | 0,17 | 5,2% | 39,8% | 25,7% |
+| 2025 | 81 | 3.383 | 12,7% | 0,17 | 4,9% | 39,3% | 27,6% |
+| 2026 | 76 | 3.707 | 12,1% | 0,17 | 6,0% | 34,2% | 30,6% |
 
-Dentro de esta cohorte fija, el % promocional cae a poco más de la
-mitad entre 2021 y 2026 (11,5%→6,4%), la especificidad cae de 0,199 a
-0,140, y `deployed` cae de 50,0% a 33,9% — mientras el volumen de
-frames por empresa se multiplica más de 5 veces (676→2.391 con menos
-empresas activas en 2026 que en 2021). El % de riesgo sube de forma
-sostenida (17,0%→42,5%) y el % hipotético repunta claramente desde
-2024 (3,6%→10,0%).
+**Este es el resultado que más cambia con la actualización.** La versión
+anterior (10-K solo) mostraba el promocional cayendo casi a la mitad
+dentro de la cohorte fija: 11,5%→6,4%. Con DEF 14A y 8-K incorporados, la
+caída es de 14,7%→12,1%: **2,6 p.p. en vez de 5,1**, y con un repunte en
+2022.
+
+La explicación es directa y ya está medida: la DEF 14A tiene 16,3% de
+frames promocionales contra 7,1% del 10-K (`01_...md` #8). A medida que
+avanzan los años, la proporción de frames que viene del proxy crece, y
+eso sostiene el promocional agregado que el 10-K por sí solo dejaba caer.
+
+Consecuencia para la tesis: **"las empresas se volvieron menos
+promocionales sobre IA" era, en buena medida, un artefacto de mirar sólo
+el 10-K.** No se volvieron menos promocionales; se volvieron menos
+promocionales *en el documento que lee el regulador*. Lo que le dicen al
+accionista en el proxy no siguió esa trayectoria. Eso es una hipótesis de
+AI-washing más filosa que la original, y está a un análisis de distancia:
+separar la serie por formulario dentro de la cohorte fija.
+
+El resto de las tendencias sobrevive: especificidad 0,21→0,17, `deployed`
+49,3%→34,2%, riesgo 14,0%→30,6%, hipotético 3,2%→6,0%.
 
 ## Estabilidad de arquetipo dentro de la cohorte
 
-Persistencia año-a-año: **74,6%** de los pares consecutivos se quedan
-en el mismo arquetipo.
+Persistencia año-a-año: **61,1%** de los 380 pares consecutivos (antes
+74,6%).
 
 | De \ A | A cauteloso | B genérico | C cuantificador | D vocal |
 |---|---|---|---|---|
-| **A cauteloso** | 29,4% | 52,9% | 0,0% | 17,6% |
-| **B genérico** | 6,2% | 72,9% | 1,0% | 19,8% |
-| **C cuantificador** | 0,0% | 11,1% | 27,8% | 61,1% |
-| **D vocal** | 2,0% | 11,8% | 3,0% | **83,3%** |
+| **A cauteloso** | 37,5% | 45,8% | 12,5% | 4,2% |
+| **B genérico** | 8,0% | 59,0% | 5,0% | 28,0% |
+| **C cuantificador** | 1,4% | 9,5% | 50,0% | **39,2%** |
+| **D vocal** | 2,7% | 17,0% | 10,4% | **69,8%** |
 
-D es el arquetipo más estable de la cohorte (83,3% se queda en D al año
-siguiente). A es el menos estable (29,4%; más de la mitad sube a B).
-C, cuando sale, termina mayoritariamente en D (61,1%).
+D es el más estable (69,8%). **C pierde casi el 40% de sus empresas hacia
+D cada año**, contra un flujo inverso D→C de sólo 10,4% — una fuga neta
+de casi 4 a 1. Combinado con la caída de C en la composición, el
+movimiento dominante de esta cohorte es de cuantificar a promocionar.
+
+La cohorte 2021 es más estable que el panel completo (61,1% vs. 56,8%):
+las empresas que hablaban de IA desde el principio tienen una identidad
+de disclosure más definida que las que entraron después.
 
 ## D vocal: intensidad de `deployed` año a año
 
 | Año | % deployed (media, solo empresas en D) | n empresas-D |
 |---|---|---|
-| 2021 | 58,2% | 50 |
-| 2022 | 59,3% | 44 |
-| 2023 | 56,0% | 45 |
-| 2024 | 48,1% | 40 |
-| 2025 | 46,9% | 40 |
-| 2026 | 43,9% | 33 |
+| 2021 | 54,8% | 41 |
+| 2022 | 59,0% | 36 |
+| 2023 | 52,5% | 34 |
+| 2024 | 42,8% | 39 |
+| 2025 | 43,9% | 40 |
+| 2026 | 37,2% | 36 |
 
 Dentro del subgrupo de empresas-en-D de esta cohorte, `deployed` cae de
-58,2% a 43,9% en el período — una caída de 14,3 p.p. con un número de
-empresas-D relativamente estable (33-50 por año, sin gran entrada de
-empresas nuevas al subgrupo).
+54,8% a 37,2% — 17,6 p.p., con un número de empresas-D estable (34-41).
+Las mismas empresas, con voz igual de vocal, describiendo cada vez menos
+despliegue efectivo. Es la versión más limpia del hallazgo central: **la
+voz no baja, la sustancia sí.**
 
 ## Talk vs. walk
 
 - `revenue_outcome` (año *t*) vs. crecimiento real de revenue del FY
-  siguiente: **r = 0,082** (n=331).
-- `cost_outcome` (año *t*) vs. crecimiento real de SG&A del FY
-  siguiente: **r = −0,042** (n=145).
+  siguiente: **r = 0,065** (n=365), antes 0,082.
+- `cost_outcome` (año *t*) vs. crecimiento real de SG&A del FY siguiente:
+  **r = +0,029** (n=167), antes −0,042 — cambia de signo, igual que en
+  `02_...md`.
 
 Crecimiento de revenue del FY siguiente, por arquetipo:
 
 | Arquetipo | Mediana | Media | n |
 |---|---|---|---|
-| A cauteloso | 11,3% | 13,2% | 17 |
-| B genérico | 9,8% | 12,0% | 96 |
-| C cuantificador | 8,0% | 6,5% | 17 |
-| D vocal | 11,2% | 15,0% | 201 |
+| A cauteloso | 6,6% | 10,5% | 24 |
+| B genérico | 9,9% | 12,2% | 99 |
+| C cuantificador | 8,0% | **14,9%** | 69 |
+| D vocal | **10,9%** | 12,7% | 173 |
+
+A es el más bajo y D el más alto en mediana; C tiene la media más alta,
+arrastrada por su cola derecha (semis en años de expansión). Con n=24 en
+A, esto no aguanta mucho peso.
 
 ## Reacción de mercado al filing
 
@@ -104,19 +142,22 @@ Retorno crudo [-1, +5 días hábiles] alrededor del 10-K, por arquetipo:
 
 | Arquetipo | Media | Mediana | Desv. est. | n |
 |---|---|---|---|---|
-| A cauteloso | 0,36% | 0,12% | 4,12% | 19 |
-| B genérico | −0,26% | −0,35% | 7,45% | 118 |
-| C cuantificador | −2,85% | −3,80% | 8,81% | 17 |
-| D vocal | −0,67% | −0,41% | 7,08% | 239 |
+| A cauteloso | 0,47% | 0,69% | 6,35% | 26 |
+| B genérico | −0,47% | −0,56% | 7,14% | 123 |
+| C cuantificador | 0,19% | −0,05% | 7,19% | 78 |
+| D vocal | −0,92% | −0,18% | 6,65% | 211 |
 
-Correlación retorno vs. `promotional_rate`: **r = −0,002**.
-Correlación retorno vs. `specificity_index`: **r = −0,086**.
+Correlación retorno vs. `promotional_rate`: **r = −0,009**.
+Correlación retorno vs. `specificity_index`: **r = −0,064**.
+
+Sigue sin haber señal. El −2,85% de media de C en la versión anterior
+salía de 17 observaciones; con 78 queda en +0,19%, dentro del ruido.
 
 ## Notas
 
 - Cohorte definida por primer año en el panel empresa-año, con el
   mismo umbral de volumen (≥3 frames/año) de `01_ai_disclosure_analytics.md`
-  — no todas las 77 empresas tienen fila en los 6 años (caen bajo el
+  — no todas las 85 empresas tienen fila en los 6 años (caen bajo el
   umbral algunos años).
 - Guardado en `data/processed/clusters/cohort_2021_crosscheck.parquet`.
 - Solo EE.UU., sin ponderar por `inclusion_weight`.

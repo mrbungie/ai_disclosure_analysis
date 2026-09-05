@@ -24,8 +24,14 @@ distintos y se comparó, con fechas reales, `filing_date` (10-K) vs.
 
 ```sql
 -- filing_manifest: fechas reales de filing
+-- El filtro form_type='10-K' es OBLIGATORIO hoy y no lo era cuando se
+-- escribió este chequeo: `filing_manifest` ahora UNIONa DEF 14A y 8-K
+-- junto al 10-K. Sin el filtro esta consulta devuelve 86 filas para KO
+-- en vez de 6, y el alineamiento a año fiscal deja de tener sentido:
+-- un 8-K no reporta ningún FY.
 SELECT ticker, filing_date FROM filing_manifest
-WHERE country_code='us' AND ticker IN ('KO','NVDA') ORDER BY ticker, filing_date;
+WHERE country_code='us' AND form_type='10-K' AND ticker IN ('KO','NVDA')
+ORDER BY ticker, filing_date;
 ```
 
 ```python
@@ -167,3 +173,11 @@ externo":
    year end, distintos exchanges con distinto trading calendar, etc.),
    **el alineamiento debe hacerse por entidad**, nunca con un shift
    global.
+5. **¿La consulta filtra por `form_type`?** (Agregado 2026-09-05.)
+   `filing_manifest` dejó de ser una tabla de 10-K: hoy tiene 35.829
+   8-K, 2.898 10-K y 2.883 DEF 14A para EE.UU. Cualquier cruce que
+   alinee texto contra un período fiscal tiene que restringirse al
+   formulario que efectivamente reporta ese período — el 8-K es un
+   evento puntual y la DEF 14A sigue el calendario de la junta de
+   accionistas, no el FY. Un JOIN sin filtro multiplica las filas por
+   empresa-año en vez de fallar, así que el error es silencioso.

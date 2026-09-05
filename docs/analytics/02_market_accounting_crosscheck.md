@@ -1,5 +1,18 @@
 # Cruce con mercado y contabilidad (EE.UU.)
 
+> **Recalculado 2026-09-05 con DEF 14A y 8-K.** El panel pasó de 1.229 a
+> 1.363 empresas-año (429 → 454 empresas). Los insumos financieros y de
+> mercado NO cambiaron — mismo XBRL, mismos precios; lo que se movió son
+> las etiquetas de arquetipo y los `behavior_share_*`, porque K-means se
+> re-ajustó sobre la población ampliada. Los parquets se rehacen con
+> `scripts/analytics/build_firm_clusters.py` +
+> `build_firm_panels.py`, dos scripts reconstruidos para esto (el
+> generador original nunca se versionó); los anteriores están en
+> `data/archive/processed/clusters/`. En el camino se corrigió un bug de
+> reproducibilidad en la vista `gold_ai_frames` que hacía que cada
+> consulta devolviera cifras distintas — ver `01_...md`.
+
+
 Primer cruce de los arquetipos/comportamientos de divulgación de IA
 (`01_ai_disclosure_analytics.md`) con datos externos al texto: XBRL
 (¿la sustancia declarada se refleja en los números?) y precios
@@ -113,122 +126,120 @@ ret_5d = p1 / p0 - 1
 
 ## Resultados: "talk vs. walk"
 
+> Recalculado 2026-09-05 sobre el panel ampliado (1.363 empresas-año, 454
+> empresas, con DEF 14A y 8-K). Los insumos financieros no cambiaron —
+> mismo XBRL, mismos precios; lo que cambió son las etiquetas de arquetipo
+> y los `behavior_share_*`.
+
 ### 1. `revenue_outcome` (lo que dicen) vs. crecimiento de revenue real al año fiscal siguiente
 
-Correlación entre `behavior_share_revenue_outcome` del año *t* y el
-crecimiento real de revenue del FY siguiente (`next_revenue_yoy`):
-**r = 0,093** (n=786, recortando outliers >300% YoY). Débil pero
-positiva y en la dirección esperada — hay algo de sustancia real
-detrás de la narrativa de revenue, no es puro ruido.
+Correlación entre `behavior_share_revenue_outcome` del año *t* y
+`next_revenue_yoy`: **r = 0,091** (n=870, recortando outliers >300% YoY).
+Prácticamente idéntica al 0,093 anterior, con 84 observaciones más.
 
 Por arquetipo — crecimiento de revenue del FY **siguiente**:
 
 | Arquetipo | Mediana next FY revenue YoY | Media | n |
 |---|---|---|---|
-| A cauteloso | 4,7% | 6,1% | 165 |
-| B genérico | 7,0% | 8,8% | 310 |
-| C cuantificador | 9,3% | 10,5% | 35 |
-| D vocal | **9,3%** | **12,6%** | 276 |
+| A cauteloso | 4,8% | 6,5% | 186 |
+| B genérico | 7,2% | 9,3% | 294 |
+| C cuantificador | 8,0% | **12,8%** | 113 |
+| D vocal | **8,4%** | 9,9% | 277 |
 
-Con el alineamiento corregido, C y D quedan prácticamente empatados en
-mediana (ambos ~9,3%), con D todavía arriba en media. A sigue siendo,
-con claridad, el arquetipo con menor crecimiento subsecuente — y sigue
-siendo el que menos habla de resultados (§ Comportamiento por
-arquetipo, `01_...md`). El ranking ordinal (A < B < C≈D) se mantiene
-respecto a la versión anterior del análisis, aunque C se movió de
-"medio" a "empatado con D".
+El ranking ordinal A < B < C ≈ D se mantiene respecto de la versión
+anterior. C y D quedan otra vez prácticamente empatados en mediana, con C
+bastante arriba en media — el mismo patrón que reportaba la versión
+original con el cluster C de 7 empresas, ahora con 113 observaciones
+detrás en vez de 35.
 
 ### 2. `ai_investment` / `ai_infrastructure` vs. capex y R&D reales
 
-Correlación con crecimiento real de capex/R&D del FY siguiente:
-
 | Comportamiento declarado (t) | vs. crecimiento real (FY t+1) | r | n |
 |---|---|---|---|
-| `ai_investment` | `capex_yoy` | 0,034 | 563 |
-| `ai_investment` | `rd_expense_yoy` | 0,009 | 418 |
-| `ai_infrastructure` | `capex_yoy` | 0,113 | 563 |
-| `ai_infrastructure` | `rd_expense_yoy` | 0,084 | 418 |
+| `ai_investment` | `capex_yoy` | 0,016 | 617 |
+| `ai_investment` | `rd_expense_yoy` | 0,036 | 456 |
+| `ai_infrastructure` | `capex_yoy` | **0,114** | 617 |
+| `ai_infrastructure` | `rd_expense_yoy` | 0,014 | 456 |
 
-**Corrección (`05_circularity_and_robustness_checks.md`)**: `ai_infrastructure`
-vs. `capex_yoy` (r=0,113) SÍ es estadísticamente significativo — de
-hecho es la correlación más significativa de las 11 testeadas en todo
-el cruce contable/mercado, incluso tras corrección por comparaciones
-múltiples (FDR). "Sin señal" abajo se refiere a magnitud económica
-chica, no a que la relación sea estadísticamente inexistente — los
-otros 3 pares de esta tabla sí quedan sin señal tras esa corrección.
+El patrón central sobrevive: `ai_infrastructure` → `capex` sigue siendo
+la única de las cuatro con magnitud apreciable (0,114, contra 0,113 en la
+versión anterior — casi sin cambio). Las otras tres quedan en 0,014-0,036,
+o sea nada.
 
-Magnitud económica chica en los cuatro casos. Hablar de "estamos
-invirtiendo en IA" o "infraestructura de IA" predice muy poco del capex
-o R&D real del año siguiente (aunque el par `ai_infrastructure`/`capex_yoy`
-es estadísticamente real, ver corrección arriba). Esto contrasta con el
-resultado de revenue abajo — la narrativa de resultado (revenue) tiene
-algo de sustancia, la narrativa de insumo
-(inversión) no, al menos a este nivel de agregación anual.
+La asimetría es el hallazgo: decir "invertimos en IA" no predice el capex
+del año siguiente; decir "construimos infraestructura de IA" sí predice
+algo, poco pero consistente entre poblaciones. Es la correlación más
+estable de todo el cruce contable.
 
-### 3. `cost_outcome` vs. SG&A real — la señal más cercana a "washing" encontrada
+### 3. `cost_outcome` vs. SG&A real — la señal de "washing" desapareció
 
-Correlación: **r = −0,027** (n=419) — sigue siendo negativa (dirección
-contraria a lo esperado), aunque más débil que en la versión anterior
-del análisis. Partiendo la muestra en dos por intensidad de
+Correlación: **r = +0,011** (n=467), contra −0,027 en la versión anterior
+— cambia de signo y queda en cero. Partiendo por intensidad de
 `cost_outcome`:
 
 | Grupo | SG&A YoY (FY t+1) mediana | n |
 |---|---|---|
-| Menos `cost_outcome` (mitad baja) | 4,6% | 210 |
-| Más `cost_outcome` (mitad alta) | 5,5% | 209 |
+| Menos `cost_outcome` (mitad baja) | 5,1% | 357 |
+| Más `cost_outcome` (mitad alta) | 5,2% | 110 |
 
-Sigue siendo la señal más parecida a "washing" del pase: las empresas
-que más enmarcan la IA como ahorro de costos no muestran ningún ahorro
-real medible al año fiscal siguiente. Débil (n chico, sin controles) y
-más débil que antes de la corrección — hay que tratarla como
-sugerente, no concluyente.
+La versión anterior reportaba esto como "la señal más cercana a washing
+encontrada": quienes más enmarcaban la IA como ahorro de costos mostraban
+SG&A creciendo MÁS (4,6% vs. 5,5%). **Con la población ampliada la
+diferencia es de 0,1 p.p. y la correlación es cero.**
 
-### 4. Intensidad de R&D por arquetipo (contemporánea, disclosed en el mismo documento) — posible confusor sectorial
+No es "antes había washing y ahora no". Es que **la señal nunca tuvo
+fuerza suficiente para sobrevivir a un cambio de muestra** — era r=−0,027
+sobre n=419. Es la lección metodológica más útil de esta actualización, y
+`05_...md` la confirma: ese par queda último en el ranking FDR con
+p=0,81.
+
+(El corte por mediana queda desbalanceado, 357 vs. 110, porque la mayoría
+de empresas-año tiene `cost_outcome` exactamente en 0 y cae del lado bajo.)
+
+### 4. Intensidad de R&D por arquetipo (contemporánea) — posible confusor sectorial
 
 | Arquetipo | R&D / revenue (mediana) |
 |---|---|
-| A cauteloso | 4,3% |
-| B genérico | 7,9% |
-| C cuantificador | 6,6% |
-| D vocal | **14,1%** |
+| A cauteloso | 4,9% |
+| B genérico | 7,0% |
+| C cuantificador | 9,0% |
+| D vocal | **13,0%** |
 
-D tiene más del triple de intensidad de R&D que A. Esto es coherente
-con "D tiene más sustancia real" (§ resultado 1), pero también es
-exactamente lo que predeciría la composición sectorial de D (semis +
-software, ya documentado en `01_...md` — NVDA, MSFT, ADBE, SNOW) sin
-que el comportamiento de disclosure tenga nada que ver. **No se puede
-todavía separar "D crece más porque divulga distinto" de "D crece más
-porque es del sector que estructuralmente crece más" con este diseño**
-— falta un control por sector/industria.
+D casi triplica a A y el orden es monótono. Sigue en pie la advertencia:
+es exactamente lo que predeciría la composición sectorial de D
+(software/servicios) sin que el disclosure tenga nada que ver.
+`04_...md` muestra que dentro de sector-año la brecha se reduce ~85%.
 
 ## Resultados: reacción de mercado al filing
 
-Retorno crudo [-1, +5 días hábiles] alrededor del 10-K, por arquetipo
-(sin cambios respecto a la versión anterior — esta parte no tenía el
-bug de alineamiento):
+Retorno crudo [-1, +5 días hábiles] alrededor del 10-K, por arquetipo:
 
 | Arquetipo | Media | Mediana | Desv. est. | n |
 |---|---|---|---|---|
-| A cauteloso | −0,01% | 0,26% | 5,38% | 287 |
-| B genérico | 0,08% | −0,11% | 6,69% | 495 |
-| C cuantificador | −1,26% | −0,27% | 7,39% | 42 |
-| D vocal | −0,16% | 0,11% | 6,58% | 360 |
+| A cauteloso | 0,30% | 0,19% | 5,79% | 299 |
+| B genérico | −0,22% | −0,06% | 6,57% | 479 |
+| C cuantificador | 0,36% | −0,01% | 6,64% | 146 |
+| D vocal | −0,15% | 0,26% | 6,09% | 375 |
 
-Sin diferencias económicamente relevantes entre arquetipos (todas las
-medias están dentro de ±1,3 p.p., con desviaciones de 5-7%, es decir,
-ruido >> señal). Correlaciones directas:
+Sin diferencias económicamente relevantes (medias dentro de ±0,4 p.p. con
+desviaciones de 6-7%: ruido >> señal). El rango se estrechó respecto de
+la versión anterior, donde C mostraba −1,26% de media con 42
+observaciones de un cluster de 7 empresas.
 
-- retorno vs. `promotional_rate` del filing: **r = −0,013**
-- retorno vs. `specificity_index` del filing: **r = −0,054**
-- retorno vs. volumen de menciones de IA (`n_frames`): **r = −0,042**
+Correlaciones directas:
 
-**Ninguna.** En esta ventana de 5 días y sin ajuste por mercado, el
-tono o la especificidad del contenido de IA del filing no se relaciona
-con el retorno alrededor de la publicación. Partiendo pre/post SEC 2024
-(año ≥2024), la correlación `promotional_rate` vs. retorno pasa de
-0,002 a 0,00 — tampoco hay evidencia de que el mercado empezara a
-"castigar" el lenguaje promocional después del escrutinio SEC, al
-menos con este diseño.
+- retorno vs. `promotional_rate` del filing: **r = −0,015**
+- retorno vs. `specificity_index` del filing: **r = −0,030**
+- retorno vs. volumen de menciones de IA (`n_frames`): **r = −0,054**
+
+**Ninguna**, igual que antes y ahora con más datos.
+
+Una nota de alcance que ahora importa más: `ret_m1_p5` se calcula sobre
+la fecha de filing del **10-K**, pero el panel de texto mezcla frames de
+10-K, DEF 14A y 8-K, así que el `promotional_rate` de una empresa-año
+puede venir en parte de un proxy presentado en otra fecha. El cruce
+texto→retorno quedó peor alineado que antes; separarlo por formulario es
+trabajo pendiente.
 
 ## Lectura conjunta
 

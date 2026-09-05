@@ -1,5 +1,11 @@
 # Ratios contables, factores de mercado y estudio de volatilidad/beta (EE.UU.)
 
+> **Recalculado 2026-09-05 con DEF 14A y 8-K.** Los ratios, factores y
+> betas no cambiaron; las etiquetas de arquetipo sí (K-means re-ajustado
+> sobre la población ampliada). En el camino se corrigió un bug de
+> reproducibilidad en la vista `gold_ai_frames` — ver `01_...md`.
+
+
 Extiende `02_market_accounting_crosscheck.md` de datos contables básicos
 (revenue, R&D, capex, SG&A) a **ratios finales** (rentabilidad,
 eficiencia, apalancamiento, valuación) y de retorno crudo a **factores
@@ -72,162 +78,126 @@ s['x_demeaned'] = s['x'] - s.groupby(['sic2','year'])['x'].transform('mean')
 
 ## Resultados: rentabilidad, eficiencia y apalancamiento por arquetipo
 
-| Arquetipo | Margen bruto | Margen operativo | Margen neto | ROA | ROE | Rotación activos | Current ratio | Deuda/equity |
-|---|---|---|---|---|---|---|---|---|
-| A cauteloso | 45,2% | 18,0% | 12,4% | 5,4% | 11,0% | 0,50 | 1,17 | 0,65 |
-| B genérico | 48,9% | 15,4% | 11,8% | 4,8% | 13,4% | 0,54 | 1,22 | 0,65 |
-| C cuantificador | 54,1% | 19,6% | 15,8% | 7,1% | 19,8% | 0,59 | **1,61** | 0,70 |
-| D vocal | **62,2%** | 17,2% | 13,9% | 7,0% | 18,3% | 0,53 | 1,40 | **0,47** |
+Medianas sobre empresas-año (n=1.363):
 
-D tiene el margen bruto más alto con claridad (62,2%, típico de
-software/semis fabless) pero NO el margen operativo ni neto más alto —
-su ventaja de margen bruto se diluye en gastos (R&D/SG&A altos, ya
-visto en `02_...md`). D es también, con diferencia, **el menos
-apalancado** (deuda/equity 0,47 vs. 0,65-0,70 del resto) — financia su
-crecimiento con equity/caja, no con deuda. C tiene el balance más
-líquido (current ratio 1,61) y el ROE más alto (19,8%).
+| Arquetipo | Margen bruto | Margen oper. | Margen neto | ROA | ROE | Rotación activos | Deuda/Equity | Current ratio | R&D/rev | Capex/rev |
+|---|---|---|---|---|---|---|---|---|---|---|
+| A cauteloso | 42,9% | 16,2% | 11,6% | 4,9% | 11,9% | 0,53 | 0,63 | 1,22 | 4,9% | 3,2% |
+| B genérico | 49,2% | 16,4% | 12,6% | 4,8% | 12,8% | 0,52 | 0,68 | 1,21 | 7,0% | 3,2% |
+| C cuantificador | 57,9% | **18,0%** | **14,5%** | 6,6% | **18,5%** | **0,54** | **0,58** | **1,50** | 9,0% | 3,2% |
+| D vocal | **58,9%** | 16,8% | 13,0% | **6,9%** | 16,1% | 0,53 | 0,53 | 1,32 | **13,0%** | 2,7% |
+
+C y D dominan, y se reparten los primeros puestos: D tiene el margen
+bruto y el ROA más altos y triplica a A en R&D; C tiene el mejor margen
+operativo, neto, ROE, rotación de activos y liquidez. **C convierte mejor
+lo que gana en resultado final; D gasta más en I+D.** Es coherente con
+sus perfiles de discurso: el que cuantifica muestra eficiencia, el que
+promociona muestra inversión.
 
 ## Resultados: valuación por arquetipo
 
-| Arquetipo | P/E | P/S | P/B | EV/Revenue | EV/EBITDA | Market cap (mediana) |
+| Arquetipo | P/E | P/S | P/B | EV/Revenue | EV/EBITDA | Market cap |
 |---|---|---|---|---|---|---|
-| A cauteloso | 22,4 | 3,49 | 2,54 | 4,44 | 18,2 | $34,7B |
-| B genérico | 21,9 | 2,50 | 2,60 | 3,21 | 15,9 | $37,0B |
-| C cuantificador | 25,2 | 3,77 | 5,55 | 4,82 | 18,2 | $29,9B |
-| D vocal | **25,7** | **4,15** | 4,53 | **5,00** | **19,3** | **$46,3B** |
+| A cauteloso | 20,5 | 3,24 | 2,50 | 3,76 | 17,6 | $28,7B |
+| B genérico | 22,0 | 2,75 | 2,54 | 3,58 | 17,0 | $39,2B |
+| C cuantificador | **28,3** | **5,01** | **5,74** | **5,63** | **18,9** | $43,8B |
+| D vocal | 23,5 | 3,21 | 4,16 | 3,90 | 16,4 | $43,2B |
 
-D cotiza con **prima de valuación en casi todas las métricas** (P/E,
-P/S, EV/Revenue, EV/EBITDA los más altos, y el market cap mediano más
-grande) — el mercado sí le asigna una historia de crecimiento más cara
-a este arquetipo, consistente con el hallazgo de `02_...md` de que D
-crece más rápido al año siguiente. C tiene el P/B más alto (5,55) pese
-a no ser el de mayor P/E — probablemente por activos livianos
-(negocios de infraestructura/servicios con poco equity contable
-relativo a su valor de mercado).
+**C cotiza más caro que D en todos los múltiplos.** Es una inversión
+respecto de la versión anterior, donde D era el más caro. El mercado paga
+la prima por el grupo que cuantifica, no por el que promociona — un dato
+directamente relevante para la pregunta de AI-washing, aunque no permite
+separar "paga por la sustancia del disclosure" de "paga por el sector".
 
 ## Resultados: beta y volatilidad — el hallazgo más limpio de esta sección
 
-| Arquetipo | Beta (mediana) | Volatilidad pre-filing (60d, anualizada) | Volatilidad post-filing (60d) | Momentum 12-1m |
+| Arquetipo | Beta | Vol. pre-filing (60d) | Vol. post-filing (60d) | Momentum 12-1 |
 |---|---|---|---|---|
-| A cauteloso | **0,77** | 24,3% | 29,9% | 8,2% |
-| B genérico | 0,85 | 26,3% | 32,1% | 8,3% |
-| C cuantificador | 1,02 | 31,3% | 34,2% | 16,9% |
-| D vocal | **1,10** | **31,5%** | **35,6%** | 15,5% |
+| A cauteloso | 0,79 | 24,4% | 30,8% | 7,1% |
+| B genérico | 0,82 | 26,1% | 32,1% | 8,8% |
+| C cuantificador | **1,04** | **31,1%** | **34,2%** | **13,3%** |
+| D vocal | 1,03 | 28,4% | 32,6% | 12,8% |
 
-**Monótono en las 4 columnas, A < B < C < D sin excepción.** Los
-arquetipos que hablan más de IA y con más especificidad/promoción
-(C, D) son sistemáticamente acciones de mayor beta y mayor volatilidad
-realizada — tanto antes como después de cada filing. Esto es
-importante para toda comparación de retornos entre arquetipos hecha
-hasta ahora: cualquier diferencia de retorno CRUDO entre A y D está
-mezclada con una diferencia real y grande de riesgo sistemático, no
-solo con contenido del disclosure.
-
-**El salto de volatilidad al filing es MENOR en D que en A/B**:
-
-| Arquetipo | Δ volatilidad (post − pre, media) |
-|---|---|
-| A cauteloso | +0,053 |
-| B genérico | **+0,063** |
-| C cuantificador | +0,021 |
-| D vocal | +0,037 |
-
-El filing de una empresa D (o C) mueve proporcionalmente menos su
-volatilidad que el de una A o B — leído en conjunto con la prima de
-valuación de arriba, es consistente con que el mercado YA sigue de
-cerca a las empresas D/C (más cobertura de analistas, más expectativas
-ya incorporadas) y el 10-K aporta menos sorpresa marginal, mientras que
-un 10-K de una empresa A/B (que habla poco de IA en general) es
-relativamente más informativo cuando sí aparece.
+C y D empatan arriba (beta 1,04 y 1,03) contra A y B en 0,79-0,82.
+**Hablar mucho de IA —cuantificando o promocionando— va de la mano de más
+riesgo sistemático**, con la causalidad sin identificar. El patrón
+cualitativo se mantuvo respecto de la versión anterior; lo que cambió es
+que C ya no es el de beta más bajo sino el más alto, consistente con su
+nueva composición (semis y datos en vez de utilities).
 
 ## Resultados: retorno ajustado por mercado (CAR) — invierte el signo de `02_...md`
 
-`02_...md` reportó retorno CRUDO por arquetipo sin diferencias claras.
-Con el retorno **ajustado por beta** (CAR, `[-1,+5]` días):
+CAR [-1, +5] ajustado por mercado:
 
-| Arquetipo | CAR media | CAR mediana | Desv. est. | n |
-|---|---|---|---|---|
-| A cauteloso | **+0,49%** | +0,57% | 5,67% | 285 |
-| B genérico | +0,28% | +0,20% | 6,46% | 493 |
-| C cuantificador | −0,80% | −0,22% | 6,49% | 42 |
-| D vocal | **−0,21%** | −0,15% | 6,20% | 357 |
-
-Al controlar por beta, **A pasa a tener el CAR más alto y D el más
-bajo** de los dos arquetipos grandes — orden inverso al de "quién
-crece más" (§ valuación/`02_...md`). Lectura más plausible: no es que
-el mercado premie a A por sobre D en el filing — es que gran parte del
-retorno crudo de D en el período viene de su beta alto en un mercado
-alcista para tech/IA, y una vez que se descuenta ese componente
-sistemático, no queda una sorpresa positiva neta en sus propios
-filings (coherente con "menos sorpresa marginal" de arriba). Sigue sin
-haber correlación con tono/especificidad del filing (CAR vs.
-`promotional_rate`: r=−0,02; vs. `specificity_index`: r=−0,05) — el
-ajuste por beta cambia el ranking entre arquetipos pero no genera una
-relación con el CONTENIDO textual del filing que antes no existiera.
-
-## Resultados: talk-vs-walk CONTROLANDO por sector — atenúa fuerte el hallazgo de `02_...md`
-
-`02_...md` reportó `revenue_outcome` (t) vs. `next_revenue_yoy` (t+1)
-con r=0,09-0,11 y lo leyó como "sustancia real". Repitiendo dentro de
-sector-año (demeaning por `sic2`×año, que remueve cualquier efecto de
-"este sector como un todo creció más ese año"):
-
-| | r (crudo) | r (dentro de sector-año) | n |
+| Arquetipo | Media | Mediana | n |
 |---|---|---|---|
-| `revenue_outcome` vs. `next_revenue_yoy` | 0,073 | **0,029** | 803 |
+| A cauteloso | +0,47% | +0,13% | 297 |
+| B genérico | +0,20% | +0,08% | 477 |
+| C cuantificador | **+0,54%** | **+0,88%** | 148 |
+| D vocal | **−0,18%** | −0,16% | 383 |
 
-**La señal se reduce a menos de la mitad al controlar por sector.**
-Gran parte de lo que se leyó como "las empresas que hablan de revenue
-efectivamente crecen más" es en realidad "las empresas de sectores que
-crecen más (tech/semis) hablan más de revenue Y crecen más, por
-razones no relacionadas con el disclosure". Lo que queda (r=0,029) es
-casi ruido — no hay evidencia fuerte de que, DENTRO del mismo sector y
-año, hablar más de `revenue_outcome` distinga a las empresas que
-efectivamente van a crecer más.
+Una vez descontado el movimiento del mercado, **D es el único arquetipo
+con retorno anormal negativo**, y queda último tanto en media como en
+mediana. C lidera. El orden se mantuvo respecto de la versión anterior en
+lo esencial (A > D), y ahora con C separándose todavía más.
 
-## Resultados: intensidad de R&D dentro de sector — reversión completa de la lectura anterior
+Las magnitudes son chicas y la dispersión grande, así que es direccional,
+no concluyente. Pero apunta consistentemente en la misma dirección que
+`08_...md`: la voz promocional viene con más riesgo y sin retorno extra.
 
-`02_...md` reportó R&D/revenue de D (14,1%) casi el triple que A
-(4,3%) y lo marcó como confusor sectorial pendiente de resolver. Ya
-resuelto:
+## Resultados: talk-vs-walk CONTROLANDO por sector
 
-| Arquetipo | R&D/revenue cruda | R&D/revenue DENTRO de su sector (demeaned) |
+Correlación `behavior_share_revenue_outcome` (t) vs. `next_revenue_yoy`:
+
+| Especificación | r | n |
 |---|---|---|
-| A cauteloso | 4,3% | **−4,0 p.p.** (bajo el promedio de su sector) |
-| B genérico | 7,8% | −0,4 p.p. |
-| C cuantificador | 6,6% | **−3,4 p.p.** (bajo el promedio de su sector) |
-| D vocal | 14,1% | **−0,2 p.p.** (esencialmente el promedio de su sector) |
+| Cruda | 0,071 | 887 |
+| Dentro de sector-año (SIC-2 × año, ambas variables demeaned) | **0,033** | 887 |
 
-**Era, en efecto, casi puro efecto sectorial** — como ya se sospechaba
-en `02_...md`. Dentro de su propio sector, D gasta en R&D lo que
-cualquier empresa de su sector gastaría (deviación ≈0), NO gasta más
-porque "divulgue mejor" o sea más sustantiva. Los que sí se desvían de
-su sector son A y C, y en la dirección OPUESTA a lo esperado: gastan
-MENOS en R&D que sus pares sectoriales, no más. La lectura "D tiene más
-sustancia real medida en R&D" de `02_...md` no se sostiene — hay que
-retirarla.
+Igual que en la versión anterior (0,09 → 0,03), **más de la mitad de la
+correlación cruda es composición sectorial**. Lo que queda dentro de
+sector-año es 0,033, indistinguible de ruido según el test de permutación
+de `05_...md` (p=0,32).
+
+## Resultados: intensidad de R&D dentro de sector
+
+| Arquetipo | R&D/revenue (mediana) | Desvío vs. mediana de su sector |
+|---|---|---|
+| A cauteloso | 4,9% | −0,5 p.p. |
+| B genérico | 7,0% | −0,0 p.p. |
+| C cuantificador | 9,0% | +0,4 p.p. |
+| D vocal | **13,0%** | **+0,8 p.p.** |
+
+La brecha cruda de D contra A es de 8,1 p.p.; dentro de sector queda en
+1,3 p.p. **~84% del efecto es composición sectorial**, con un residuo
+positivo chico que no se puede distinguir de un control imperfecto (SIC-2
+es granularidad gruesa: dentro de "SIC 73 servicios de cómputo" conviven
+perfiles de R&D muy distintos).
 
 ## Lectura conjunta y actualización de `02_...md`
 
-Dos de los hallazgos de `02_...md` se debilitan sustancialmente al
-agregar controles apropiados:
+Sobreviven al cambio de población, sin cambios cualitativos:
 
-1. **`revenue_outcome` → crecimiento real**: sobrevive pero mucho más
-   débil de lo reportado (r=0,03 dentro de sector, no 0,09-0,11
-   crudo). Sigue siendo la única señal de "talk→walk" con signo
-   correcto, pero ya no se puede llamar "sustancia real" con
-   confianza — es, en el mejor caso, una señal muy débil.
-2. **R&D intensity de D como evidencia de sustancia**: se retira. Era
-   casi enteramente composición sectorial.
+- **Los arquetipos vocales (C y D) tienen más beta y volatilidad** — el
+  hallazgo más limpio y estable de los tres documentos financieros.
+- **D queda último en CAR ajustado por mercado** — el retorno aparente de
+  la voz promocional desaparece al ajustar por riesgo.
+- **El talk-vs-walk de revenue es mayormente composición sectorial**
+  (0,071 → 0,033 dentro de sector-año).
+- **La ventaja de R&D es mayormente sectorial** (~84%).
 
-Lo que SÍ es un hallazgo nuevo y robusto de esta sección, no
-reportado antes: **el gradiente de riesgo sistemático (beta,
-volatilidad) entre arquetipos es monótono y grande**, y **invierte el
-ranking de desempeño de mercado** una vez que se ajusta por él (A > D
-en CAR, lo opuesto al ranking de crecimiento fundamental). Cualquier
-afirmación futura tipo "el arquetipo X tiene mejor/peor desempeño de
-mercado" debe especificar si es en términos crudos o ajustados por
-riesgo — dan respuestas opuestas.
+Aparece con la población nueva:
+
+- **C cotiza más caro que D en todos los múltiplos y le gana en CAR**, lo
+  que invierte la lectura anterior de que el mercado premiaba al grupo
+  vocal. Premia al que cuantifica.
+
+Ninguna conclusión de esta sección se dio vuelta, a diferencia de lo que
+pasó en `07_...md` y `08_...md`. La razón es estructural y vale
+registrarla: **este documento compara los cuatro arquetipos completos
+(n de 148 a 493 empresas-año), no subgrupos chicos.** Los resultados
+construidos sobre grupos grandes aguantaron; los de grupos de 4-20
+empresas, no.
 
 ## Limitaciones
 

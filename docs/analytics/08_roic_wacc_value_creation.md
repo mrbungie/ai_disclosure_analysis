@@ -1,5 +1,12 @@
 # ROIC − WACC: ¿los segmentos de "sustancia" realmente crean valor económico?
 
+> **Recalculado 2026-09-05 con DEF 14A y 8-K.** Los insumos financieros
+> (ROIC, WACC) no cambiaron; las etiquetas de segmento sí. En el camino se
+> corrigió un bug de reproducibilidad en `gold_ai_frames` (ver `01_...md`).
+> **El resultado sobre washing se dio vuelta por completo** — leer esa
+> sección.
+
+
 Extiende `07_segment_financial_profiles.md` de ratios contables y
 múltiplos de mercado a una medida de **creación de valor económico**:
 ROIC (retorno sobre capital invertido) vs. WACC (costo de capital) —
@@ -30,108 +37,166 @@ Guardado en `data/processed/clusters/firm_year_roic_wacc.parquet`.
 
 ## Resultados: por cluster de comportamiento
 
-| Cluster de comportamiento | ROIC | WACC | **ROIC − WACC** |
-|---|---|---|---|
-| 0 — Narradores de revenue | 11,9% | 12,6% | +0,5% |
-| 1 — Comportamiento mínimo | 9,6% | 8,6% | +0,6% |
-| **2 — Desplegadores de producto** | **12,5%** | 11,0% | **+3,6%** |
-| 3 — Inversores en infraestructura | 11,4% | 10,2% | +0,6% |
+Mediana sobre empresas-año con ROIC y WACC disponibles (1.589
+observaciones, 281 empresas):
 
-**El cluster de despliegue real (2) es, con diferencia, el único que
-crea valor económico de forma sistemática** (+3,6 p.p., 6-7 veces más
-que los otros tres). Los "narradores de revenue" (cluster 0) tienen
-ROIC decente (11,9%) pero su WACC es tan alto (12,6%, el más alto de
-los 4 — coherente con su beta también más alto en `07_...md`) que casi
-no queda spread — son rentables pero apenas cubren su costo de
-capital, más riesgosos de lo que su rentabilidad contable sugiere.
+| Cluster de comportamiento | ROIC | WACC | **ROIC − WACC** | % obs con spread > 0 | n obs |
+|---|---|---|---|---|---|
+| 0 — Intermedio interno | 13,4% | **7,7%** | **+4,70%** | 68,6% | 86 |
+| 1 — Comportamiento mínimo | 10,7% | 8,7% | +1,32% | 58,0% | 697 |
+| 2 — Desplegadores de producto | **13,5%** | **10,7%** | +3,36% | 59,5% | 538 |
+| 3 — Inversores en infraestructura | 11,7% | 9,0% | +2,65% | 63,1% | 268 |
 
-## Resultados: por arquetipo de VOZ — la sorpresa
+**El cluster de despliegue real (2) tiene el ROIC más alto (13,5%) pero no
+el mayor spread**, porque también tiene el WACC más alto (10,7%). El
+cluster 0 lo supera (+4,70%) por la vía opuesta: ROIC similar con el WACC
+más bajo del conjunto. Con n=25 empresas, ese primer puesto no es
+confiable; lo que sí es sólido es que **el cluster mínimo queda último
+(+1,32%) con clara diferencia** — no describir comportamiento de IA va de
+la mano de crear menos valor económico.
 
-| Arquetipo de voz | ROIC | WACC | **ROIC − WACC** |
-|---|---|---|---|
-| A cauteloso | 10,6% | 9,3% | +0,5% |
-| B genérico | 11,9% | 8,8% | +2,8% |
-| **C cuantificador** | 11,8% | 11,4% | **+3,6%** |
-| D vocal | 11,7% | **11,3%** | +1,6% |
+La brecha se achicó respecto de la versión anterior (era +3,6% contra
++0,5/0,6%, o sea 6-7x; ahora 3,6x entre el 2 y el 1).
 
-**D, el arquetipo "líder", NO es el que más valor crea — queda por
-debajo de B y C.** Su ROIC es similar al de los demás (11,7%, ni el más
-alto), pero su WACC es el segundo más alto (11,3%, casi igual a C) por
-su beta elevado (`07_...md`) — el costo de financiarse de una empresa D
-es tan alto como su retorno, y el spread neto queda por debajo de la
-mitad del de B. Es la misma historia que ya apareció en el CAR ajustado por
-mercado de `04_...md` (A superaba a D en retorno ajustado por riesgo):
-**ser "vocal" viene con un costo de capital más alto que compensa buena
-parte de la rentabilidad aparente.**
+## Resultados: por arquetipo de VOZ
 
-## Resultados: washing vs. resto de D — deja de ser sutil
+| Arquetipo de voz | ROIC | WACC | **ROIC − WACC** | % obs con spread > 0 | n obs |
+|---|---|---|---|---|---|
+| A cauteloso | 11,7% | 9,1% | +1,69% | 57,6% | 373 |
+| B genérico | 11,0% | 9,1% | +1,36% | 57,4% | 619 |
+| C cuantificador | 10,4% | **11,8%** | **−0,28%** | 48,4% | 124 |
+| D vocal | **13,4%** | 9,4% | **+4,51%** | **68,1%** | 473 |
 
-| Ticker | Años en panel (§`06_...md`) | ROIC | WACC | ROIC − WACC |
-|---|---|---|---|---|
-| CCL | 1 | −1,7% | 12,8% | **−12,7%** |
-| FE | 1 | 15,1% | 6,6% | +10,2% |
-| GPC | 3 | — (sin dato) | 8,3% | — |
-| HII | 4 (migra D→D→B→A) | 7,5% | 7,2% | +0,5% |
-| IQV | 2 | 8,0% | 10,2% | **−2,9%** |
-| NEM | 2 | — (sin dato) | 8,0% | — |
-| **Resto de D (mediana, n=79)** | mayoría 6/6 | 12,0% | 11,4% | **+2,2%** |
+**Esto invierte el resultado de la versión anterior, y es el cambio más
+grande del documento.** Antes D quedaba por debajo de B y C porque su
+WACC alto se comía su rentabilidad. Hoy D tiene el ROIC más alto (13,4%),
+un WACC en el promedio (9,4%) y el mayor spread por lejos (+4,51%), con
+el 68,1% de sus observaciones creando valor.
 
-> **Nota de persistencia**: como se detalla en `06_...md`, la mayoría
-> de estos 6 tiene 1-2 años de datos (frente a 6/6 años típico del
-> resto de D) y HII migra fuera de D en los últimos dos años del panel
-> — el ROIC−WACC de cada empresa es un dato financiero real e
-> independiente del texto, pero conectarlo a "la voz de líder vocal
-> predijo esto" es más débil de lo que parece cuando la etiqueta de voz
-> detrás descansa en tan pocos años/frames.
+Y C, el arquetipo que cuantifica, es **el único con spread negativo**
+(−0,28%): ROIC más bajo del conjunto (10,4%) y WACC más alto (11,8%). Su
+composición nueva lo explica —semiconductores y datos, capital-intensivos
+y de beta alto (`04_...md`)— pero el resultado es incómodo para la
+lectura simple de que cuantificar señala sustancia: **el grupo que pone
+números crea menos valor económico que el que promociona.**
 
-De los 4 candidatos a washing con dato disponible, **2 destruyen valor
-económico activamente** (CCL: −12,7 p.p., el peor del panel completo;
-IQV: −2,9 p.p.) mientras el resto de D crea +2,2 p.p. en mediana. No es
-un patrón perfectamente uniforme (FE de hecho crea mucho valor, +10,2
-p.p., como utility estable de bajo riesgo) — pero el promedio del grupo
-washing está claramente peor que el resto de D, y el peor caso del
-panel (CCL) está en este grupo. Esto va más allá de "no son tech" (§
-`07_...md`) — sugiere que al menos parte del grupo de washing usa el
-lenguaje de IA mientras atraviesa problemas reales de rentabilidad
-económica, no solo una diferencia de sector.
+Con n=124 observaciones y 22 empresas, C es el grupo más chico de los
+cuatro y su cifra es la menos estable. Aun así, el contraste D vs. C está
+medido sobre 597 observaciones combinadas y no es un artefacto de muestra
+mínima.
 
-## Resultados: sustancia callada — se confirma, y con más fuerza en B que en A
+## Resultados: washing vs. resto de D — el resultado se dio vuelta
 
-| Segmento | ROIC | WACC | ROIC − WACC |
-|---|---|---|---|
-| Sustancia callada A | 12,3% | 10,5% | **+1,9%** |
-| Resto de A | 10,2% | 9,2% | +0,3% |
-| **Sustancia callada B** | 11,7% | 10,3% | **+6,5%** |
-| Resto de B | 12,1% | 8,7% | +2,1% |
+> **La definición del grupo está superada** por `09_washing_score.md`.
 
-Ambos grupos de "sustancia callada" crean más valor económico que el
-resto de su propio arquetipo de voz — 6x más en el caso de A, 3x más en
-el caso de B. **El grupo B de sustancia callada (ADSK, WDAY, TEAM,
-OKTA, PLTR, V, WMT, entre otras 33 más) tiene el spread ROIC-WACC más
-alto de TODO el análisis (+6,5 p.p.)** — mayor incluso que el cluster
-de comportamiento 2 completo (+3,6 p.p.) o que C (+3,6 p.p.). Son las
-empresas que, en términos de creación de valor real, más se parecen a
-"ganadoras genuinas de IA" — y son precisamente las que menos lo
-cuentan con lenguaje promocional.
+
+| | Washing (D + comportamiento mínimo) | Resto de D |
+|---|---|---|
+| ROIC | 13,4% | 13,5% |
+| WACC | **6,6%** | 10,2% |
+| **ROIC − WACC** | **+7,31%** | +4,17% |
+| % obs con spread > 0 | **83,3%** | 65,6% |
+| n obs (empresas) | 66 (11) | 407 (72) |
+
+**El grupo de "candidatos a washing" crea MÁS valor económico que el resto
+de D**, con el 83% de sus observaciones en spread positivo. La versión
+anterior concluía exactamente lo contrario ("al menos la mitad está
+destruyendo valor económico activamente"), sobre 4 empresas con dato.
+
+**Esto NO significa que hablar vago genere valor.** El ROIC —lo que la
+empresa produce con su capital— es idéntico entre los dos grupos: 13,4%
+vs. 13,5%, una diferencia de 0,1 p.p. En desempeño operativo no hay
+ninguna diferencia. Todo el spread extra viene del otro término: el WACC,
+6,6% contra 10,2%.
+
+Y ese WACC bajo es consecuencia del **beta: 0,46 contra 1,00**
+(`07_...md`). Son utilities, consumo básico, farma, seguros y bancos —
+negocios estables que se financian barato. `ROIC − WACC` premia por
+construcción al negocio de bajo riesgo: una utility regulada que gana 13%
+sobre capital que le cuesta 6% tiene un spread excelente que no tiene
+nada que ver con IA.
+
+La causalidad no es "es vago → crea valor". Hay una **causa común**: ser
+una empresa estable, no-tech y de bajo I+D produce simultáneamente (a) un
+costo de capital bajo, que infla el spread, y (b) un discurso sobre IA sin
+comportamiento observable detrás, porque efectivamente no hay despliegue
+que describir. El estilo de divulgación y el spread son dos consecuencias
+del mismo hecho, no causa y efecto entre sí.
+
+**Un control sectorial no lo elimina, lo que refuerza esa lectura.**
+Comparando cada empresa-año contra la mediana de su propio SIC-2, el
+grupo de washing queda +2,96 p.p. y el resto de D +0,09 p.p. — o sea que
+no es sólo "están en otros sectores": es que **dentro de cualquier
+sector, la empresa de beta bajo tiene el spread alto**. El mecanismo es
+el riesgo, no la industria, y por eso el control sectorial no lo toca.
+
+Conclusión: la comparación de `ROIC − WACC` entre estos dos grupos **no
+es informativa sobre AI-washing en ninguna dirección.** La versión
+anterior de este documento concluía lo contrario ("al menos la mitad está
+destruyendo valor económico") sobre 4 empresas con dato; esta versión
+mediría riesgo si se leyera literalmente. Para preguntar si el washing
+tiene consecuencias económicas hay que usar una métrica que no esté
+mecánicamente ligada al beta — ROIC solo, o crecimiento de ingresos, o
+retorno ajustado por riesgo como el CAR de `04_...md`.
+
+## Resultados: sustancia callada — se sostiene, debilitada
+
+| | Callados B | Resto de B |
+|---|---|---|
+| ROIC | **13,5%** | 10,6% |
+| WACC | 10,2% | 8,9% |
+| **ROIC − WACC** | **+2,36%** | +1,21% |
+| % obs con spread > 0 | 56,0% | 57,7% |
+| n obs (empresas) | 141 (25) | 478 (86) |
+
+Los "callados B" crean casi el doble de spread que el resto de su propio
+arquetipo de voz (+2,36% vs. +1,21%), con un ROIC 2,9 p.p. mayor. La
+versión anterior reportaba 3x (+6,5% vs. +2,1%); hoy es 1,9x. **La
+dirección y el orden de magnitud sobreviven, la magnitud se reduce.**
+
+A diferencia del grupo de washing, acá la ventaja viene del numerador: el
+ROIC es genuinamente más alto, no el WACC más bajo. Es el hallazgo mejor
+sostenido de este documento — 25 empresas con datos, contraste contra un
+control de 86 empresas del mismo arquetipo de voz, y mecanismo coherente
+con el perfil de `07_...md` (más I+D, mejor margen bruto, prima de
+mercado).
+
+El `% con spread > 0` casi no distingue a los dos grupos (56,0% vs.
+57,7%), así que la diferencia está en la magnitud del spread de los que
+crean valor, no en cuántos lo crean.
 
 ## Lectura conjunta
 
-ROIC−WACC agrega una tercera confirmación independiente (después de
-comportamiento textual en `06_...md` y ratios/multiplos en `07_...md`)
-de que **voz y sustancia divergen, y la divergencia importa
-económicamente, no solo retóricamente**:
+Qué queda en pie después de recalcular sobre una población distinta:
 
-- El washing no es solo "hablar de tech sin ser tech" — al menos la
-  mitad de la muestra chica de candidatos está destruyendo valor
-  económico activamente.
-- La sustancia callada no es solo "más R&D/margen" — se traduce en
-  spreads de creación de valor 3-6 veces más altos que sus pares de
-  voz similar, con el grupo B como el caso más extremo de todo el
-  proyecto.
-- El arquetipo "líder vocal" (D) pierde su lugar de primero en creación
-  de valor una vez que se descuenta correctamente su propio costo de
-  capital (más alto por su beta) — el mismo patrón que ya había
-  aparecido con el retorno ajustado por mercado.
+- **Se sostiene**: los "callados B" —empresas que despliegan IA y lo
+  cuentan en registro llano— crean casi el doble de valor económico que
+  sus pares de voz equivalente (+2,36% vs. +1,21%), y por la vía correcta
+  (ROIC más alto, no WACC más bajo). Es el único resultado de este
+  documento con muestra decente y mecanismo coherente entre versiones.
+- **Se sostiene**: el cluster de comportamiento mínimo queda último en
+  creación de valor (+1,32%). No describir comportamiento de IA
+  correlaciona con crear menos valor.
+- **Se dio vuelta, pero la comparación no servía en ninguna dirección**:
+  "el washing destruye valor económico". Hoy ese grupo muestra más spread,
+  con ROIC idéntico (13,4% vs. 13,5%) y WACC 3,6 p.p. menor por su beta de
+  0,46. `ROIC − WACC` premia mecánicamente al negocio de bajo riesgo, así
+  que entre grupos con betas tan distintos mide riesgo, no conducta de
+  disclosure — y el control sectorial no lo arregla, porque el mecanismo
+  es el beta, no la industria.
+- **Se dio vuelta**: "D no es el que más valor crea". Hoy D tiene el mayor
+  spread de los cuatro arquetipos (+4,51%) y C el único negativo
+  (−0,28%).
+
+La lección metodológica es más valiosa que cualquiera de los hallazgos, y
+vale para todo el proyecto: **estos segmentos son particiones de K-means
+sobre una muestra, no categorías del dominio.** Cuando la muestra cambió
+—sin que cambiara un solo dato financiero— dos titulares se dieron vuelta
+y uno se debilitó a la mitad. Y ninguna comparación financiera entre
+segmentos tiene control sectorial, que es lo que explica el caso más
+llamativo. Cualquier resultado que dependa de un grupo de menos de ~30
+empresas, o que compare segmentos con composición sectorial distinta,
+debería tratarse como generador de hipótesis, nunca como evidencia.
 
 ## Limitaciones (más pronunciadas que en docs anteriores — leer antes de citar)
 
@@ -148,9 +213,18 @@ económicamente, no solo retóricamente**:
 - **Costo de deuda con fallback grueso** (rf+2%) cuando no hay
   `InterestExpense` reportado — afecta especialmente a empresas con
   poca deuda donde el dato es más ruidoso.
-- **n=4-6 en los grupos de washing** — cualquier lectura es
-  descriptiva. El caso CCL (−12,7 p.p.) por sí solo domina la media del
-  grupo; sensible a un solo caso extremo.
+- **Ninguna comparación entre segmentos tiene control sectorial**, y esa
+  es la limitación decisiva de este documento, no el tamaño muestral. El
+  grupo de washing tiene beta 0,46 y el resto de D 1,00: cualquier
+  diferencia de WACC entre ellos mide sector, no conducta de disclosure.
+  Repetir todas estas comparaciones dentro de SIC-2 es el próximo paso
+  obligatorio antes de citar cualquier cifra como evidencia.
+- **Los grupos de segmento son inestables entre poblaciones.** El de
+  washing pasó de 6 a 20 empresas con composición casi totalmente
+  distinta entre una versión y otra de este análisis; el de sustancia
+  callada A quedó en n=1.
+- El ERP fijo no afecta comparaciones relativas, pero el beta sí, y el
+  beta es justamente donde los segmentos difieren más.
 - No se validó el ROIC/WACC contra una fuente externa (Bloomberg,
   CapitalIQ, etc.) — es una construcción propia desde XBRL crudo, sin
   benchmark de sanity-check más allá de que las medianas del panel
