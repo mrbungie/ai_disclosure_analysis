@@ -222,38 +222,54 @@ def build_design(frames: pd.DataFrame, controls: str) -> tuple[np.ndarray, list[
 
 
 def score(frames: pd.DataFrame, controls: str, dispersion: str,
-          min_frames: int, verbose: bool = True) -> tuple[pd.DataFrame, dict]:
-    """El estimador completo. Devuelve la tabla por empresa y el diagnóstico."""
-    per_firm = frames.groupby("ticker").agg(
+          min_frames: int, verbose: bool = True,
+          keys: tuple[str, ...] = ("ticker",)) -> tuple[pd.DataFrame, dict]:
+    """El estimador completo. Devuelve la tabla por unidad y el diagnóstico.
+
+    `keys` es la unidad de análisis: `("ticker",)` da el score pooled por
+    empresa; `("ticker", "year")` da el panel empresa-año, donde el mismo test
+    se aplica a cada año por separado y el FDR corre sobre todas las
+    empresas-año a la vez. El panel es lo que permite preguntar si el exceso
+    promocional de una empresa cambia después de un evento — con la advertencia
+    de que partir los frames por año deja denominadores mucho más chicos, así
+    que la potencia cae y casi todo pasa a ser "sin evidencia"."""
+    keys = list(keys)
+    per_firm = frames.groupby(keys).agg(
         n_frames=("promotional", "size"), k_promo=("promotional", "sum")).reset_index()
     non_promotional = (frames[frames["promotional"] == 0]
-                       .groupby("ticker")["behavior"].mean().rename("behavior_index"))
-    per_firm = per_firm.merge(non_promotional.reset_index(), on="ticker", how="left")
+                       .groupby(keys)["behavior"].mean().rename("behavior_index"))
+    per_firm = per_firm.merge(non_promotional.reset_index(), on=keys, how="left")
     per_firm["behavior_index"] = per_firm["behavior_index"].fillna(
         frames["behavior"].mean())
     per_firm = per_firm[per_firm["n_frames"] >= min_frames].reset_index(drop=True)
 
-    fitted = frames.merge(per_firm[["ticker", "behavior_index"]], on="ticker")
+    fitted = frames.merge(per_firm[keys + ["behavior_index"]], on=keys)
     design, names = build_design(fitted, controls)
     model = LogisticRegression(max_iter=2000).fit(design, fitted["promotional"].values)
     fitted["p_hat"] = model.predict_proba(design)[:, 1]
     coefficients = dict(zip(names, model.coef_[0].round(3)))
 
-    grouped = fitted.groupby("ticker")["p_hat"]
+    grouped = fitted.groupby(keys)["p_hat"]
     per_firm = per_firm.merge(
-        grouped.agg(p_esperada="mean", k_esperado="sum").reset_index(), on="ticker")
+        grouped.agg(p_esperada="mean", k_esperado="sum").reset_index(), on=keys)
     per_firm["exceso"] = per_firm["k_promo"] - per_firm["k_esperado"]
     per_firm["tasa_obs"] = per_firm["k_promo"] / per_firm["n_frames"]
 
-    probabilities = {ticker: group.to_numpy() for ticker, group in grouped}
-    variance = np.array([float((probabilities[t] * (1 - probabilities[t])).sum())
-                         for t in per_firm["ticker"]])
+    # pandas entrega la clave como tupla de 1 elemento cuando `keys` es una
+    # lista de un solo nombre; se normaliza para que el índice de abajo sirva
+    # tanto para el score pooled como para el panel empresa-año.
+    probabilities = {(unit[0] if isinstance(unit, tuple) and len(keys) == 1 else unit):
+                     group.to_numpy() for unit, group in grouped}
+    unit_index = (per_firm[keys[0]] if len(keys) == 1
+                  else pd.MultiIndex.from_frame(per_firm[keys]))
+    variance = np.array([float((probabilities[u] * (1 - probabilities[u])).sum())
+                         for u in unit_index])
     # Frames por filing de cada empresa: es el tamaño de cluster que entra en el
     # efecto de diseño. Una empresa que dice 40 cosas sobre IA repartidas en 6
     # filings tiene menos dependencia que otra que dice las mismas 40 en uno.
-    per_filing = (fitted.groupby(["ticker", "accession_number"]).size()
-                  .groupby("ticker").mean().rename("frames_por_filing"))
-    per_firm = per_firm.merge(per_filing.reset_index(), on="ticker", how="left")
+    per_filing = (fitted.groupby(keys + ["accession_number"]).size()
+                  .groupby(keys).mean().rename("frames_por_filing"))
+    per_firm = per_firm.merge(per_filing.reset_index(), on=keys, how="left")
     per_firm["frames_por_filing"] = per_firm["frames_por_filing"].fillna(1.0)
 
     icc = 0.0
@@ -274,8 +290,8 @@ def score(frames: pd.DataFrame, controls: str, dispersion: str,
             print(f"sobredispersión a nivel empresa: rho={firm_rho:.4f}")
 
     upper, lower, rhos = [], [], []
-    for row in per_firm.itertuples(index=False):
-        p_i = probabilities[row.ticker]
+    for unit, row in zip(unit_index, per_firm.itertuples(index=False)):
+        p_i = probabilities[unit]
         if dispersion == "document" and icc > 0:
             deff = design_effect(float(row.frames_por_filing), icc)
             # deff = 1 + (n-1) * rho_equivalente sobre el conteo de la empresa.
@@ -336,6 +352,12 @@ def main() -> None:
                              "trata TODA la heterogeneidad entre empresas como ruido — "
                              "cota superior de conservadurismo, no marca a nadie. "
                              "'none': supone frames independientes (versión original).")
+    parser.add_argument("--by-year", action="store_true",
+                        help="Calcular el score por (empresa, año de filing) además del "
+                             "pooled, y escribir firm_year_washing_score.parquet. Permite "
+                             "preguntar si el exceso promocional de una empresa cambia tras "
+                             "un evento; la contra es que partir por año achica el "
+                             "denominador y la potencia cae mucho.")
     parser.add_argument("--min-frames", type=int, default=5,
                         help="Sólo para no reportar filas sin ninguna potencia; el test "
                              "no necesita umbral (default: 5)")
@@ -387,6 +409,36 @@ def main() -> None:
     print(power.to_string())
     print("  (con pocos frames el test no rechaza casi nunca — eso es correcto:")
     print("   ausencia de evidencia queda registrada como ausencia de evidencia)")
+
+    if args.by_year:
+        print("\n" + "=" * 74)
+        print("PANEL EMPRESA-AÑO — mismo test por año, FDR sobre todas las empresas-año")
+        print("=" * 74)
+        panel, panel_diagnostics = score(frames, args.controls, args.dispersion,
+                                         args.min_frames, verbose=False,
+                                         keys=("ticker", "year"))
+        print(f"{len(panel):,} empresas-año con >= {args.min_frames} frames | "
+              f"{panel_diagnostics['washing']} marcadas washing, "
+              f"{panel_diagnostics['callada']} callada")
+        flagged = panel[panel["washing"]]
+        if len(flagged):
+            counts = flagged.groupby("ticker").size().sort_values(ascending=False)
+            print(f"\nempresas marcadas en más de un año: "
+                  f"{counts[counts > 1].to_dict() or 'ninguna'}")
+            print("\n" + flagged.sort_values(["ticker", "year"])[
+                ["ticker", "year", "n_frames", "k_promo", "k_esperado", "tasa_obs"]
+            ].round(2).to_string(index=False))
+        # Exceso estandarizado antes vs. después del escrutinio SEC (marzo 2024).
+        # Es descriptivo: los grupos no son aleatorios y no hay contrafactual.
+        panel["z"] = ((panel["k_promo"] - panel["k_esperado"]) /
+                      np.sqrt((panel["n_frames"] * panel["p_esperada"]
+                               * (1 - panel["p_esperada"])).clip(lower=1e-9)))
+        era = panel.assign(era=np.where(panel["year"] <= 2023, "<=2023", ">=2024"))
+        print("\nexceso estandarizado medio por época (descriptivo, sin contrafactual):")
+        print(era.groupby("era")["z"].agg(["mean", "median", "size"]).round(3).to_string())
+        panel_out = args.output_dir / "firm_year_washing_score.parquet"
+        panel.to_parquet(panel_out, index=False)
+        print(f"\n-> {panel_out} ({len(panel):,} filas)")
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     out = args.output_dir / "firm_washing_score.parquet"
