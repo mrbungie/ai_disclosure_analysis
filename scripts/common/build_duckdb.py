@@ -839,13 +839,41 @@ def main(with_text_tables: bool = False):
     # population or get an entity-mention run, no view change needed here.
     frames_glob = "data/interim/ai_classify/ai_frames__session=*.parquet"
     if with_text_tables and _existing(frames_glob):
+        # Dedup por LLAMADA al juez, no por (text_hash, frame_index).
+        #
+        # La versión anterior particionaba por (text_hash, frame_index) y
+        # ordenaba sólo por session_id. Dos problemas, ambos reales sobre
+        # este corpus: (a) un mismo texto se clasifica varias veces DENTRO
+        # de una sesión, porque instancias de párrafo distintas
+        # (accession_number distinto) comparten text_hash -- 1.225 grupos
+        # empatados, y en 976 de ellos las filas empatadas traen valores
+        # DISTINTOS, así que `row_number()` desempataba al azar y la vista
+        # devolvía números diferentes en cada consulta (medido: el conteo
+        # de `rhetoric_promotional` oscilaba entre 2.903 y 2.911 sobre las
+        # mismas filas). Nada aguas abajo era reproducible.
+        # (b) aun desempatando, particionar por frame_index puede quedarse
+        # con el frame 0 de una llamada y el frame 1 de otra, mezclando dos
+        # lecturas distintas del mismo párrafo en un juego incoherente.
+        #
+        # `classified_at` identifica la llamada y es único por texto
+        # (verificado: cero grupos empatados lo comparten), así que elegir
+        # la última LLAMADA y traer todos sus frames arregla las dos cosas.
         views["gold_ai_frames"] = f"""
-            WITH latest_frames AS (
+            WITH all_frames AS (
                 SELECT * FROM read_parquet('{frames_glob}', union_by_name=True)
                 WHERE error IS NULL
+            ), latest_call AS (
+                SELECT text_hash, session_id, classified_at
+                FROM (SELECT DISTINCT text_hash, session_id, classified_at FROM all_frames)
                 QUALIFY row_number() OVER (
-                    PARTITION BY text_hash, frame_index ORDER BY session_id DESC
+                    PARTITION BY text_hash ORDER BY session_id DESC, classified_at DESC
                 ) = 1
+            ), latest_frames AS (
+                SELECT f.* FROM all_frames f
+                JOIN latest_call c
+                  ON c.text_hash = f.text_hash
+                 AND c.session_id = f.session_id
+                 AND c.classified_at = f.classified_at
             )
             SELECT p.country_code, p.form, p.accession_number, p.item_key, p.paragraph_index,
                    f.text_hash, up.duplicate_count, f.frame_index, f.has_frame,
