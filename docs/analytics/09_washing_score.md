@@ -126,6 +126,45 @@ documental — y de la cola callada META, AXP, KLAC, NET, SQ y FTNT.
 puede concluir que son las únicas empresas sobre las que este corpus permite
 afirmar algo. De 210 empresas con ≤25 frames, el test no rechaza en ninguna.
 
+## Todas las empresas, en intensidad
+
+El test de arriba sólo existe para quien tiene frames (449 empresas con ≥5).
+Para poner a las 510 en la misma escala, `washing_score.py` estima además
+
+```
+log(1 + promocionales por 1.000 párrafos) = a + b·log(1 + conducta por 1.000 párrafos)
+                                              + c·log(1 + frames de IA por 1.000 párrafos) + e
+```
+
+sobre todas las empresas con filings (pooled 2021-2026; conducta = frames con
+`deployed`, `revenue_outcome`, `cost_outcome`, `ai_investment` o
+`ai_infrastructure`), y usa el residuo estandarizado como exceso: cuánto más
+promociona la empresa de lo que su conducta descrita y su volumen de IA
+predicen. La empresa que no habla de IA tiene cero en todo y queda en el
+centro: sin evidencia, no excluida. R² 0,75; Spearman con el exceso del test
+binomial **+0,60** sobre las 449 comunes. `firm_washing_score_all.parquet`.
+
+| ticker | frames de IA / 1.000 párrafos | promocionales / 1.000 | conducta / 1.000 | z |
+|---|---:|---:|---:|---:|
+| INTU | 35,4 | 10,4 | 23,4 | **5,3** |
+| CRWD | 17,8 | 6,0 | 12,8 | 4,2 |
+| PANW | 27,6 | 7,5 | 22,4 | 3,9 |
+| NVDA | 70,4 | 10,5 | 50,4 | 3,7 |
+| ADBE | 41,0 | 8,1 | 30,8 | 3,6 |
+| CDNS | 16,5 | 4,7 | 11,9 | 3,3 |
+| WDAY | 22,4 | 3,8 | 11,2 | 2,8 |
+| SNOW | 43,6 | 6,3 | 28,5 | 2,8 |
+| ACN | 24,7 | 3,8 | 11,7 | 2,7 |
+| GOOGL | 21,6 | 3,9 | 12,4 | 2,6 |
+| ADP | 20,1 | 3,5 | 10,8 | 2,5 |
+| MSFT | 54,2 | 7,3 | 41,3 | 2,5 |
+
+Las 8 de la cola del test están todas en el 5% superior de esta escala (z de
+2,4 a 5,3); se les suman NVDA, ADBE, WDAY, SNOW, ACN y MSFT, que el test no
+marca porque su exceso, aunque grande en volumen, no es desproporcionado
+frente a sus cientos de frames. Los dos instrumentos ordenan igual el
+extremo; el test es el que da un umbral con FDR.
+
 ## Validación
 
 `validate_washing_score.py`, cinco chequeos. No hay gold standard de "esta

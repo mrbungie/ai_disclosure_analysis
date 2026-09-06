@@ -1,330 +1,171 @@
 # Cruce con mercado y contabilidad (EE.UU.)
 
-Todas las cifras salen de la corrida vigente de `make analytics`
-(`report_crosscheck_stats.py` reproduce las tablas numéricas) sobre el panel
-de 1.426 empresas-año y 460 empresas: frames de 10-K, DEF 14A y 8-K,
-población marcada por el prefiltro v2 (árboles, umbral 0,17 —
-`prefilter_evaluation.md` §8.16), lado contable/mercado de
+**Modo de análisis final: margen extensivo.** El panel son **todas las
+empresas-año con filings** (10-K, 10-Q, DEF 14A, 8-K): 2.964 filas, 510
+empresas, 2021-2026. Lo que la empresa dice de IA se mide como **intensidad
+por 1.000 párrafos** de sus filings del año, con **cero** cuando no habla de
+IA. Nada condiciona a hablar de IA: la empresa que no menciona IA es un cero,
+no una fila que falta. El 36% de las empresas-año no tiene ningún frame de IA
+(64% en 2021, 6% en 2026); sólo 17 empresas de 510 no hablan de IA en ningún
+año.
+
+Producido por `build_firm_panels.py` (`firm_year_master_v2.parquet`, sobre
+`ai_intensity.py`) y `report_crosscheck_stats.py`, que reproduce cada tabla
+numérica de este documento y de `04`, `05` y `08`. Lado contable/mercado de
 `build_firm_financials.py`, `build_market_factors.py` y `build_roic_wacc.py`
-(ERP geométrico 6,48%, `10_builders_y_recalculo.md`).
+(`10_builders_y_recalculo.md`).
 
-Primer cruce de los arquetipos/comportamientos de divulgación de IA
-(`01_ai_disclosure_analytics.md`) con datos externos al texto: XBRL
-(¿la sustancia declarada se refleja en los números?) y precios
-(¿el mercado reacciona al contenido del filing, no solo a su
-existencia?). Responde al hueco identificado explícitamente en la
-revisión de literatura de `docs/thesis_proposal.md` (Eisfeldt et al.,
-Basnet et al. — reacción de mercado a narrativas de IA), que hasta
-ahora no tenía ningún análisis conectándolo con el trabajo de NLP.
-
-**Estado: primer pase exploratorio, no resultado de tesis.** Los
-números de abajo son reales y las correlaciones están bien calculadas,
-pero el diseño es simple (sin ajuste por mercado/beta en retornos, sin
-efectos fijos de empresa/sector en las regresiones de "talk vs. walk")
-— ver limitaciones al final antes de citar cualquier cifra.
-
-> **Corrección aplicada (revisión de alineamiento temporal)**: la
-> primera versión de esta sección calculaba "año siguiente" con un
-> shift fijo de −1 año calendario sobre `period_end`, asumiendo cierre
-> fiscal en diciembre para todas las empresas. Es falso para una
-> fracción grande del panel — NVDA, por ejemplo, cierra en enero, así
-> que su 10-K filed en `2025-02-26` reporta el FY que termina
-> `2025-01-26` (mismo año calendario, sin desfase), mientras que KO
-> (cierre diciembre) filed en `2024-02-20` reporta el FY que termina
-> `2023-12-31` (desfasado un año). El shift fijo no era leakage (nunca
-> se usaron datos que no existieran aún al momento del filing — el
-> error apuntaba a datos DEMASIADO futuros, dos años fiscales adelante
-> en vez de uno, para las empresas con cierre no-enero), pero mezclaba
-> horizontes distintos entre empresas y estaba mal etiquetado. Se
-> corrigió usando el calendario fiscal real de cada ticker (ver
-> "Datos y construcción" abajo) y se recalcularon todos los números de
-> esta sección — las conclusiones cualitativas se mantienen, con
-> cobertura mejor (787 vs. 548 observaciones para el cruce de
-> `revenue_outcome`, porque ahora el alineamiento funciona para
-> cualquier mes de cierre fiscal, no solo por coincidencia calendario).
-> Auditoría completa del bug, la verificación del fix sobre las 2.325
-> filas del panel (99,7% con gap correcto de 340-380 días) y un
-> checklist para futuros cruces con datos fechados: ver
-> `leakage-checking.md`.
-
-> **Actualización posterior (`04_ratios_factors_and_volatility.md`)**:
-> dos conclusiones de esta sección se debilitan al agregar control
-> sectorial y ajuste por riesgo — la correlación `revenue_outcome` →
-> crecimiento real cae de r≈0,09 a r≈0,03 dentro de sector-año, y la
-> mayor intensidad de R&D de D resultó ser casi enteramente composición
-> sectorial (dentro de su sector, D gasta lo esperado, no más). Leer
-> `04_...md` antes de citar cualquier número de esta sección como
-> evidencia de "sustancia real".
+Cruce de la divulgación de IA con datos externos al texto: XBRL (¿la
+sustancia declarada se refleja en los números?) y precios (¿el mercado
+reacciona al contenido del filing?). Responde al hueco de la revisión de
+literatura de `docs/thesis_proposal.md` (Eisfeldt et al., Basnet et al.).
 
 ## Datos y construcción
 
-Tres tablas nuevas, todas en `data/processed/clusters/`, todas
-derivadas de datos ya existentes (sin nueva extracción LLM):
+| Archivo | Contenido |
+|---|---|
+| `firm_year_master_v2.parquet` | todas las empresas-año con filings: intensidades de IA por 1.000 párrafos (`frames_per_1k`, `promo_per_1k`, `revenue_outcome_per_1k`, …), `any_ai`, ratios contables, factores de mercado, crecimiento t+1; etiquetas del panel condicionado (`archetype`, tasas) donde la empresa habló de IA |
+| `firm_year_full_crosscheck.parquet` | lo mismo con niveles XBRL crudos y el retorno de ventana |
 
-| Archivo | Contenido | Fuente |
-|---|---|---|
-| `firm_year_financials.parquet` | revenue, R&D, capex, SG&A del FY disclosed en cada 10-K + YoY del FY SIGUIENTE, alineado por fecha real de filing, por (ticker, año) | `data/raw/xbrl_facts/us/*.parquet` + `filing_manifest` |
-| `firm_year_filing_returns.parquet` | retorno de ventana corta [-1, +5 días hábiles] alrededor de la fecha del 10-K, por (ticker, año) | `data/raw/market/prices/*.parquet` (yfinance) |
-| `firm_year_full_crosscheck.parquet` | merge de las dos anteriores con `firm_year_archetype_behaviors.parquet` (`01_...md`, sección "Panel empresa-año") | — |
+**Financials**: XBRL alineado por fecha real —el `period_end` más reciente
+antes del `filing_date` es el FY divulgado; el siguiente de ese ticker es el
+FY futuro— con cadenas de fallback de conceptos (cobertura de capex 87%,
+SG&A 80%, `net_margin` 98%). `next_*_yoy` se anula cuando el gap fiscal sale
+de [340, 380] días. Crecimientos con |YoY| > 300% se descartan.
 
-**Financials — alineamiento por fecha real, no por año calendario.**
-Para cada `(ticker, filing_date)` de un 10-K:
-1. Se busca, entre los hechos XBRL de duración anual (340-380 días) de
-   ESE ticker, el `period_end` más reciente que sea `<= filing_date`
-   (con 10 días de margen) → es el FY efectivamente **disclosed en ese
-   documento** (dato ya conocido al momento del filing, no un outcome
-   futuro).
-2. Se busca el **siguiente** `period_end` de ese mismo ticker (el FY
-   que empieza justo después del disclosed) → es el FY que todavía NO
-   había terminado cuando se filed el documento, genuinamente futuro.
-   `next_<metric>_yoy` = crecimiento de esa métrica entre el FY
-   disclosed y ese FY siguiente.
-3. XBRL repite cada cifra anual en 2-3 filings distintos (comparativos)
-   — se dedupea a un valor por `(ticker, concept, period_end)` con la
-   mediana de las repeticiones antes del paso 1-2.
+**Retornos**: `adj_close` del día hábil anterior al `filing_date` del 10-K
+contra el quinto día hábil posterior (`ret_m1_p5`); `car_m1_p5` resta el
+mercado ajustado por beta (`04_...md`).
 
-Cobertura: 429/429 tickers del panel tienen algo de XBRL, pero `capex`
-tiene huecos grandes (el tag `PaymentsToAcquirePropertyPlantAndEquipment`
-no todos lo reportan de forma consistente).
-
-**Retornos**: `adj_close` del día hábil anterior al `filing_date` del
-10-K hasta 5 días hábiles después — 2.746 observaciones. **Sin ajuste
-por mercado** (no se resta un benchmark ni se calcula beta) — es
-retorno crudo de la acción, no retorno anormal. Esta parte no tenía el
-bug de alineamiento (usa `filing_date` real de principio a fin, sin
-pasar por año calendario). 411/429 tickers del panel tienen cobertura
-de precios.
-
-```python
-# financials: dedup + filtro de duración anual + alineamiento por fecha real
-CONCEPTS = {'us-gaap:Revenues': 'revenue',
-            'us-gaap:ResearchAndDevelopmentExpense': 'rd_expense',
-            'us-gaap:PaymentsToAcquirePropertyPlantAndEquipment': 'capex',
-            'us-gaap:SellingGeneralAndAdministrativeExpense': 'sga_expense'}
-df['duration_days'] = (df['period_end'] - df['period_start']).dt.days
-df = df[(df['duration_days'] >= 340) & (df['duration_days'] <= 380)]
-dd = df.groupby(['metric','period_end'])['value'].median()  # dedup re-reportings
-
-# por (ticker, filing_date): último period_end <= filing_date = FY disclosed;
-# el period_end INMEDIATAMENTE siguiente de ESE ticker = FY futuro real
-idx_disclosed = np.searchsorted(pe, filing_date + pd.Timedelta(days=10), side='right') - 1
-disclosed = fg.iloc[idx_disclosed]
-next_fy   = fg.iloc[idx_disclosed + 1]
-next_revenue_yoy = next_fy.revenue / disclosed.revenue - 1
-
-# retornos: ventana [-1, +5] días hábiles alrededor del filing_date
-idx = px['date'].searchsorted(filing_date)
-p0 = px['adj_close'].iloc[idx - 1]
-p1 = px['adj_close'].iloc[idx + 5]
-ret_5d = p1 / p0 - 1
-```
+**Texto**: frames de `gold_ai_frames` contados por documento y divididos por
+los párrafos puntuables del conjunto de filings del año. `revenue_outcome`,
+`ai_investment`, `ai_infrastructure`, `cost_outcome` son frames con ese
+concepto por 1.000 párrafos.
 
 ## Resultados: "talk vs. walk"
 
 ### 1. `revenue_outcome` (lo que dicen) vs. crecimiento de revenue real al año fiscal siguiente
 
-Correlación entre `behavior_share_revenue_outcome` del año *t* y
-`next_revenue_yoy`: **r = 0,049** (n=939, recortando outliers >300% YoY).
-El test de permutación de `05_...md` la deja en p=0,12 — indistinguible de
-cero.
+| especificación | r | n | p (permutación) |
+|---|---:|---:|---:|
+| cruda | **0,112** | 2.313 | <0,001 |
+| dentro de sector-año (SIC-2 × año) | **0,167** | 2.313 | <0,001 |
+| dentro de empresa (efectos fijos) | 0,038 | 2.313 | |
+| primeras diferencias dentro de empresa | 0,114 | 1.820 | |
+| cruda, sólo empresas-año que hablan de IA | 0,201 | 1.345 | |
 
-Por arquetipo — crecimiento de revenue del FY **siguiente**:
+**Cuanto más de su filing dedica una empresa a resultados de IA, más crece
+su revenue al año siguiente**, y la relación es más fuerte dentro de
+sector-año que cruda: no es composición de industria. Pasa el FDR (abajo).
 
-| Arquetipo | Mediana next FY revenue YoY | Media | n |
-|---|---|---|---|
-| A cauteloso | 5,0% | 5,9% | 243 |
-| B genérico | 7,1% | 9,9% | 309 |
-| C cuantificador | 7,4% | **11,8%** | 105 |
-| D vocal | **8,6%** | 11,2% | 282 |
+Dos lecturas que la cifra tiene que cargar:
 
-El ranking ordinal es A < B < C ≈ D: C y D casi empatados en mediana, con
-C arriba en media por su cola derecha (semis en años de expansión). El
-orden por arquetipo existe aunque la correlación lineal no: la diferencia
-está en los extremos (A contra D), no en el gradiente continuo.
+- **Es transversal, no temporal.** Dentro de empresa la correlación cae a
+  0,04. Dedicar más filing a IA identifica un TIPO de empresa que crece más;
+  no predice que la misma empresa crezca más el año en que habla más. Para
+  la pregunta de washing esto importa: el instrumento separa empresas, no
+  detecta cambios de conducta.
+- **El margen extensivo puro va al revés.** Hablar de IA en absoluto
+  (`any_ai`) tiene r=−0,07 con el crecimiento: las empresas-año sin ningún
+  frame de IA crecen más (12,0% contra 8,8% de mediana), porque en 2021-2022
+  quien no hablaba de IA era la empresa chica en expansión y quien hablaba,
+  la grande. Hablar de IA no es señal de nada; cuánto del filing se dedica a
+  resultados de IA, sí.
+
+Crecimiento de revenue del FY siguiente por nivel de intensidad de IA del año
+(cero = ningún frame; terciles entre quienes hablan):
+
+| nivel de IA | frames por 1.000 párrafos (mediana) | next FY revenue YoY (mediana) | n |
+|---|---:|---:|---:|
+| cero | 0 | 8,1% | 1.057 |
+| bajo | 0,7 | 5,7% | 636 |
+| medio | 3,1 | 5,6% | 635 |
+| alto | 12,1 | **8,7%** | 636 |
+
+La forma es de U: los que no hablan crecen, los que hablan mucho crecen, los
+que hablan poco no. El extremo alto es software/semis; el cero, 2021-2022.
 
 ### 2. `ai_investment` / `ai_infrastructure` vs. capex y R&D reales
 
-| Comportamiento declarado (t) | vs. crecimiento real (FY t+1) | r | n |
-|---|---|---|---|
-| `ai_investment` | `capex_yoy` | −0,007 | 840 |
-| `ai_investment` | `rd_expense_yoy` | 0,044 | 512 |
-| `ai_infrastructure` | `capex_yoy` | **0,086** | 840 |
-| `ai_infrastructure` | `rd_expense_yoy` | 0,019 | 512 |
+| declarado (t), por 1.000 párrafos | vs. crecimiento real (FY t+1) | r | p | pasa FDR |
+|---|---|---:|---:|---|
+| `ai_infrastructure` | `capex_yoy` | **0,107** | <0,0001 | **sí** |
+| `ai_infrastructure` | `rd_expense_yoy` | 0,059 | 0,059 | no |
+| `ai_investment` | `capex_yoy` | 0,042 | 0,057 | no |
+| `ai_investment` | `rd_expense_yoy` | 0,044 | 0,158 | no |
 
-`ai_infrastructure` → `capex` es la única de las cuatro con alguna
-magnitud (0,086). Las otras tres quedan entre −0,007 y 0,044, o sea nada.
-Con cobertura de capex parcial (sólo los filers que reportan el tag más
-común) la correlación sube a ~0,11; con la cobertura completa de 87%
-(`10_...md`) baja a 0,086 — se apoya en parte en qué filers tienen dato.
+La asimetría se mantiene: decir "invertimos en IA" no predice el capex del
+año siguiente; decir "construimos infraestructura de IA" sí, y es la segunda
+correlación que sobrevive al FDR.
 
-La asimetría es el hallazgo: decir "invertimos en IA" no predice el capex
-del año siguiente; decir "construimos infraestructura de IA" sí predice
-algo, poco. Es la mayor del cruce contable y no pasa el FDR de `05_...md`
-(p=0,013 contra un umbral BH de 0,0045).
+### 3. `cost_outcome` vs. SG&A real
 
-### 3. `cost_outcome` vs. SG&A real — la señal de "washing" desapareció
+`cost_outcome` por 1.000 párrafos contra crecimiento de SG&A: **r = −0,013**
+(p=0,57, n=2.038 con dato). La hipótesis de washing —quienes más enmarcan la
+IA como ahorro de costos muestran SG&A creciendo MÁS— no aparece. Cero.
 
-Correlación: **r = −0,011** (n=799): cero. Partiendo por intensidad de
-`cost_outcome`:
+### 4. Intensidad de R&D por nivel de IA (contemporánea)
 
-| Grupo | SG&A YoY (FY t+1) mediana | n |
-|---|---|---|
-| Menos `cost_outcome` (mitad baja) | 5,7% | 585 |
-| Más `cost_outcome` (mitad alta) | 6,0% | 214 |
+| nivel de IA | R&D / revenue (mediana) |
+|---|---:|
+| cero | 3,3% |
+| bajo | 3,8% |
+| medio | 5,9% |
+| alto | **11,9%** |
 
-La hipótesis de washing acá sería "quienes más enmarcan la IA como
-ahorro de costos muestran SG&A creciendo MÁS". **La diferencia es de 0,3
-p.p., la correlación es cero, y con n=799 no es cuestión de muestra
-chica.** `05_...md` lo confirma: ese par queda noveno de once en el
-ranking FDR con p=0,75. No hay señal de washing en el cruce de costos.
-
-(El corte por mediana queda desbalanceado, 585 vs. 214, porque la mayoría
-de empresas-año tiene `cost_outcome` exactamente en 0 y cae del lado bajo.)
-
-### 4. Intensidad de R&D por arquetipo (contemporánea) — posible confusor sectorial
-
-| Arquetipo | R&D / revenue (mediana) |
-|---|---|
-| A cauteloso | 5,3% |
-| B genérico | 6,9% |
-| C cuantificador | 8,6% |
-| D vocal | **13,2%** |
-
-D multiplica por 2,5 a A y el orden es monótono. Sigue en pie la advertencia:
-es exactamente lo que predeciría la composición sectorial de D
-(software/servicios) sin que el disclosure tenga nada que ver.
-`04_...md` muestra que dentro de sector-año la brecha se reduce ~85%.
-
-## Resultados: margen extensivo — la misma pregunta sin condicionar a hablar de IA
-
-Todo lo anterior mide "cuánto de lo que la empresa dice de IA es X" sobre
-un panel que entra sólo si la empresa tuvo ≥3 frames en el año. Eso
-selecciona sobre el fenómeno: la empresa que no habla de IA no es un cero,
-es una fila que no existe. `firm_year_extensive.parquet`
-(`build_firm_panels.py`, sobre `ai_intensity.py`) toma **todas las
-empresas-año con filings** —2.964 filas, 510 empresas— y mide intensidad:
-frames de cada tipo por 1.000 párrafos del conjunto de filings del año,
-cero cuando no hay ninguno. El 36% de las empresas-año no tiene ningún
-frame de IA (64% en 2021, 6% en 2026); sólo 17 empresas de 510 no hablan de
-IA en ningún año.
-
-`report_crosscheck_stats.py --panel extensive`, mismos pares, medidos en
-intensidad:
-
-| par | r | p | pasa FDR 5% |
-|---|---:|---:|---|
-| `revenue_outcome` por 1.000 párrafos ~ crecimiento de revenue t+1 | **0,112** | <0,0001 | **sí** |
-| `ai_infrastructure` por 1.000 párrafos ~ crecimiento de capex t+1 | **0,107** | <0,0001 | **sí** |
-| promocional por 1.000 párrafos ~ CAR | −0,046 | 0,018 | no |
-| especificidad por 1.000 párrafos ~ CAR | −0,039 | 0,041 | no |
-| los otros siete | entre −0,025 y 0,059 | ≥0,06 | no |
-
-| `revenue_outcome` ~ revenue t+1 | r | n |
-|---|---:|---:|
-| cruda | 0,112 (p perm. <0,001) | 2.313 |
-| dentro de sector-año | **0,167** (p perm. <0,001) | 2.313 |
-| dentro de empresa (efectos fijos) | 0,038 | 2.313 |
-| primeras diferencias | 0,114 | 1.820 |
-
-**Con los ceros adentro, dos cruces sobreviven al FDR y la correlación de
-revenue es tres veces la del panel condicionado.** No es el margen
-extensivo por sí solo: entre las empresas que sí hablan de IA la
-correlación es 0,20, y dentro de sector-año 0,24. Lo que cambia es la
-medida: intensidad (frames de revenue por párrafo del filing) en vez de
-proporción (frames de revenue sobre frames de IA). Una empresa que dedica
-más de su 10-K a resultados de IA crece más al año siguiente que sus pares
-de sector; una que reparte sus pocos frames de IA igual que otra no se
-distingue de ella.
-
-Dos advertencias que la lectura tiene que cargar:
-
-- **Es transversal, no temporal.** Dentro de empresa la correlación cae a
-  0,04. Dedicar más filing a IA identifica un TIPO de empresa que crece más,
-  no predice que la misma empresa crezca más el año que habla más. Es lo
-  contrario del panel condicionado, donde lo poco que había era within-firm.
-- **El margen extensivo puro va al revés.** Las empresas-año sin ningún
-  frame de IA crecen más (12,0% contra 8,8% de mediana), y `any_ai` tiene
-  r=−0,07 con el crecimiento: en 2021-2022 quien no hablaba de IA era la
-  empresa chica en expansión, y quien hablaba, la grande. Hablar de IA en
-  absoluto no es señal de nada; cuánto del filing se dedica a resultados de
-  IA, sí.
+Monótono y de 3,6x entre extremos. Es lo que predeciría la composición
+sectorial del nivel alto (software/semis); `04_...md` mide cuánto queda
+dentro de sector.
 
 ## Resultados: reacción de mercado al filing
 
-Retorno crudo [-1, +5 días hábiles] alrededor del 10-K, por arquetipo:
+Retorno crudo [−1, +5 días hábiles] alrededor del 10-K, mediana por nivel de
+IA: 0,1% / 0,1% / 0,3% / 0,1%. CAR ajustado por mercado: 0,3% / 0,3% / 0,4%
+/ 0,1%. Correlaciones directas sobre las 2.746 empresas-año con retorno:
 
-| Arquetipo | Media | Mediana | Desv. est. | n |
-|---|---|---|---|---|
-| A cauteloso | 0,12% | 0,27% | 5,91% | 368 |
-| B genérico | −0,16% | −0,11% | 6,54% | 497 |
-| C cuantificador | 0,63% | 1,01% | 6,74% | 130 |
-| D vocal | −0,17% | −0,11% | 6,35% | 363 |
+| | r | p |
+|---|---:|---:|
+| promocional por 1.000 párrafos ~ retorno | −0,025 | 0,19 |
+| promocional por 1.000 párrafos ~ CAR | −0,046 | 0,018 |
+| especificidad por 1.000 párrafos ~ CAR | −0,039 | 0,041 |
+| frames de IA por 1.000 párrafos ~ retorno | −0,003 | 0,89 |
+| `any_ai` ~ CAR | −0,053 | 0,006 |
 
-Sin diferencias económicamente relevantes (medias dentro de ±0,7 p.p. con
-desviaciones de 6-7%: ruido >> señal).
-
-Correlaciones directas:
-
-- retorno vs. `promotional_rate` del filing: **r = −0,018**
-- retorno vs. `specificity_index` del filing: **r = −0,008**
-- retorno vs. volumen de menciones de IA (`n_frames`): **r = −0,050**
-
-**Ninguna.**
-
-Una nota de alcance que ahora importa más: `ret_m1_p5` se calcula sobre
-la fecha de filing del **10-K**, pero el panel de texto mezcla frames de
-10-K, DEF 14A y 8-K, así que el `promotional_rate` de una empresa-año
-puede venir en parte de un proxy presentado en otra fecha. El cruce
-texto→retorno quedó peor alineado que antes; separarlo por formulario es
-trabajo pendiente.
+**Ninguna sobrevive al FDR.** Lo poco que hay va en una sola dirección: más
+promoción de IA, más IA en absoluto, retorno anormal levemente menor en la
+ventana del filing. Es direccional, chico, y no pasa la corrección.
 
 ## Lectura conjunta
 
-De los tres tipos de cruce (revenue, insumos de inversión, mercado),
-**ninguno muestra una relación que sobreviva a la corrección por
-comparaciones múltiples en el panel condicionado a hablar de IA**
-(`05_...md`); **en el panel extensivo, medido en intensidad por párrafo,
-dos sobreviven** (revenue y capex, r≈0,11) y son transversales, no
-within-firm. Lo que queda de revenue es un
-orden por arquetipo (D y C crecen más al año fiscal siguiente que A y
-B, 8,6% y 7,4% contra 5,0% y 7,1% de mediana) con una correlación lineal
-de 0,049 que la permutación no distingue de cero, y que `04_...md`
-reduce a 0,019 dentro de sector-año. Insumos (`ai_investment`,
-`ai_infrastructure`) y mercado no muestran ninguna relación, y
-`cost_outcome` quedó en cero exacto. Es un resultado calibrado, no
-negativo: el instrumento de texto no predice resultados financieros al
-año siguiente, y ahora eso está medido sobre 799-939 observaciones con
-cobertura XBRL decente (`10_...md`), no sobre la mitad de la muestra.
+De los tres tipos de cruce, **dos relaciones contables sobreviven al FDR**
+—dedicar más filing a resultados de IA predice más revenue, dedicar más a
+infraestructura de IA predice más capex, ambas r≈0,11— y **ninguna de
+mercado**. Las dos sobreviven al control de sector-año (la de revenue sube
+a 0,17) y se van dentro de empresa (0,04): **son rasgos de empresa, no
+respuestas a lo que la empresa hizo ese año.** El instrumento de texto
+identifica qué empresas están construyendo con IA; no detecta cuándo una
+empresa cambia.
+
+Para la tesis, eso acota el uso del cruce financiero: sirve para
+caracterizar segmentos (`04`, `07`, `08`), no para medir washing como
+desviación temporal entre lo dicho y lo hecho. Ese trabajo lo hace la brecha
+entre canales (`14_...md`).
 
 ## Limitaciones (leer antes de citar cualquier número de esta sección)
 
-- **Sin ajuste de mercado en los retornos** — son retornos crudos, no
-  anormales. Con AI/tech en fuerte alza 2024-2026, cualquier cruce con
-  arquetipo (más pesado en tech) puede confundirse con beta de mercado,
-  no con contenido del filing. Próximo paso obligatorio: restar un
-  benchmark (o CAPM de un factor) antes de interpretar magnitudes.
-- **Sin control por sector/industria** en ninguno de los cruces
-  financieros — el resultado de revenue y R&D de D/C puede ser
-  composición sectorial, no comportamiento de disclosure. Necesita
-  regresión con efectos fijos de sector (SIC) como mínimo.
-- **Correlaciones a nivel empresa-año agregado, no panel con efectos
-  fijos de empresa** — no se controla por tendencia propia de cada
-  empresa (una empresa que siempre crece rápido y siempre habla de
-  revenue contamina la correlación sin que haya relación causal
-  filing→resultado).
-- **`capex` tiene cobertura XBRL incompleta** (tag inconsistente entre
-  filers) — los resultados de capex son los menos confiables de la
-  sección.
-- **Ventana de retorno fija en 5 días hábiles**, sin robustez probada
-  con otras ventanas (1, 3, 10, 20 días) — un resultado nulo en una
-  ventana no descarta reacción de mercado en otra.
-- El alineamiento financiero usa el `period_end` XBRL más reciente con
-  10 días de margen respecto al `filing_date` — filings con retraso
-  inusual en el reporte XBRL respecto al 10-K en sí podrían quedar mal
-  clasificados en el borde; no verificado sistemáticamente.
-- 3 de 2.325 filas (0,13%) tienen `next_period_end` a 2-4 años del FY
-  disclosed, no a 1 (huecos de datos XBRL en esos tickers, no el bug de
-  calendario) — impacto despreciable en los resultados agregados pero
-  no filtrado explícitamente; ver `leakage-checking.md`.
-- Igual que el resto del proyecto: solo EE.UU., sin ponderar por
-  `inclusion_weight`, población filtrada por el prefiltro.
+- **Sin control por sector más fino que SIC-2.** Dentro de "SIC 73 servicios
+  de cómputo" conviven perfiles de I+D muy distintos; el residuo dentro de
+  sector-año puede ser sub-sector.
+- **Correlaciones, no un panel con dinámica.** El efecto fijo de empresa
+  elimina la señal, lo que dice que es entre empresas; un modelo con rezagos
+  y controles de tamaño sería el siguiente paso.
+- **`capex` con 87% de cobertura XBRL y R&D con 45%**: los cruces con R&D
+  tienen la mitad de la muestra.
+- **Ventana de retorno fija en 5 días hábiles**, sin robustez con otras
+  ventanas.
+- **Denominador de párrafos.** La intensidad por 1.000 párrafos premia a la
+  empresa con filings cortos; `frames_per_1k` entra como control en los
+  perfiles de `04` y como covariable en `09`.
+- Igual que el resto del proyecto: solo EE.UU., etiquetas de un LLM sin
+  validación humana (`docs/problemas_academicos.md` #1), población filtrada
+  por el prefiltro (recall 0,96-0,98 según formulario).

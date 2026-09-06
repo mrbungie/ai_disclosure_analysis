@@ -1,12 +1,28 @@
 # ROIC − WACC: ¿los segmentos de "sustancia" realmente crean valor económico?
 
-Todas las cifras salen de la corrida vigente de `make analytics`
-(`report_crosscheck_stats.py` reproduce las tablas numéricas) sobre el panel
-de 1.426 empresas-año y 460 empresas: frames de 10-K, DEF 14A y 8-K,
-población marcada por el prefiltro v2 (árboles, umbral 0,17 —
-`prefilter_evaluation.md` §8.16), lado contable/mercado de
-`build_firm_financials.py`, `build_market_factors.py` y `build_roic_wacc.py`
-(ERP geométrico 6,48%, `10_builders_y_recalculo.md`).
+**Modo de análisis final: margen extensivo.** Todas las empresas-año con
+filings y ROIC/WACC (2.108), por nivel de intensidad de IA del año (cero =
+ningún frame; terciles de frames por 1.000 párrafos entre quienes hablan).
+`report_crosscheck_stats.py` §4:
+
+| nivel de IA | ROIC | WACC | ROIC − WACC | spread vs. mediana de su SIC-2 (media) | % obs con spread > 0 | n obs |
+|---|---:|---:|---:|---:|---:|---:|
+| cero | 11,9% | 6,5% | +4,8% | +3,8 p.p. | 72,2% | 737 |
+| bajo | 11,9% | 6,5% | +5,1% | +2,6 p.p. | 72,5% | 422 |
+| medio | 10,3% | 6,4% | +3,8% | −2,1 p.p. | 72,4% | 442 |
+| alto | **14,1%** | **7,9%** | **+5,8%** | **+7,0 p.p.** | 70,6% | 507 |
+
+**El tercil alto de IA tiene el ROIC más alto (14,1%), el WACC más alto
+(7,9%, es el de mayor beta) y el mayor spread (+5,8%), incluso contra la
+mediana de su propio sector (+7,0 p.p. de media).** Los otros tres niveles no
+se distinguen entre sí; el cero crea tanto valor como el bajo. Es el mismo
+patrón de `04_...md`: hablar mucho de IA en el filing identifica un tipo de
+empresa —software/semis, rentable, cara, de beta alto— y hablar poco o nada
+no identifica nada.
+
+Lo que sigue son los segmentos del panel condicionado —clusters de
+comportamiento, arquetipos de voz, "washing" y "sustancia callada"— sobre
+quienes hablan de IA (1.049 observaciones, 331 empresas).
 
 Extiende `07_segment_financial_profiles.md` de ratios contables y
 múltiplos de mercado a una medida de **creación de valor económico**:

@@ -1,12 +1,12 @@
 # Perfil financiero de los segmentos voz × comportamiento
 
-Todas las cifras salen de la corrida vigente de `make analytics`
-(`report_crosscheck_stats.py` reproduce las tablas numéricas) sobre el panel
-de 1.426 empresas-año y 460 empresas: frames de 10-K, DEF 14A y 8-K,
-población marcada por el prefiltro v2 (árboles, umbral 0,17 —
-`prefilter_evaluation.md` §8.16), lado contable/mercado de
-`build_firm_financials.py`, `build_market_factors.py` y `build_roic_wacc.py`
-(ERP geométrico 6,48%, `10_builders_y_recalculo.md`).
+Los grupos de este documento —clusters de comportamiento, "washing = voz D ×
+comportamiento mínimo", "sustancia callada"— son particiones sobre CÓMO habla
+de IA quien habla de IA (panel condicionado a ≥3 frames por año, 451
+empresas). No existen para la empresa que no habla; el perfil financiero por
+nivel de intensidad de IA sobre todas las empresas-año está en `04_...md`.
+Financieros por empresa: mediana de sus años (`build_firm_panels.py`,
+`segment_financials.parquet`).
 
 Cruza los clusters de comportamiento y los grupos de washing/sustancia
 callada de `06_voice_vs_behavior_clustering.md` con los ratios,

@@ -35,6 +35,16 @@ Claves en `.env`: `OPENROUTER_API_KEY` (clasificación), `B2_KEY_ID` /
 Todo lo demás es CPU: clasificación (I/O contra OpenRouter) y analytics
 (pandas, sklearn, statsmodels).
 
+## Modo de análisis final
+
+**Margen extensivo**: todo agregado sobre empresas o períodos se calcula sobre
+todos los documentos, con cero cuando el documento no habla de IA, en
+intensidad por 1.000 párrafos (`scripts/analytics/ai_intensity.py`;
+`docs/analytics/10_builders_y_recalculo.md`). Nada condiciona a hablar de IA
+salvo los objetos que son, por construcción, sobre cómo se habla (arquetipos,
+segmentos, grilla, test binomial de 09). El funnel completo del corpus está en
+`docs/analytics/00_funnel_del_corpus.md`.
+
 ## Corpus final
 
 | | |
@@ -57,10 +67,7 @@ for s in report_crosscheck_stats.py validate_washing_score.py voice_behavior_fac
          behavior_block_eval.py cluster_diagnostics.py washing_hierarchical.py channel_gap_analysis.py; do
   .venv/bin/python scripts/analytics/$s; done
 .venv/bin/python scripts/analytics/report_crosscheck_stats.py --json data/processed/clusters/crosscheck_stats.json
-# margen extensivo (todos los documentos, con ceros) — ver 10_builders_y_recalculo.md
-.venv/bin/python scripts/analytics/report_crosscheck_stats.py --panel extensive --json data/processed/clusters/crosscheck_stats_extensive.json
-.venv/bin/python scripts/analytics/shock_analysis.py --margin extensive
-.venv/bin/python scripts/analytics/shock_did_simple.py --margin extensive
+
 scripts/common/sync_data_b2.sh push
 ```
 
@@ -90,11 +97,10 @@ precisión/recall del prefiltro reponderados por estrato. Falta anotar.
   al centro de la tesis; el de `14` es el que corresponde al mecanismo que
   persigue la SEC, y es donde está el único efecto post-SEC del proyecto (el
   filing agrega gobernanza de IA; la call no cambia).
-- Entrada endógena al panel empresa-año (`docs/problemas_academicos.md`
-  #12): cerrada para el cruce financiero, los shocks y la brecha entre
-  canales con los paneles extensivos (`10_...md`, "Dos márgenes"). Sigue
-  abierta por construcción para el score de washing, los segmentos y la
-  grilla, que son objetos definidos sobre lo que se dice de IA.
+- Entrada endógena al panel (`docs/problemas_academicos.md` #12): cerrada
+  con el modo extensivo para todo lo que agrega sobre empresas o períodos.
+  Sigue por construcción en los objetos sobre cómo se habla (arquetipos,
+  segmentos, grilla, test binomial), que no existen para quien no habla.
 
 ### 3. Deuda técnica
 

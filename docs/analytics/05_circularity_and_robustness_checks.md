@@ -1,198 +1,117 @@
 # Circularidad, placebo y corrección por comparaciones múltiples
 
-Todas las cifras salen de la corrida vigente de `make analytics`
-(`report_crosscheck_stats.py` reproduce las tablas numéricas) sobre el panel
-de 1.426 empresas-año y 460 empresas: frames de 10-K, DEF 14A y 8-K,
-población marcada por el prefiltro v2 (árboles, umbral 0,17 —
-`prefilter_evaluation.md` §8.16), lado contable/mercado de
-`build_firm_financials.py`, `build_market_factors.py` y `build_roic_wacc.py`
-(ERP geométrico 6,48%, `10_builders_y_recalculo.md`).
+**Modo de análisis final: margen extensivo** — todas las empresas-año con
+filings (2.964, 510 empresas), intensidad por 1.000 párrafos con ceros
+(`02_...md`). Todo sale de `report_crosscheck_stats.py`.
 
-Auditoría pedida explícitamente después de discutir qué tan circular
-es el diseño de `02_market_accounting_crosscheck.md` /
-`04_ratios_factors_and_volatility.md` (el arquetipo se construye a
-partir de intensidad/especificidad del discurso de IA, que está casi
-mecánicamente correlacionada con pertenecer a un sector tech — así que
-"D crece más" podía ser casi tautológico) y el riesgo de sobre-vender
-un hallazgo "interesante" (positivo o neutro) sin someterlo al mismo
-escrutinio en ambas direcciones. Tres chequeos, todos sobre
-`data/processed/clusters/firm_year_master_v2.parquet`.
+Auditoría del diseño de `02_market_accounting_crosscheck.md` /
+`04_ratios_factors_and_volatility.md`: la intensidad de IA está casi
+mecánicamente correlacionada con pertenecer a un sector tech, así que "las
+que hablan de IA crecen más" podía ser tautológico. Tres chequeos, todos sobre
+`firm_year_master_v2.parquet`.
 
-**Resultado headline: de once correlaciones del cruce contable/mercado,
-ninguna sobrevive a la corrección por comparaciones múltiples, y la
-cruda de revenue (r=0,049) ya no se distingue de ruido por permutación
-(p=0,12). Lo único que queda es que el efecto fijo de empresa encuentra
-una señal mayor (0,084) que la de dentro-de-sector (0,019) — débil, pero
-en la dirección contraria a "todo es composición".**
+**Resultado headline: de once correlaciones del cruce contable/mercado, dos
+sobreviven a la corrección por comparaciones múltiples (revenue e
+infraestructura, r≈0,11), ambas sobreviven al control de sector-año —la de
+revenue sube a 0,17— y ambas desaparecen dentro de empresa (0,04). Son
+señales transversales, no circularidad sectorial ni dinámica.**
 
 ## 1. Placebo / permutación: ¿el r crudo y el r dentro-de-sector son distinguibles de ruido?
 
-2.000 permutaciones del predictor contra el outcome fijo, semilla 42:
+Se permuta la variable de texto 2.000 veces y se mide qué tan seguido el azar
+produce un |r| igual o mayor.
 
 | Especificación | r observado | p (permutación) | n |
 |---|---|---|---|
-| `revenue_outcome` ~ `next_revenue_yoy`, crudo | 0,049 | **0,115** | 939 |
-| Ídem, dentro de sector-año | 0,019 | 0,533 | 939 |
+| `revenue_outcome` por 1.000 párrafos ~ `next_revenue_yoy`, crudo | 0,112 | **<0,001** | 2.313 |
+| Ídem, dentro de sector-año | 0,167 | **<0,001** | 2.313 |
 
-**La correlación cruda no se distingue de ruido (p=0,12) y la de dentro
-de sector-año menos todavía (p=0,53).** Una vez
-que se controla por
-sector, "hablar de revenue impulsado por IA" no predice el crecimiento
-de revenue mejor que una asignación al azar de las etiquetas.
+Ni la cruda ni la de dentro de sector-año son ruido. Y el control sectorial
+la AUMENTA: dentro de la misma industria y el mismo año, la empresa que
+dedica más filing a resultados de IA crece más que sus pares. No es
+composición de sector.
 
 ## 2. Efectos fijos de empresa (within-firm): la prueba más estricta para circularidad
 
-Pregunta: ¿cuando UNA MISMA empresa habla más de revenue de IA que su
-propio promedio, crece más que su propio promedio? Esto elimina de raíz
-cualquier confusor fijo por empresa (sector, modelo de negocio, tamaño,
-estilo de redacción del filing).
+Pregunta: ¿cuando UNA MISMA empresa dedica más filing a resultados de IA que
+su propio promedio, crece más que su propio promedio?
 
 | Especificación | r | n |
 |---|---|---|
-| (a) Primeras diferencias (Δ año a año dentro de cada ticker) | **0,088** | 562 |
-| (b) Demeaning por empresa (equivalente a efectos fijos) | **0,084** | 939 |
+| (a) Primeras diferencias (Δ año a año dentro de cada ticker) | 0,114 | 1.820 |
+| (b) Demeaning por empresa (equivalente a efectos fijos) | **0,038** | 2.313 |
 
-Ambas siguen siendo positivas y **mayores que la correlación dentro de
-sector-año (0,019) y que la cruda (0,049)**. Es el resultado más
-interesante de este documento: la señal within-firm es más fuerte que la
-between-firm-dentro-de-sector.
+El demeaning por empresa se lleva la señal: 0,038. Las primeras diferencias
+la conservan (0,114), pero en un panel que arranca en 2021 con dos tercios de
+ceros las primeras diferencias son en buena parte "empezó a hablar de IA"
+contra "no habló", que es el margen extensivo otra vez.
 
-Interpretación: la parte de la correlación cruda que es genuina parece
-ser **temporal dentro de la empresa** (cuando una empresa empieza a
-hablar más de resultados de IA, algo cambia de verdad en su trayectoria)
-más que transversal entre empresas. El orden relativo —within-firm >
-within-sector— es lo que sostiene la lectura.
-
-Caveat que no cambia: r≈0,08-0,09 sigue siendo una correlación débil, y sin
-test de permutación propio (el placebo de §1 es sobre la cruda). "No es
-puramente circular" no es lo mismo que "es fuerte".
+Lectura: **la relación es un rasgo de la empresa**, no una respuesta a lo que
+la empresa dijo ese año. Eso descarta la circularidad sectorial (§1) pero no
+otra: la empresa que construye con IA y la que lo escribe en su 10-K son la
+misma empresa por razones anteriores a ambas cosas. El cruce no identifica
+dirección.
 
 ## 3. Corrección por comparaciones múltiples (FDR, Benjamini-Hochberg) sobre las 11 correlaciones reportadas
 
+Las 11 correlaciones del cruce contable/mercado, en intensidad por 1.000
+párrafos, ordenadas por p:
+
 | # | Par | r | p | Umbral BH | ¿Pasa FDR 5%? |
 |---|---|---|---|---|---|
-| 1 | `ai_infrastructure` ~ `next_capex_yoy` | 0,086 | 0,0131 | 0,0045 | No |
-| 2 | `n_frames` ~ `ret_m1_p5` | −0,050 | 0,0668 | 0,0091 | No |
-| 3 | `promotional_rate` ~ `car_m1_p5` | −0,046 | 0,0934 | 0,0136 | No |
-| 4 | `revenue_outcome` ~ `next_revenue_yoy` | 0,049 | 0,1335 | 0,0182 | No |
-| 5 | `ai_investment` ~ `next_rd_expense_yoy` | 0,044 | 0,3239 | 0,0227 | No |
-| 6 | `promotional_rate` ~ `ret_m1_p5` | −0,018 | 0,5154 | 0,0273 | No |
-| 7 | `specificity_index` ~ `car_m1_p5` | −0,016 | 0,5558 | 0,0318 | No |
-| 8 | `ai_infrastructure` ~ `next_rd_expense_yoy` | 0,019 | 0,6740 | 0,0364 | No |
-| 9 | `cost_outcome` ~ `next_sga_expense_yoy` | −0,011 | 0,7533 | 0,0409 | No |
-| 10 | `specificity_index` ~ `ret_m1_p5` | −0,008 | 0,7722 | 0,0455 | No |
-| 11 | `ai_investment` ~ `next_capex_yoy` | −0,007 | 0,8359 | 0,0500 | No |
+| 1 | `revenue_outcome` ~ `next_revenue_yoy` | 0,112 | <0,0001 | 0,0045 | **Sí** |
+| 2 | `ai_infrastructure` ~ `next_capex_yoy` | 0,107 | <0,0001 | 0,0091 | **Sí** |
+| 3 | promocional ~ `car_m1_p5` | −0,046 | 0,0175 | 0,0136 | No |
+| 4 | especificidad ~ `car_m1_p5` | −0,039 | 0,0414 | 0,0182 | No |
+| 5 | `ai_investment` ~ `next_capex_yoy` | 0,042 | 0,0571 | 0,0227 | No |
+| 6 | `ai_infrastructure` ~ `next_rd_expense_yoy` | 0,059 | 0,0591 | 0,0273 | No |
+| 7 | `ai_investment` ~ `next_rd_expense_yoy` | 0,044 | 0,1583 | 0,0318 | No |
+| 8 | promocional ~ `ret_m1_p5` | −0,025 | 0,1860 | 0,0364 | No |
+| 9 | `cost_outcome` ~ `next_sga_expense_yoy` | −0,013 | 0,5683 | 0,0409 | No |
+| 10 | especificidad ~ `ret_m1_p5` | −0,008 | 0,6611 | 0,0455 | No |
+| 11 | frames de IA ~ `ret_m1_p5` | −0,003 | 0,8874 | 0,0500 | No |
 
-**Ninguna de las 11 sobrevive al FDR.** La primera del ranking,
-`ai_infrastructure` ~ `capex`, tiene p=0,013 contra un umbral BH de
-0,0045: lejos. `revenue_outcome` ~ `next_revenue_yoy` es cuarta con
-p=0,13.
+**Dos de once pasan, con holgura** (p<0,0001 contra umbrales de 0,0045 y
+0,0091). El tercero está cerca (promocional contra CAR, p=0,018 contra
+0,014) y va en la dirección de "más promoción, peor retorno anormal", pero no
+pasa.
 
-Lo defendible es: **de once correlaciones testeadas en todo el cruce
-contable/mercado, ninguna se distingue de lo esperable por azar
-múltiple.** Es un resultado limpio de defender: el instrumento de texto
-no predice resultados financieros al año
-siguiente, y ahora eso está medido con cobertura XBRL decente
-(`10_...md`) en vez de sobre el subconjunto de filers con el tag más
-común.
-
-`cost_outcome` ~ `next_sga_expense_yoy`, la "señal de washing" de la
-hipótesis de washing, queda novena de once con p=0,75 y r=−0,011. Ver
-`02_...md` §3.
-
-`ai_infrastructure` ~ `next_capex_yoy` depende de la cobertura de capex:
-con el 69% de filers que reportan el tag más común da r≈0,11, con la
-cobertura completa de 87% da 0,086. La relación "infraestructura
-declarada → capex real" se apoya en parte en qué filers tienen dato.
-
-## 4. Margen extensivo: los mismos chequeos sin condicionar a hablar de IA
-
-`report_crosscheck_stats.py --panel extensive` corre §1 y §2 sobre
-`firm_year_extensive.parquet`: 2.964 empresas-año (todas las que tienen
-filings), intensidad por 1.000 párrafos con ceros (`02_...md`, sección
-"margen extensivo").
-
-| especificación (`revenue_outcome` por 1.000 párrafos ~ revenue t+1) | r | n | p (perm.) |
-|---|---:|---:|---:|
-| cruda | 0,112 | 2.313 | <0,001 |
-| dentro de sector-año | 0,167 | 2.313 | <0,001 |
-| dentro de empresa (efectos fijos) | 0,038 | 2.313 | |
-| primeras diferencias | 0,114 | 1.820 | |
-
-FDR sobre los mismos once pares en intensidad: pasan **dos**,
-`revenue_outcome` ~ revenue t+1 (r=0,112, p<0,0001) y `ai_infrastructure`
-~ capex t+1 (r=0,107, p<0,0001); los otros nueve no.
-
-Lo que esto le hace a la lectura de circularidad es distinto de lo que uno
-esperaría: el panel condicionado tenía una señal within-firm (0,08) mayor
-que la cruda (0,05); el extensivo tiene una señal cruda y dentro de
-sector-año (0,11 y 0,17) mucho mayor que la within-firm (0,04). **Son dos
-señales distintas.** La del panel condicionado —proporción de frames que
-son de revenue— es temporal y débil. La del extensivo —cuánto del filing se
-dedica a resultados de IA— es transversal y no débil. El control sectorial
-no la reduce, la aumenta, así que no es composición de industria; y el
-efecto fijo de empresa la elimina, así que es un rasgo de la empresa, no
-una respuesta a algo que la empresa hizo ese año.
+Los dos que pasan son los dos contables de "lo que dicen que hacen contra lo
+que hicieron": resultados de IA contra revenue, infraestructura de IA contra
+capex. Los de mercado no pasan ninguno; el de costos —la hipótesis de
+washing más directa del cruce— está en cero.
 
 ## Lectura conjunta: ¿qué tan circular es, entonces?
 
-Con evidencia, no sólo con intuición:
-
-- **La preocupación de circularidad era correcta para el resultado
-  reportado en `04_...md` como "atenuado pero sobreviviente"** (r=0,019
-  dentro de sector-año) — el placebo confirma que ESE número específico
-  es ruido (p=0,53), y ahora también lo es la cruda (p=0,12). El chequeo
-  hace más sólido al hallazgo neutro, no lo contradice.
-- **Pero la circularidad NO explica todo.** El efecto fijo de empresa —el
-  control más estricto posible contra "esto es sólo composición sectorial
-  o de nivel-empresa fijo"— encuentra una señal MÁS fuerte (r=0,084-0,088)
-  que la de dentro-de-sector (0,019) para exactamente la misma relación.
-  Es el opuesto de lo que predeciría "todo es
-  circular": si fuera pura composición fija, el efecto fijo debería haber
-  hecho desaparecer la señal, no fortalecerla.
-- **Ya no hay una "señal más robusta del cruce contable".**
-  `ai_infrastructure` → `capex` (r=0,086, p=0,013) es la primera del
-  ranking y queda a un orden de magnitud del umbral FDR.
-
-Los chequeos de acá se corren sobre el panel completo (n=562 a 1.358), no
-sobre subgrupos de 4-10 empresas, y por eso son los más estables del
-cruce financiero.
+- **No es circularidad sectorial.** El control de sector-año sube la
+  correlación de revenue de 0,11 a 0,17 y la permutación la deja en <0,001.
+  Dentro de la misma industria, la empresa que más habla de resultados de IA
+  es la que más crece.
+- **Pero tampoco es dinámica.** El efecto fijo de empresa la baja a 0,04. La
+  señal separa empresas; no dice que la empresa que empezó a hablar más
+  empezó a crecer más.
+- **El margen extensivo puro no aporta**: `any_ai` correlaciona negativo con
+  el crecimiento (−0,07) por composición temporal (2021-2022: las que no
+  hablaban eran las chicas en expansión). Lo que predice es cuánto del
+  filing se dedica a resultados de IA, no si se menciona.
 
 ## Qué implica para los otros documentos
 
-- `02_...md` §3: la "señal de washing" de costos (`cost_outcome` ~ SG&A)
-  está en r=−0,011, novena de once en el ranking FDR (p=0,75). No es un
-  hallazgo.
-- `02_...md` §1 y `04_...md`, talk-vs-walk: la cruda (r=0,049) no es
-  distinguible de ruido (placebo p=0,12); la de dentro de sector (0,019)
-  menos (p=0,53). Revenue no es "evidencia de que el instrumento mide
-  algo".
-- `04_...md`, `ai_investment`/`ai_infrastructure`: `ai_infrastructure`/
-  `capex` (r=0,086) no pasa FDR. No queda ningún par del cruce contable
-  para reportar como señal.
-- Hallazgo más defendible de todo el cruce contable, panel condicionado: el
-  resultado de efectos fijos de empresa (§2), within-firm > within-sector.
-  Sigue sin ser fuerte.
-- **Panel extensivo (§4)**: `revenue_outcome` y `ai_infrastructure`, medidos
-  como intensidad por párrafo con ceros, pasan FDR (r≈0,11) y sobreviven al
-  control de sector-año. Son transversales. `02_...md` los reporta con esa
-  advertencia.
+- `02_...md`: reporta las dos correlaciones que pasan FDR con la advertencia
+  de que son transversales. La "señal de washing" de costos no existe
+  (r=−0,013).
+- `04_...md`: los perfiles por nivel de IA son descriptivos de un tipo de
+  empresa; el control de sector-año hay que leerlo como en §1.
+- `14_...md`: el washing como desviación temporal entre lo dicho y lo hecho
+  no se mide en este cruce; se mide entre canales, dentro de la empresa y el
+  ejercicio.
 
 ## Limitaciones
 
-- El placebo solo se corrió para `revenue_outcome`→`next_revenue_yoy`
-  (el caso con la historia más fuerte) — no para las otras 10
-  correlaciones de la tabla FDR; barajar todas sería el chequeo
-  completo.
-- Efectos fijos de empresa con solo 232 empresas y 2-3 observaciones
-  por empresa en promedio — poca potencia para detectar efectos
-  chicos, y sensible a outliers de crecimiento año a año (recortados a
-  |growth|<300% pero no winsorizados más finamente).
-- FDR (Benjamini-Hochberg) asume las pruebas razonablemente
-  independientes — varias de las 11 comparten la misma variable
-  dependiente o independiente (`next_revenue_yoy` aparece 2 veces,
-  `promotional_rate`/`specificity_index` aparecen 4 veces cada una),
-  así que la independencia es aproximada, no exacta.
-- No se testeó reverse causality de forma directa para el hallazgo de
-  efectos fijos (§2) — es la explicación alternativa más plausible al
-  resultado y queda abierta.
+- SIC-2 es granularidad gruesa; el residuo dentro de sector-año puede ser
+  sub-sector.
+- El panel arranca en 2021 con 64% de ceros, así que las primeras
+  diferencias mezclan el margen extensivo con el intensivo.
+- Los `next_*_yoy` dependen de la cobertura XBRL (capex 87%, R&D 45%).
+- Etiquetas de un LLM sin validación humana (`docs/problemas_academicos.md`
+  #1); el prefiltro tiene recall 0,96-0,98 y precisión 0,73 en proxy/8-K.

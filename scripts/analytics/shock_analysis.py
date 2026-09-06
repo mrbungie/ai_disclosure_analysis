@@ -74,88 +74,17 @@ EVENTS = {
 }
 REFERENCE_OFFSET = -1
 WINDOW = 5
-MIN_FRAMES_QUARTER = 3
-MIN_FRAMES_PRE = 5
 MIN_QUARTERS_EACH_SIDE = 2
 GROUP_WINDOW_END = "2023-01-01"
-OUTCOMES = ("promotional_rate", "specificity_index", "risk_share", "hypothetical_share")
-# Margen extensivo: intensidades por 1.000 párrafos sobre TODOS los filings,
-# con cero cuando el documento no habla de IA (ai_intensity.py). No condiciona
-# a hablar de IA: la empresa que deja de hablar cuenta como cero, no sale.
-OUTCOMES_EXTENSIVE = ("promo_per_1k", "spec_per_1k", "risk_per_1k", "hyp_per_1k", "frames_per_1k")
-MARGIN = "intensive"
-CONTROLS = {"intensive": "mix_proxy + mix_10k + np.log(n_frames)",
-            "extensive": "mix_proxy + mix_10k + np.log(n_paragraphs)"}
-SPECIFICITY_FLAGS = ["specificity_business_process", "specificity_product_or_system",
-                     "specificity_vendor_or_partner", "specificity_quantified_metric",
-                     "specificity_date_or_timeline"]
-
-
-def load_frames(con) -> pd.DataFrame:
-    """Frames de los cuatro formularios, con su trimestre de presentación.
-
-    Se traen UNA vez y los manifiestos se unen en pandas: escribirlo como un
-    `UNION ALL` de dos consultas a `gold_ai_frames` obliga a DuckDB a instanciar
-    la vista dos veces y a recalcular por dentro la población vigente con una
-    ventana sobre 37 millones de filas. Medido: 0,7 s así, más de 115 s de la
-    otra forma."""
-    frames = con.execute("""
-        SELECT accession_number, text_hash, frame_index, temporal, concepts,
-               rhetoric_promotional, specificity_business_process,
-               specificity_product_or_system, specificity_vendor_or_partner,
-               specificity_quantified_metric, specificity_date_or_timeline
-        FROM gold_ai_frames WHERE country_code = 'us' AND has_frame
-    """).fetchdf()
-    manifests = []
-    for relation, form in (("filing_manifest", None), ("filing_manifest_10q", "10-Q")):
-        columns = "accession_number, ticker, filing_date" + (", form_type" if form is None else "")
-        table = con.execute(f"SELECT {columns} FROM {relation} "
-                            f"WHERE country_code = 'us' AND ticker IS NOT NULL").fetchdf()
-        if form is not None:
-            table["form_type"] = form
-        manifests.append(table)
-    merged = frames.merge(pd.concat(manifests, ignore_index=True),
-                          on="accession_number", how="inner")
-    return merged.drop_duplicates(["ticker", "filing_date", "form_type",
-                                   "text_hash", "frame_index"])
-
-
-def add_metrics(frame: pd.DataFrame) -> pd.DataFrame:
-    out = frame.copy()
-    out["specificity_index"] = out[SPECIFICITY_FLAGS].astype(float).mean(axis=1)
-    out["promotional_rate"] = out["rhetoric_promotional"].astype(float)
-    out["hypothetical_share"] = (out["temporal"] == "hypothetical").astype(float)
-    out["risk_share"] = out["concepts"].apply(
-        lambda cs: float(any(str(c).startswith("risk_") for c in (cs if cs is not None else []))))
-    return out
+# Intensidades por 1.000 párrafos sobre TODOS los filings, con cero cuando el
+# documento no habla de IA (ai_intensity.py). No condiciona a hablar de IA: la
+# empresa que deja de hablar cuenta como cero, no sale del panel.
+OUTCOMES = ("promo_per_1k", "spec_per_1k", "risk_per_1k", "hyp_per_1k", "frames_per_1k")
+MAIN_OUTCOME = "promo_per_1k"
+CONTROLS = "mix_proxy + mix_10k + np.log(n_paragraphs)"
 
 
 def build_panel(con) -> tuple[pd.DataFrame, pd.DataFrame]:
-    quarterly = add_metrics(load_frames(con))
-    quarterly["quarter"] = pd.PeriodIndex(pd.to_datetime(quarterly["filing_date"]), freq="Q")
-    quarterly["es_proxy"] = (quarterly["form_type"] == "DEF 14A").astype(float)
-    quarterly["es_10k"] = (quarterly["form_type"] == "10-K").astype(float)
-    panel = (quarterly.groupby(["ticker", "quarter"])
-             .agg(n_frames=("promotional_rate", "size"),
-                  mix_proxy=("es_proxy", "mean"), mix_10k=("es_10k", "mean"),
-                  **{c: (c, "mean") for c in OUTCOMES}).reset_index())
-    panel = panel[panel["n_frames"] >= MIN_FRAMES_QUARTER]
-
-    # Exposición: cuánto hablaba de IA ANTES de 2023, en volumen. Deja 2023 como
-    # pre-período limpio y, sobre todo, no es el outcome.
-    pre = quarterly[quarterly["filing_date"].astype(str) < GROUP_WINDOW_END]
-    exposure = pre.groupby("ticker").size().rename("n_pre")
-    exposure = exposure[exposure >= MIN_FRAMES_PRE]
-    treatment = pd.DataFrame({"exposure": np.log(exposure)})
-
-    segments_path = OUT_DIR / "firm_segments.parquet"
-    if segments_path.exists():
-        segments = pd.read_parquet(segments_path)[["ticker", "segmento"]]
-        treatment = treatment.join(segments.set_index("ticker"))
-    return panel, treatment
-
-
-def build_panel_extensive(con) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Todos los filings (10-K, 10-Q, DEF 14A, 8-K) por empresa-trimestre, con
     intensidades por 1.000 párrafos y ceros. Exposición = frames de IA por
     1.000 párrafos antes de 2023, sobre todas las empresas."""
@@ -186,7 +115,7 @@ def fit(data: pd.DataFrame, outcome: str, formula_treat: str) -> tuple:
     data["ev"] = pd.Categorical(data["event_time"],
                                 categories=sorted(data["event_time"].unique()))
     formula = (f"{outcome} ~ C(ev, Treatment(reference={REFERENCE_OFFSET})):{formula_treat} "
-               f"+ C(ticker) + C(ev) + {CONTROLS[MARGIN]}")
+               f"+ C(ticker) + C(ev) + {CONTROLS}")
     model = smf.ols(formula, data=data).fit(
         cov_type="cluster", cov_kwds={"groups": data["ticker"]})
     return model, data
@@ -232,7 +161,7 @@ def report_event(panel: pd.DataFrame, treatment: pd.DataFrame, event_name: str) 
     print(f"\n{'=' * 78}\nEVENTO: {event_name} — corte en {event} | "
           f"{len(data):,} empresa-trimestre, {data['ticker'].nunique()} empresas\n{'=' * 78}")
     out = {}
-    for outcome in (OUTCOMES if MARGIN == "intensive" else OUTCOMES_EXTENSIVE):
+    for outcome in OUTCOMES:
         model, _ = fit(data, outcome, "exposure")
         table = coefficients(model)
         pre_terms = table.loc[table["event_time"] < REFERENCE_OFFSET, "term"].tolist()
@@ -260,8 +189,8 @@ def report_segments(panel: pd.DataFrame, treatment: pd.DataFrame, event_name: st
         return {}
     data = prepare(panel, treatment.dropna(subset=["segmento"]), EVENTS[event_name])
     data["post"] = (data["event_time"] >= 0).astype(float)
-    main_outcome = "promotional_rate" if MARGIN == "intensive" else "promo_per_1k"
-    formula = (f"{main_outcome} ~ post:C(segmento) + C(ticker) + C(ev) + {CONTROLS[MARGIN]}")
+    main_outcome = MAIN_OUTCOME
+    formula = (f"{main_outcome} ~ post:C(segmento) + C(ticker) + C(ev) + {CONTROLS}")
     data["ev"] = pd.Categorical(data["event_time"])
     model = smf.ols(formula, data=data).fit(
         cov_type="cluster", cov_kwds={"groups": data["ticker"]})
@@ -286,18 +215,11 @@ def main() -> None:
     parser.add_argument("--database", type=Path, default=DB)
     parser.add_argument("--output", type=Path, default=OUT_DIR / "shock_analysis.json")
     parser.add_argument("--event", choices=(*EVENTS, "all"), default="all")
-    parser.add_argument("--margin", choices=("intensive", "extensive"), default="intensive",
-                        help="intensive = tasas entre frames (≥3 por trimestre); extensive = "
-                             "intensidad por 1.000 párrafos sobre todos los filings, con ceros")
     args = parser.parse_args()
-    global MARGIN
-    MARGIN = args.margin
-    if MARGIN == "extensive" and args.output == OUT_DIR / "shock_analysis.json":
-        args.output = OUT_DIR / "shock_analysis_extensive.json"
 
     con = duckdb.connect(str(args.database), read_only=True)
     try:
-        panel, treatment = build_panel(con) if MARGIN == "intensive" else build_panel_extensive(con)
+        panel, treatment = build_panel(con)
     finally:
         con.close()
     print(f"panel: {len(panel):,} empresa-trimestre, {panel['ticker'].nunique()} empresas | "

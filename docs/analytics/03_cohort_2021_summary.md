@@ -1,12 +1,32 @@
 # Cohorte 2021: empresas presentes desde el primer año del panel
 
-Todas las cifras salen de la corrida vigente de `make analytics`
-(`report_crosscheck_stats.py` reproduce las tablas numéricas) sobre el panel
-de 1.426 empresas-año y 460 empresas: frames de 10-K, DEF 14A y 8-K,
-población marcada por el prefiltro v2 (árboles, umbral 0,17 —
-`prefilter_evaluation.md` §8.16), lado contable/mercado de
-`build_firm_financials.py`, `build_market_factors.py` y `build_roic_wacc.py`
-(ERP geométrico 6,48%, `10_builders_y_recalculo.md`).
+**Modo de análisis final: margen extensivo.** La cohorte son las **475
+empresas con filings en 2021 y en 2026**, todas, hablen o no de IA; la
+intensidad de IA se mide por 1.000 párrafos de sus filings del año, con cero
+cuando no hablan (`firm_year_master_v2.parquet`, `ai_intensity.py`).
+
+| año | empresas | con algún frame de IA | frames de IA por 1.000 párrafos | promocionales por 1.000 | de riesgo por 1.000 | de gobernanza por 1.000 | `deployed` por 1.000 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 2021 | 496 | 36% | 1,0 | 0,14 | 0,11 | 0,07 | 0,54 |
+| 2022 | 499 | 40% | 1,3 | 0,18 | 0,15 | 0,08 | 0,68 |
+| 2023 | 491 | 46% | 2,0 | 0,23 | 0,40 | 0,16 | 0,94 |
+| 2024 | 495 | 79% | 4,9 | 0,48 | 1,60 | 0,53 | 1,71 |
+| 2025 | 494 | 92% | 7,7 | 0,63 | 2,56 | 0,90 | 2,40 |
+| 2026 (parcial) | 489 | 94% | 11,6 | 0,91 | 3,99 | 1,61 | 3,38 |
+
+(Todas las empresas-año con filings; la cohorte fija de 475 da las mismas
+cifras a un decimal.) **Entre 2021 y 2026 la intensidad de IA en los filings
+se multiplica por 11, la promocional por 6,6, la de riesgo por 35 y la de
+gobernanza por 24.** El salto es 2023→2024: la proporción de empresas que
+habla de IA pasa de 46% a 79% en un año. En tasas condicionadas —entre los
+frames de IA— el promocional CAE de 11% a 5% y el riesgo SUBE de 12% a 44%:
+lo que crece no es la promoción, es el factor de riesgo de IA que todas las
+empresas agregan al 10-K. La promoción crece en volumen porque todo crece,
+pero pierde peso relativo.
+
+Lo que sigue describe la cohorte del panel condicionado —empresas con ≥3
+frames por año desde 2021, 99 empresas— y sus arquetipos de voz: cómo hablan
+de IA quienes hablaban desde el principio.
 
 Resumen autocontenido de las 99 empresas cuyo primer año en el panel
 empresa-año (`data/processed/clusters/firm_year_archetype_behaviors.parquet`)

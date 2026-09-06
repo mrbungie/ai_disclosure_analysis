@@ -276,15 +276,14 @@ afirmación más expuesta.
 
 ---
 
-**Estado.** `scripts/analytics/ai_intensity.py` arma la tabla de todos los
-documentos con sus párrafos y conteos de frames, cero incluido, y sobre
-ella corren versiones extensivas del cruce financiero
-(`report_crosscheck_stats.py --panel extensive`, `firm_year_extensive`),
-de los shocks (`--margin extensive`) y de la brecha entre canales
-(`14_...md`, Resultado 3b). Los docs reportan los dos márgenes; donde
-difieren, lo dicen (`10_builders_y_recalculo.md`, "Dos márgenes"). Queda
-abierto por construcción para el score de washing, los segmentos y la
-grilla, que son objetos definidos sobre lo que se dice de IA.
+**Estado.** El modo de análisis final es el margen extensivo
+(`10_builders_y_recalculo.md`): `scripts/analytics/ai_intensity.py` arma la
+tabla de todos los documentos con sus párrafos y conteos de frames, cero
+incluido, y sobre ella corren el cruce financiero (`firm_year_master_v2`,
+2.964 empresas-año), los shocks, la brecha entre canales y el score de
+washing en intensidad. Queda por construcción en los objetos sobre cómo se
+habla de IA —arquetipos, segmentos, grilla, test binomial— que no existen para
+quien no habla.
 
 ## Qué NO arregla el trabajo del prefiltro
 

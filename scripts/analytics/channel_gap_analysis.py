@@ -46,9 +46,8 @@ primer período) y la descomposición por canal (¿se mueve la call o el
 filing?). `post` = 2024 en adelante (escrutinio de la SEC, marzo 2024).
 
 Salidas (`data/processed/clusters/`):
-  channel_gap_cells.parquet            una fila por celda (≥3 frames por canal): tasas y brecha
-  channel_gap_cells_extensive.parquet  una fila por empresa-ejercicio con ≥1 documento por canal:
-                                       intensidad por 1.000 párrafos, con ceros
+  channel_gap_cells.parquet      una fila por empresa-ejercicio con ≥1 documento por canal:
+                                 intensidad por 1.000 párrafos, con ceros (MODO FINAL)
   channel_gap_firm.parquet       brecha promedio por empresa (score por canal)
   channel_gap_analysis.json      estimaciones, event study, descriptivos
 
@@ -354,7 +353,7 @@ def main() -> None:
     ext = None
     if PERIOD == "fy":
         ext = cells_extensive(load_documents(con, frames))
-        print(f"\nMARGEN EXTENSIVO — celdas empresa×ejercicio con ≥1 transcripción y ≥1 filing, sin umbral de frames: "
+        print(f"\nANÁLISIS PRINCIPAL — todas las celdas empresa×ejercicio con ≥1 transcripción y ≥1 filing, con ceros: "
               f"{len(ext):,} | empresas {ext.ticker.nunique():,} | por ejercicio {ext.groupby('t').size().to_dict()} "
               f"| calls sin ningún frame de IA: {int((ext.n_frames_call == 0).sum())} celdas")
         print("  niveles por canal (media sobre celdas): " + " | ".join(
@@ -410,9 +409,8 @@ def main() -> None:
         print("brecha promocional por segmento:"); print(by.round(3).to_string())
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    paired.assign(t=paired["t"].astype(str)).to_parquet(args.output_dir / "channel_gap_cells.parquet", index=False)
     if ext is not None:
-        ext.assign(t=ext["t"].astype(str)).to_parquet(args.output_dir / "channel_gap_cells_extensive.parquet", index=False)
+        ext.assign(t=ext["t"].astype(str)).to_parquet(args.output_dir / "channel_gap_cells.parquet", index=False)
     firm.to_parquet(args.output_dir / "channel_gap_firm.parquet", index=False)
     payload = {"period": PERIOD, "event": str(EVENT[PERIOD]), "min_frames": MIN_FRAMES,
                "calls_coverage": [str(frames.loc[frames.channel == 'call', 'quarter'].min()), str(frames.loc[frames.channel == 'call', 'quarter'].max())],

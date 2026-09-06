@@ -123,12 +123,13 @@ def main() -> None:
                 .merge(crossed, on="ticker", how="inner"))
     print(f"segment_financials: {len(per_firm):,} empresas con ambas etiquetas y financieros")
 
-    # --- margen extensivo: TODAS las empresas-año con filings, con ceros ---
-    # El panel de arriba entra si la empresa tuvo ≥3 frames en el año, o sea
-    # condiciona a hablar de IA. Este panel toma cada empresa-año con al menos
-    # un filing puntuable y mide intensidad de IA por 1.000 párrafos (cero si
-    # no habla), y se une a los mismos financieros. `year` = año de
-    # presentación, igual que los financieros y el panel de texto.
+    # --- MODO FINAL: el panel son TODAS las empresas-año con filings, con ceros ---
+    # Cada empresa-año con al menos un filing puntuable entra, con intensidad de
+    # IA por 1.000 párrafos (cero si no habla) desde ai_intensity.py. Las tasas
+    # de texto (promotional_rate, behavior_share_*) y las etiquetas de
+    # arquetipo vienen del panel condicionado y quedan NaN donde la empresa no
+    # habló de IA: son propiedades de CÓMO se habla, no existen para el cero.
+    # `year` = año de presentación, igual que los financieros.
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from ai_intensity import document_table, aggregate, FILING_FORMS
@@ -139,19 +140,22 @@ def main() -> None:
     finally:
         con.close()
     docs = docs[docs["form"].isin(FILING_FORMS)].assign(year=lambda d: d["fecha"].dt.year)
-    extensive = aggregate(docs, ["ticker", "year"])
-    extensive = (extensive
-                 .merge(ratios[["ticker", "year"] + RATIO_COLUMNS + GROWTH_COLUMNS], on=["ticker", "year"], how="left")
-                 .merge(market[["ticker", "year"] + MARKET_COLUMNS], on=["ticker", "year"], how="left")
-                 .merge(returns[["ticker", "year", "ret_m1_p5"]], on=["ticker", "year"], how="left")
-                 .merge(text_side[["ticker", "year", "archetype"]], on=["ticker", "year"], how="left"))
-    extensive["in_text_panel"] = extensive["archetype"].notna()
-    print(f"firm_year_extensive: {len(extensive):,} empresas-año con filings, "
-          f"{int(extensive['any_ai'].sum()):,} con algún frame de IA, "
-          f"{int(extensive['in_text_panel'].sum()):,} en el panel condicionado")
+    base = aggregate(docs, ["ticker", "year"])
+    base = base.merge(text_side.drop(columns=["n_frames"]), on=["ticker", "year"], how="left")
+    base["in_text_panel"] = base["archetype"].notna()
+    full = (base.merge(financials[["ticker", "year"] + LEVEL_COLUMNS + GROWTH_COLUMNS], on=["ticker", "year"], how="left")
+                .merge(returns[["ticker", "year", "ret_m1_p5"]], on=["ticker", "year"], how="left"))
+    master = (base.merge(ratios[["ticker", "year"] + RATIO_COLUMNS + GROWTH_COLUMNS], on=["ticker", "year"], how="left")
+                  .merge(market[["ticker", "year"] + MARKET_COLUMNS], on=["ticker", "year"], how="left"))
+    print(f"firm_year_master_v2: {len(master):,} empresas-año con filings, "
+          f"{int(master['any_ai'].sum()):,} con algún frame de IA, "
+          f"{int(master['in_text_panel'].sum()):,} con etiquetas del panel condicionado "
+          f"({master['operating_margin'].notna().mean()*100:.0f}% con ratios)")
+    cohort = full[full["ticker"].isin(cohort_tickers)].copy()
+    per_firm = (master[master["in_text_panel"]].groupby("ticker")[SEGMENT_COLUMNS].median().reset_index()
+                .merge(crossed, on="ticker", how="inner"))
 
-    for name, table in (("firm_year_extensive", extensive),
-                        ("firm_year_full_crosscheck", full),
+    for name, table in (("firm_year_full_crosscheck", full),
                         ("firm_year_master_v2", master),
                         ("cohort_2021_crosscheck", cohort),
                         ("segment_financials", per_firm)):

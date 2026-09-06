@@ -49,78 +49,15 @@ EVENT = pd.Period("2024Q2", freq="Q")
 GROUP_END = "2024-01-01"
 WINDOW = 5
 REFERENCE = -1
-MIN_FRAMES_QUARTER = 3
-MIN_FRAMES_PRE = 5
 MIN_QUARTERS_EACH_SIDE = 2
-SPECIFICITY_FLAGS = ["specificity_business_process", "specificity_product_or_system",
-                     "specificity_vendor_or_partner", "specificity_quantified_metric",
-                     "specificity_date_or_timeline"]
 # El primero comparte dimensión con la definición del grupo: va como control
 # interno, no como resultado.
-OUTCOMES = ("promotional_rate", "quantified_rate", "gov_share", "specificity_index")
-OUTCOMES_EXTENSIVE = ("promo_per_1k", "quant_per_1k", "gov_per_1k", "spec_per_1k")
-MARGIN = "intensive"
-CONTROLS = {"intensive": "mix_proxy + np.log(n_frames)", "extensive": "mix_proxy + np.log(n_paragraphs)"}
+OUTCOMES = ("promo_per_1k", "quant_per_1k", "gov_per_1k", "spec_per_1k")
+GROUP_OUTCOME = "promo_per_1k"     # la dimensión que define el grupo: control interno
+CONTROLS = "mix_proxy + np.log(n_paragraphs)"
 
 
-def load(con) -> pd.DataFrame:
-    frames = con.execute("""
-        SELECT accession_number, text_hash, frame_index, temporal, concepts,
-               rhetoric_promotional, specificity_business_process,
-               specificity_product_or_system, specificity_vendor_or_partner,
-               specificity_quantified_metric, specificity_date_or_timeline
-        FROM gold_ai_frames WHERE country_code = 'us' AND has_frame
-    """).fetchdf()
-    manifests = []
-    for relation, form in (("filing_manifest", None), ("filing_manifest_10q", "10-Q")):
-        columns = "accession_number, ticker, filing_date" + (", form_type" if form is None else "")
-        table = con.execute(f"SELECT {columns} FROM {relation} "
-                            f"WHERE country_code='us' AND ticker IS NOT NULL").fetchdf()
-        if form is not None:
-            table["form_type"] = form
-        manifests.append(table)
-    data = frames.merge(pd.concat(manifests, ignore_index=True), on="accession_number")
-    data = data.drop_duplicates(["ticker", "filing_date", "form_type", "text_hash", "frame_index"])
-    data["specificity_index"] = data[SPECIFICITY_FLAGS].astype(float).mean(axis=1)
-    data["promotional_rate"] = data["rhetoric_promotional"].astype(float)
-    data["quantified_rate"] = data["specificity_quantified_metric"].astype(float)
-    data["gov_share"] = data["concepts"].apply(
-        lambda cs: float(any(str(c).startswith("gov_") for c in (cs if cs is not None else []))))
-    data["quarter"] = pd.PeriodIndex(pd.to_datetime(data["filing_date"]), freq="Q")
-    data["mix_proxy"] = (data["form_type"] == "DEF 14A").astype(float)
-    return data
-
-
-def build(data: pd.DataFrame) -> pd.DataFrame:
-    panel = (data.groupby(["ticker", "quarter"])
-             .agg(n_frames=("promotional_rate", "size"), mix_proxy=("mix_proxy", "mean"),
-                  **{c: (c, "mean") for c in OUTCOMES}).reset_index())
-    panel = panel[panel["n_frames"] >= MIN_FRAMES_QUARTER]
-
-    # Grupo: mitad más promocional ANTES del evento. Una sola dimensión, para
-    # que los outcomes de otra dimensión queden libres del artefacto.
-    pre = data[data["filing_date"].astype(str) < GROUP_END]
-    by_firm = pre.groupby("ticker").agg(n_pre=("promotional_rate", "size"),
-                                        promo=("promotional_rate", "mean"))
-    by_firm = by_firm[by_firm["n_pre"] >= MIN_FRAMES_PRE]
-    high_risk = (by_firm["promo"] > by_firm["promo"].median()).astype(float).rename("alto_riesgo")
-
-    panel = panel.merge(high_risk.reset_index(), on="ticker", how="inner")
-    panel["event_time"] = (panel["quarter"].astype("period[Q]") - EVENT).apply(lambda x: x.n)
-    panel = panel[panel["event_time"].abs() <= WINDOW]
-    sides = panel.groupby("ticker")["event_time"].agg(
-        pre=lambda s: (s < 0).sum(), post=lambda s: (s >= 0).sum())
-    keep = sides[(sides["pre"] >= MIN_QUARTERS_EACH_SIDE)
-                 & (sides["post"] >= MIN_QUARTERS_EACH_SIDE)].index
-    panel = panel[panel["ticker"].isin(keep)].copy()
-    panel["post"] = (panel["event_time"] >= 0).astype(float)
-    # patsy no sabe qué hacer con un Period: el efecto fijo de tiempo entra como
-    # string.
-    panel["trimestre"] = panel["quarter"].astype(str)
-    return panel
-
-
-def build_extensive(con) -> pd.DataFrame:
+def build(con) -> pd.DataFrame:
     """Todos los filings por empresa-trimestre con intensidades por 1.000
     párrafos y ceros. Grupo = mitad más promocional ANTES del evento medida en
     promocionales por 1.000 párrafos, sobre todas las empresas con filings pre."""
@@ -153,7 +90,7 @@ def build_extensive(con) -> pd.DataFrame:
 
 def did(panel: pd.DataFrame, outcome: str) -> dict:
     model = smf.ols(f"{outcome} ~ alto_riesgo:post + C(ticker) + C(trimestre) "
-                    f"+ {CONTROLS[MARGIN]}", data=panel).fit(
+                    f"+ {CONTROLS}", data=panel).fit(
         cov_type="cluster", cov_kwds={"groups": panel["ticker"]})
     term = [n for n in model.params.index if "alto_riesgo:post" in n][0]
     return {"coef": float(model.params[term]), "se": float(model.bse[term]),
@@ -179,7 +116,7 @@ def event_study(panel: pd.DataFrame, outcome: str) -> pd.DataFrame:
         data[name] = ((data["event_time"] == period) * data["alto_riesgo"]).astype(float)
         terms.append((period, name))
     formula = (f"{outcome} ~ " + " + ".join(name for _, name in terms)
-               + f" + C(ticker) + C(trimestre) + {CONTROLS[MARGIN]}")
+               + f" + C(ticker) + C(trimestre) + {CONTROLS}")
     model = smf.ols(formula, data=data).fit(
         cov_type="cluster", cov_kwds={"groups": data["ticker"]})
     rows = [{"event_time": period, "coef": float(model.params[name]),
@@ -235,14 +172,11 @@ def main() -> None:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--database", type=Path, default=DB)
     parser.add_argument("--output-dir", type=Path, default=OUT_DIR)
-    parser.add_argument("--margin", choices=("intensive", "extensive"), default="intensive")
     args = parser.parse_args()
-    global MARGIN
-    MARGIN = args.margin
 
     con = duckdb.connect(str(args.database), read_only=True)
     try:
-        panel = build(load(con)) if MARGIN == "intensive" else build_extensive(con)
+        panel = build(con)
     finally:
         con.close()
     firms = panel.groupby("alto_riesgo")["ticker"].nunique()
@@ -251,22 +185,21 @@ def main() -> None:
 
     print(f"{'outcome':20s} {'DiD':>9s} {'SE':>7s} {'p':>7s} {'pre-tend p':>11s}")
     report = {}
-    suffix = "" if MARGIN == "intensive" else "_extensive"
-    for outcome in (OUTCOMES if MARGIN == "intensive" else OUTCOMES_EXTENSIVE):
+    for outcome in OUTCOMES:
         estimate = did(panel, outcome)
         study = event_study(panel, outcome)
         pretrend = study.attrs.get("pretrend_p", float("nan"))
-        marker = " <- misma dimensión que el grupo" if outcome in ("promotional_rate", "promo_per_1k") else ""
+        marker = " <- misma dimensión que el grupo" if outcome == GROUP_OUTCOME else ""
         print(f"{outcome:20s} {estimate['coef']:+9.4f} {estimate['se']:7.4f} "
               f"{estimate['p']:7.3f} {pretrend:11.3f}{marker}")
         report[outcome] = {**estimate, "pretrend_p": pretrend,
                            "event_study": study.drop(columns="term").to_dict("records")}
-        plot(study, outcome, args.output_dir / f"shock_did_{outcome}{suffix}.png", pretrend)
+        plot(study, outcome, args.output_dir / f"shock_did_{outcome}.png", pretrend)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    (args.output_dir / f"shock_did_simple{suffix}.json").write_text(json.dumps(report, indent=2, default=float))
-    print(f"\nfiguras -> {args.output_dir}/shock_did_<outcome>{suffix}.png")
-    print(f"-> {args.output_dir}/shock_did_simple{suffix}.json")
+    (args.output_dir / "shock_did_simple.json").write_text(json.dumps(report, indent=2, default=float))
+    print(f"\nfiguras -> {args.output_dir}/shock_did_<outcome>.png")
+    print(f"-> {args.output_dir}/shock_did_simple.json")
 
 
 if __name__ == "__main__":
