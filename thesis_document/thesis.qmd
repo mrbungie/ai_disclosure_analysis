@@ -507,4 +507,118 @@ The score is well calibrated (zero false positives under label-permutation place
 
 H4 does not hold at the panel level once multiple testing is accounted for: AI-disclosure content, measured as topical frame shares or promotional/specificity rates, does not predict next-year operating outcomes or filing-window returns beyond noise. It does hold, robustly, for risk pricing: the segmentation in Chapter 3 and the behavior clusters in this chapter both separate firms on beta and realized volatility, net of the CAR sign reversal that raw returns miss. The combined reading is that the market prices *what kind of firm discloses AI-related risk*, consistent with signalling and legitimacy operating through firm and sector characteristics correlated with disclosure style, rather than through the specific promotional or hypothetical content of any given claim carrying incremental information on its own. The washing score adds a second, complementary result: excess promotion, net of a firm's own described behaviour and its document mix, is real, well-calibrated and persistent for a small number of firms, but detectable only where enough text exists to estimate it — a limitation of the corpus, not of the estimator.
 
+# Disclosure under scrutiny
+
+## Exposure-based event study
+
+A firm-quarter event study — firm and quarter fixed effects, event-time dummies interacted with each firm's pre-2023 AI-disclosure volume, document-mix and log-frame-count controls, standard errors clustered by firm, ±5-quarter window around the SEC's March 2024 actions — tests whether more AI-exposed firms changed their disclosure differently from less exposed firms.
+
+```{python}
+#| label: tbl-t5-1
+#| tbl-cap: "Exposure-based event study around the SEC's March 2024 actions: joint pre-trend test and post-period change, by outcome (393 firm-quarters, 55 firms)."
+
+shock = load_json("shock_analysis")
+rows = []
+for outcome, v in shock["sec"]["outcomes"].items():
+    rows.append([outcome, round(v["pretrend_p"], 3), "passes" if v["pretrend_p"] > 0.05 else "fails",
+                 round(v["post_mean"], 4), round(v["post_p"], 3)])
+t5_1 = pd.DataFrame(rows, columns=["Outcome", "Pre-trend p", "Pre-trend", "Post-period change", "p"])
+t5_1
+```
+
+Where the pre-trend assumption holds, the post-period change is not distinguishable from zero for any outcome: promotional rate, hypothetical share and specificity all move by less than what a firm-clustered standard error rules out. `risk_share` fails its own pre-trend test and is not reported as a result. A window sweep (±3 to ±7 quarters, reported in full in Appendix C) finds a marginally significant promotional-rate increase only at the ±7 window — exactly the window where the pre-trend test itself starts to fail, which this dissertation treats as evidence of trend contamination entering with the wider window, not as an effect. The same design applied around the DeepSeek release (27 January 2025) fails its pre-trend test in every window tested for promotional rate, specificity and hypothetical share; only `risk_share` passes, and it shows no change. DeepSeek is therefore outside what this design can speak to, and is reported as such rather than as a null finding.
+
+## A two-group difference-in-differences
+
+The specification carried forward as this dissertation's main SEC-scrutiny result splits firms into a high-risk group (the half with above-median promotional rate before 2024) and a low-risk group, and measures the difference-in-differences from 2024Q2 on outcomes *other than* the grouping variable — quantified rate, governance share, specificity — with promotional rate itself retained only as an internal check, since defining the groups and measuring the effect on the same variable produces mechanical convergence regardless of any real change.
+
+```{python}
+#| label: tbl-t5-2
+#| tbl-cap: "Two-group DiD around the SEC's March 2024 actions (firm + quarter FE, firm-clustered SE, ±5-quarter window; 40 high-risk firms, 26 low-risk, 462 firm-quarters)."
+
+did = load_json("shock_did_simple")
+rows = []
+labels = {"promotional_rate": "Promotional rate (same dim. as grouping)", "quantified_rate": "Quantified rate",
+          "gov_share": "Governance share", "specificity_index": "Specificity index"}
+for outcome, label in labels.items():
+    d = did[outcome]
+    rows.append([label, round(d["coef"] * 100, 2), round(d["se"] * 100, 2), round(d["p"], 3)])
+t5_2 = pd.DataFrame(rows, columns=["Outcome", "DiD coefficient (p.p.)", "SE (p.p.)", "p"])
+t5_2
+```
+
+```{python}
+#| label: fig-f5-1
+#| fig-cap: "Event-time coefficients, promotional rate, two-group DiD (normalized to t-1, 95% band)."
+
+es = pd.DataFrame(did["promotional_rate"]["event_study"])
+fig, ax = plt.subplots(figsize=(6, 3))
+ax.errorbar(es["event_time"], es["coef"], yerr=1.96 * es["se"], fmt="o-", color="#1f2d3d", markersize=3, linewidth=1)
+ax.axhline(0, color="gray", linewidth=0.7)
+ax.axvline(-0.5, color="#b0473d", linestyle="--", linewidth=0.8)
+ax.set_xlabel("Quarters relative to SEC actions (2024Q1/Q2)")
+ax.set_ylabel("Coefficient (promotional rate)")
+ax.spines[["top", "right"]].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+The only outcome that moves is promotional rate — the variable used to define the groups — and it was already converging before the cutoff (the quarter-by-quarter differential runs +8.8, +8.1, +4.9, −4.8 percentage points across the four pre-period quarters), consistent with mean reversion that predates the event rather than a response to it. Quantified rate, governance share and specificity index — the outcomes the SEC's own language about substantiation would predict should rise — show no post-period change. The defensible reading: firms that looked most exposed to AI-washing scrutiny did not become more concrete, more quantified, or more governance-oriented than other firms after March 2024; their promotional tone converged toward the rest of the sample, but that convergence was already under way beforehand.
+
+## The cross-venue gap
+
+The same firm, the same quarter, filings (10-K, 10-Q, DEF 14A, 8-K pooled) against earnings-call transcripts, differenced within firm-quarter — so that anything common to the firm that quarter, including the general AI boom, cancels out — gives the cleanest identified result in this dissertation.
+
+```{python}
+#| label: tbl-t5-3
+#| tbl-cap: "Call-minus-filing gap, same firm and quarter, mean over 590 cells from 173 firms (2021Q1-2025Q2)."
+
+cg = load_json("channel_gap_analysis")
+rows = []
+dim_labels = {"promotional_rate": "Promotional", "quantified_rate": "Quantified", "specificity_index": "Specificity index",
+              "realized_share": "Realized", "hypothetical_share": "Hypothetical", "gov_share": "Governance"}
+for k, label in dim_labels.items():
+    d = cg["descriptive"][k]
+    rows.append([label, round(d["mean_call"] * 100, 1) if k != "specificity_index" else round(d["mean_call"], 3),
+                 round(d["mean_filing"] * 100, 1) if k != "specificity_index" else round(d["mean_filing"], 3),
+                 round(d["mean_gap"] * 100, 1) if k != "specificity_index" else round(d["mean_gap"], 3),
+                 round(d["t_vs_zero"], 1)])
+t5_3 = pd.DataFrame(rows, columns=["Dimension", "Call", "Filing", "Gap (call − filing)", "t vs. 0"])
+t5_3
+```
+
+The same firm is roughly twice as promotional on the earnings call as in its filings that quarter (+10.7 p.p., t = 12.1), and simultaneously more quantified and more specific — the call sells the product with numbers, the filing lists risk, governance and hypotheticals. This is the most stable stylized fact in the dissertation: it does not depend on sector, on document composition, or on the general AI boom, because all three are differenced away within firm-quarter.
+
+```{python}
+#| label: tbl-t5-4
+#| tbl-cap: "Did the SEC's scrutiny close the gap? DiD on the call-minus-filing gap, firm FE, firm-clustered SE, ±6-quarter window, 86 firms on both sides of the cutoff, 399 cells."
+
+rows = []
+for k, label in dim_labels.items():
+    d = cg["did_on_gap"][k]
+    rows.append([label, round(d["did_coef"], 4), round(d["did_se"], 4), round(d["did_p"], 3),
+                 "passes" if d["pretrend_p"] > 0.05 else "fails"])
+t5_4 = pd.DataFrame(rows, columns=["Gap dimension", "DiD coefficient", "SE", "p", "Pre-trend"])
+t5_4
+```
+
+The promotional gap is unchanged after the SEC's scrutiny (+0.001, SE 0.019, p = 0.958), with flat pre-trends: the 95% interval rules out any closure larger than about 4 percentage points against a gap of 10.7. This is the same firm, telling the market a more promotional story on the call than it is willing to put in a filing, before and after the regulator explicitly started looking for exactly that pattern. The one dimension that does move — specificity — fails its own pre-trend test and is not reported as an effect.
+
+```{python}
+#| label: tbl-t5-5
+#| tbl-cap: "Firm-level promotional gap (call minus filing), firms with at least 3 qualifying quarters (n=70). Top 10 by gap."
+
+firm_gap = load_parquet("channel_gap_firm").sort_values("gap_promotional", ascending=False)
+t5_5 = firm_gap[["ticker", "n_cells", "gap_promotional"]].head(10).copy()
+t5_5["gap_promotional"] = (t5_5["gap_promotional"] * 100).round(1)
+t5_5.columns = ["Ticker", "Quarters", "Gap (p.p.)"]
+t5_5
+```
+
+The firm-level gap correlates weakly with Chapter 4's within-filing washing score (Spearman = 0.10, n = 70): the two are largely orthogonal measures of AI-washing. None of the eight firms flagged for within-filing promotional excess in Chapter 4 rank among the largest cross-channel gaps — they promote consistently across both channels rather than saying more on the call than they are willing to file. The cross-venue gap is the measure that matches the mechanism the SEC's own Welltower case describes.
+
+## What changed under scrutiny
+
+Across three designs — exposure-based, two-group, and cross-channel — the answer to whether the SEC's 2024 scrutiny changed AI disclosure is a consistently measured null on substance: no design finds firms becoming more concrete, more quantified, or more governance-oriented afterward, and the one channel where the SEC's own enforcement language points — the gap between what a firm tells analysts and what it puts in a filing — did not close. This supports H5's first half (a reduction in promotional framing where the metric and the grouping coincide) more than its second (no rise in realized or specific language), and is consistent with H6 read narrowly: the venue with legal exposure did not become more like the venue without it, nor vice versa — the two venues kept their separate registers.
+
 
