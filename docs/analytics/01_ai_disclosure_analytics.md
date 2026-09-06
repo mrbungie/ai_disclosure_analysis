@@ -654,6 +654,41 @@ financieros.
 > escrutinio de la SEC de 2024 cambiara la divulgación de IA en este corpus**, y
 > el diseño anterior no podía haberla detectado aunque existiera.
 >
+> **Rehecho con un diseño identificable (2026-09-06).** El problema no era el
+> estimador sino el TRATAMIENTO: definir el grupo por el nivel pre-evento de
+> `promotional_rate` y después medir `promotional_rate` garantiza tendencias no
+> paralelas — el grupo "vago" está arriba por construcción y sólo puede bajar.
+> Cambiando el tratamiento a **exposición** (cuánto hablaba la empresa de IA
+> antes de 2023, en volumen de frames, que no es el outcome), con efectos fijos
+> de empresa y trimestre, controles de composición documental, panel balanceado
+> y SE clusterizados:
+>
+> | outcome | tendencias paralelas (test conjunto) | efecto post |
+> |---|---|---|
+> | `promotional_rate` | **F=1,21, p=0,32 → pasa** | **+8,4 p.p.** (p<0,001) |
+> | `risk_share` | **F=1,07, p=0,39 → pasa** | −0,7 p.p. (p=0,71, nulo) |
+> | `specificity_index` | F=8,60, p<0,001 → falla | — |
+> | `hypothetical_share` | F=9,07, p<0,001 → falla | — |
+>
+> Trayectoria de `promotional_rate` (coeficientes por trimestre relativo al
+> corte, referencia t−1): t−6 +0,00, t−5 +0,01, t−4 +0,03, t−3 +0,14, t−2 +0,08
+> | t+0 +0,07, t+1 **+0,12\***, t+2 **+0,08\***, t+4 **+0,11\***.
+>
+> **Lectura, con el caveat que la hace honesta**: las empresas que ya hablaban
+> más de IA se volvieron MÁS promocionales después del primer trimestre de 2024,
+> no menos — lo contrario de la hipótesis de la propuesta. Pero el evento es
+> común en el tiempo, así que ese coeficiente recoge **todo** lo que le pasó a
+> las empresas expuestas a IA después de marzo 2024, y el boom de IA generativa
+> es la explicación alternativa obvia. No se puede atribuir a la SEC sin una
+> fuente de variación que separe a las dos cosas.
+>
+> El nulo de `risk_share` sí es limpio: pasa tendencias paralelas y el efecto es
+> cero (p=0,71). Las empresas expuestas no agregaron lenguaje de riesgo tras el
+> escrutinio.
+>
+> Muestra: 419 observaciones, 51 empresas — chica, porque exige ≥5 frames de
+> 10-K pre-2023 para clasificar y ≥2 trimestres a cada lado del corte.
+>
 > Lo que sigue se conserva como registro de lo que se intentó.
 
 

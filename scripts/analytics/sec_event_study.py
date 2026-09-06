@@ -45,6 +45,8 @@ from pathlib import Path
 import duckdb
 import numpy as np
 import pandas as pd
+import re
+
 import statsmodels.formula.api as smf
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -57,6 +59,13 @@ EVENT_QUARTER = pd.Period("2024Q2", freq="Q")
 REFERENCE_OFFSET = -1
 MIN_FRAMES_QUARTER = 3
 MIN_FRAMES_PRE = 5
+# El grupo se define con 10-K de 2021-2022 SOLAMENTE, dejando 2023 como
+# pre-período limpio. Si se define con todo el pre-2024, las empresas se
+# clasifican con los mismos trimestres contra los que después se testea el
+# pre-trend, y la reversión a la media aparece como violación de tendencias
+# paralelas aunque no haya pasado nada.
+GROUP_WINDOW_END = pd.Timestamp("2023-01-01")
+MIN_QUARTERS_EACH_SIDE = 2
 SPECIFICITY_FLAGS = ["specificity_business_process", "specificity_product_or_system",
                      "specificity_vendor_or_partner", "specificity_quantified_metric",
                      "specificity_date_or_timeline"]
@@ -76,6 +85,47 @@ def load_10q_frames(con) -> pd.DataFrame:
     """).fetchdf().drop_duplicates(["ticker", "filing_date", "text_hash", "frame_index"])
 
 
+def load_all_forms(con) -> pd.DataFrame:
+    """Frames de TODOS los formularios con su trimestre de presentación.
+
+    La versión anterior usaba sólo 10-Q y se quedaba con 257 observaciones y 54
+    empresas — sin potencia para detectar nada. Sumar 10-K, DEF 14A y 8-K
+    multiplica el panel, pero mete un confusor: la mezcla de formularios de una
+    empresa cambia trimestre a trimestre y los formularios difieren en retórica
+    (la DEF 14A tiene 14,6% de frames promocionales contra 7,2% del 10-K). Por
+    eso la regresión controla por la composición documental del trimestre — un
+    control de la regresión, no una feature del instrumento de medición.
+
+    Los frames se traen UNA vez y los dos manifiestos se unen en pandas. Escribir
+    esto como un `UNION ALL` de dos consultas a `gold_ai_frames` parece
+    equivalente y no lo es: obliga a DuckDB a instanciar la vista dos veces, y la
+    vista recalcula por dentro la población vigente con una ventana sobre 37
+    millones de filas de predicciones. Medido: así no termina en 115 segundos;
+    de esta forma tarda ~2."""
+    frames = con.execute("""
+        SELECT accession_number, text_hash, frame_index, temporal, concepts,
+               rhetoric_promotional, specificity_business_process,
+               specificity_product_or_system, specificity_vendor_or_partner,
+               specificity_quantified_metric, specificity_date_or_timeline
+        FROM gold_ai_frames
+        WHERE country_code = 'us' AND has_frame
+    """).fetchdf()
+    manifests = []
+    for relation, form in (("filing_manifest", None), ("filing_manifest_10q", "10-Q")):
+        table = con.execute(f"""
+            SELECT accession_number, ticker, filing_date
+                   {', form_type' if form is None else ''}
+            FROM {relation} WHERE country_code = 'us' AND ticker IS NOT NULL
+        """).fetchdf()
+        if form is not None:
+            table["form_type"] = form
+        manifests.append(table)
+    manifest = pd.concat(manifests, ignore_index=True)
+    merged = frames.merge(manifest, on="accession_number", how="inner")
+    return merged.drop_duplicates(["ticker", "filing_date", "form_type",
+                                   "text_hash", "frame_index"])
+
+
 def load_10k_pre2024(con) -> pd.DataFrame:
     return con.execute("""
         SELECT fm.ticker, f.text_hash, f.frame_index, f.rhetoric_promotional,
@@ -85,7 +135,7 @@ def load_10k_pre2024(con) -> pd.DataFrame:
         FROM gold_ai_frames f
         JOIN filing_manifest fm USING (country_code, accession_number)
         WHERE f.country_code = 'us' AND f.has_frame AND fm.form_type = '10-K'
-          AND fm.filing_date < DATE '2024-01-01' AND fm.ticker IS NOT NULL
+          AND CAST(fm.filing_date AS DATE) < DATE '2023-01-01' AND fm.ticker IS NOT NULL
         ORDER BY fm.ticker, f.text_hash, f.frame_index
     """).fetchdf().drop_duplicates(["ticker", "text_hash", "frame_index"])
 
@@ -103,15 +153,18 @@ def metrics(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_panel(con) -> tuple[pd.DataFrame, pd.Series]:
-    quarterly = metrics(load_10q_frames(con))
+    quarterly = metrics(load_all_forms(con))
     quarterly["quarter"] = pd.PeriodIndex(pd.to_datetime(quarterly["filing_date"]), freq="Q")
+    quarterly["es_proxy"] = (quarterly["form_type"] == "DEF 14A").astype(float)
+    quarterly["es_10k"] = (quarterly["form_type"] == "10-K").astype(float)
     outcomes = ["promotional_rate", "specificity_index", "hypothetical_share", "risk_share"]
     panel = (quarterly.groupby(["ticker", "quarter"])
              .agg(n_frames=("promotional_rate", "size"),
+                  mix_proxy=("es_proxy", "mean"), mix_10k=("es_10k", "mean"),
                   **{c: (c, "mean") for c in outcomes}).reset_index())
     panel = panel[panel["n_frames"] >= MIN_FRAMES_QUARTER]
 
-    pre = metrics(load_10k_pre2024(con))
+    pre = metrics(load_10k_pre2024(con))  # sólo 2021-2022
     pre_firm = pre.groupby("ticker").agg(n_pre=("promotional_rate", "size"),
                                          promo=("promotional_rate", "mean"),
                                          spec=("specificity_index", "mean"))
@@ -121,27 +174,53 @@ def build_panel(con) -> tuple[pd.DataFrame, pd.Series]:
     # para que el mismo texto no defina el grupo y el resultado.
     vagueness = ((pre_firm["promo"] - pre_firm["promo"].mean()) / pre_firm["promo"].std()
                  - (pre_firm["spec"] - pre_firm["spec"].mean()) / pre_firm["spec"].std())
-    return panel, vagueness.rename("vagueness")
+    # Tratamiento alternativo: EXPOSICIÓN, no vaguedad. Cuánto hablaba la empresa
+    # de IA antes de 2023, medido en volumen de frames, que NO es el outcome.
+    #
+    # Es la diferencia entre un diseño identificable y uno que no lo es. Definir
+    # el grupo por el NIVEL pre-evento de `promotional_rate` y después medir
+    # `promotional_rate` garantiza tendencias no paralelas: el grupo "vago" está
+    # arriba por construcción y sólo puede bajar. La exposición evita eso —
+    # separa a quién le apuntaba el escrutinio (las que ya hablaban de IA) sin
+    # usar cómo hablaban.
+    exposure = np.log(pre_firm["n_pre"])
+    return panel, pd.DataFrame({"vagueness": vagueness, "exposure": exposure})
 
 
-def event_study(panel: pd.DataFrame, outcome: str, treatment: pd.Series,
-                binary: bool) -> pd.DataFrame:
+def event_study(panel: pd.DataFrame, outcome: str, treatment: pd.DataFrame,
+                binary: bool, group_trend: bool = False,
+                column: str = "vagueness") -> pd.DataFrame:
     data = panel.merge(treatment.reset_index(), on="ticker", how="inner").copy()
     if binary:
-        data["treat"] = (data["vagueness"] > data["vagueness"].median()).astype(float)
+        data["treat"] = (data[column] > data[column].median()).astype(float)
     else:
-        data["treat"] = ((data["vagueness"] - data["vagueness"].mean())
-                         / data["vagueness"].std())
+        data["treat"] = (data[column] - data[column].mean()) / data[column].std()
     data["event_time"] = (data["quarter"].astype("period[Q]")
                           - EVENT_QUARTER).apply(lambda x: x.n)
     data = data[data["event_time"].between(-6, 6)]
     # El trimestre anterior al evento es la referencia omitida: todos los
     # coeficientes se leen contra él, y los NEGATIVOS son el test de tendencias
     # paralelas — si el efecto ya estaba antes del evento, no es del evento.
+    # Panel utilizable: empresas observadas a los dos lados del corte. Sin esto,
+    # una empresa que sólo aparece después del evento aporta a los coeficientes
+    # post sin haber aportado nunca a los pre, y el "efecto" es composición.
+    sides = data.groupby("ticker")["event_time"].agg(
+        pre=lambda s: (s < 0).sum(), post=lambda s: (s >= 0).sum())
+    balanced = sides[(sides["pre"] >= MIN_QUARTERS_EACH_SIDE)
+                     & (sides["post"] >= MIN_QUARTERS_EACH_SIDE)].index
+    data = data[data["ticker"].isin(balanced)]
+    if data.empty:
+        return pd.DataFrame()
     data["ev"] = pd.Categorical(data["event_time"],
                                 categories=sorted(data["event_time"].unique()))
+    controls = "+ mix_proxy + mix_10k + np.log(n_frames)"
+    # Tendencias lineales propias de cada grupo: es el remedio estándar cuando
+    # las tendencias paralelas fallan. Absorbe que los grupos vinieran
+    # moviéndose a ritmos distintos ANTES del evento y deja como "efecto" sólo
+    # el quiebre respecto de esa trayectoria.
+    trend = "+ treat:event_time" if group_trend else ""
     formula = (f"{outcome} ~ C(ev, Treatment(reference={REFERENCE_OFFSET})):treat "
-               f"+ C(ticker) + C(ev)")
+               f"+ C(ticker) + C(ev) {controls} {trend}")
     model = smf.ols(formula, data=data).fit(
         cov_type="cluster", cov_kwds={"groups": data["ticker"]})
     import re
@@ -162,6 +241,24 @@ def event_study(panel: pd.DataFrame, outcome: str, treatment: pd.Series,
     result = result[result["event_time"] != REFERENCE_OFFSET].sort_values("event_time")
     result.attrs["n_obs"] = int(model.nobs)
     result.attrs["n_firms"] = int(data["ticker"].nunique())
+    # Test formal de tendencias paralelas: los coeficientes PRE conjuntamente
+    # iguales a cero. Mirar si alguno tiene p<0,05 uno por uno infla el falso
+    # positivo con 5 coeficientes; el test conjunto es el que corresponde.
+    pre_terms = [name for name in model.params.index
+                 if "treat" in name and re.search(r"\[T?\.?(-?\d+)\]", name)
+                 and int(re.search(r"\[T?\.?(-?\d+)\]", name).group(1)) < REFERENCE_OFFSET]
+    if pre_terms:
+        joint = model.f_test(" = 0, ".join(pre_terms) + " = 0")
+        result.attrs["pretrend_F"] = float(np.squeeze(joint.fvalue))
+        result.attrs["pretrend_p"] = float(np.squeeze(joint.pvalue))
+    post_terms = [name for name in model.params.index
+                  if "treat" in name and re.search(r"\[T?\.?(-?\d+)\]", name)
+                  and int(re.search(r"\[T?\.?(-?\d+)\]", name).group(1)) >= 0]
+    if post_terms:
+        average = model.f_test(" + ".join(post_terms) + f" = 0")
+        result.attrs["post_F"] = float(np.squeeze(average.fvalue))
+        result.attrs["post_p"] = float(np.squeeze(average.pvalue))
+        result.attrs["post_mean"] = float(np.mean([model.params[name] for name in post_terms]))
     return result
 
 
@@ -185,25 +282,27 @@ def main() -> None:
     report = {}
     for outcome in ("promotional_rate", "specificity_index", "risk_share",
                     "hypothetical_share"):
-        for binary in (True, False):
-            label = f"{outcome} ({'binario' if binary else 'continuo'})"
-            result = event_study(panel, outcome, vagueness, binary)
+        for column in ("vagueness", "exposure"):
+            label = f"{outcome} [tratamiento: {column}]"
+            result = event_study(panel, outcome, vagueness, binary=True,
+                                 group_trend=False, column=column)
             if result.empty:
                 continue
-            pre = result[result.event_time < REFERENCE_OFFSET]
-            post = result[result.event_time >= 0]
             print(f"--- {label} | n={result.attrs['n_obs']:,} obs, "
                   f"{result.attrs['n_firms']} empresas ---")
             print("  " + "  ".join(f"t{r.event_time:+d}={r.coef:+.3f}"
                                    f"{'*' if r.p < 0.05 else ''}"
                                    for r in result.itertuples()))
-            print(f"  pre-evento (test de tendencias paralelas): "
-                  f"{'FALLA — hay efecto antes del evento' if (pre.p < 0.05).any() else 'pasa'}"
-                  f" | post significativos: {int((post.p < 0.05).sum())} de {len(post)}")
+            pretrend_p = result.attrs.get("pretrend_p", float("nan"))
+            verdict = ("pasa" if pretrend_p > 0.10 else
+                       "límite" if pretrend_p > 0.05 else "FALLA")
+            print(f"  tendencias paralelas (test conjunto de los pre): "
+                  f"F={result.attrs.get('pretrend_F', float('nan')):.2f}, "
+                  f"p={pretrend_p:.3f} -> {verdict}")
+            print(f"  efecto post promedio: {result.attrs.get('post_mean', float('nan')):+.4f} "
+                  f"(p conjunto = {result.attrs.get('post_p', float('nan')):.3f})")
             report[label] = {"coefficients": result.to_dict("records"),
-                             "n_obs": result.attrs["n_obs"],
-                             "n_firms": result.attrs["n_firms"],
-                             "parallel_trends_violated": bool((pre.p < 0.05).any())}
+                             **{k: v for k, v in result.attrs.items()}}
     args.output.write_text(json.dumps(report, indent=2, default=float))
     print(f"\n-> {args.output}")
 

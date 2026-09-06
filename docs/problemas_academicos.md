@@ -21,7 +21,7 @@ está el script que lo produce.
 | 6 | Marco muestral y potencia (sólo large caps) | **DESCARTADO por decisión del autor** |
 | 7 | `gold_ai_frames` acumulaba la unión histórica de despliegues | **CERRADO** |
 | 8 | El lado contable/mercado no tenía código que lo generara | **CERRADO** |
-| 9 | El "DiD de tendencia" SEC/DeepSeek no es un DiD | **CERRADO — y el hallazgo se cae** |
+| 9 | El "DiD de tendencia" SEC/DeepSeek no es un DiD | **CERRADO** — rehecho identificable; el hallazgo original se cae y aparece uno nuevo |
 | 10 | ROIC−WACC mezclaba valor libro y de mercado | **CERRADO** — y medido: no cambiaba el ordenamiento |
 | 11 | K-means con silhouette 0,15 sostiene 4 categorías | **CERRADO** — reemplazado por 3 segmentos estables (`11_segmentacion.md`) |
 | 12 | El panel empresa-año tiene entrada endógena | **ABIERTO** |
@@ -176,9 +176,27 @@ esperable porque los grupos se definieron por esas mismas métricas. El
 "quiebre de tendencia" que reportaba `01_...md` era del diseño, no de los
 datos, y esa sección quedó retirada.
 
-Limitación que queda registrada: el panel correcto tiene 257 observaciones y 54
-empresas (el 10-Q aporta pocos frames por trimestre), así que tampoco habría
-potencia para detectar un efecto chico si existiera.
+**Segunda vuelta: el diseño SÍ se puede identificar, cambiando el tratamiento.**
+El defecto de fondo era definir el grupo por el nivel pre-evento de la misma
+variable que después se mide. Con **exposición** (volumen de frames de IA
+pre-2023, que no es el outcome), panel de los cuatro formularios con controles
+de composición documental, panel balanceado y el test conjunto de los pre:
+
+| outcome | tendencias paralelas | efecto post |
+|---|---|---|
+| `promotional_rate` | **pasa** (p=0,32) | **+8,4 p.p.** (p<0,001) |
+| `risk_share` | **pasa** (p=0,39) | −0,7 p.p. (nulo, p=0,71) |
+| `specificity_index` | falla (p<0,001) | — |
+| `hypothetical_share` | falla (p<0,001) | — |
+
+Las empresas más expuestas a IA se volvieron MÁS promocionales después de
+2024-Q1, no menos. **Pero el evento es común en el tiempo**: ese coeficiente
+recoge todo lo que le pasó a las empresas expuestas a IA en esa fecha, y el boom
+de IA generativa es la alternativa obvia. Atribuirlo a la SEC requiere variación
+que separe ambas cosas — por ejemplo, empresas efectivamente contactadas por el
+regulador (hay 1) o una comparación entre jurisdicciones.
+
+Panel: 419 observaciones, 51 empresas.
 
 ## 10. ROIC−WACC mezclaba libro y mercado — CERRADO
 

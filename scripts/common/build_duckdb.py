@@ -160,7 +160,8 @@ def _filing_manifest_selects(countries: list[tuple[str, dict]], dirs) -> list[st
         if base_path is None:
             continue
         parts = [f"SELECT '{country}' AS country_code, * FROM {base_path}"]
-        for extra in ("filing_manifest_proxy", "filing_manifest_8k"):
+        for extra in ("filing_manifest_proxy", "filing_manifest_8k",
+                      "filing_manifest_earnings_calls"):
             source = _manifest_source(f"{manifests_dir}/{extra}")
             if source:
                 parts.append(f"SELECT '{country}' AS country_code, * FROM {source}")
@@ -408,6 +409,57 @@ def _paragraph_select_sql(form: str, source_view: str) -> str:
 
 CL_PARAGRAPHS_GLOB = str(
     REPO_ROOT / "data" / "interim" / "sections_cl" / "filing_paragraphs__run=*__part=*.parquet")
+#: Earnings calls carry an EXTRACTOR VERSION in the filename, unlike every
+#: other source here. The segmentation rule that splits prepared remarks
+#: from Q&A was revised twice against real output (see
+#: scripts/us/earnings_calls/02_extract_sections.py), and each revision
+#: wrote a new run ALONGSIDE the old rather than replacing it — nothing was
+#: deleted. So this glob must pin ONE version, or the view unions three
+#: incompatible labellings of the same 554,281 turns.
+EARNINGS_CALLS_VERSION = "3"
+EARNINGS_CALLS_GLOB = str(
+    REPO_ROOT / "data" / "interim" / "sections" /
+    f"earnings_call_paragraphs__v={EARNINGS_CALLS_VERSION}__run=*__part=*.parquet")
+
+
+def _earnings_call_select_sql(source_glob: str) -> str:
+    """Earnings call turns mapped onto the shared `paragraphs` contract.
+
+    Already paragraph-grained on disk (one speaker turn = one row), so this
+    does NOT go through `_paragraph_select_sql`'s line-merging, same as the
+    Chilean branch below.
+
+      - `form` = 'Earnings call' — a genuinely different CHANNEL, not
+        another SEC form. Keeping it distinct is the entire point: the open
+        question in docs/problemas_academicos.md #5 is whether a firm's
+        promotional language differs BETWEEN channels, which is
+        unanswerable if calls are pooled with filings.
+      - `accession_number` = document_id (`<TICKER>_<YEAR>Q<N>`). Calls have
+        no SEC accession; the fiscal period is what identifies them.
+      - `item_key` = the call SECTION ('prepared' / 'qa' / 'handoff' /
+        'unknown'). This is the one source where item_key carries real
+        meaning rather than a constant: prepared remarks are scripted and
+        the Q&A is improvised, and every downstream table already groups by
+        item_key for free.
+
+    `speaker` is NOT projected here — the shared contract has no column for
+    it — but it stays in the parquet, so attributing a claim to an executive
+    rather than to the analyst who asked the question is a read away.
+    """
+    return f"""
+        SELECT
+            'us' AS country_code,
+            'Earnings call' AS form,
+            document_id AS accession_number,
+            section AS item_key,
+            content_type,
+            paragraph_index,
+            paragraph_text,
+            text_hash8(paragraph_text) AS text_hash,
+            length(trim(paragraph_text)) > 3
+                AND regexp_matches(paragraph_text, '[A-Za-z0-9]') AS is_scorable
+        FROM read_parquet('{source_glob}', union_by_name=True)
+    """
 
 
 def _cl_paragraph_select_sql(source_glob: str) -> str:
@@ -771,6 +823,12 @@ def main(with_text_tables: bool = False):
             )
         else:
             print("  skipping 8-K paragraphs (no filing_sections_8k files yet)")
+        if _existing(EARNINGS_CALLS_GLOB):
+            paragraph_stage_specs.append(
+                ("_paragraphs_stage_calls", _earnings_call_select_sql(EARNINGS_CALLS_GLOB))
+            )
+        else:
+            print(f"  skipping earnings calls (no files matching {EARNINGS_CALLS_GLOB})")
         if _existing(CL_PARAGRAPHS_GLOB):
             paragraph_stage_specs.append(
                 ("_paragraphs_stage_cl", _cl_paragraph_select_sql(CL_PARAGRAPHS_GLOB))
