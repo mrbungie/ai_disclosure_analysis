@@ -240,3 +240,63 @@ corpus.
 - **La composición por formulario contamina el eje de voz.** La DEF 14A
   tiene 16,3% de frames promocionales contra 7,1% del 10-K, así que una
   empresa con proxy extenso se corre hacia "vocal" por mezcla documental.
+
+---
+
+## Voz × comportamiento como factores, no como cruce de clusters (2026-09-06)
+
+`scripts/analytics/voice_behavior_factors.py` reemplaza la matriz 2D de
+etiquetas por dos bloques de factores sobre tasas con encogimiento
+empírico-Bayes, cruzados con **correlación canónica** — que es la forma de
+contestar con un número la premisa de este documento: ¿cuánto comparten "cómo
+habla" y "qué dice que hace"?
+
+### El eje de voz y el de comportamiento son casi el mismo
+
+**Primera correlación canónica: 0,930** (bootstrap remuestreando frames:
+0,90-0,92). Los dos bloques comparten **~86% de la varianza**, y el bloque de
+comportamiento explica por sí solo **55,7%** de la varianza del eje principal de
+voz.
+
+Qué es ese eje compartido:
+
+| lado "riesgo hipotético" | lado "despliegue afirmado" |
+|---|---|
+| `risk_share` +0,83 | `promotional_rate` −0,58 |
+| `hypothetical_share` +0,52 | `quantified_rate` −0,42 |
+| `gov_share` +0,40 | `realized_share` −0,40 |
+| | `behavior_share_deployed` −0,81 |
+| | `behavior_share_productivity_outcome` −0,69 |
+
+**Esto obliga a corregir la lectura central de este documento.** No son dos ejes
+independientes que a veces se despegan: son **un eje dominante** —hablar de IA
+como riesgo futuro en un extremo, describir despliegue y resultados en el otro—
+más un residuo. La matriz voz×comportamiento no era una matriz: era ese eje
+visto dos veces.
+
+### El residuo es lo que queda para "washing"
+
+Regresando el eje de voz sobre TODO el bloque de comportamiento, el residuo
+—"habla distinto de lo que su comportamiento declarado predice"— es una medida
+continua y corregida por confiabilidad, en vez de un cruce de dos etiquetas de
+cluster con denominadores de 5 a 500 frames.
+
+Cuadrantes (mediana de cada eje):
+
+| cuadrante | empresas | frames (mediana) |
+|---|---:|---:|
+| voz y conducta altas | 169 | 59 |
+| voz y conducta bajas | 169 | 20 |
+| **voz alta, conducta baja** | 59 | 24 |
+| **conducta alta, voz baja** | 60 | 26 |
+
+Residuo más alto (hablan más de lo que su conducta declarada predice): DLTR,
+DPZ, WEC, VTR, GNRC, HLT, TDY, ETN, ODFL, SPG — retail, utilities y REITs.
+Residuo más bajo: AMZN, USB, ALLE, RSG, ANSS, HUM, SO, VLO, HON, BA.
+
+Es la misma pregunta que responde `09_washing_score.md` con conteos y un test
+exacto; esta versión no tiene potencia estadística por empresa, pero sí ordena a
+las 457 en una escala continua en vez de marcar 8. Las dos deberían leerse
+juntas: el score dice **dónde hay evidencia**, el residuo dice **dónde mirar**.
+
+Salida: `data/processed/clusters/firm_voice_behavior_factors.parquet`.

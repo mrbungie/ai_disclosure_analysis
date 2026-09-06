@@ -22,8 +22,8 @@ está el script que lo produce.
 | 7 | `gold_ai_frames` acumulaba la unión histórica de despliegues | **CERRADO** |
 | 8 | El lado contable/mercado no tenía código que lo generara | **CERRADO** |
 | 9 | El "DiD de tendencia" SEC/DeepSeek no es un DiD | **CERRADO — y el hallazgo se cae** |
-| 10 | ROIC−WACC mezcla valor libro y de mercado | **PARCIAL** (ERP corregido; libro/mercado no) |
-| 11 | K-means con silhouette 0,15 sostiene 4 categorías | **CERRADO — con reemplazo** |
+| 10 | ROIC−WACC mezclaba valor libro y de mercado | **CERRADO** — y medido: no cambiaba el ordenamiento |
+| 11 | K-means con silhouette 0,15 sostiene 4 categorías | **CERRADO — con reemplazo y cruce voz×conducta** |
 | 12 | El panel empresa-año tiene entrada endógena | **ABIERTO** |
 
 ---
@@ -180,13 +180,23 @@ Limitación que queda registrada: el panel correcto tiene 257 observaciones y 54
 empresas (el 10-Q aporta pocos frames por trimestre), así que tampoco habría
 potencia para detectar un efecto chico si existiera.
 
-## 10. ROIC−WACC mezcla libro y mercado — PARCIAL
+## 10. ROIC−WACC mezclaba libro y mercado — CERRADO
 
-El ERP ya está corregido (geométrico 6,48% en vez del aritmético 8,20%, que
-inflaba las diferencias de WACC en proporción al beta). Sigue en pie que el ROIC
-usa capital invertido a valor LIBRO mientras los ponderadores del WACC usan
-market cap: el spread queda sesgado con el market-to-book, que es una dimensión
-donde los segmentos difieren.
+El ROIC se calculaba sobre capital invertido CONTABLE y el WACC se ponderaba con
+MARKET CAP: dividir con una regla y ponderar con otra sesga el spread con el
+market-to-book, que es una dimensión donde los segmentos difieren.
+
+`build_roic_wacc.py` ahora pondera el WACC con valores de libro (coherente con
+el denominador del ROIC) y guarda la versión de mercado aparte
+(`wacc_market`, `roic_minus_wacc_market`).
+
+**Y midiendo el efecto: la corrección mueve el NIVEL, no el ordenamiento.**
+Mediana del spread 3,98% → 4,91%, pero la correlación entre las dos versiones es
+**0,999** sobre 1.907 empresas-año. Cualquier comparación ENTRE segmentos era en
+la práctica insensible a esto. Se corrigió igual porque la definición ahora es
+coherente y la cobertura sube (spread disponible 66% → 73%), pero el problema
+era menor de lo que parecía. El ERP ya estaba corregido antes (geométrico 6,48%
+en vez del aritmético 8,20%).
 
 ## 11. K-means con silhouette 0,15 — CERRADO, con reemplazo
 
@@ -212,6 +222,15 @@ global, dos factores continuos, y una partición binaria estable —
 `risk_hypothetical` (229 empresas) vs. `deployment_asserted` (265). Los cuatro
 arquetipos se siguen calculando por compatibilidad, marcados como no
 reproducibles.
+
+**Y el cruce que faltaba** (`voice_behavior_factors.py`): dos factores de voz
+solos no dicen nada sobre la pregunta de la tesis, así que se cruzan con los
+factores de COMPORTAMIENTO por correlación canónica. **Primera correlación
+canónica 0,930** (bootstrap 0,90-0,92): los dos bloques comparten ~86% de la
+varianza y el comportamiento explica 55,7% del eje de voz. O sea: **voz y
+conducta declarada no son dos ejes, son casi el mismo**, y lo que queda para
+"washing" es el residuo — que ahora es una variable continua por empresa
+(`firm_voice_behavior_factors.parquet`) en vez de un cruce de etiquetas.
 
 ## 12. Entrada endógena al panel empresa-año — ABIERTO
 
