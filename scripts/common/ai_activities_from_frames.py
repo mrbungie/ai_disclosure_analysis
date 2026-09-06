@@ -18,13 +18,18 @@ devuelve, por cada actividad distinta, una estructura chica:
     function    para qué (snake_case normalizado: customer_service, coding, ...)
     target      para quién (enum: employees, customers, developers, ...)
     stage       en qué etapa (enum: exploring, piloting, deployed, scaled)
-    providers   con qué modelos/proveedores: TODOS los nombrados (lista; "proprietary" si es propio)
+    providers   proveedores o modelos EXTERNOS nombrados (lista, todos)
+    own_brands  marcas o productos PROPIOS de la empresa nombrados (lista)
+    is_own_ai   si la IA de la actividad es de la propia empresa (autoreferencia)
     evidence    fuerza de la evidencia (enum: named_product_or_process, metric, vendor, generic)
     sentence_ids
 
-v2 (2026-09-06): `providers_or_models` es una lista con todos los proveedores
-o modelos nombrados (v1 guardaba uno solo y perdía el segundo en el 2% de las
-actividades), y el prompt exige una actividad por cada acción·objeto·función
+v2 (2026-09-06): el prompt dice QUÉ EMPRESA presenta el documento (ticker y
+nombre), para que el modelo distinga proveedor externo de autoreferencia:
+`providers_or_models` es la lista de proveedores o modelos externos (todos:
+v1 guardaba uno solo y perdía el segundo en el 2% de las actividades),
+`own_brands` la de marcas propias nombradas e `is_own_ai` dice si la IA es de
+la propia empresa. Además el prompt exige una actividad por cada acción·objeto·función
 distinta del párrafo (v1 pedía "el mínimo" y dejó una sola actividad en el
 57% de los párrafos, 43% de los de ocho o más oraciones). Las partes v1 están
 archivadas en `data/archive/interim/ai_activities/`.
@@ -100,9 +105,16 @@ class AIActivity(BaseModel):
     target: Target = Field(description="Who the AI serves: employees, customers, developers, an internal process, partners, or unspecified.")
     stage: Stage = Field(description="Adoption stage as stated: exploring, piloting, deployed, scaled, or unspecified.")
     providers_or_models: list[str] = Field(default_factory=list, description=(
-        "EVERY external provider, partner or model named for this activity, each in 1-3 words "
-        "(e.g. ['NVIDIA', 'Intel'], ['OpenAI', 'Azure OpenAI'], ['Gemini']). Add 'proprietary' when the "
-        "firm says it built or owns the AI itself. Empty list when none is named."))
+        "EVERY EXTERNAL provider, partner or model named for this activity, each in 1-3 words "
+        "(e.g. ['NVIDIA', 'Intel'], ['OpenAI', 'Azure OpenAI'], ['Gemini']). The filing firm itself and "
+        "its own products are NOT external: put those in own_brands. Empty list when none is named."))
+    own_brands: list[str] = Field(default_factory=list, description=(
+        "The filing firm's OWN AI products, models or brands named for this activity, each in 1-3 words "
+        "(e.g. ['Ryzen AI', 'Instinct'] for AMD, ['Copilot'] for Microsoft, ['Erica'] for Bank of America). "
+        "Empty when none is named."))
+    is_own_ai: bool = Field(description=(
+        "True when the AI involved is the filing firm's own (built, owned or branded by the firm, or the firm "
+        "is itself the AI vendor); False when it relies on an external provider or the text does not say."))
     evidence_strength: Evidence = Field(description=(
         "Strongest evidence attached: named_product_or_process (a named product, system or "
         "process), metric (a number), vendor (a named provider), generic (none of those)."))
@@ -132,11 +144,15 @@ those statements into activities of the form
 
     the firm performs ACTION on OBJECT for FUNCTION (target, stage, provider, evidence).
 
+You are told which firm files the document (ticker and name): mentions of that firm or \
+its products are self-references, not external providers.
+
 Rules. Be exhaustive: list EVERY distinct activity, one per distinct (action, object, \
 function); a paragraph that deploys a product, invests in infrastructure and partners \
 with a provider yields three activities, not one. Cover every behavioural frame you are \
-given unless it is too generic to name an object. Name EVERY provider or model the text \
-attaches to an activity (both when two are named). Report only what the text states the \
+given unless it is too generic to name an object. Name EVERY external provider or model the text \
+attaches to an activity (both when two are named), keep the firm's own brands in own_brands, \
+and set is_own_ai when the AI is the firm's own. Report only what the text states the \
 FIRM does or did or plans; never what customers, the market or competitors do. Do not invent an object or function the \
 text does not give: use 'unspecified'. Prefer generic objects ('copilot', 'chatbot', \
 'fraud model') over brand names; put brand names of models or providers in \
@@ -146,12 +162,13 @@ activities is a valid answer when the statements are too generic to name any \
 action-object pair (e.g. 'AI is important to our strategy')."""
 
 
-def build_prompt(sentences: list[str], frames: list[dict]) -> str:
+def build_prompt(sentences: list[str], frames: list[dict], firm: str = "") -> str:
     numbered = "\n".join(f"[{i}] {s}" for i, s in enumerate(sentences))
+    header = f"Filing firm: {firm}\n" if firm else ""
     described = "\n".join(
         f"- frame {f['frame_index']}: concepts={f['concepts']}, temporal={f['temporal']}, "
         f"domain={f['domain']}, evidence sentences={f['evidence_sentence_ids']}" for f in frames)
-    return (f"{numbered}\n---\nBehavioural frames already identified in this paragraph:\n{described}\n---\n"
+    return (f"{header}{numbered}\n---\nBehavioural frames already identified in this paragraph:\n{described}\n---\n"
             f"List the concrete AI activities the firm discloses.")
 
 
@@ -160,7 +177,8 @@ ACTIVITY_SCHEMA = pa.schema([
     ("item_key", pa.string()), ("paragraph_index", pa.int64()), ("text_hash", pa.uint64()),
     ("activity_index", pa.int64()), ("has_activity", pa.bool_()),
     ("action", pa.string()), ("object", pa.string()), ("function", pa.string()), ("target", pa.string()),
-    ("stage", pa.string()), ("providers_or_models", pa.list_(pa.string())), ("evidence_strength", pa.string()),
+    ("stage", pa.string()), ("providers_or_models", pa.list_(pa.string())), ("own_brands", pa.list_(pa.string())),
+    ("is_own_ai", pa.bool_()), ("firm", pa.string()), ("evidence_strength", pa.string()),
     ("evidence_sentence_ids", pa.list_(pa.int64())), ("sentence_indices", pa.list_(pa.int64())),
     ("source_frame_indices", pa.list_(pa.int64())),
     ("judge_model", pa.string()), ("prompt_version", pa.string()), ("session_id", pa.string()),
@@ -184,14 +202,14 @@ def _base(row: dict, judge_model: str, session_id: str) -> dict:
     return {**{c: row[c] for c in PARAGRAPH_KEY}, "text_hash": row["text_hash"],
             "sentence_indices": row["sentence_indices"],
             "source_frame_indices": [f["frame_index"] for f in row["frames"]],
-            "judge_model": judge_model, "prompt_version": PROMPT_VERSION, "session_id": session_id,
+            "firm": row.get("firm"), "judge_model": judge_model, "prompt_version": PROMPT_VERSION, "session_id": session_id,
             "classified_at": datetime.now(timezone.utc).isoformat(), "error": None}
 
 
 def _rows(row: dict, judge_model: str, session_id: str, out: ParagraphActivities) -> list[dict]:
     base = _base(row, judge_model, session_id)
     empty = {"action": None, "object": None, "function": None, "target": None, "stage": None,
-             "providers_or_models": [], "evidence_strength": None, "evidence_sentence_ids": []}
+             "providers_or_models": [], "own_brands": [], "is_own_ai": None, "evidence_strength": None, "evidence_sentence_ids": []}
     if not out.activities:
         return [{**base, **empty, "activity_index": 0, "has_activity": False}]
     n = len(row["sentences"])
@@ -199,6 +217,7 @@ def _rows(row: dict, judge_model: str, session_id: str, out: ParagraphActivities
              "object": a.object.strip().lower()[:80], "function": a.function.strip().lower()[:60],
              "target": a.target, "stage": a.stage,
              "providers_or_models": [p.strip()[:60] for p in a.providers_or_models if p and p.strip()],
+             "own_brands": [p.strip()[:60] for p in a.own_brands if p and p.strip()], "is_own_ai": bool(a.is_own_ai),
              "evidence_strength": a.evidence_strength,
              "evidence_sentence_ids": [s for s in a.sentence_ids if 0 <= s < n]}
             for i, a in enumerate(out.activities)]
@@ -207,7 +226,7 @@ def _rows(row: dict, judge_model: str, session_id: str, out: ParagraphActivities
 def _error_row(row: dict, judge_model: str, session_id: str, error: Exception) -> dict:
     return {**_base(row, judge_model, session_id), "activity_index": 0, "has_activity": False,
             "action": None, "object": None, "function": None, "target": None, "stage": None,
-            "providers_or_models": [], "evidence_strength": None, "evidence_sentence_ids": [],
+            "providers_or_models": [], "own_brands": [], "is_own_ai": None, "evidence_strength": None, "evidence_sentence_ids": [],
             "error": f"{type(error).__name__}: {error}"[:2000]}
 
 
@@ -246,7 +265,7 @@ async def run_rows(rows, directory, session_id, judge_model, concurrency, part_r
             if interrupted.is_set():
                 raise asyncio.CancelledError
             try:
-                result = await agent.run(build_prompt(row["sentences"], row["frames"]))
+                result = await agent.run(build_prompt(row["sentences"], row["frames"], row.get("firm", "")))
                 out = _rows(row, judge_model, session_id, result.output)
                 done += 1; n_act += sum(1 for r in out if r["has_activity"])
                 return out
@@ -297,6 +316,16 @@ def fetch_pending(database: Path, output_dir: Path, limit: int) -> tuple[list[di
         # trae como representante clasificado es cualquiera de sus instancias;
         # se toma la primera por llave para reconstruir las oraciones
         con.execute(f"""
+            CREATE TEMP VIEW doc_firm AS
+            WITH docs AS (
+                SELECT accession_number, ticker FROM filing_manifest WHERE country_code = 'us'
+                UNION ALL SELECT accession_number, ticker FROM filing_manifest_10q WHERE country_code = 'us'
+                UNION ALL SELECT document_id, ticker FROM read_parquet('{REPO_ROOT / "data/interim/manifests/filing_manifest_earnings_calls.parquet"}')
+            ), names AS (SELECT ticker, any_value(company_name) AS company_name FROM firm_universe WHERE country_code = 'us' GROUP BY 1)
+            SELECT accession_number, any_value(ticker) AS ticker, any_value(company_name) AS company_name
+            FROM docs LEFT JOIN names USING (ticker) GROUP BY 1
+        """)
+        con.execute(f"""
             CREATE TEMP VIEW population_all AS
             SELECT text_hash, {', '.join(PARAGRAPH_KEY)},
                    list(struct_pack(frame_index := frame_index, concepts := concepts, temporal := temporal,
@@ -321,7 +350,9 @@ def fetch_pending(database: Path, output_dir: Path, limit: int) -> tuple[list[di
             SELECT (SELECT count(*) FROM population) AS population_texts,
                    (SELECT count(*) FROM population p JOIN done_hashes d USING (text_hash)) AS already_done""").df().iloc[0].items()}
         pend = con.execute(f"""
-            SELECT * FROM population p WHERE NOT EXISTS (SELECT 1 FROM done_hashes d WHERE d.text_hash = p.text_hash)
+            SELECT p.*, coalesce(f.company_name, '') || CASE WHEN f.ticker IS NOT NULL THEN ' (' || f.ticker || ')' ELSE '' END AS firm
+            FROM population p LEFT JOIN doc_firm f USING (accession_number)
+            WHERE NOT EXISTS (SELECT 1 FROM done_hashes d WHERE d.text_hash = p.text_hash)
             ORDER BY {', '.join(PARAGRAPH_KEY)}""").df()
         stats["pending_texts"] = len(pend)
         reps = pend.to_dict("records")[: int(limit)] if limit else pend.to_dict("records")
@@ -342,7 +373,7 @@ def fetch_pending(database: Path, output_dir: Path, limit: int) -> tuple[list[di
             info = by_key[key]
             frames = [{**f, "concepts": list(f["concepts"]), "evidence_sentence_ids": [int(x) for x in f["evidence_sentence_ids"]],
                        "frame_index": int(f["frame_index"])} for f in info["frames"]]
-            rows[key] = {**{c: rec[c] for c in PARAGRAPH_KEY}, "text_hash": int(info["text_hash"]),
+            rows[key] = {**{c: rec[c] for c in PARAGRAPH_KEY}, "text_hash": int(info["text_hash"]), "firm": (info.get("firm") or "").strip(),
                          "frames": frames, "sentences": [], "sentence_indices": []}
         rows[key]["sentences"].append(rec["sentence_text"]); rows[key]["sentence_indices"].append(int(rec["sentence_index"]))
     return list(rows.values()), stats
