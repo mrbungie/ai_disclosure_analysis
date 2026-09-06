@@ -29,9 +29,12 @@ User-Agent that says who is calling.
 
 from __future__ import annotations
 
+import http.client
+import io
 import json
 import re
 import time
+import zipfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -56,10 +59,34 @@ _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
 
 
-def _request(url: str, accept: str) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": accept})
-    with urllib.request.urlopen(request, timeout=600) as response:
-        return response.read()
+def _encode(url: str) -> str:
+    """Percent-encodes the PATH only, leaving the scheme/host alone.
+
+    One real filing's report path contains spaces — ".../8156...-it GHC
+    RFA2023 v200324/reports/..." — which urllib rejects outright as
+    "control characters". The aggregator publishes the path unencoded, so
+    encoding it here is what makes the URL usable at all."""
+    parts = urllib.parse.urlsplit(url)
+    return urllib.parse.urlunsplit(parts._replace(
+        path=urllib.parse.quote(parts.path, safe="/%")))
+
+
+def _request(url: str, accept: str, attempts: int = 3) -> bytes:
+    """Retries on transient transport failures. These reports run to 140 MB
+    and one of 870 came back as an IncompleteRead after 16 MB — over a
+    corpus that is a guaranteed occasional loss, and a retry costs nothing
+    when nothing is wrong."""
+    request = urllib.request.Request(_encode(url),
+                                     headers={"User-Agent": USER_AGENT, "Accept": accept})
+    last = None
+    for attempt in range(attempts):
+        try:
+            with urllib.request.urlopen(request, timeout=900) as response:
+                return response.read()
+        except (urllib.error.URLError, http.client.IncompleteRead, OSError) as error:
+            last = error
+            time.sleep(2 ** attempt)
+    raise last
 
 
 def get_json(path_or_url: str) -> dict:
@@ -99,6 +126,32 @@ def download_report(report_url: str) -> bytes:
     time.sleep(REQUEST_DELAY)
     return _request(BASE + report_url if report_url.startswith("/") else report_url,
                     "text/html,application/xhtml+xml")
+
+
+def download_report_from_package(package_url: str) -> bytes:
+    """The report XHTML pulled out of the ESEF ZIP package.
+
+    Needed because 8 of 870 Italian filings publish a package but no
+    standalone `report_url` — the aggregator simply has no direct link for
+    them. Skipping those would drop real annual reports for a reason that
+    is an artefact of the index, not of the filing.
+
+    Picks the largest .xhtml/.html under a `reports/` directory: an ESEF
+    package also carries the taxonomy and, sometimes, small auxiliary HTML,
+    and the annual report is by a wide margin the biggest of them."""
+    time.sleep(REQUEST_DELAY)
+    payload = _request(
+        BASE + package_url if package_url.startswith("/") else package_url, "application/zip")
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        candidates = [i for i in archive.infolist()
+                      if i.filename.lower().endswith((".xhtml", ".html"))
+                      and "/reports/" in i.filename.lower()]
+        if not candidates:
+            candidates = [i for i in archive.infolist()
+                          if i.filename.lower().endswith((".xhtml", ".html"))]
+        if not candidates:
+            raise ValueError("no XHTML report inside the ESEF package")
+        return archive.read(max(candidates, key=lambda i: i.file_size))
 
 
 def probe_report(xhtml: bytes) -> dict:

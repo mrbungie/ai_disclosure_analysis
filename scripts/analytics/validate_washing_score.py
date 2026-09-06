@@ -49,7 +49,7 @@ from washing_score import DB, OUT_DIR, load, score
 
 # Welltower: único caso del corpus con una carta de comentario de la SEC que
 # pregunta explícitamente por sus afirmaciones de IA (abril 2025, ver
-# docs/analytics/01_...md). ANET/HPE/NVDA salieron en la misma búsqueda léxica
+# docs/analytics/apendice/descriptivos_sql_corpus.md). ANET/HPE/NVDA salieron en la misma búsqueda léxica
 # y al leerlas resultaron ser contabilidad de segmentos, no escrutinio de
 # disclosure: sirven como controles negativos débiles.
 EXTERNAL_CASES = {"WELL": "carta SEC sobre disclosure de IA (abril 2025)",

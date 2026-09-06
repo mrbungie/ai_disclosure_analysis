@@ -58,7 +58,7 @@ RATIO_COLUMNS = ["gross_margin", "operating_margin", "net_margin", "roa", "roe",
                  "current_ratio", "debt_to_equity", "asset_turnover",
                  "rd_intensity", "capex_intensity", "sic2"]
 MARKET_COLUMNS = ["market_cap", "pe_ratio", "ps_ratio", "pb_ratio", "ev_revenue",
-                  "ev_ebitda", "beta", "vol_pre_60d", "vol_post_60d",
+                  "ev_ebitda", "beta", "idio_vol_252d", "vol_pre_60d", "vol_post_60d",
                   "momentum_12_1", "car_m1_p5"]
 # docs/analytics/07 aggregates these per firm; sic2 is categorical and
 # entities_named is text, so neither belongs in a mean.
@@ -117,10 +117,43 @@ def main() -> None:
     print(f"cohort_2021_crosscheck: {len(cohort):,} filas, "
           f"{cohort['ticker'].nunique():,} empresas de la cohorte 2021")
 
-    # --- segmentos: una fila por empresa, promediando sus años ---
-    per_firm = (master.groupby("ticker")[SEGMENT_COLUMNS].mean().reset_index()
+    # --- segmentos: una fila por empresa, MEDIANA de sus años (robusta a un
+    # año atípico; es lo que 04_perfiles_economicos.md documenta y lo que usan las demás tablas) ---
+    per_firm = (master.groupby("ticker")[SEGMENT_COLUMNS].median().reset_index()
                 .merge(crossed, on="ticker", how="inner"))
     print(f"segment_financials: {len(per_firm):,} empresas con ambas etiquetas y financieros")
+
+    # --- MODO FINAL: el panel son TODAS las empresas-año con filings, con ceros ---
+    # Cada empresa-año con al menos un filing puntuable entra, con intensidad de
+    # IA por 1.000 párrafos (cero si no habla) desde ai_intensity.py. Las tasas
+    # de texto (promotional_rate, behavior_share_*) y las etiquetas de
+    # arquetipo vienen del panel condicionado y quedan NaN donde la empresa no
+    # habló de IA: son propiedades de CÓMO se habla, no existen para el cero.
+    # `year` = año de presentación, igual que los financieros.
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from ai_intensity import document_table, aggregate, FILING_FORMS
+    import duckdb
+    con = duckdb.connect(str(REPO_ROOT / "duckdb" / "thesis.duckdb"), read_only=True)
+    try:
+        docs = document_table(con)
+    finally:
+        con.close()
+    docs = docs[docs["form"].isin(FILING_FORMS)].assign(year=lambda d: d["fecha"].dt.year)
+    base = aggregate(docs, ["ticker", "year"])
+    base = base.merge(text_side.drop(columns=["n_frames"]), on=["ticker", "year"], how="left")
+    base["in_text_panel"] = base["archetype"].notna()
+    full = (base.merge(financials[["ticker", "year"] + LEVEL_COLUMNS + GROWTH_COLUMNS], on=["ticker", "year"], how="left")
+                .merge(returns[["ticker", "year", "ret_m1_p5"]], on=["ticker", "year"], how="left"))
+    master = (base.merge(ratios[["ticker", "year"] + RATIO_COLUMNS + GROWTH_COLUMNS], on=["ticker", "year"], how="left")
+                  .merge(market[["ticker", "year"] + MARKET_COLUMNS], on=["ticker", "year"], how="left"))
+    print(f"firm_year_master_v2: {len(master):,} empresas-año con filings, "
+          f"{int(master['any_ai'].sum()):,} con algún frame de IA, "
+          f"{int(master['in_text_panel'].sum()):,} con etiquetas del panel condicionado "
+          f"({master['operating_margin'].notna().mean()*100:.0f}% con ratios)")
+    cohort = full[full["ticker"].isin(cohort_tickers)].copy()
+    per_firm = (master[master["in_text_panel"]].groupby("ticker")[SEGMENT_COLUMNS].median().reset_index()
+                .merge(crossed, on="ticker", how="inner"))
 
     for name, table in (("firm_year_full_crosscheck", full),
                         ("firm_year_master_v2", master),

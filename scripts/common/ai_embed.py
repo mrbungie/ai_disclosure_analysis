@@ -17,17 +17,6 @@ speed on every downstream pass.
 Resumable and additive: parts are verified on startup and only the missing
 paragraphs are embedded, so adding a country later, or resuming after a
 crash, costs only the new rows.
-
-Scope is a WHERE clause, not a separate script. `paragraphs` is one table
-across every form and country, so a run says which slice of it it owns:
---form/--country-code narrow the population (a country whose vectors
-aren't wanted yet stays untouched instead of riding along), and
---source-relation unique_paragraphs embeds each distinct TEXT once rather
-than once per instance. That last one matters at this corpus's duplication
-rate: DEF 14A + 8-K are 5,303,459 paragraph instances but only 2,668,526
-distinct texts, so instance-level embedding buys ~2.6M duplicate vectors
-and doubles the GPU time for nothing the prefilter reads — it already
-scores `unique_paragraphs` (docs/prefilter_evaluation.md §8.8).
 """
 
 from __future__ import annotations
@@ -97,60 +86,49 @@ def verify_parts(output_dir: Path, model_name: str, dtype: str) -> dict:
 
 
 def register_embedded_keys(con, usable: list[Path], view: str = "embedded_keys") -> int:
-    columns = ", ".join(PARAGRAPH_KEY)
+    """Registers already-embedded TEXTS, keyed by `text_hash` -- not by
+    PARAGRAPH_KEY. (2026-09-05) The original per-instance design re-embedded
+    every duplicate INSTANCE of the same text separately (a paragraph shared
+    by 3.4M 8-K filings' cover pages got encoded 3.4M times), the exact
+    "reimplement its own dedup instead of using unique_paragraphs" mistake
+    already fixed once in ai_classify.py (docs/prefilter_evaluation.md §8.7)
+    -- this is that same fix applied to the embedding step, which pays the
+    real GPU cost `paragraphs`' own docstring warns about. Existing parts
+    already carry `text_hash` per row (see `_text_hashes`), so this is a
+    pure query-side change; no re-embedding or migration of old parts."""
     if not usable:
-        con.execute(f"CREATE OR REPLACE TEMP VIEW {view} AS SELECT {columns} FROM paragraphs WHERE false")
+        con.execute(f"CREATE OR REPLACE TEMP VIEW {view} AS SELECT NULL::UBIGINT AS text_hash WHERE false")
         return 0
     files = ", ".join(f"'{part}'" for part in usable)
     con.execute(f"CREATE OR REPLACE TEMP VIEW {view} AS "
-                f"SELECT DISTINCT {columns} FROM read_parquet([{files}], union_by_name=True)")
+                f"SELECT DISTINCT text_hash FROM read_parquet([{files}], union_by_name=True)")
     return con.execute(f"SELECT count(*) FROM {view}").fetchone()[0]
 
 
-def population_filter(forms=(), countries=(), scorable_only: bool = False,
-                      alias: str = "p") -> str:
-    """SQL predicate narrowing WHICH paragraphs a run is responsible for.
+def pending_sql(limit: int = 0, against: str = "embedded_keys", source: str = "paragraphs",
+                 countries: tuple[str, ...] | None = None) -> str:
+    """`source` is `paragraphs` (one row per INSTANCE -- the original,
+    cost-scales-with-duplication behavior) or `unique_paragraphs` (one row
+    per unique `text_hash` -- the cheap, correct default; see
+    register_embedded_keys' docstring). Either way the output schema is
+    identical (same PARAGRAPH_KEY columns, naming ONE representative
+    instance per text when source is unique_paragraphs) -- downstream
+    readers never need to know which was used.
 
-    `paragraphs` is deliberately ONE table across every form and country
-    (see build_duckdb.py:_paragraph_select_sql), so "embed the new DEF 14A
-    and 8-K text" would otherwise also sweep up every other unembedded row
-    sharing that table — including a country whose vectors are deliberately
-    not wanted yet, which is not a hypothetical: CL paragraphs entered
-    `paragraphs` with no embeddings of their own. Scoping a run is a WHERE
-    clause here, the same way `form`/`country_code` is how every other
-    query in the pipeline re-imposes that split.
-
-    Empty means the whole table, so the unfiltered path is byte-identical
-    to what it was before this existed.
-    """
-    def in_list(column: str, values) -> str:
-        literals = ", ".join("'" + str(v).replace("'", "''") + "'" for v in values)
-        return f"{alias}.{column} IN ({literals})"
-
-    clauses = []
-    if forms:
-        clauses.append(in_list("form", forms))
+    `countries`, when given, restricts which country_code(s) get embedded
+    this run -- e.g. Chile's paragraphs are wired into `paragraphs`/
+    `unique_paragraphs` (docs/prefilter_evaluation.md §8.9) but its document
+    parsing isn't trusted yet, so embedding/scoring it needs an explicit,
+    separate go-ahead rather than riding along on a `paragraphs`-wide run."""
+    country_filter = ""
     if countries:
-        clauses.append(in_list("country_code", countries))
-    if scorable_only:
-        # `is_scorable` (build_duckdb.py) marks the rows extraction left as
-        # paragraphs but that carry no content — lone bullets, zero-width
-        # spaces, dashes. Off by default deliberately: nothing downstream
-        # filters on the column yet, and the 10-K/10-Q vectors already on
-        # disk were written without it, so turning it on by default would
-        # make coverage mean something different per form.
-        clauses.append(f"{alias}.is_scorable")
-    return " AND ".join(clauses) if clauses else "TRUE"
-
-
-def pending_sql(limit: int = 0, against: str = "embedded_keys", population: str = "TRUE",
-                source_relation: str = "paragraphs") -> str:
-    keys = " AND ".join(f"e.{c} IS NOT DISTINCT FROM p.{c}" for c in PARAGRAPH_KEY)
+        quoted = ", ".join(f"'{c}'" for c in countries)
+        country_filter = f"AND p.country_code IN ({quoted})"
     return f"""
         SELECT {", ".join(f"p.{c}" for c in PARAGRAPH_KEY)}, p.paragraph_text
-        FROM {source_relation} AS p
-        WHERE ({population})
-          AND NOT EXISTS (SELECT 1 FROM {against} AS e WHERE {keys})
+        FROM {source} AS p
+        WHERE NOT EXISTS (SELECT 1 FROM {against} AS e WHERE e.text_hash = p.text_hash)
+        {country_filter}
         ORDER BY p.form, p.country_code, p.accession_number, p.item_key, p.paragraph_index
         {f'LIMIT {int(limit)}' if limit and limit > 0 else ''}
     """
@@ -197,15 +175,11 @@ def run_embed(
     sample_seed: int = 42,
     resume: bool = True,
     verify_only: bool = False,
-    forms: list[str] | None = None,
-    countries: list[str] | None = None,
-    scorable_only: bool = False,
-    source_relation: str = "paragraphs",
+    source_relation: str = "unique_paragraphs",
+    countries: tuple[str, ...] | None = None,
 ) -> tuple[list[Path], Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    forms, countries = tuple(forms or ()), tuple(countries or ())
-    population = population_filter(forms, countries, scorable_only)
 
     audit = verify_parts(output_dir, model_name, dtype)
     usable = audit["usable"] if resume else []
@@ -217,41 +191,27 @@ def run_embed(
 
     con = duckdb.connect(str(database), read_only=True)
     try:
-        if con.sql(f"SELECT count(*) FROM {source_relation}").fetchone()[0] == 0:
-            raise ValueError(f"{source_relation} is empty; build it with `make duckdb-text` first")
-        row_count = con.execute(
-            f"SELECT count(*) FROM {source_relation} AS p WHERE {population}").fetchone()[0]
+        country_where = ""
+        if countries:
+            quoted = ", ".join(f"'{c}'" for c in countries)
+            country_where = f"WHERE p.country_code IN ({quoted})"
+        row_count = con.sql(f"SELECT count(*) FROM {source_relation} AS p {country_where}").fetchone()[0]
         if row_count == 0:
-            raise ValueError(f"no paragraphs match this run's population ({population}); "
-                             f"check --form/--country-code against `SELECT DISTINCT country_code, "
-                             f"form FROM paragraphs`")
+            raise ValueError(f"{source_relation} is empty (for countries={countries}); "
+                              f"build it with `make duckdb-text` first")
         embedded = register_embedded_keys(con, usable)
-        keys = " AND ".join(f"e.{c} IS NOT DISTINCT FROM p.{c}" for c in PARAGRAPH_KEY)
-        # Coverage is reported over the WHOLE table, not just this run's
-        # population: the point of the line is to show what does and does
-        # not have vectors, and hiding the rows a filter excluded is how a
-        # country silently stays unembedded for months. `in scope` marks
-        # which of them this run will actually touch.
         coverage = con.execute(f"""
             SELECT p.country_code, p.form, count(*) AS paragraphs,
-                   count(*) FILTER (WHERE EXISTS (SELECT 1 FROM embedded_keys AS e WHERE {keys})) AS embedded,
-                   coalesce(bool_or({population}), false) AS in_scope
-            FROM {source_relation} AS p GROUP BY 1, 2 ORDER BY 1, 2
+                   count(*) FILTER (WHERE EXISTS (SELECT 1 FROM embedded_keys AS e WHERE e.text_hash = p.text_hash)) AS embedded
+            FROM {source_relation} AS p {country_where} GROUP BY 1, 2 ORDER BY 1, 2
         """).df().to_dict("records")
 
         print(f"{len(usable)} usable part(s), {embedded:,} paragraphs already embedded", flush=True)
-        if forms or countries:
-            print(f"Population this run: {population}", flush=True)
         for row in coverage:
             done, total = int(row["embedded"]), int(row["paragraphs"])
-            scope = "" if row["in_scope"] else "  [out of scope this run]"
             print(f"  {row['country_code']}/{row['form']}: {done:,}/{total:,} embedded, "
-                  f"{total - done:,} pending{scope}", flush=True)
-        pending = con.execute(f"""
-            SELECT count(*) FROM {source_relation} AS p
-            WHERE ({population})
-              AND NOT EXISTS (SELECT 1 FROM embedded_keys AS e WHERE {keys})
-        """).fetchone()[0]
+                  f"{total - done:,} pending", flush=True)
+        pending = row_count - embedded
         target_rows = min(limit, pending) if limit and limit > 0 else pending
         print(f"Pending this run: {target_rows:,} paragraphs", flush=True)
 
@@ -259,9 +219,6 @@ def run_embed(
             "run_id": run_id, "model": model_name, "dtype": dtype,
             "embedding_dim": EMBEDDING_DIM, "storage": "fixed_size_list<float16>, uncompressed",
             "corpus_paragraphs": row_count, "already_embedded": embedded,
-            "population_filter": population, "population_forms": list(forms),
-            "population_countries": list(countries), "population_scorable_only": scorable_only,
-            "source_relation": source_relation,
             "pending_at_start": pending, "coverage_before": coverage,
             "sample_seed": sample_seed, "reused_parts": [str(p) for p in usable],
             "unreadable_parts": audit["unreadable"], "mismatched_parts": audit["mismatched"],
@@ -276,8 +233,7 @@ def run_embed(
         device = resolve_device(device)
         print(f"Device: {device} | Precision: {dtype}", flush=True)
         model = _load_model(model_name, device, dtype)
-        sample = con.sql(f"SELECT paragraph_text FROM "
-                         f"(SELECT paragraph_text FROM {source_relation} AS p WHERE {population}) "
+        sample = con.sql(f"SELECT paragraph_text FROM {source_relation} AS p {country_where} "
                          f"USING SAMPLE {max(1, min(probe_rows, row_count))} ROWS "
                          f"(reservoir, {sample_seed})").fetchall()
         plan = autotune_batching(model, [r[0] or "" for r in sample], device, memory_fraction)
@@ -287,8 +243,7 @@ def run_embed(
               f"stopped on {plan['stop_reason']} at {plan['saturated_tokens_per_second']/1000:,.1f}k tok/s",
               flush=True)
 
-        result = con.execute(pending_sql(limit, population=population,
-                                         source_relation=source_relation))
+        result = con.execute(pending_sql(limit, source=source_relation, countries=countries))
         reporter = ThroughputReporter(target_rows, "embedding", progress_seconds, device)
         written: list[Path] = []
         buffered: list[pa.Table] = []
@@ -358,21 +313,22 @@ def main() -> None:
     parser.add_argument("--sample-seed", type=int, default=42)
     parser.add_argument("--no-resume", dest="resume", action="store_false")
     parser.add_argument("--verify-only", action="store_true")
-    parser.add_argument("--form", dest="forms", action="append", metavar="FORM",
-                        help="Embed only this form (repeatable), e.g. --form 'DEF 14A' --form 8-K. "
-                             "Default: every form in `paragraphs`.")
-    parser.add_argument("--country-code", dest="countries", action="append", metavar="CC",
-                        help="Embed only this country (repeatable), e.g. --country-code us. "
-                             "Default: every country in `paragraphs`.")
-    parser.add_argument("--scorable-only", action="store_true",
-                        help="Skip paragraphs marked is_scorable=false (lone bullets, empty "
-                             "cells, dashes). Off by default: nothing downstream filters on the "
-                             "column yet and the existing 10-K/10-Q vectors were written without it.")
-    parser.add_argument("--source-relation", default="paragraphs",
-                        help="'unique_paragraphs' embeds each unique paragraph TEXT once instead "
-                             "of once per corpus instance (see docs/prefilter_evaluation.md §8.8). "
-                             "Score it with ai_prefilter.py --source-relation unique_paragraphs.")
+    parser.add_argument("--source-relation", choices=("paragraphs", "unique_paragraphs"),
+                        default="unique_paragraphs",
+                        help="unique_paragraphs (default): embed each unique text ONCE, keyed by "
+                             "text_hash -- the correct default now that a downstream join back to "
+                             "instances is available wherever needed. paragraphs: the original "
+                             "per-instance behavior (re-embeds every duplicate), kept only for "
+                             "exact reproduction of pre-2026-09-05 runs.")
+    parser.add_argument("--countries", nargs="+", default=None,
+                        help="Restrict this run to these country_code(s) (e.g. --countries us). "
+                             "Default: no restriction, embeds every country wired into the source "
+                             "relation -- pass this explicitly when a country's paragraphs exist "
+                             "but its document parsing/scoring hasn't been signed off yet (see "
+                             "Chile in docs/prefilter_evaluation.md §8.9).")
     args = parser.parse_args()
+    if args.countries:
+        args.countries = tuple(args.countries)
     written, manifest = run_embed(**vars(args))
     print(f"Parts written: {len(written)}")
     print(f"Manifest -> {manifest}")

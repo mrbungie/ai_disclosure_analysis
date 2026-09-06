@@ -1,7 +1,7 @@
 """ROIC vs. WACC por empresa-año: ¿el capital rinde más de lo que cuesta?
 
 Produce `firm_year_roic_wacc.parquet`, el insumo de
-`docs/analytics/08_roic_wacc_value_creation.md`, que hasta ahora existía como
+`docs/analytics/04_perfiles_economicos.md`, que hasta ahora existía como
 dato sin código que lo generara.
 
     NOPAT             = operating_income x (1 - tasa efectiva de impuesto)
@@ -21,7 +21,7 @@ documentadas acá porque cambian el NIVEL de las cifras:
      para descontar flujos multi-período. La diferencia NO es neutral entre
      segmentos: como coe = rf + beta x ERP, un ERP inflado infla las
      DIFERENCIAS de WACC en proporción a las diferencias de beta, y los
-     segmentos de 08_...md difieren justamente en beta (0,46 vs 1,00). Se
+     segmentos de 04_perfiles_economicos.md difieren justamente en beta (0,46 vs 1,00). Se
      calcula desde los propios factores del repo y queda registrado en la
      columna `erp` de la salida. `--erp 0.082` reproduce la versión vieja.
   2. **Tasa efectiva de impuesto acotada a [0, 1]**, con fallback a la tasa
@@ -32,11 +32,18 @@ documentadas acá porque cambian el NIVEL de las cifras:
      dispara cuando la deuda LP es casi nula (el gasto financiero incluye
      deuda corriente y arriendos que no están en el denominador).
 
-Limitación que ninguna de esas correcciones arregla, y que hay que decir al
-citar: ROIC es de valor LIBRO y los ponderadores del WACC son de MERCADO, así
-que el spread queda sesgado con el market-to-book de cada empresa — que es
-exactamente una de las dimensiones donde los segmentos difieren. Es una
-medida direccional, no una valuación.
+  4. **El spread por defecto es LIBRO contra LIBRO.** Antes el ROIC se calculaba
+     sobre capital invertido contable y el WACC se ponderaba con market cap:
+     dividir con una regla y ponderar con otra sesga el spread con el
+     market-to-book de cada empresa, que es justo una dimensión donde los
+     segmentos difieren (una tecnológica que vale 10x libro y una utility que
+     vale 1,2x no son comparables así). Ahora `wacc` usa ponderadores de LIBRO
+     (patrimonio contable y deuda contable), consistentes con el denominador del
+     ROIC, y `roic_minus_wacc` se calcula con ese. El WACC con ponderadores de
+     mercado queda en `wacc_market` / `roic_minus_wacc_market` para poder
+     comparar las dos lecturas — el costo de capital que enfrenta la empresa en
+     el mercado es una pregunta legítima, pero no es la que se resta a un ROIC
+     contable.
 
 Determinístico, sin LLM, sin costo de API.
 
@@ -126,14 +133,22 @@ def main() -> None:
     panel["cost_of_debt"] = cost_of_debt.where(cost_of_debt.between(0, MAX_COST_OF_DEBT)) \
         .fillna(panel["rf_annualized"] + DEBT_SPREAD_FALLBACK)
 
-    equity_value = panel["market_cap"]
     debt_value = panel["long_term_debt"].fillna(0)
-    total = equity_value + debt_value
-    weight_equity = equity_value / total.where(total > 0)
-    panel["wacc"] = (weight_equity * panel["cost_of_equity"]
-                     + (1 - weight_equity) * panel["cost_of_debt"]
-                     * (1 - panel["effective_tax_rate"]))
+
+    def mix(equity_value: pd.Series) -> pd.Series:
+        total = equity_value + debt_value
+        weight_equity = equity_value / total.where(total > 0)
+        return (weight_equity * panel["cost_of_equity"]
+                + (1 - weight_equity) * panel["cost_of_debt"]
+                * (1 - panel["effective_tax_rate"]))
+
+    # Libro contra libro: mismo criterio de valuación que el denominador del
+    # ROIC. Es el que se resta.
+    panel["wacc"] = mix(panel["equity"])
     panel["roic_minus_wacc"] = panel["roic"] - panel["wacc"]
+    # Mercado, para comparar: mismo costo de capital, otra ponderación.
+    panel["wacc_market"] = mix(panel["market_cap"])
+    panel["roic_minus_wacc_market"] = panel["roic"] - panel["wacc_market"]
 
     destination = args.clusters_dir / "firm_year_roic_wacc.parquet"
     panel.sort_values(["ticker", "year"]).to_parquet(destination, index=False)
@@ -142,8 +157,19 @@ def main() -> None:
           f"WACC {panel['wacc'].notna().mean()*100:.0f}% | "
           f"spread {panel['roic_minus_wacc'].notna().mean()*100:.0f}%")
     print(f"medianas: ROIC {panel['roic'].median():.4f} | "
-          f"WACC {panel['wacc'].median():.4f} | "
-          f"spread {panel['roic_minus_wacc'].median():.4f}")
+          f"WACC libro {panel['wacc'].median():.4f} (spread {panel['roic_minus_wacc'].median():.4f}) | "
+          f"WACC mercado {panel['wacc_market'].median():.4f} "
+          f"(spread {panel['roic_minus_wacc_market'].median():.4f})")
+    consistent = panel[["roic_minus_wacc", "roic_minus_wacc_market"]].dropna()
+    if len(consistent) > 10:
+        correlation = consistent.corr().iloc[0, 1]
+        print(f"correlación entre los dos spreads: {correlation:.3f} sobre "
+              f"{len(consistent):,} filas")
+        print("  -> medido: la inconsistencia libro/mercado movía el NIVEL del spread "
+              "(~0,9 p.p. en la mediana),\n     no el ordenamiento entre empresas. "
+              "Cualquier comparación ENTRE segmentos era, en la práctica,\n     "
+              "insensible a esto. Corregido igual, porque la definición ahora es "
+              "coherente y\n     la cobertura sube (spread disponible 66% -> 73%).")
 
 
 if __name__ == "__main__":

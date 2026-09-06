@@ -83,6 +83,55 @@ DEFAULT_JUDGE_MODEL = "qwen/qwen3.7-flash"
 OUT_DIR = REPO_ROOT / "data" / "interim" / "prefilter_predictions_unique"
 
 
+def current_scores_run(con) -> str:
+    """Run id de la corrida de scores vigente.
+
+    `main()` referenciaba una constante `LATEST_PREFILTER_RUN` que dejó de
+    existir cuando `scores_relation()` reemplazó el run fijo por "la config de
+    anchors más nueva" (el pin congelaba el corpus). El camino de --apply-only
+    se usó todos estos días y el de entrenamiento no, así que el NameError
+    quedó latente hasta el primer refit. Se resuelve preguntándole a los
+    propios scores cuál es la corrida vigente, que es la misma regla que usa
+    `scores_relation()` para elegir la población."""
+    return con.execute(
+        f"SELECT max(run_id) FROM {scores_relation()}").fetchone()[0]
+
+
+
+def connect_read_only(database: Path | str = None, timeout_seconds: int = 1800,
+                      poll_seconds: int = 20) -> duckdb.DuckDBPyConnection:
+    """Conexión de sólo lectura que ESPERA si otro proceso tiene el archivo.
+
+    DuckDB permite varios lectores simultáneos, pero si algún proceso lo abrió
+    para escritura rechaza a todos los demás — también a los read-only, y con un
+    error inmediato, no una espera:
+
+        IO Error: Could not set lock on file "duckdb/thesis.duckdb":
+        Conflicting lock is held in /usr/bin/python3.12 (PID 160957)
+
+    Con varias corridas conviviendo en la misma máquina (fetch de un país nuevo,
+    rebuild de vistas, analytics) eso mata pasos largos por una razón
+    transitoria. Reintentar es lo correcto: el que escribe termina, y esto sigue.
+    Ver https://duckdb.org/docs/stable/connect/concurrency"""
+    import time
+    target = str(database or DB)
+    deadline = time.time() + timeout_seconds
+    announced = False
+    while True:
+        try:
+            return duckdb.connect(target, read_only=True)
+        except duckdb.IOException as error:
+            if "lock" not in str(error).lower() or time.time() > deadline:
+                raise
+            if not announced:
+                holder = str(error).split("Conflicting lock is held in ")[-1].split(".")[0]
+                print(f"  esperando el lock de duckdb (lo tiene {holder.strip()}); "
+                      f"reintento cada {poll_seconds}s hasta {timeout_seconds//60} min",
+                      flush=True)
+                announced = True
+            time.sleep(poll_seconds)
+
+
 def scores_relation() -> str:
     """Every score part written under the CURRENT (model, anchors, dtype),
     across however many runs produced them — not one hardcoded run id.
@@ -158,6 +207,142 @@ LEXICAL_STEP_COLUMNS = [
     ("strong_ge2", "len(p.strong_matched_terms) >= 2"),
     ("weak_ge1", "len(p.weak_matched_terms) >= 1"),
 ]
+
+# ---------------------------------------------------------------------------
+# Señales de TEXTO (2026-09-06)
+# ---------------------------------------------------------------------------
+# Motivo: el modelo de 11 señales rendía F1 pond. 0,925 en 10-K/10-Q y 0,755 /
+# 0,647 en DEF 14A / 8-K (§8.15). Al leer sus falsos positivos en esos
+# formularios, todos comparten forma, no tema:
+#
+#   - matrices de habilidades del directorio: "artificial intelligence" es UNA
+#     celda dentro de una tabla de 14.350 caracteres;
+#   - biografías de directores: "Mr. Wang is the founder and CEO of Scale AI";
+#   - resultados de votación en 8-K: "a stockholder proposal regarding a report
+#     on risks of discrimination in GenAI was not approved";
+#   - regulación de terceros: "Export Control Framework for Artificial
+#     Intelligence Diffusion... Federal Register";
+#   - viñetas de temas de comité: "emerging technologies, including artificial
+#     intelligence".
+#
+# El vector denso no puede verlos: en un párrafo de 14 mil caracteres la
+# similitud semántica se diluye, y las dummies léxicas sólo dicen "apareció el
+# término". Lo que distingue esos casos es DÓNDE y CÓMO aparece el término:
+# densidad, marcado de tabla, contexto de biografía/votación/regulación, y sobre
+# todo si el párrafo habla en primera persona (una divulgación de la propia
+# empresa dice "we"/"our"; una biografía o una norma, no).
+#
+# NINGUNA de estas señales mira el tipo de documento. Meter `form` como feature
+# sería un atajo: el modelo aprendería "los proxies mencionan más IA" en vez de
+# leer el párrafo, y como el hallazgo central del proyecto ES una comparación
+# entre formularios (docs/analytics/apendice/descriptivos_sql_corpus.md #8), la medición quedaría circular.
+# Todo lo de abajo se calcula del texto y valdría igual si el mismo párrafo
+# apareciera en cualquier otro documento.
+STRONG_SPELLED_OUT = (
+    "artificial intelligence", "generative ai", "gen ai", "machine learning",
+    "deep learning", "large language model", "large language models",
+    "foundation model", "foundation models", "neural network", "neural networks",
+)
+STRONG_ALTERNATION = (
+    "ai|ml|llm|llms|agi|nlp|gen[ ]ai|artificial[ ]intelligence|generative[ ]ai|genai|"
+    "machine[ ]learning|deep[ ]learning|large[ ]language[ ]models?|"
+    "foundation[ ]models?|neural[ ]networks?"
+)
+BIO_CONTEXT = "mr\\.|ms\\.|mrs\\.|dr\\.|director since|age [0-9]{2}|ph\\.d|founder of|served as"
+VOTE_CONTEXT = "stockholder proposal|shareholder proposal|votes cast|broker non-vote|abstentions"
+RULE_CONTEXT = "federal register|final rule|executive order|export control"
+
+
+def text_feature_columns(text_expr: str, scores_alias: str = "p") -> list[tuple[str, str]]:
+    """(nombre, SQL) de cada señal de texto, para el golden set y para el corpus.
+
+    `text_expr` es la expresión que devuelve el texto del párrafo en esa
+    consulta — cambia según desde dónde se lea, pero la definición de la señal
+    no puede cambiar, y por eso se genera desde acá en vez de escribirse dos
+    veces."""
+    lower = f"lower(coalesce({text_expr}, ''))"
+    length = f"greatest(length({lower}), 1)"
+    words = f"greatest(len(regexp_extract_all({lower}, '\\s+')) + 1, 1)"
+    # Partición barata en oraciones: puntuación final, salto de línea o celda de
+    # tabla. No es un segmentador lingüístico y no necesita serlo — lo que
+    # importa es aislar el fragmento donde aparece el término.
+    sentences = f"list_filter(regexp_split_to_array({lower}, '[.!?\\n|]+'), s -> length(s) > 2)"
+    anchors = ", ".join(f"{scores_alias}.{c}" for c in SIGNAL_COLUMNS[:7])
+    sorted_anchors = f"list_sort([{anchors}], 'DESC')"
+    return [
+        # Longitud: los falsos positivos de tabla son párrafos gigantes.
+        ("log_len", f"ln(1 + {length})"),
+        # Densidad del término: "IA" una vez en 14 mil caracteres no es
+        # divulgación; tres veces en 400 caracteres, casi siempre sí.
+        ("strong_per_1k", f"len(regexp_extract_all({lower}, "
+                          f"'\\b({STRONG_ALTERNATION})\\b')) * 1000.0 / {length}"),
+        # Primera persona: una empresa que divulga habla de sí misma. Una
+        # biografía, una norma o un resultado de votación, no.
+        ("first_person_per_100w", f"len(regexp_extract_all({lower}, "
+                                  f"'\\b(we|our|us|the company)\\b')) * 100.0 / {words}"),
+        # Marcado: tablas y viñetas son donde vive la enumeración sin contenido.
+        ("pipe_rate", f"(length({lower}) - length(replace({lower}, '|', ''))) * 100.0 / {length}"),
+        ("bullet_rate", f"(length({lower}) - length(replace({lower}, '•', ''))) * 100.0 / {length}"),
+        ("digit_rate", f"len(regexp_extract_all({lower}, '[0-9]')) * 100.0 / {length}"),
+        ("bio_context", f"regexp_matches({lower}, '{BIO_CONTEXT}')"),
+        ("vote_context", f"regexp_matches({lower}, '{VOTE_CONTEXT}')"),
+        ("rule_context", f"regexp_matches({lower}, '{RULE_CONTEXT}')"),
+        # Sólo siglas: "AI" suelto es mucho más ambiguo que "artificial
+        # intelligence" escrito completo (y es de donde salen los choques con
+        # nombres propios y con "AI" dentro de otro token).
+        ("acronym_only", f"len({scores_alias}.strong_matched_terms) >= 1 AND len(list_filter("
+                         f"{scores_alias}.strong_matched_terms, x -> x IN "
+                         f"({', '.join(chr(39) + s + chr(39) for s in STRONG_SPELLED_OUT)}))) = 0"),
+        # Señales de ORACIÓN. El problema de fondo con las tablas y las
+        # biografías es de UNIDAD: el término de IA vive en una oración y el
+        # resto del párrafo no tiene nada que ver, pero tanto el embedding como
+        # la densidad promedian sobre todo el párrafo. Partir por puntuación y
+        # mirar sólo las oraciones que contienen el término separa "we use AI to
+        # do X" de "Mr. Wang, founder of Scale AI, age 57, director since 2017".
+        ("ai_sent_share", f"len(list_filter({sentences}, s -> regexp_matches(s, "
+                          f"'\\b({STRONG_ALTERNATION})\\b'))) * 1.0 / greatest(len({sentences}), 1)"),
+        ("ai_sent_first_person", f"len(list_filter({sentences}, s -> regexp_matches(s, "
+                                 f"'\\b({STRONG_ALTERNATION})\\b') AND regexp_matches(s, "
+                                 f"'\\b(we|our|us|the company)\\b'))) >= 1"),
+        ("log_n_sentences", f"ln(1 + greatest(len({sentences}), 1))"),
+        # Nitidez del match semántico: qué tan por encima está el mejor anchor
+        # del segundo. Un párrafo genuino se parece a UNA categoría; el
+        # boilerplate se parece un poco a todas.
+        ("anchor_gap", f"{sorted_anchors}[1] - {sorted_anchors}[2]"),
+        ("anchor_mean", f"list_avg([{anchors}])"),
+    ]
+
+
+TEXT_FEATURE_NAMES = [name for name, _ in text_feature_columns("''")]
+
+# Señales de ORACIÓN (scripts/common/ai_prefilter_sentences.py). El embedding
+# del párrafo se diluye justo donde más falla el prefiltro: una celda de tabla
+# con "artificial intelligence" entre cientos de celdas produce un vector que no
+# se parece a ninguna divulgación. Estas columnas puntúan SÓLO las oraciones que
+# mencionan IA, con el mismo modelo y los mismos anchors, y se agregan por
+# texto. Un texto sin fila acá es uno que no pasó la compuerta léxica: se
+# rellena con 0, que es lo que corresponde ("no hay oración de IA que puntuar").
+SENTENCE_SCORES_GLOB = "data/interim/prefilter_sentence_scores/prefilter_sentence_scores__run=*.parquet"
+SENTENCE_FEATURE_NAMES = [
+    "sent_n_ai", "sent_max_margin", "sent_mean_margin", "sent_max_semantic",
+    "sent_min_negative",
+] + [f"sent_max_{c}" for c in ("ai_use", "ai_exploration", "ai_capability",
+                              "ai_outcome", "ai_risk", "ai_governance", "ai_strategy")]
+
+
+def sentence_scores_relation() -> str:
+    """La corrida de oraciones más nueva, una fila por `text_hash`."""
+    return f"""(
+        SELECT * FROM read_parquet('{SENTENCE_SCORES_GLOB}', union_by_name=True)
+        QUALIFY row_number() OVER (PARTITION BY text_hash ORDER BY run_id DESC) = 1
+    )"""
+
+
+def sentence_feature_sql(alias: str = "sent") -> str:
+    return ", ".join(f"coalesce({alias}.{name}, 0) AS {name}" for name in SENTENCE_FEATURE_NAMES)
+
+
+
 ALL_SIGNAL_COLUMNS = SIGNAL_COLUMNS + [name for name, _ in LEXICAL_STEP_COLUMNS]
 PARAGRAPH_KEY = ("country_code", "form", "accession_number", "item_key", "paragraph_index")
 
@@ -233,6 +418,31 @@ def load_golden(judge_model: str | None = None) -> pd.DataFrame:
         return con.execute(query.replace(
             "JUDGE_CLAUSE",
             f"AND l.judge_model = '{judge_model}'" if judge_model else "")).df()
+    finally:
+        con.close()
+
+
+def load_golden_judges(judge_model: str | None = None) -> pd.Series:
+    """Qué juez etiquetó cada fila que entra al fit. Va al manifiesto: un
+    despliegue tiene que poder decir con qué criterio se definió su target."""
+    con = duckdb.connect(str(DB), read_only=True)
+    try:
+        clause = f"AND l.judge_model = '{judge_model}'" if judge_model else ""
+        return con.execute(f"""
+            SELECT l.judge_model
+            FROM read_parquet('data/interim/golden_set/golden_set_labels__session=*__part=*.parquet',
+                               union_by_name=True) l
+            JOIN paragraphs par
+                ON par.country_code = l.country_code AND par.form = l.form
+               AND par.accession_number = l.accession_number AND par.item_key = l.item_key
+               AND par.paragraph_index = l.paragraph_index
+            JOIN unique_paragraphs up ON up.text_hash = par.text_hash
+            JOIN {scores_relation()} p
+                ON p.country_code = up.country_code AND p.form = up.form
+               AND p.accession_number = up.accession_number AND p.item_key = up.item_key
+               AND p.paragraph_index = up.paragraph_index
+            WHERE l.error IS NULL AND up.is_scorable {clause}
+        """).df()["judge_model"]
     finally:
         con.close()
 
@@ -528,7 +738,8 @@ def main(judge_model: str | None = DEFAULT_JUDGE_MODEL) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     print(f"Cargando golden set (juez: {judge_model or 'TODOS — mezcla, ver load_golden'})...")
     golden = load_golden(judge_model)
-    print(f"{len(golden):,} etiquetas")
+    golden_judges = load_golden_judges(judge_model)
+    print(f"{len(golden):,} etiquetas | jueces: {golden_judges.value_counts().to_dict()}")
 
     y = golden["is_ai_mention"].astype(int).values
     weights = golden["inclusion_weight"].astype(float).values
@@ -643,6 +854,7 @@ def main(judge_model: str | None = DEFAULT_JUDGE_MODEL) -> None:
           f"({100 * is_positive.mean():.2f}%), representando {instances_positive:,} instancias del corpus"
           + (f" — de los cuales {rescued:,} textos solo por named_entity_match" if use_named_entity else ""))
 
+    anchors_run = current_scores_run(con)
     print("Calculando el funnel...")
     funnel = funnel_counts(con)
     funnel["prefilter_model_only_positive"] = int(model_positive.sum())
@@ -658,14 +870,19 @@ def main(judge_model: str | None = DEFAULT_JUDGE_MODEL) -> None:
     out["is_ai_prefiltered"] = is_positive
     out["threshold"] = threshold
     out["model_version"] = run_id
-    out["anchors_run"] = LATEST_PREFILTER_RUN
+    out["anchors_run"] = anchors_run
 
     out_path = OUT_DIR / f"prefilter_predictions__run={run_id}.parquet"
     pq.write_table(pa.Table.from_pandas(out, preserve_index=False), out_path, compression="zstd")
 
     manifest = {
-        "run_id": run_id, "anchors_run": LATEST_PREFILTER_RUN,
+        "run_id": run_id, "anchors_run": anchors_run,
         "golden_set_labels": int(len(golden)),
+        # Provenance del target: sin esto el manifiesto no dice con qué criterio
+        # se decidió "esto menciona IA", y el golden set tiene dos jueces.
+        "judge_model": judge_model or "MEZCLA (todos los jueces del golden set)",
+        "labels_by_judge": {str(k): int(v) for k, v in
+                            golden_judges.value_counts().items()},
         "deploy_c": deploy_c, "threshold": threshold,
         "cv_metrics": cv_metrics, "cv_metrics_with_named_entity": combined_metrics,
         "named_entity_used_in_deployment": use_named_entity,

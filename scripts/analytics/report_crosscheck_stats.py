@@ -1,7 +1,12 @@
 """Reproduce, desde los parquets, las tablas numéricas de los documentos de
-cruce financiero: `02_market_accounting_crosscheck.md`,
-`04_ratios_factors_and_volatility.md`, `05_circularity_and_robustness_checks.md`
-y `08_roic_wacc_value_creation.md`.
+cruce financiero: `05_senal_incremental.md`,
+`04_perfiles_economicos.md`, `apendice/correlaciones_fdr_permutacion.md`
+y `04_perfiles_economicos.md`.
+
+MODO DE ANÁLISIS FINAL: margen extensivo. El panel es `firm_year_master_v2`
+con TODAS las empresas-año que tienen filings (`build_firm_panels.py`), y las
+variables de texto son intensidades por 1.000 párrafos con cero cuando la
+empresa no habla de IA (`ai_intensity.py`). Nada condiciona a hablar de IA.
 
 Existe porque esos cuatro documentos reportaban cifras calculadas en consultas
 ad hoc de sesión: el dato quedaba, la consulta no. Cualquier cambio de
@@ -42,7 +47,7 @@ SEED = 42
 GROWTH_CLIP = 3.0          # |crecimiento YoY| > 300% se descarta como outlier
 PERMUTATIONS = 2000
 
-# Los 11 pares que 05_...md somete a FDR: comportamiento declarado en t contra
+# Los 11 pares que apendice/correlaciones_fdr_permutacion.md somete a FDR: comportamiento declarado en t contra
 # el resultado real, y retórica contra reacción de mercado.
 FDR_PAIRS = [
     ("behavior_share_ai_infrastructure", "next_capex_yoy"),
@@ -61,9 +66,6 @@ FDR_PAIRS = [
 # (D reclama promotional_rate, C quantified_rate, A risk_share, B es el
 # residuo) y no por el id que devuelve sklearn — así "D" sigue significando
 # "líder vocal" después de un re-ajuste.
-ARCHETYPE_ORDER = ["A", "B", "C", "D"]
-ARCHETYPE_NAMES = {"A": "A cauteloso", "B": "B genérico",
-                   "C": "C cuantificador", "D": "D vocal"}
 
 
 def _clean(frame: pd.DataFrame, x: str, y: str) -> pd.DataFrame:
@@ -152,6 +154,31 @@ def sector_demeaned(frame: pd.DataFrame, column: str) -> pd.Series:
     return frame[column] - frame.groupby("sic2")[column].transform("median")
 
 
+INTENSITY = {  # la misma pregunta, medida en intensidad por 1.000 párrafos con ceros
+    "behavior_share_ai_infrastructure": "ai_infrastructure_per_1k",
+    "behavior_share_revenue_outcome": "revenue_outcome_per_1k",
+    "behavior_share_ai_investment": "ai_investment_per_1k",
+    "behavior_share_cost_outcome": "cost_outcome_per_1k",
+    "n_frames": "frames_per_1k",
+    "promotional_rate": "promo_per_1k",
+    "specificity_index": "spec_per_1k",
+}
+LEVELS = ["cero", "bajo", "medio", "alto"]
+PROFILE_COLUMNS = ["gross_margin", "operating_margin", "net_margin", "roa", "roe", "rd_intensity",
+                   "beta", "vol_pre_60d", "momentum_12_1", "pe_ratio", "ps_ratio", "pb_ratio",
+                   "market_cap", "car_m1_p5", "ret_m1_p5", "next_revenue_yoy"]
+
+
+def intensity_level(frame: pd.DataFrame) -> pd.Series:
+    """cero = ningún frame de IA en el año; bajo/medio/alto = terciles de
+    frames por 1.000 párrafos entre las empresas-año que sí hablan."""
+    level = pd.Series("cero", index=frame.index, dtype=object)
+    talk = frame["frames_per_1k"] > 0
+    level[talk] = pd.qcut(frame.loc[talk, "frames_per_1k"].rank(method="first"), 3,
+                          labels=["bajo", "medio", "alto"]).astype(str)
+    return level
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--clusters-dir", type=Path, default=CLUSTERS)
@@ -161,19 +188,17 @@ def main() -> None:
     master = pd.read_parquet(args.clusters_dir / "firm_year_master_v2.parquet")
     full = pd.read_parquet(args.clusters_dir / "firm_year_full_crosscheck.parquet")
     roic = pd.read_parquet(args.clusters_dir / "firm_year_roic_wacc.parquet")
-    behavior = pd.read_parquet(args.clusters_dir / "voice_x_behavior.parquet")
-    master = master.merge(full[["ticker", "year", "ret_m1_p5"]], on=["ticker", "year"],
-                          how="left", suffixes=("", "_full"))
     if "ret_m1_p5" not in master.columns:
-        master["ret_m1_p5"] = np.nan
-    report: dict = {"n_firm_years": int(len(master)),
-                    "n_firms": int(master["ticker"].nunique())}
-    print(f"panel: {len(master):,} empresas-año, {master['ticker'].nunique():,} empresas\n")
+        master = master.merge(full[["ticker", "year", "ret_m1_p5"]], on=["ticker", "year"], how="left")
+    master["nivel_ia"] = intensity_level(master)
+    report: dict = {"n_firm_years": int(len(master)), "n_firms": int(master["ticker"].nunique()),
+                    "share_any_ai": float(master["any_ai"].mean()),
+                    "n_in_conditional_panel": int(master["in_text_panel"].sum()) if "in_text_panel" in master else None}
+    print(f"panel: {len(master):,} empresas-año con filings, {master['ticker'].nunique():,} empresas, "
+          f"{master['any_ai'].mean()*100:.0f}% con algún frame de IA\n")
 
-    print("=" * 78)
-    print("§1  TALK VS. WALK — declarado en t contra resultado real en t+1")
-    print("=" * 78)
-    x, y = "behavior_share_revenue_outcome", "next_revenue_yoy"
+    print("=" * 78); print("§1  TALK VS. WALK — revenue_outcome por 1.000 párrafos (con ceros) contra revenue real en t+1"); print("=" * 78)
+    x, y = "revenue_outcome_per_1k", "next_revenue_yoy"
     r_raw, p_raw, n_raw = correlation(master, x, y)
     r_sector, n_sector = within_group_correlation(master, x, y, ["sic2", "year"])
     r_firm, n_firm = within_group_correlation(master, x, y, ["ticker"])
@@ -181,84 +206,65 @@ def main() -> None:
     p_perm_raw = permutation_p(master, x, y)
     sector_frame = master.copy()
     for column in (x, y):
-        sector_frame[column] = (sector_frame[column]
-                                - sector_frame.groupby(["sic2", "year"])[column]
-                                .transform("mean"))
+        sector_frame[column] = sector_frame[column] - sector_frame.groupby(["sic2", "year"])[column].transform("mean")
     p_perm_sector = permutation_p(sector_frame, x, y)
-    rows = [("cruda", r_raw, n_raw, p_perm_raw),
-            ("dentro de sector-año", r_sector, n_sector, p_perm_sector),
+    talk = master[master["any_ai"] == 1]
+    r_talk, _, n_talk = correlation(talk, x, y)
+    rows = [("cruda", r_raw, n_raw, p_perm_raw), ("dentro de sector-año", r_sector, n_sector, p_perm_sector),
             ("dentro de empresa (demeaning = efectos fijos)", r_firm, n_firm, np.nan),
-            ("primeras diferencias dentro de empresa", r_diff, n_diff, np.nan)]
+            ("primeras diferencias dentro de empresa", r_diff, n_diff, np.nan),
+            ("cruda, sólo empresas-año que hablan de IA", r_talk, n_talk, np.nan)]
     print(f"{'especificación':46s} {'r':>7s} {'n':>6s} {'p(perm)':>9s}")
     for label, r, n, p in rows:
         print(f"{label:46s} {r:7.3f} {n:6d} {'' if np.isnan(p) else f'{p:9.3f}'}")
     report["talk_vs_walk"] = [{"spec": s, "r": r, "n": n, "p_perm": p} for s, r, n, p in rows]
 
-    print("\n" + "=" * 78)
-    print("§2  LAS 11 CORRELACIONES DEL CRUCE, CON FDR (Benjamini-Hochberg 5%)")
-    print("=" * 78)
+    print("\n" + "=" * 78); print("§2  LAS 11 CORRELACIONES DEL CRUCE, EN INTENSIDAD, CON FDR (Benjamini-Hochberg 5%)"); print("=" * 78)
     results = []
-    for x, y in FDR_PAIRS:
+    for x0, y in FDR_PAIRS:
+        x = INTENSITY.get(x0, x0)
         if x not in master.columns or y not in master.columns:
             continue
         r, p, n = correlation(master, x, y)
         results.append({"x": x, "y": y, "r": r, "p": p, "n": n})
     results.sort(key=lambda row: (np.inf if np.isnan(row["p"]) else row["p"]))
-    flags = benjamini_hochberg([row["p"] for row in results])
-    m = len(results)
+    flags = benjamini_hochberg([row["p"] for row in results]); m = len(results)
     print(f"{'par':62s} {'r':>7s} {'p':>8s} {'BH':>7s} {'pasa':>5s}")
     for rank, (row, keep) in enumerate(zip(results, flags), start=1):
         row["passes_fdr"] = bool(keep)
-        threshold = rank / m * 0.05
-        print(f"{row['x'] + ' ~ ' + row['y']:62s} {row['r']:7.3f} {row['p']:8.4f} "
-              f"{threshold:7.4f} {'sí' if keep else 'no':>5s}")
+        print(f"{row['x'] + ' ~ ' + row['y']:62s} {row['r']:7.3f} {row['p']:8.4f} {rank / m * 0.05:7.4f} {'sí' if keep else 'no':>5s}")
     report["fdr"] = results
+    print("\n§2b  ¿Hablar de IA en absoluto predice algo? (any_ai y frames_per_1k)")
+    extra = []
+    for x in ("any_ai", "frames_per_1k"):
+        for y in ("next_revenue_yoy", "next_capex_yoy", "next_rd_expense_yoy", "ret_m1_p5", "car_m1_p5"):
+            r, p, n = correlation(master, x, y); extra.append({"x": x, "y": y, "r": r, "p": p, "n": n})
+            print(f"  {x:14s} ~ {y:20s} r={r:+.3f} p={p:.4f} n={n}")
+    report["any_ai"] = extra
 
-    print("\n" + "=" * 78)
-    print("§3  PERFIL FINANCIERO POR ARQUETIPO DE VOZ")
-    print("=" * 78)
-    profile_columns = ["gross_margin", "operating_margin", "net_margin", "roa", "roe",
-                       "rd_intensity", "beta", "vol_pre_60d", "momentum_12_1",
-                       "pe_ratio", "ps_ratio", "pb_ratio", "car_m1_p5", "ret_m1_p5"]
-    available = [c for c in profile_columns if c in master.columns]
-    by_voice = master.groupby("archetype")[available].median().reindex(ARCHETYPE_ORDER)
-    print(by_voice.round(3).to_string())
-    report["profile_by_voice"] = json.loads(by_voice.to_json(orient="index"))
+    print("\n" + "=" * 78); print("§3  PERFIL FINANCIERO POR NIVEL DE INTENSIDAD DE IA (cero / terciles de frames por 1.000 párrafos)"); print("=" * 78)
+    available = [c for c in PROFILE_COLUMNS if c in master.columns]
+    by_level = master.groupby("nivel_ia")[available].median().reindex(LEVELS)
+    by_level["n"] = master.groupby("nivel_ia").size().reindex(LEVELS)
+    by_level["frames_per_1k_mediana"] = master.groupby("nivel_ia")["frames_per_1k"].median().reindex(LEVELS)
+    print(by_level.round(3).T.to_string())
+    report["profile_by_level"] = json.loads(by_level.to_json(orient="index"))
 
-    labelled = master.merge(behavior[["ticker", "behavior_cluster"]], on="ticker", how="left")
-    if labelled["behavior_cluster"].notna().any():
-        by_behavior = labelled.groupby("behavior_cluster")[available].median()
-        print("\nPOR CLUSTER DE COMPORTAMIENTO")
-        print(by_behavior.round(3).to_string())
-        report["profile_by_behavior"] = json.loads(by_behavior.to_json(orient="index"))
-
-    print("\n" + "=" * 78)
-    print("§4  ROIC - WACC POR SEGMENTO (con y sin control sectorial)")
-    print("=" * 78)
-    value = roic[["ticker", "year", "roic", "wacc", "roic_minus_wacc", "sic2", "erp"]]
-    value = master[["ticker", "year", "archetype"]].merge(value, on=["ticker", "year"])
-    value = value.merge(behavior[["ticker", "behavior_cluster"]], on="ticker", how="left")
+    print("\n" + "=" * 78); print("§4  ROIC - WACC POR NIVEL DE INTENSIDAD DE IA (con y sin control sectorial)"); print("=" * 78)
+    value = master[["ticker", "year", "nivel_ia"]].merge(
+        roic[["ticker", "year", "roic", "wacc", "roic_minus_wacc", "sic2", "erp"]], on=["ticker", "year"])
     usable = value.dropna(subset=["roic_minus_wacc"]).copy()
     usable["spread_vs_sector"] = sector_demeaned(usable, "roic_minus_wacc")
-    print(f"ERP usado: {float(value['erp'].dropna().iloc[0]):.4f} | "
-          f"{len(usable):,} empresas-año con ROIC y WACC")
-    for key, order in (("archetype", ARCHETYPE_ORDER), ("behavior_cluster", None)):
-        table = usable.groupby(key).agg(
-            roic=("roic", "median"), wacc=("wacc", "median"),
-            spread=("roic_minus_wacc", "median"),
-            spread_vs_sector_med=("spread_vs_sector", "median"),
-            spread_vs_sector_avg=("spread_vs_sector", "mean"),
-            pct_positive=("roic_minus_wacc", lambda s: float((s > 0).mean())),
-            n=("roic_minus_wacc", "size"))
-        if order:
-            table = table.reindex(order)
-        print(f"\npor {key}:")
-        print(table.round(4).to_string())
-        report[f"roic_wacc_by_{key}"] = json.loads(table.to_json(orient="index"))
+    print(f"ERP usado: {float(value['erp'].dropna().iloc[0]):.4f} | {len(usable):,} empresas-año con ROIC y WACC")
+    table = usable.groupby("nivel_ia").agg(
+        roic=("roic", "median"), wacc=("wacc", "median"), spread=("roic_minus_wacc", "median"),
+        spread_vs_sector_med=("spread_vs_sector", "median"), spread_vs_sector_avg=("spread_vs_sector", "mean"),
+        pct_positive=("roic_minus_wacc", lambda s: float((s > 0).mean())), n=("roic_minus_wacc", "size")).reindex(LEVELS)
+    print(table.round(4).to_string())
+    report["roic_wacc_by_level"] = json.loads(table.to_json(orient="index"))
 
     if args.json:
-        args.json.write_text(json.dumps(report, indent=2, default=float))
-        print(f"\n-> {args.json}")
+        args.json.write_text(json.dumps(report, indent=2, default=float) + "\n"); print(f"\n-> {args.json}")
 
 
 if __name__ == "__main__":
