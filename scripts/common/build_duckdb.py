@@ -991,9 +991,40 @@ def main(with_text_tables: bool = False):
             con.execute(f"DROP TABLE IF EXISTS {stage_name}")
 
     print(f"\nCountries: {', '.join(c for c, _ in countries)}")
+    con.close()
+
+    if with_text_tables:
+        # DuckDB never returns freed blocks to the OS: dropping the staging
+        # tables above (and CREATE OR REPLACE over the old text tables)
+        # leaves their blocks as dead space inside the file. Measured
+        # 2026-09-05: 12.7 GiB free blocks on a 17.8 GiB file right after a
+        # fresh build; 25 GiB after a few rebuilds over the same file. Copy
+        # everything into a fresh file and swap it in -- ~1 min, and the
+        # result carries zero free blocks.
+        _compact(DB_PATH)
+
     print(f"Wrote -> {DB_PATH}")
     print("Open with: duckdb duckdb/thesis.duckdb   (then .tables, or SELECT * FROM <view> LIMIT 5;)")
+
+
+def _compact(db_path: Path) -> None:
+    compact_path = db_path.with_suffix(".compact.duckdb")
+    if compact_path.exists():
+        compact_path.unlink()
+    con = duckdb.connect(str(db_path))
+    before = _db_size(con)
+    con.execute(f"ATTACH '{compact_path}' AS compact")
+    con.execute("COPY FROM DATABASE thesis TO compact")
+    con.execute("DETACH compact")
     con.close()
+    compact_path.replace(db_path)
+    after = _db_size(duckdb.connect(str(db_path), read_only=True))
+    print(f"  compacted {before} -> {after}")
+
+
+def _db_size(con) -> str:
+    row = con.execute("PRAGMA database_size").fetchone()
+    return str(row[1]) if row else "?"
 
 
 if __name__ == "__main__":
