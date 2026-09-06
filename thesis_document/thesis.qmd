@@ -6,4 +6,333 @@ format:
     toc: true
     toc-depth: 3
     number-sections: true
+execute:
+  echo: false
+  warning: false
+  freeze: auto
+jupyter: thesis-py
 ---
+
+```{python}
+#| label: setup
+import os
+import duckdb
+import pandas as pd
+import matplotlib.pyplot as plt
+
+REPO_ROOT = os.path.abspath("..")
+os.chdir(REPO_ROOT)  # gold_ai_frames / paragraphs views hold globs relative to repo root
+con = duckdb.connect(os.path.join(REPO_ROOT, "duckdb", "thesis.duckdb"), read_only=True)
+
+plt.rcParams["figure.dpi"] = 150
+plt.rcParams["font.size"] = 9
+```
+
+# Executive summary {.unnumbered}
+
+Since the release of ChatGPT in late 2022, S&P 500 companies have sharply increased the volume of AI-related language in their disclosures. Regulators and investors increasingly ask whether that language is credible or promotional: in March 2024 the U.S. Securities and Exchange Commission (SEC) brought its first enforcement actions against "AI washing" [@sec2024pressrelease]. This dissertation asks whether firms differ systematically in *what* they say about AI — not just in *how much* they say — and whether that difference carries information for investors, regulators and issuers themselves.
+
+The method combines a large-scale text pipeline with established disclosure theory. Every AI-related paragraph across five disclosure venues — 10-K filings, 10-Q filings, proxy statements (DEF 14A), 8-K events and earnings-call transcripts, for S&P 500 constituents, fiscal years 2021–2025 — is identified by a validated classifier and decomposed by a large language model into structured *frames*: who is making the claim, whether AI use is realized, planned, expected or hypothetical, how specific the claim is, and what rhetoric accompanies it. These frames are aggregated to firm-year and firm-quarter features and analysed through four lenses — signalling, cheap talk, legitimacy and greenwashing-as-precedent — to test whether disclosure clusters into distinct, economically coherent archetypes; whether those archetypes add information beyond simple AI-mention volume and financial fundamentals; and whether disclosure behaviour changed after the SEC's 2024 scrutiny and after the DeepSeek competitive shock of January 2025.
+
+Three findings anchor the dissertation: (i) AI disclosure separates along how *realized* and *specific* the claims are, not only along how much a firm talks; (ii) that separation is either informative about risk and valuation beyond fundamentals and volume, or it is not — either result is reported and interpreted; and (iii) the SEC's 2024 statements are associated with a measurable shift in the *composition* of disclosure, tested against the alternative that firms simply talk less. For issuers, the dissertation offers a disclosure-profile benchmark and a self-assessment checklist. For capital allocators, it offers evidence on which narrative features are worth pricing and which are cheap talk. For management scholarship, it tests how far the greenwashing framework transfers to a new technology narrative.
+
+# Introduction {.unnumbered}
+
+Corporate disclosure about artificial intelligence has grown from a niche topic to a near-universal feature of S&P 500 annual reports, proxy statements and earnings calls in the space of three fiscal years. The shift began with the public release of ChatGPT in November 2022 and accelerated through 2023 as management teams, boards and investor relations functions adopted AI as a framing device for strategy, risk and growth. That growth in volume, however, does not resolve the question that matters to the people who read these disclosures: is the firm describing something it is actually doing, something it plans to do, or something it merely hopes investors will associate it with?
+
+The SEC gave that question regulatory weight. In December 2023 its Chair used the term "AI washing" publicly for the first time [@gensler2023], and in March 2024 the agency charged two investment advisers with making false and misleading statements about their use of artificial intelligence [@sec2024pressrelease] — the first enforcement actions of their kind. The episode reframed AI disclosure from a communications choice into a compliance exposure, and it created a natural point in time against which to test whether disclosure behaviour actually changed.
+
+This dissertation treats AI disclosure as a measurement problem before it treats it as a policy question. It builds a paragraph-level, multi-venue corpus of AI-related text for S&P 500 firms (FY2021–2025), validates a classifier that identifies AI-related paragraphs without pre-selecting for substance, and uses a large language model to decompose each paragraph into structured claims — frames — that capture who is speaking, what kind of AI is being described, whether the claim is realized or merely hypothetical, how specific it is, and what rhetorical register it uses. That structured measurement is the empirical foundation for everything that follows: firm-level disclosure archetypes, tests of whether those archetypes carry information beyond mention volume and financial fundamentals, and an assessment of how disclosure changed after the SEC's 2024 scrutiny and after the DeepSeek shock of January 2025.
+
+The main research question is: **how do public firms differ in what they disclose about AI adoption, capabilities, risks and governance, and which distinct disclosure archetypes emerge from those differences?** Five extended questions structure the analysis, each mapped to a chapter later in this document: whether content or volume drives the differences (RQ2, Ch. 4), whether archetypes track coherent economic characteristics (RQ3, Ch. 3), whether semantic content is informative beyond fundamentals (RQ4, Ch. 4), how disclosure evolved over 2021–2025 and around the SEC's scrutiny (RQ5, Ch. 5), and whether the DeepSeek shock changed how firms frame AI capabilities and competitive positioning (RQ6, Ch. 5). Chapter 6 turns the empirical findings into implications for three audiences: the disclosing firm, the capital allocator reading its disclosure, and management scholarship's account of talk–action decoupling.
+
+The dissertation proceeds as follows. Chapter 1 places AI washing in its regulatory context and builds the theoretical framing — signalling, cheap talk, legitimacy and the greenwashing precedent — that later chapters test against. Chapter 2 describes the corpus, the measurement pipeline and its validation. Chapter 3 identifies disclosure archetypes and characterises the firms that occupy each one. Chapter 4 asks whether those archetypes, and the semantic features behind them, carry information about firm risk and valuation beyond what mention volume and financial fundamentals already explain. Chapter 5 studies how disclosure evolved over the sample period and around the two 2024–2025 shocks. Chapter 6 draws out the managerial, investment and scholarly implications, and the Conclusions close with the dissertation's main outcomes, limitations and open questions.
+
+# AI washing: context and theory
+
+## The post-ChatGPT disclosure wave
+
+```{python}
+#| label: fig-f1-1
+#| fig-cap: "Monthly count of S&P 500 AI-related paragraphs identified by the prefilter, all five sources pooled, January 2021–December 2025. Vertical lines mark ChatGPT's public release (Nov 2022), the SEC Chair's first public use of \"AI washing\" (Dec 2023), the SEC's first AI-washing enforcement actions (18 Mar 2024), and the DeepSeek release (27 Jan 2025)."
+
+import matplotlib.dates as mdates
+
+monthly = con.execute("""
+    select date_trunc('month', fm.filing_date) as month, count(*) as n_paragraphs
+    from gold_ai_frames f
+    join filing_manifest fm using (accession_number)
+    where fm.country_code = 'us'
+    group by 1
+    order by 1
+""").df()
+monthly["month"] = pd.to_datetime(monthly["month"])
+monthly = monthly[(monthly["month"] >= "2021-01-01") & (monthly["month"] <= "2025-12-31")]
+
+events = {
+    "ChatGPT (Nov 2022)": "2022-11-30",
+    '"AI washing" speech (Dec 2023)': "2023-12-05",
+    "SEC actions (Mar 2024)": "2024-03-18",
+    "DeepSeek (Jan 2025)": "2025-01-27",
+}
+
+fig, ax = plt.subplots(figsize=(6.5, 3.2))
+ax.plot(monthly["month"], monthly["n_paragraphs"], color="#1f2d3d", linewidth=1.3)
+for i, (label, date) in enumerate(events.items()):
+    ax.axvline(pd.Timestamp(date), color="#b0473d", linestyle="--", linewidth=0.9)
+    ax.text(pd.Timestamp(date), ax.get_ylim()[1] * (0.92 - 0.08 * i), label,
+            rotation=0, fontsize=6.5, color="#b0473d", ha="left")
+ax.set_ylabel("AI-related paragraphs / month")
+ax.xaxis.set_major_locator(mdates.YearLocator())
+ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+ax.spines[["top", "right"]].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+@fig-f1-1 plots the volume of AI-related disclosure pooled across all five venues in the corpus, against the four dates that structure this dissertation's regulatory and competitive narrative. The pattern this chapter's hypotheses depend on is whether volume merely rises monotonically with AI's general salience, in which case the SEC's 2024 scrutiny shows up — if it shows up at all — in the *composition* of disclosure rather than in its quantity, or whether volume itself breaks around one of the marked dates, which would mean the regulatory and competitive shocks studied in Chapter 5 changed how much firms say, not only what they say.
+
+The regulatory response summarised in the SEC's 2024 actions [@sec2024pressrelease] is not, on its own, evidence that most AI disclosure is misleading. It is evidence that the SEC judged verification costly enough, and incentives to overstate strong enough, to intervene. That judgment is the starting point for the theoretical framing in the next section: it motivates treating AI disclosure as a case where firms differ in the private information behind their claims and in their incentives to signal it credibly, rather than as text that can be taken at face value.
+
+## The SEC's 2024 position and enforcement
+
+The SEC's public concern with AI-related disclosure moved from remarks to enforcement in a five-month window. Its Chair first used the term "AI washing" in December 2023 [@gensler2023], and by March 2024 the agency had charged two investment advisers with making false and misleading statements about their use of artificial intelligence [@sec2024pressrelease]. The agency's own framing draws an explicit parallel to greenwashing: firms adopting a favourable label — "AI," like "green" before it — without the underlying substance the label implies.
+
+Three features of the SEC's position matter for the design of this dissertation. First, the concern is about the *gap* between disclosure and operational reality, not about AI disclosure volume as such — which is exactly the gap the frame schema in Chapter 2 is built to measure, through the `temporal` field (realized versus planned, expected or hypothetical) and the specificity flags (does the claim name a process, product, vendor, metric or date). Second, the enforcement actions targeted investment advisers, a category outside this dissertation's S&P 500 operating-company sample; the scrutiny event studied in Chapter 5 is therefore a signal of a general regulatory posture shift, not a treatment that directly touched the sample firms — which is why the dissertation reports it as a difference-in-differences on disclosure intensity, not as a causal claim about firms that were themselves investigated. Third, the SEC listed AI as an emerging examination priority for 2024 and proposed related rulemaking on predictive data analytics, so the March 2024 actions are one visible point in a broader posture shift rather than an isolated event — a reason to treat the post-period as starting from March 2024 but to check robustness against nearby placebo dates (Ch. 5, T5.4).
+
+## Theoretical lenses
+
+Four theoretical lenses frame the empirical work, chosen because each predicts a different observable pattern in the frame-level data described in Chapter 2, and because together they cover both why firms speak the way they do and why regulators respond.
+
+**Voluntary disclosure and signalling theory.** Verrecchia's [@verrecchia1983] discretionary-disclosure framework and Spence's [@spence1973] signalling model share a mechanism relevant here: a costly, hard-to-imitate signal separates firms with good private information from firms without it. Applied to AI disclosure, specificity — naming a process, product, vendor, metric or date — and realization — describing something already done rather than merely planned — are costly in the sense that they are falsifiable and can be checked against subsequent filings, earnings, or product launches. A firm with nothing concrete to report cannot cheaply fabricate a specific, realized claim without creating a verifiable trail it may not be able to sustain. This is the basis for **H1**: specificity and realization behave as a separating signal, and disclosure archetypes should organise along those two dimensions more than along topic breadth or volume alone.
+
+**Cheap talk and impression management.** Where claims cannot be verified in the short run — a "planned" or "expected" AI capability with no committed date — Crawford and Sobel's [@crawford1982] cheap-talk result implies management has no cost-based reason to report its private information truthfully, and Merkl-Davies and Brennan [@merkldavies2007] document exactly this incentive in narrative disclosure generally: promotional framing and hedged, forward-looking language cluster where the underlying claim is hardest for a reader to check. This motivates **H2**: promotional rhetoric and hypothetical or expected framing should concentrate in the same paragraphs, and in the same firms, because both are symptoms of a claim insulated from verification.
+
+**Legitimacy and institutional theory.** Suchman's [@suchman1995] account of legitimacy-seeking behaviour and DiMaggio and Powell's [@dimaggio1983] mimetic isomorphism predict a different driver of AI talk: firms adopt AI language not because they have something specific to report but because peers and stakeholders expect the topic to be addressed. This produces low-specificity disclosure that diffuses by sector and imitation rather than by firm-level economic characteristics — **H3**. It is the lens most directly at odds with H1: if sector, not R&D intensity or growth, predicts who talks about AI and how, disclosure is closer to institutional conformity than to costly signalling.
+
+**Greenwashing as the reference case.** Delmas and Burbano's [@delmas2011] drivers-of-greenwashing framework and Lyon and Montgomery's [@lyon2015] account of greenwashing as a form of strategic communication give this dissertation its closest structural analogue, and its regulatory-response precedent: Marquis, Toffel and Zhou [@marquis2016] show that external scrutiny reduces selective disclosure in the environmental domain. Applied to AI, this motivates **H5** — that the SEC's 2024 scrutiny should reduce the promotional and hypothetical share of disclosure more than it increases the realized or specific share, i.e., firms are more likely to *remove* what looks risky than to *add* what would look credible — and, combined with the venue distinctions in Chapter 2 (mandated versus voluntary disclosure), **H6**: voluntary venues (earnings calls) should react more to scrutiny than mandated ones (10-K), because mandated text already carries higher baseline legal review.
+
+A fifth prediction, **H4**, follows from combining the first three lenses rather than from any one of them: if disclosure content reflects real private information (H1) rather than pure mimicry (H3) or pure cheap talk (H2), it should be informative about firm outcomes — risk, valuation, growth — beyond what AI-mention volume and financial fundamentals already capture. Chapter 4 is built to test H4 directly; the other hypotheses are tested in Chapters 3 and 5.
+
+## Prior empirical work and the gap
+
+Three empirical literatures precede this dissertation. The finance literature on textual measures of AI exposure includes Eisfeldt, Schubert and Zhang [@eisfeldt2023], who link occupational exposure to generative AI to firm value, and — closest to this dissertation's design — Basnet et al. [@basnet2025], who classify 10-K AI narratives as actionable or speculative and find that only actionable narratives earn a valuation premium, and Song et al. [@song2026], who compare BERT-classified AI claims against AI patents and find that unsubstantiated claims attract attention and then underperform. Anantharaman, Parker and Rozario [@anantharaman2026] provide large-sample descriptive evidence on the evolution of AI risk, ethics and opportunity disclosure in 10-Ks since 2017, and Babina et al. [@babina2024] offer a resume-based measure of AI investment linked to product innovation and growth — the closest available proxy for the "substance" this dissertation's frame schema tries to measure directly from disclosure rather than infer from hiring data. Strauss et al. [@strauss2025] study 8-K AI disclosure by item and argue for an SEC 10-K AI mandate, providing context for the thin 8-K layer in this dissertation's own corpus (Ch. 2, T2.1). The accounting literature on disclosure quality and cheap talk, and the Loughran–McDonald tradition of transparent, dictionary-based textual analysis [@loughran2011], frame the measurement choices in Chapter 2: a lexical gate in the spirit of Loughran and McDonald's finance dictionaries, extended with embedding-based semantic scores and an LLM extraction layer validated against human coding rather than taken on trust.
+
+The gap this dissertation addresses is specific. Basnet et al. [@basnet2025] and Song et al. [@song2026] each collapse AI disclosure to a binary substantive/speculative split measured at the document or claim level; neither characterises a multi-dimensional structure of disclosure style, tests whether that structure survives controlling for volume, or studies how it moved around a named regulatory event with quarterly, cross-venue resolution. This dissertation's frame schema — subject, AI type, temporal status, domain, concept breadth, specificity and rhetoric, captured separately for 10-K, 10-Q, DEF 14A, 8-K and earnings-call text — is built to close exactly that gap.
+
+## Hypotheses derived from theory
+
+```{python}
+#| label: tbl-t1-1
+#| tbl-cap: "Hypotheses, theoretical lens and the chapter that tests each."
+
+import pandas as pd
+
+t1_1 = pd.DataFrame([
+    ["H1", "Signalling", "Specificity and realization are costly to fabricate, so they separate disclosure archetypes.", "Ch. 3"],
+    ["H2", "Cheap talk", "Promotional and hypothetical framing concentrate where verification is hardest.", "Ch. 3"],
+    ["H3", "Legitimacy", "Low-specificity AI talk spreads by sector, not by firm economics.", "Ch. 3"],
+    ["H4", "Informativeness (H1+H2+H3 combined)", "Semantic disclosure content adds explanatory power for firm outcomes beyond AI-mention volume and fundamentals.", "Ch. 4"],
+    ["H5", "Regulatory response (greenwashing precedent)", "The SEC's 2024 scrutiny reduces promotional/hypothetical share more than it raises realized/specific share.", "Ch. 5"],
+    ["H6", "Venue (greenwashing precedent)", "Voluntary venues (earnings calls) react more to scrutiny than mandated venues (10-K).", "Ch. 5"],
+], columns=["#", "Theoretical lens", "Hypothesis", "Tested in"])
+t1_1
+```
+
+# Data and measurement
+
+## Corpus and sources
+
+The corpus covers S&P 500 constituents across five disclosure venues, fiscal years 2021–2025: Form 10-K (annual, mandated), Form 10-Q (quarterly, mandated), DEF 14A proxy statements (annual, governance-focused), Form 8-K (event-driven), and earnings-call transcripts (quarterly, voluntary). Table 2.1 reports, as queried live against the pipeline's DuckDB store, filings and firms covered per source and the number of AI-related paragraphs each source has yielded so far.
+
+```{python}
+#| label: tbl-t2-1
+#| tbl-cap: "Corpus by source: filings, firms and AI-related paragraphs identified to date (live query against the pipeline database)."
+
+t2_1_filings = con.execute("""
+    with us_forms as (
+        select form_type as form,
+               case when form_type = 'Earnings call transcript' then document_id else accession_number end as doc_key,
+               cik
+        from filing_manifest where country_code = 'us'
+    )
+    select form, count(distinct doc_key) as filings, count(distinct cik) as firms
+    from us_forms group by 1
+    union all
+    select '10-Q', count(distinct accession_number), count(distinct cik) from filing_manifest_10q
+""").df()
+
+t2_1_paras = con.execute("""
+    select f.form, count(distinct f.accession_number || '|' || f.item_key || '|' || f.paragraph_index) as ai_paragraphs
+    from gold_ai_frames f
+    join filing_manifest fm on f.accession_number = fm.accession_number
+    where fm.country_code = 'us'
+    group by 1
+""").df()
+
+t2_1 = t2_1_filings.merge(t2_1_paras, on="form", how="left").fillna(0)
+t2_1["ai_paragraphs"] = t2_1["ai_paragraphs"].astype(int)
+order = ["10-K", "Earnings call transcript", "DEF 14A", "10-Q", "8-K"]
+t2_1 = t2_1.set_index("form").loc[order].reset_index()
+t2_1.columns = ["Source", "Filings", "Firms", "AI paragraphs"]
+t2_1
+```
+
+The multi-source design separates *mandated* disclosure (10-K, 10-Q) from *voluntary* disclosure (earnings calls, 8-K) and from *governance* disclosure (DEF 14A), so the same firm's AI narrative can be compared across venues that carry different liability exposure and reach different audiences. It also gives quarterly frequency (calls, 10-Q) alongside annual frequency (10-K, DEF 14A), which is what makes the SEC scrutiny event and the DeepSeek shock separately identifiable at quarterly resolution in Chapter 5.
+
+```{python}
+#| label: fig-f2-1
+#| fig-cap: "AI-related paragraphs per firm-year by source, FY2021-2025 (median, with interquartile range)."
+
+fy = con.execute("""
+    select fm.form_type as form,
+           extract(year from fm.filing_date)::int as fy,
+           fm.cik,
+           count(distinct f.paragraph_index) as n_paragraphs
+    from gold_ai_frames f
+    join filing_manifest fm on f.accession_number = fm.accession_number
+    where fm.country_code = 'us' and fm.form_type in ('10-K', 'DEF 14A')
+    group by 1, 2, 3
+""").df()
+
+fig, ax = plt.subplots(figsize=(6.5, 3.2))
+sources = fy["form"].unique().tolist()
+years = sorted(fy["fy"].unique())
+width = 0.35
+for i, src in enumerate(sources):
+    meds = [fy[(fy.form == src) & (fy.fy == y)]["n_paragraphs"].median() for y in years]
+    ax.bar([y + (i - 0.5) * width for y in years], meds, width=width, label=src)
+ax.set_xticks(years)
+ax.set_ylabel("Median AI paragraphs / firm-year")
+ax.legend(frameon=False, fontsize=7)
+ax.spines[["top", "right"]].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+#| label: fig-f2-2
+#| fig-cap: "Share of S&P 500 firms with at least one AI-related 10-K paragraph, by SIC-derived industry group (top 12 by firm count) and fiscal year."
+
+sector = con.execute("""
+    with fy_firm as (
+        select fu.industry_group, extract(year from fm.filing_date)::int as fy, fm.cik,
+               max(case when f.paragraph_index is not null then 1 else 0 end) as has_ai
+        from filing_manifest fm
+        left join gold_ai_frames f on f.accession_number = fm.accession_number
+        join firm_universe fu on fu.cik = fm.cik and fu.country_code = 'us'
+        where fm.country_code = 'us' and fm.form_type = '10-K'
+        group by 1, 2, 3
+    )
+    select industry_group, fy, avg(has_ai) as share, count(*) as n_firms
+    from fy_firm group by 1, 2
+""").df()
+
+top_groups = (sector.groupby("industry_group")["n_firms"].max()
+              .sort_values(ascending=False).head(12).index.tolist())
+pivot = sector[sector.industry_group.isin(top_groups)].pivot(index="industry_group", columns="fy", values="share")
+pivot = pivot.loc[top_groups]
+
+fig, ax = plt.subplots(figsize=(6.5, 4))
+im = ax.imshow(pivot.values, cmap="Blues", aspect="auto", vmin=0, vmax=1)
+ax.set_xticks(range(len(pivot.columns)))
+ax.set_xticklabels(pivot.columns)
+ax.set_yticks(range(len(pivot.index)))
+ax.set_yticklabels([g[:32] for g in pivot.index], fontsize=6.5)
+fig.colorbar(im, ax=ax, shrink=0.8, label="Share of firms with ≥1 AI paragraph")
+plt.tight_layout()
+plt.show()
+```
+
+@fig-f2-2 uses SIC-derived industry groups, the classification currently available in the firm universe table, rather than GICS sectors as originally planned in the proposal; a GICS crosswalk is a pending pipeline task (Appendix A) and this figure will be rebuilt on GICS once that join exists, without changing its interpretation materially since the two taxonomies agree closely at this level of aggregation.
+
+## From text to frames
+
+Measurement proceeds in three stages, each producing a persisted, idempotent artefact keyed by paragraph text hash so that upstream changes do not force downstream recomputation.
+
+**Embedding.** Every unique paragraph text in the corpus is embedded once with BAAI/bge-m3 [@chen2024bge], 1024 dimensions. Semantic margin scores against curated positive and negative anchor sets are computed on these paragraph vectors.
+
+**AI prefilter.** A classifier answers "does this paragraph mention AI?" — deliberately not "is this substantive?", because vagueness is the object of study and must not be filtered out before it can be measured. It combines a lexical gate (strong and weak AI-vocabulary terms with word-boundary matching, including acronyms) with the paragraph-level semantic margin (maximum positive-anchor similarity minus negative-anchor similarity), and — within the lexical-gate population — a sentence-level signal computed only on sentences that themselves contain an AI term, because in long structural text such as board skills matrices the paragraph vector is dominated by non-AI content even when one cell explicitly names AI. The deployed classifier is a decision-tree ensemble over paragraph-level, text-form and sentence-level signals; document type is deliberately excluded as a feature so that cross-venue comparisons in later chapters are not circular. Full signal list, training protocol and per-channel holdout metrics are in Appendix A/B.
+
+**Frame extraction.** Each prefiltered paragraph is sent to a large language model, segmented into numbered sentences, and returns zero or more *frames* — coherent propositions about AI — with evidence given as sentence indices rather than copied text, so no quotation is fabricated. Each frame records a subject (firm, suppliers/partners, customers, competitors/industry), an AI type (generative, predictive ML, unspecified), a temporal status (realized, planned, expected, hypothetical), a domain (internal, customer-facing, unspecified), a set of topical concepts, five specificity flags (process, product, vendor, metric, date) and two rhetoric flags (promotional, strategic-importance), together with the evidence sentence indices. As of this draft the pipeline has produced:
+
+```{python}
+#| label: tbl-frames-status
+#| tbl-cap: "Frames extracted to date, by source (live count)."
+
+frames_status = con.execute("""
+    select fm.form_type as source, count(*) as frames, count(distinct fm.cik) as firms
+    from gold_ai_frames f
+    join filing_manifest fm on f.accession_number = fm.accession_number
+    where fm.country_code = 'us' and f.has_frame
+    group by 1 order by frames desc
+""").df()
+frames_status
+```
+
+## Validation
+
+Validation is staged and is a first-class deliverable of the dissertation, not an afterthought.
+
+The **prefilter** is validated in two independent ways, documented in full in `docs/prefilter_evaluation.md` (condensed to Appendix B for submission): (i) an LLM judge is checked against an independent model (Gemini) for label agreement, and (ii) the deployed decision-tree classifier is evaluated by `GroupKFold`, grouped by filing so that paragraphs from the same document never span train and test, against a held-out golden set built from the same LLM-judge labels. The weighted F1 the deployed model is selected on, and the reasoning behind that choice over recall-maximising alternatives, are reported in full in Appendix B rather than restated here, so that this chapter is not overtaken by the next threshold-tuning iteration recorded in the evaluation log.
+
+**Frame extraction** is the critical-path validation item and is not yet complete. The plan, unchanged from the proposal stage, is a stratified human-coded sample (target ≥ 400 paragraphs across sources, years and prefilter score bands), double-coded, with agreement reported at frame level (count and boundaries) and field level (Cohen's κ [@cohen1960] per field), `temporal`, `specificity` and `rhetoric` carrying the dissertation's central claims and therefore the fields whose agreement threshold is checked most carefully before any firm-level result in Chapters 3–5 is treated as final. Systematic disagreement on a field collapses that field to a coarser category (e.g. planned/expected/hypothetical → "not realized") rather than being silently absorbed.
+
+## Firm-period features
+
+```{python}
+#| label: tbl-t2-4
+#| tbl-cap: "Firm-period feature definitions."
+
+t2_4 = pd.DataFrame([
+    ["AI volume", "Count / share of AI paragraphs and frames per firm-period", "firm-year, firm-quarter", "H3, H4"],
+    ["Realization", "Share of firm-subject frames with temporal = realized vs. planned/expected/hypothetical", "firm-year, firm-quarter", "H1, H5"],
+    ["Specificity", "Mean count (0-5) and share of frames with ≥1 of {process, product, vendor, metric, date}", "firm-year, firm-quarter", "H1, H5"],
+    ["Promotional rhetoric", "Share of frames flagged rhetoric_promotional", "firm-year, firm-quarter", "H2, H5"],
+    ["Strategic-importance rhetoric", "Share of frames flagged rhetoric_strategic_importance", "firm-year, firm-quarter", "H2"],
+    ["Breadth", "Distinct concept count per firm-period", "firm-year", "H3"],
+    ["Risk/governance presence", "Indicator: ≥1 frame touches a risk or governance concept", "firm-year", "H5"],
+    ["Composition (type)", "Share generative vs. predictive-ML among typed frames", "firm-year", "descriptive"],
+    ["Composition (domain)", "Share internal vs. customer-facing among typed frames", "firm-year", "descriptive"],
+    ["Cross-venue gap", "Within-firm difference in realization/specificity/rhetoric, 10-K vs. calls vs. DEF 14A", "firm-year", "H6"],
+], columns=["Feature", "Definition", "Level", "Hypothesis served"])
+t2_4
+```
+
+Only frames with `subject = firm` enter these core features; frames about suppliers, customers or competitors are retained as separate context measures rather than pooled with the firm's own claims, since a firm describing a *customer's* AI adoption is not making a claim about itself.
+
+## Financial and market data
+
+```{python}
+#| label: tbl-t2-5
+#| tbl-cap: "Financial and market variables, from EDGAR XBRL Financial Statement Data Sets and daily prices, fiscal-year aligned to the 10-K."
+
+t2_5 = pd.DataFrame([
+    ["Size", "log market cap; log total assets", "At fiscal year-end"],
+    ["Investment", "R&D/sales; capex/sales; SG&A/sales", "R&D missing → 0 with indicator"],
+    ["Profitability", "Gross margin; EBIT margin; ROA", ""],
+    ["Growth", "Revenue growth (YoY); 3-year revenue CAGR", ""],
+    ["Valuation", "Price/sales; EV/EBITDA; book-to-market; Tobin's Q (approx.)", ""],
+    ["Balance sheet", "Cash/assets; net debt/EBITDA", ""],
+    ["Risk", "CAPM beta (252 trading days vs. S&P 500); total volatility; idiosyncratic volatility", "Computed over the fiscal year"],
+    ["Classification", "SIC-derived industry group (GICS crosswalk pending)", "Characterisation only"],
+], columns=["Group", "Variable(s)", "Note"])
+t2_5
+```
+
+```{python}
+#| label: tbl-t2-6
+#| tbl-cap: "Descriptive statistics, market data coverage (live query)."
+
+t2_6 = con.execute("""
+    select extract(year from date)::int as year, count(distinct ticker) as tickers, count(*) as price_obs
+    from market_prices group by 1 order by 1
+""").df()
+t2_6
+```
+
+## Analytical strategy
+
+The analysis in Chapters 3–5 follows the aggregation in this chapter directly: firm-year and firm-quarter features feed unsupervised clustering (Ch. 3), nested regressions against financial outcomes (Ch. 4), and a continuous-treatment difference-in-differences on the quarterly panel (Ch. 5). Each of those chapters is written against the live, currently-available frame counts reported above, and is re-run as the frame-extraction pass completes across the full corpus rather than being fixed to a one-time snapshot.
+
+
