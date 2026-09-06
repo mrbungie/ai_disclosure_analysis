@@ -18,9 +18,16 @@ devuelve, por cada actividad distinta, una estructura chica:
     function    para qué (snake_case normalizado: customer_service, coding, ...)
     target      para quién (enum: employees, customers, developers, ...)
     stage       en qué etapa (enum: exploring, piloting, deployed, scaled)
-    provider    con qué modelo/proveedor (texto corto; "proprietary"; "unspecified")
+    providers   con qué modelos/proveedores: TODOS los nombrados (lista; "proprietary" si es propio)
     evidence    fuerza de la evidencia (enum: named_product_or_process, metric, vendor, generic)
     sentence_ids
+
+v2 (2026-09-06): `providers_or_models` es una lista con todos los proveedores
+o modelos nombrados (v1 guardaba uno solo y perdía el segundo en el 2% de las
+actividades), y el prompt exige una actividad por cada acción·objeto·función
+distinta del párrafo (v1 pedía "el mínimo" y dejó una sola actividad en el
+57% de los párrafos, 43% de los de ocho o más oraciones). Las partes v1 están
+archivadas en `data/archive/interim/ai_activities/`.
 
 `object` y `function` quedan libres a propósito: anticipar todos los casos de
 uso produce una ontología monstruosa; `scripts/analytics/activity_profiles.py`
@@ -59,7 +66,7 @@ from ai_classify import DEFAULT_DATABASE, DEFAULT_JUDGE_MODEL, PARAGRAPH_KEY, RE
 
 DEFAULT_DIR = REPO_ROOT / "data" / "interim" / "ai_activities"
 PART_GLOB = "ai_activities__session=*.parquet"
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 BEHAVIOURAL_CONCEPTS = ["deployed", "pilot_or_testing", "exploring", "expansion_or_scaling",
                         "proprietary_ai", "third_party_ai", "ai_infrastructure", "ai_talent", "ai_investment",
                         "productivity_outcome", "cost_outcome", "revenue_outcome", "customer_outcome"]
@@ -92,9 +99,10 @@ class AIActivity(BaseModel):
         "'unspecified' if the text gives none."))
     target: Target = Field(description="Who the AI serves: employees, customers, developers, an internal process, partners, or unspecified.")
     stage: Stage = Field(description="Adoption stage as stated: exploring, piloting, deployed, scaled, or unspecified.")
-    provider_or_model: str = Field(description=(
-        "Named provider or model in 1-3 words (e.g. 'OpenAI', 'Azure OpenAI', 'Gemini', 'Anthropic', "
-        "'NVIDIA'); 'proprietary' if the firm says it built its own; 'unspecified' otherwise."))
+    providers_or_models: list[str] = Field(default_factory=list, description=(
+        "EVERY external provider, partner or model named for this activity, each in 1-3 words "
+        "(e.g. ['NVIDIA', 'Intel'], ['OpenAI', 'Azure OpenAI'], ['Gemini']). Add 'proprietary' when the "
+        "firm says it built or owns the AI itself. Empty list when none is named."))
     evidence_strength: Evidence = Field(description=(
         "Strongest evidence attached: named_product_or_process (a named product, system or "
         "process), metric (a number), vendor (a named provider), generic (none of those)."))
@@ -102,11 +110,15 @@ class AIActivity(BaseModel):
 
 
 class ParagraphActivities(BaseModel):
-    """Zero activities is valid when the behavioural frames turn out to describe
-    nothing concrete (e.g. 'we use AI across our business')."""
+    """Every distinct activity the paragraph discloses. A long paragraph usually
+    contains several (e.g. deploying a copilot AND investing in data centres AND
+    partnering with a provider): list each one. Zero is valid only when nothing
+    concrete is stated (e.g. 'we use AI across our business')."""
     activities: list[AIActivity] = Field(default_factory=list, description=(
-        "Distinct disclosed AI activities. One per (action, object, function) combination; "
-        "merge repetitions, do not split one activity across several entries."))
+        "ALL distinct disclosed AI activities in the paragraph, one entry per distinct (action, object, "
+        "function) combination. Every behavioural frame listed in the input should be covered by at least "
+        "one activity unless it is too generic to name an object. Do not collapse different actions or "
+        "different objects into one entry; do merge exact repetitions of the same activity."))
 
 
 SYSTEM_PROMPT = """\
@@ -120,12 +132,16 @@ those statements into activities of the form
 
     the firm performs ACTION on OBJECT for FUNCTION (target, stage, provider, evidence).
 
-Rules. Report only what the text states the FIRM does or did or plans; never what \
-customers, the market or competitors do. Do not invent an object or function the \
+Rules. Be exhaustive: list EVERY distinct activity, one per distinct (action, object, \
+function); a paragraph that deploys a product, invests in infrastructure and partners \
+with a provider yields three activities, not one. Cover every behavioural frame you are \
+given unless it is too generic to name an object. Name EVERY provider or model the text \
+attaches to an activity (both when two are named). Report only what the text states the \
+FIRM does or did or plans; never what customers, the market or competitors do. Do not invent an object or function the \
 text does not give: use 'unspecified'. Prefer generic objects ('copilot', 'chatbot', \
 'fraud model') over brand names; put brand names of models or providers in \
-provider_or_model. One activity per distinct (action, object, function); merge \
-repetitions. Return sentence indices as evidence, never sentence text. Zero \
+providers_or_models, all of them. One activity per distinct (action, object, function); \
+merge only exact repetitions. Return sentence indices as evidence, never sentence text. Zero \
 activities is a valid answer when the statements are too generic to name any \
 action-object pair (e.g. 'AI is important to our strategy')."""
 
@@ -144,7 +160,7 @@ ACTIVITY_SCHEMA = pa.schema([
     ("item_key", pa.string()), ("paragraph_index", pa.int64()), ("text_hash", pa.uint64()),
     ("activity_index", pa.int64()), ("has_activity", pa.bool_()),
     ("action", pa.string()), ("object", pa.string()), ("function", pa.string()), ("target", pa.string()),
-    ("stage", pa.string()), ("provider_or_model", pa.string()), ("evidence_strength", pa.string()),
+    ("stage", pa.string()), ("providers_or_models", pa.list_(pa.string())), ("evidence_strength", pa.string()),
     ("evidence_sentence_ids", pa.list_(pa.int64())), ("sentence_indices", pa.list_(pa.int64())),
     ("source_frame_indices", pa.list_(pa.int64())),
     ("judge_model", pa.string()), ("prompt_version", pa.string()), ("session_id", pa.string()),
@@ -175,13 +191,14 @@ def _base(row: dict, judge_model: str, session_id: str) -> dict:
 def _rows(row: dict, judge_model: str, session_id: str, out: ParagraphActivities) -> list[dict]:
     base = _base(row, judge_model, session_id)
     empty = {"action": None, "object": None, "function": None, "target": None, "stage": None,
-             "provider_or_model": None, "evidence_strength": None, "evidence_sentence_ids": []}
+             "providers_or_models": [], "evidence_strength": None, "evidence_sentence_ids": []}
     if not out.activities:
         return [{**base, **empty, "activity_index": 0, "has_activity": False}]
     n = len(row["sentences"])
     return [{**base, "activity_index": i, "has_activity": True, "action": a.action,
              "object": a.object.strip().lower()[:80], "function": a.function.strip().lower()[:60],
-             "target": a.target, "stage": a.stage, "provider_or_model": a.provider_or_model.strip()[:60],
+             "target": a.target, "stage": a.stage,
+             "providers_or_models": [p.strip()[:60] for p in a.providers_or_models if p and p.strip()],
              "evidence_strength": a.evidence_strength,
              "evidence_sentence_ids": [s for s in a.sentence_ids if 0 <= s < n]}
             for i, a in enumerate(out.activities)]
@@ -190,7 +207,7 @@ def _rows(row: dict, judge_model: str, session_id: str, out: ParagraphActivities
 def _error_row(row: dict, judge_model: str, session_id: str, error: Exception) -> dict:
     return {**_base(row, judge_model, session_id), "activity_index": 0, "has_activity": False,
             "action": None, "object": None, "function": None, "target": None, "stage": None,
-            "provider_or_model": None, "evidence_strength": None, "evidence_sentence_ids": [],
+            "providers_or_models": [], "evidence_strength": None, "evidence_sentence_ids": [],
             "error": f"{type(error).__name__}: {error}"[:2000]}
 
 
