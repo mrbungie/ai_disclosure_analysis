@@ -161,30 +161,31 @@ const ACTION_ES = { deploy: 'despliega / usa', develop: 'desarrolla', integrate:
 const TARGET_ES = { employees: 'empleados', customers: 'clientes', developers: 'desarrolladores', internal_process: 'proceso interno', partners_or_suppliers: 'socios o proveedores', unspecified: 'no dice' };
 const STAGE_ES = { exploring: 'explorando', piloting: 'piloto', deployed: 'desplegado', scaled: 'escalado', unspecified: 'no dice' };
 const EVID_ES = { named_product_or_process: 'producto o proceso con nombre', metric: 'cifra', vendor: 'proveedor nombrado', generic: 'genérica (sin nombre ni cifra)' };
-const FIELDS = [['action', 'acción'], ['object', 'objeto'], ['function', 'función'], ['target', 'destinatario'], ['stage', 'etapa'], ['provider', 'proveedor'], ['evidence_strength', 'evidencia']];
+const FIELDS = [['action', 'acción'], ['object', 'objeto'], ['function', 'función'], ['target', 'destinatario'], ['stage', 'etapa'], ['provider', 'proveedores externos'], ['own', 'propia / marcas propias'], ['evidence_strength', 'evidencia']];
 function verdict(it, ai, v) { const a = get(it.id); a['a' + ai + '.veredicto'] = v; if (v !== 'mal') a['a' + ai + '.mal'] = {}; a.ts = new Date().toISOString(); save(); render(); }
 function pendingActivity(it) { const a = get(it.id); return it.activities.find(x => a['a' + x.activity_index + '.veredicto'] === undefined); }
 function renderActivity(it) {
   const a = get(it.id); const ev = new Set(it.activities.flatMap(x => x.evidence));
   let h = `<div class="meta">${firm(it)}${esc(it.form)} · ${esc(it.accession_number)} · ${it.activities.length} actividad(es) extraída(s)</div>`;
   h += `<div class="para">` + it.sentences.map(s => `<div class="sent ${ev.has(s.idx) ? 'ev' : ''}"><span class="n">[${s.idx}]</span>${esc(s.text)}</div>`).join('') + `</div>`;
-  h += `<div class="hint" style="margin:0 0 8px">Según el modelo, este párrafo de <b>${esc(it.company || it.ticker || 'la empresa')}</b> dice que la empresa hace esto (una tarjeta por actividad). Para cada una: ¿lo dice el texto? Mirá la frase, no los detalles. Si "proveedores" está vacío y el texto nombra a la propia empresa o sus productos, está bien: proveedor es alguien externo.</div>`;
+  h += `<div class="hint" style="margin:0 0 8px">Según el modelo, este párrafo de <b>${esc(it.company || it.ticker || 'la empresa')}</b> dice que la empresa hace esto (una tarjeta por actividad). Para cada una: ¿lo dice el texto? Mirá la frase, no los detalles. "Proveedores externos" son terceros; los productos de la propia empresa van en "IA propia (marcas)".</div>`;
   const pend = pendingActivity(it);
   for (const x of it.activities) {
     const p = 'a' + x.activity_index + '.'; const ver = a[p + 'veredicto']; const mal = a[p + 'mal'] || {};
     const fn = x.function && x.function !== 'unspecified' ? ` para <i>${esc(x.function.replace(/_/g, ' '))}</i>` : ' <span class="hint">(no dice para qué)</span>';
-    const prov = x.providers && x.providers.length ? x.providers.map(esc).join(', ') : 'no dice';
+    const prov = x.providers && x.providers.length ? x.providers.map(esc).join(', ') : 'ninguno';
+    const own = (x.is_own_ai ? 'IA propia' : 'no propia / no dice') + (x.own_brands && x.own_brands.length ? ' (' + x.own_brands.map(esc).join(', ') + ')' : '');
     const focus = pend && pend.activity_index === x.activity_index ? ' style="box-shadow:0 0 0 2px #6a1b9a33"' : '';
     h += `<div class="act"${focus}><div class="hint">actividad ${x.activity_index} · evidencia [${x.evidence.join(', ')}]</div>
       <div class="sentence">${esc(it.ticker || 'la empresa')} <b>${esc(ACTION_ES[x.action] || x.action)}</b> <i>${esc(x.object)}</i>${fn}</div>
-      <div class="tags"><span class="tag">destinatario: ${esc(TARGET_ES[x.target] || x.target)}</span><span class="tag">etapa: ${esc(STAGE_ES[x.stage] || x.stage)}</span><span class="tag">proveedores / modelos: ${prov}</span><span class="tag spec">evidencia: ${esc(EVID_ES[x.evidence_strength] || x.evidence_strength)}</span></div>
+      <div class="tags"><span class="tag">destinatario: ${esc(TARGET_ES[x.target] || x.target)}</span><span class="tag">etapa: ${esc(STAGE_ES[x.stage] || x.stage)}</span><span class="tag">proveedores externos: ${prov}</span><span class="tag">${own}</span><span class="tag spec">evidencia: ${esc(EVID_ES[x.evidence_strength] || x.evidence_strength)}</span></div>
       <div class="big">
         <button class="ok ${ver === 'ok' ? 'on' : ''}" data-verdict='${JSON.stringify([x.activity_index, 'ok'])}'>1 · Sí, está bien</button>
         <button class="bad ${ver === 'mal' ? 'on' : ''}" data-verdict='${JSON.stringify([x.activity_index, 'mal'])}'>2 · Casi, algo está mal</button>
         <button class="nx ${ver === 'no_existe' ? 'on' : ''}" data-verdict='${JSON.stringify([x.activity_index, 'no_existe'])}'>3 · No, el texto no dice eso</button>
       </div>`;
     if (ver === 'mal') {
-      const shown = { action: ACTION_ES[x.action] || x.action, object: x.object, function: x.function || 'no dice', target: TARGET_ES[x.target] || x.target, stage: STAGE_ES[x.stage] || x.stage, provider: prov, evidence_strength: EVID_ES[x.evidence_strength] || x.evidence_strength };
+      const shown = { action: ACTION_ES[x.action] || x.action, object: x.object, function: x.function || 'no dice', target: TARGET_ES[x.target] || x.target, stage: STAGE_ES[x.stage] || x.stage, provider: prov, own: own, evidence_strength: EVID_ES[x.evidence_strength] || x.evidence_strength };
       h += `<div class="hint">Tocá lo que está mal (uno o varios):</div><div class="chips">` +
         FIELDS.map(([k, label]) => `<button class="${mal[k] ? 'on' : ''}" data-chip='${JSON.stringify([x.activity_index, k])}'>${label}: ${esc(shown[k])}</button>`).join('') + `</div>`;
     }

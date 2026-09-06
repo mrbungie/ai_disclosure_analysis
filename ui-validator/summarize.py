@@ -113,7 +113,7 @@ def main() -> None:
             print(f"  párrafos a los que falta alguna actividad (recall): {sum(falta)}/{len(falta)} ({100*sum(falta)/len(falta):.1f}%)")
         print(f"  existe y está bien: {verd['ok']}/{n} ({100*verd['ok']/n:.1f}%) | existe con algún campo mal: {verd['mal']} | no existe: {verd['no_existe']} ({100*verd['no_existe']/n:.1f}%)")
         print("  precisión por campo, entre las actividades que existen:")
-        for k in ("action", "object", "function", "target", "stage", "provider", "evidence_strength"):
+        for k in ("action", "object", "function", "target", "stage", "provider", "own", "evidence_strength"):
             print(f"    {k:18s} {100*(1 - wrong[k]/max(1, n_fields)):.1f}%  ({wrong[k]} marcadas mal de {n_fields})")
 
     # ---- prefiltro, reponderado por estrato ----

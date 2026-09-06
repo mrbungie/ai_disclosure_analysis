@@ -181,8 +181,10 @@ def load() -> pd.DataFrame:
     # `provider_family` resume la actividad: la primera familia externa nombrada, si no
     # 'proprietary' si lo declara, si no 'unspecified'. Los conteos por proveedor usan la lista.
     a["providers_or_models"] = a["providers_or_models"].map(lambda v: [str(x) for x in (list(v) if v is not None else [])])
+    a["own_brands"] = a["own_brands"].map(lambda v: [str(x) for x in (list(v) if v is not None else [])])
+    a["is_own_ai"] = a["is_own_ai"].fillna(False).astype(bool)
     a["provider_or_model"] = a["providers_or_models"].map(lambda v: ", ".join(v) if v else "unspecified")
-    a["provider_families"] = a["providers_or_models"].map(lambda v: sorted({family(x, PROVIDER_FAMILIES, "unspecified") for x in v}))
+    a["provider_families"] = a.apply(lambda r: sorted({family(x, PROVIDER_FAMILIES, "unspecified") for x in r["providers_or_models"]} | ({"proprietary"} if r["is_own_ai"] else set())), axis=1)
     def _summary(fams):
         ext = [f for f in fams if f not in ("proprietary", "unspecified", "third_party_unnamed")]
         return ext[0] if ext else ("third_party_unnamed" if "third_party_unnamed" in fams else ("proprietary" if "proprietary" in fams else "unspecified"))
@@ -199,7 +201,7 @@ def load() -> pd.DataFrame:
     inst_docs = inst_docs.merge(docs.drop(columns="channel"), on="accession_number", how="inner")
     inst_docs["year"] = inst_docs["fecha"].dt.year
     a.attrs["instances"] = a[["text_hash", "activity_index", "action", "target", "stage", "provider_or_model", "provider_family",
-                              "provider_families", "evidence_strength", "function"]].drop_duplicates(["text_hash", "activity_index"]) \
+                              "provider_families", "own_brands", "is_own_ai", "evidence_strength", "function"]].drop_duplicates(["text_hash", "activity_index"]) \
         .merge(inst_docs, on="text_hash", how="inner")
     return a
 
@@ -211,7 +213,8 @@ def flags(a: pd.DataFrame) -> pd.DataFrame:
     f["customer_facing_deployment"] = used & (a["target"] == "customers")
     f["internal_deployment"] = used & a["target"].isin(["employees", "internal_process"])
     f["developer_tools"] = used & (a["target"] == "developers")
-    f["proprietary_ai"] = (a["action"] == "develop") | a["provider_families"].map(lambda v: "proprietary" in v)
+    f["proprietary_ai"] = (a["action"] == "develop") | a["is_own_ai"]
+    f["own_brand_named"] = a["own_brands"].map(lambda v: len(v) > 0)
     f["third_party_named_provider"] = a["provider_families"].map(lambda v: any(x not in ("proprietary", "unspecified", "third_party_unnamed") for x in v))
     f["infrastructure_investment"] = a["action"] == "invest_infrastructure"
     f["acquisition_or_licensing"] = a["action"] == "buy_or_license"
@@ -310,7 +313,7 @@ def main() -> None:
     fam = (a["function_family"].value_counts(normalize=True) * 100).round(1)
     prov = (a["provider_family"].value_counts(normalize=True) * 100).round(1)
     multi = float(a["provider_families"].map(lambda v: len(set(v) - {"proprietary", "unspecified", "third_party_unnamed"}) >= 2).mean())
-    print(f"  actividades con ≥2 proveedores externos nombrados: {100 * multi:.1f}%")
+    print(f"  actividades con ≥2 proveedores externos nombrados: {100 * multi:.1f}% | IA propia (is_own_ai): {100 * a['is_own_ai'].mean():.1f}% | con marca propia nombrada: {100 * (a['own_brands'].map(len) > 0).mean():.1f}%")
     print("  function family    " + " | ".join(f"{k} {v}" for k, v in fam.items()))
     print("  provider family    " + " | ".join(f"{k} {v}" for k, v in prov.items()))
 
@@ -397,11 +400,12 @@ def main() -> None:
                                 "targets": g["target"].apply(lambda x: ", ".join(v for v in x.value_counts().index[:2] if v != "unspecified")),
                                 "objects": g["object"].apply(lambda x: ", ".join(x.value_counts().index[:3])),
                                 "providers": g["providers_or_models"].apply(lambda x: ", ".join(v for v in pd.Series([p for lst in x for p in lst], dtype=object).value_counts().index[:3] if v.lower() not in ("unspecified", "proprietary"))),
+                                "own": g["own_brands"].apply(lambda x: ", ".join(pd.Series([p for lst in x for p in lst], dtype=object).value_counts().index[:3])),
                                 "stage": g["stage_rank"].max().map({v: k for k, v in STAGE_RANK.items()}),
                                 "named_or_metric": g["evidence_strength"].apply(lambda x: float(x.isin(["named_product_or_process", "metric", "vendor"]).mean()))
                                 }).sort_values("n", ascending=False).head(8).reset_index()
             lines = [f"{r.action} · {r.object_family} ({r.n}): {r.objects}" + (f" | for {r.functions}" if r.functions else "")
-                     + (f" | {r.targets}" if r.targets else "") + f" | {r.stage}" + (f" | {r.providers}" if r.providers else "")
+                     + (f" | {r.targets}" if r.targets else "") + f" | {r.stage}" + (f" | providers: {r.providers}" if r.providers else "") + (f" | own: {r.own}" if r.own else "")
                      + f" | concrete {r.named_or_metric:.0%}" for r in inv.itertuples()]
             cards[t_] = {"segment": SEGMENT_LABELS[s], "n_activities": int(len(sub)), "lines": lines}
             print(f"    {t_} ({len(sub)} activities)")
