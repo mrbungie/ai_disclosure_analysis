@@ -28,6 +28,13 @@ dependencies = [
 dev = [
     "pytest>=9.0.3",
 ]
+# Operación de la máquina, no del pipeline de datos. `vastai` lo usa
+# scripts/common/finish_and_stop.sh para apagar la instancia cuando la
+# corrida termina; el script cae a curl si no está, así que su ausencia
+# degrada pero no rompe.
+ops = [
+    "vastai>=1.6",
+]
 # GPU document-parsing backends for scripts/common/pdf/backends/. Optional
 # and NOT in the default install: they pull torch/paddle and multi-GB model
 # weights, and the pymupdf backend (which is in the base dependencies) runs

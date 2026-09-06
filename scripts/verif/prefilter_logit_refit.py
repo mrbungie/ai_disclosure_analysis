@@ -39,7 +39,13 @@ def load() -> pd.DataFrame:
                                union_by_name=True) l
             JOIN read_parquet('data/interim/prefilter_scores/prefilter_scores__run={LATEST_PREFILTER_RUN}__part=*.parquet') p
                 USING (country_code, form, accession_number, item_key, paragraph_index)
-            WHERE l.error IS NULL
+            -- Un solo juez. El golden set tiene etiquetas de gemini-3.8-flash y de
+            -- qwen3.7-flash sobre los MISMOS párrafos (el re-etiquetado dejó las
+            -- viejas en disco a propósito, para poder medir acuerdo). Sin este
+            -- filtro cada párrafo re-etiquetado entra DOS veces, con dos targets
+            -- posiblemente distintos, y el CV agrupado por filing ni siquiera los
+            -- separa. Ver scripts/verif/judge_agreement.py.
+            WHERE l.error IS NULL AND l.judge_model = 'qwen/qwen3.7-flash'
         """).df()
     finally:
         con.close()

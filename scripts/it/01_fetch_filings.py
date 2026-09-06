@@ -47,7 +47,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
 
 import pipeline_logger
-from xbrl_filings_client import download_report, iter_filings, probe_report
+import manifest_store
+from xbrl_filings_client import (
+    download_report, download_report_from_package, iter_filings, probe_report)
 
 CHECKPOINT_EVERY = 25
 #: Verbatim regulator label, kept next to the normalized `filing_type` so a
@@ -90,8 +92,13 @@ def main() -> None:
     manifest_path = manifest_dir / "filing_manifest.parquet"
     window = config["corpus"]["filings"]["period_end"]
 
-    existing = (pd.read_parquet(manifest_path).set_index("document_id").to_dict("index")
-                if manifest_path.exists() else {})
+    # Everything known so far, from the append-only parts (see
+    # manifest_store). Nothing here is ever rewritten — this run only ever
+    # ADDS parts, so a concurrent reader cannot lose rows and a re-run with
+    # different settings never needs anything deleted to make room.
+    known = manifest_store.read(manifest_dir)
+    existing = (known.set_index("document_id").to_dict("index")
+                if not known.empty else {})
 
     pipeline_logger.log_event(
         pipeline_step="it_fetch_filings", level="INFO",
@@ -109,7 +116,7 @@ def main() -> None:
             continue
         targets.append((attributes, name, lei, period_end))
 
-    rows = dict(existing)
+    fetched: list[dict] = []   # only THIS run's rows; parts are append-only
     pending = []
     for attributes, name, lei, period_end in targets:
         document_id = attributes["fxo_id"]
@@ -118,6 +125,11 @@ def main() -> None:
         # the file is only written after a successful download, so it is
         # the source of truth even if the manifest was lost.
         if local_path.exists():
+            continue
+        # A filing with neither a report link nor a package is genuinely
+        # unfetchable; one with only a package is not (see
+        # download_report_from_package).
+        if not (attributes.get("report_url") or attributes.get("package_url")):
             continue
         pending.append((document_id, attributes, name, lei, period_end, local_path))
 
@@ -129,8 +141,14 @@ def main() -> None:
         message=f"{len(targets)} filings in window, {len(pending)} to download",
         log_dir=manifest_dir)
 
+    run_id = datetime.now().strftime("%Y%m%dT%H%M%S")
+    part_num = 0
+
     def flush():
-        pd.DataFrame(list(rows.values())).to_parquet(manifest_path, index=False)
+        nonlocal fetched, part_num
+        if manifest_store.append(fetched, manifest_dir, run_id, part_num):
+            part_num += 1
+            fetched = []
 
     done = 0
     for document_id, attributes, name, lei, period_end, local_path in tqdm(pending):
@@ -140,12 +158,15 @@ def main() -> None:
             report_url=attributes.get("report_url") or "",
             package_sha256=attributes.get("sha256") or "")
         try:
-            xhtml = download_report(attributes["report_url"])
+            if attributes.get("report_url"):
+                xhtml = download_report(attributes["report_url"])
+            else:
+                xhtml = download_report_from_package(attributes["package_url"])
             probe = probe_report(xhtml)
             local_path.parent.mkdir(parents=True, exist_ok=True)
             with gzip.open(local_path, "wb") as fh:
                 fh.write(xhtml)
-            rows[document_id] = {
+            fetched.append({
                 **base, "local_path": str(local_path), "download_status": "completed",
                 # Our own hash of what we stored. `package_sha256` is the
                 # aggregator's hash of the ZIP package, a different object;
@@ -154,7 +175,7 @@ def main() -> None:
                 "n_bytes": probe["n_bytes"], "n_words": probe["n_words"],
                 "has_narrative": probe["has_narrative"],
                 "updated_at": datetime.now(),
-            }
+            })
             if not probe["has_narrative"]:
                 pipeline_logger.log_event(
                     pipeline_step="it_fetch_filings", level="WARNING",
@@ -162,8 +183,8 @@ def main() -> None:
                             f"financial statements only?",
                     ticker=document_id, log_dir=manifest_dir)
         except Exception as error:  # noqa: BLE001 — one bad filing must not end the run
-            rows[document_id] = {**base, "download_status": f"failed: {error}",
-                                 "updated_at": datetime.now()}
+            fetched.append({**base, "download_status": f"failed: {error}",
+                            "updated_at": datetime.now()})
             pipeline_logger.log_event(
                 pipeline_step="it_fetch_filings", level="ERROR",
                 message=f"download failed: {error}", ticker=document_id, log_dir=manifest_dir)
@@ -173,7 +194,7 @@ def main() -> None:
             flush()
 
     flush()
-    manifest = pd.DataFrame(list(rows.values()))
+    manifest = manifest_store.read(manifest_dir)
     ok = manifest[manifest.download_status == "completed"]
     pipeline_logger.log_event(
         pipeline_step="it_fetch_filings", level="SUCCESS",

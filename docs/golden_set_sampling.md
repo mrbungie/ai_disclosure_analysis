@@ -213,6 +213,18 @@ veces por la misma etiqueta y se infla el acuerdo.
 
 ## 7. Aditividad entre sesiones
 
+> **Un solo juez por población, y hacerlo cumplir (2026-09-06).** La regla de
+> abajo —"(judge_model, prompt_version) define una población"— se violó en la
+> práctica: el prefiltro se entrenó con la unión de gemini-3.8-flash y
+> qwen3.7-flash, repartidos por estrato (gemini: stage1 + parte de stage2;
+> qwen: resto de stage2 + todo stage3_random). Corregido re-etiquetando todo
+> con qwen (`label --coverage-judge current`, que trata como pendiente lo
+> etiquetado por otro juez) y filtrando por `judge_model` en cada consumidor.
+> Las etiquetas viejas NO se borran: son la única forma de medir acuerdo entre
+> jueces, y dieron κ=0,87 sobre 6.038 filas pareadas
+> (`scripts/verif/judge_agreement.py`, `prefilter_evaluation.md` §8.15).
+
+
 1. Al arrancar se validan las partes existentes (que abran, que traigan la llave,
    que coincidan `judge_model` y `prompt_version`). Lo que no califica se
    **reporta y se ignora, nunca se borra**.

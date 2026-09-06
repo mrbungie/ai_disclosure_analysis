@@ -1,8 +1,8 @@
 """Construye el lado CONTABLE del panel empresa-año desde XBRL crudo.
 
 Produce dos parquets que hasta ahora existían como datos sin código que los
-generara (`docs/analytics/02_market_accounting_crosscheck.md` y
-`04_ratios_factors_and_volatility.md` los describían en prosa; el script
+generara (`docs/analytics/05_senal_incremental.md` y
+`04_perfiles_economicos.md` los describían en prosa; el script
 original nunca se versionó y se perdió):
 
   firm_year_financials.parquet         revenue / R&D / capex / SG&A del FY
@@ -164,7 +164,7 @@ def load_facts(con: duckdb.DuckDBPyConnection, glob: Path) -> pd.DataFrame:
     XBRL repite cada cifra anual en 2-3 filings distintos (los comparativos
     del año anterior), y las repeticiones pueden diferir por reexpresiones.
     Se toma la MEDIANA de las repeticiones, que es robusta a una reexpresión
-    aislada — misma regla que documenta 02_...md."""
+    aislada — misma regla que documenta 05_senal_incremental.md."""
     return con.execute(f"""
         SELECT ticker, concept, period_type, period_start, period_end,
                median(numeric_value) AS value
@@ -246,7 +246,7 @@ def attach_asof(panel: pd.DataFrame, wide: pd.DataFrame, metrics: list[str],
     fiscal (`disclosed_period_end`), pero `shares_out` es la cifra de portada
     del 10-K y se fecha cerca del FILING. Mergear todo por `period_end`
     exacto hacía que la búsqueda agarrara la fila de portada en vez de la del
-    cierre fiscal y perdiera el balance entero (bug documentado en 04_...md)."""
+    cierre fiscal y perdiera el balance entero (bug documentado en 04_perfiles_economicos.md)."""
     left = panel.sort_values(left_on).copy()
     right = (wide[["ticker", "period_end"] + metrics]
              .dropna(subset=["period_end"]).sort_values("period_end"))

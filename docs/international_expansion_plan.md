@@ -72,6 +72,52 @@ two objects, joined by key, not merged into one).
   irrelevant — the prose is in the XHTML, same reasoning as why this
   project extracts Item 1/1A/7 text rather than XBRL facts for the US.
 
+## Italy: scope limitations, decided not discovered
+
+Decided 2026-09-06, after building the fetcher and measuring the source.
+**No PDF sources for Italy.** The pipeline takes ESEF XHTML from
+`filings.xbrl.org` and nothing else. Everything below follows from that
+choice and is a stated limitation of the Italian panel, not a gap to be
+filled later by a scraper.
+
+**1. Annual only. No `half_year`, no `quarterly`.**
+ESEF's mandate covers the annual financial report. Italy's semi-annual
+report (Relazione finanziaria semestrale, mandatory) and its voluntary
+quarterly Resoconto exist only through CONSOB-authorised storage operators
+— eMarket Storage (Teleborsa) principally — which serve PDFs and expose no
+API. So the intra-year shock series that the US has as 10-Q and Chile as
+the quarterly Análisis Razonado **has no Italian counterpart**, and any
+intra-year analysis is US+CL only. The instrument-mapping table above keeps
+those Italian rows for completeness; they stay empty.
+
+**2. Nothing before FY2021.** ESEF starts with financial years beginning
+2021-01-01. This costs nothing relative to the other countries — the US and
+Chilean windows also start in 2021 — but it does mean Italy cannot supply a
+pre-2021 baseline for anything.
+
+**3. ~8% of annual reports carry no narrative.** Measured on 148 real
+filings: 91.9% contain the Relazione sulla gestione; the rest tagged only
+the financial statements and published the management report as a separate
+PDF the mandate does not reach. Those PDFs are not being fetched.
+
+The important part is the SHAPE of that 8%, which was measured rather than
+assumed. It is a per-YEAR choice, not a per-firm policy: of 40 issuers with
+two or more filings, exactly one (Mediobanca) lacks narrative in every
+year, while Enel is 1-of-3 and Snam 1-of-2. So the panel loses year cells,
+not firms — roughly 15% of issuers end up unbalanced. Those cells are
+marked `has_narrative=false` in the manifest at fetch time precisely so
+they can be excluded explicitly. **A missing narrative must never be read
+as "this firm said nothing about AI that year"** — that is the one way this
+limitation turns into a wrong result rather than a smaller sample.
+
+**Why not just take the PDFs.** eMarket Storage would close 1 and 3. It is
+excluded because its documents are PDFs, and this project has measured what
+that path costs on Chilean filings (`docs/analytics/pdf-backend-poc.md`):
+2.5% of pages produce no paragraphs at all, 9.9% of table paragraphs lose
+cells, and recovering the difference needs a VLM at ~200 h of single-stream
+GPU for a corpus that size. Italy in XHTML is a better corpus than Italy in
+XHTML-plus-scraped-PDF would be, and it is one fetcher instead of two.
+
 ## Adaptability constraint: additive, never re-downloaded
 
 Per `CLAUDE.md`, no data-affecting step in this expansion may require

@@ -107,6 +107,41 @@ def _existing(path_pattern: str) -> bool:
     return len(glob.glob(path_pattern)) > 0
 
 
+def _manifest_source(stem: str) -> str | None:
+    """The FROM clause for one manifest, whether it is a single file or
+    append-only parts.
+
+    Italy's fetchers write `filing_manifest__run=<id>__part=<n>.parquet` and
+    never rewrite one (see scripts/it/manifest_store.py); the US and Chile
+    still write a single file. Both are read here, and a country mid-
+    migration — parts alongside the file it was moved from — reads as one
+    manifest either way.
+
+    With parts, the newest row per `document_id` wins, by `updated_at`.
+    That is the same rule `ai_prefilter_scores` below applies over its own
+    append-only parts, and it is what lets a re-run correct an earlier row
+    by appending rather than by rewriting anything.
+    """
+    single, glob_pattern = f"{stem}.parquet", f"{stem}__run=*__part=*.parquet"
+    sources = []
+    if _existing(single):
+        sources.append(single)
+    if _existing(glob_pattern):
+        sources.append(glob_pattern)
+    if not sources:
+        return None
+    if sources == [single]:
+        return f"read_parquet('{single}')"
+    reads = " UNION ALL BY NAME ".join(f"SELECT * FROM read_parquet('{s}', union_by_name=True)"
+                                       for s in sources)
+    return f"""(
+            SELECT * FROM ({reads})
+            QUALIFY row_number() OVER (
+                PARTITION BY document_id ORDER BY updated_at DESC
+            ) = 1
+        )"""
+
+
 def _filing_manifest_selects(countries: list[tuple[str, dict]], dirs) -> list[str]:
     """One SELECT per country for the `filing_manifest` view, UNIONing in
     `filing_manifest_proxy.parquet` (and, later, 8-K/comment-letter
@@ -121,16 +156,22 @@ def _filing_manifest_selects(countries: list[tuple[str, dict]], dirs) -> list[st
     selects = []
     for country, cfg in countries:
         manifests_dir = dirs(cfg)[0]
-        base_path = f"{manifests_dir}/filing_manifest.parquet"
-        if not _existing(base_path):
+        base_path = _manifest_source(f"{manifests_dir}/filing_manifest")
+        if base_path is None:
             continue
-        parts = [f"SELECT '{country}' AS country_code, * FROM read_parquet('{base_path}')"]
-        proxy_path = f"{manifests_dir}/filing_manifest_proxy.parquet"
-        if _existing(proxy_path):
-            parts.append(f"SELECT '{country}' AS country_code, * FROM read_parquet('{proxy_path}')")
-        eightk_path = f"{manifests_dir}/filing_manifest_8k.parquet"
-        if _existing(eightk_path):
-            parts.append(f"SELECT '{country}' AS country_code, * FROM read_parquet('{eightk_path}')")
+        parts = [f"SELECT '{country}' AS country_code, * FROM {base_path}"]
+        for extra in ("filing_manifest_proxy", "filing_manifest_8k",
+                      "filing_manifest_earnings_calls"):
+            source = _manifest_source(f"{manifests_dir}/{extra}")
+            if source:
+                # scripts/us/earnings_calls/01_fetch_transcripts.py writes
+                # filing_date as a 'YYYY-MM-DD' string; the SEC manifests
+                # write DATE. UNION BY NAME resolves the mix to VARCHAR and
+                # every `extract(year from fm.filing_date)` downstream then
+                # fails to bind — so normalise here, once, at the view.
+                parts.append(
+                    f"SELECT '{country}' AS country_code, "
+                    f"* REPLACE (TRY_CAST(filing_date AS DATE) AS filing_date) FROM {source}")
         selects.append("\n            UNION ALL BY NAME\n            ".join(parts))
     return selects
 
@@ -375,6 +416,99 @@ def _paragraph_select_sql(form: str, source_view: str) -> str:
 
 CL_PARAGRAPHS_GLOB = str(
     REPO_ROOT / "data" / "interim" / "sections_cl" / "filing_paragraphs__run=*__part=*.parquet")
+#: Earnings calls carry an EXTRACTOR VERSION in the filename, unlike every
+#: other source here. The segmentation rule that splits prepared remarks
+#: from Q&A was revised twice against real output (see
+#: scripts/us/earnings_calls/02_extract_sections.py), and each revision
+#: wrote a new run ALONGSIDE the old rather than replacing it — nothing was
+#: deleted. So this glob must pin ONE version, or the view unions three
+#: incompatible labellings of the same 554,281 turns.
+IT_PARAGRAPHS_GLOB = str(
+    REPO_ROOT / "data" / "interim" / "sections_it" / "filing_paragraphs__run=*__part=*.parquet")
+EARNINGS_CALLS_VERSION = "3"
+EARNINGS_CALLS_GLOB = str(
+    REPO_ROOT / "data" / "interim" / "sections" /
+    f"earnings_call_paragraphs__v={EARNINGS_CALLS_VERSION}__run=*__part=*.parquet")
+
+
+def _earnings_call_select_sql(source_glob: str) -> str:
+    """Earnings call turns mapped onto the shared `paragraphs` contract.
+
+    Already paragraph-grained on disk (one speaker turn = one row), so this
+    does NOT go through `_paragraph_select_sql`'s line-merging, same as the
+    Chilean branch below.
+
+      - `form` = 'Earnings call' — a genuinely different CHANNEL, not
+        another SEC form. Keeping it distinct is the entire point: the open
+        question in docs/problemas_academicos.md #5 is whether a firm's
+        promotional language differs BETWEEN channels, which is
+        unanswerable if calls are pooled with filings.
+      - `accession_number` = document_id (`<TICKER>_<YEAR>Q<N>`). Calls have
+        no SEC accession; the fiscal period is what identifies them.
+      - `item_key` = the call SECTION ('prepared' / 'qa' / 'handoff' /
+        'unknown'). This is the one source where item_key carries real
+        meaning rather than a constant: prepared remarks are scripted and
+        the Q&A is improvised, and every downstream table already groups by
+        item_key for free.
+
+    `speaker` is NOT projected here — the shared contract has no column for
+    it — but it stays in the parquet, so attributing a claim to an executive
+    rather than to the analyst who asked the question is a read away.
+    """
+    return f"""
+        SELECT
+            'us' AS country_code,
+            'Earnings call' AS form,
+            document_id AS accession_number,
+            section AS item_key,
+            content_type,
+            paragraph_index,
+            paragraph_text,
+            text_hash8(paragraph_text) AS text_hash,
+            length(trim(paragraph_text)) > 3
+                AND regexp_matches(paragraph_text, '[A-Za-z0-9]') AS is_scorable
+        FROM read_parquet('{source_glob}', union_by_name=True)
+    """
+
+
+def _it_paragraph_select_sql(source_glob: str) -> str:
+    """Italian ESEF annual reports mapped onto the shared contract.
+
+    Already paragraph-grained on disk, like the Chilean branch, so no
+    line-merging. Two Italy-specific notes:
+
+      - `form` = `filing_type` ('annual'). Italy contributes ONLY annual
+        rows: ESEF covers the annual financial report and nothing else, so
+        there is no Italian counterpart to the 10-Q or to Chile's quarterly
+        Análisis Razonado (docs/international_expansion_plan.md's Italian
+        limitations section). An empty `quarterly` for Italy is a scope
+        fact, not missing data.
+      - `item_key` = constant '0', same as Chile and for the same reason: a
+        Relazione finanziaria annuale has no Item-numbered structure, and
+        these files carry no headings to invent one from either — their
+        structure had to be recovered from font sizes (see
+        scripts/common/pdf/backends/html_typography.py).
+
+    Filings whose management report was published as a separate PDF outside
+    the ESEF mandate (~7%) are NOT filtered out here. They are flagged
+    `has_narrative=false` in the manifest, and excluding them in the view
+    would hide a known sampling limitation behind a smaller corpus instead
+    of leaving it visible and joinable.
+    """
+    return f"""
+        SELECT
+            'it' AS country_code,
+            filing_type AS form,
+            document_id AS accession_number,
+            '0' AS item_key,
+            content_type,
+            paragraph_index,
+            paragraph_text,
+            text_hash8(paragraph_text) AS text_hash,
+            length(trim(paragraph_text)) > 3
+                AND regexp_matches(paragraph_text, '[A-Za-z0-9]') AS is_scorable
+        FROM read_parquet('{source_glob}', union_by_name=True)
+    """
 
 
 def _cl_paragraph_select_sql(source_glob: str) -> str:
@@ -738,6 +872,18 @@ def main(with_text_tables: bool = False):
             )
         else:
             print("  skipping 8-K paragraphs (no filing_sections_8k files yet)")
+        if _existing(EARNINGS_CALLS_GLOB):
+            paragraph_stage_specs.append(
+                ("_paragraphs_stage_calls", _earnings_call_select_sql(EARNINGS_CALLS_GLOB))
+            )
+        else:
+            print(f"  skipping earnings calls (no files matching {EARNINGS_CALLS_GLOB})")
+        if _existing(IT_PARAGRAPHS_GLOB):
+            paragraph_stage_specs.append(
+                ("_paragraphs_stage_it", _it_paragraph_select_sql(IT_PARAGRAPHS_GLOB))
+            )
+        else:
+            print(f"  skipping IT paragraphs (no files matching {IT_PARAGRAPHS_GLOB})")
         if _existing(CL_PARAGRAPHS_GLOB):
             paragraph_stage_specs.append(
                 ("_paragraphs_stage_cl", _cl_paragraph_select_sql(CL_PARAGRAPHS_GLOB))
@@ -875,6 +1021,24 @@ def main(with_text_tables: bool = False):
                  AND c.session_id = f.session_id
                  AND c.classified_at = f.classified_at
             )
+            , current_population AS (
+                -- La población es la del despliegue VIGENTE del prefiltro, no
+                -- la unión histórica. `ai_classify.py` es aditivo y nunca borra
+                -- frames, así que sin este filtro la vista acumula todo texto
+                -- que alguna vez fue marcado positivo por cualquier umbral que
+                -- haya estado desplegado. Medido al cambiar el prefiltro a juez
+                -- único: 20.899 textos tenían frames y 1.332 (6,4%) ya no
+                -- pertenecían a la población marcada — números de análisis que
+                -- dependían del orden histórico de los despliegues, no del
+                -- modelo vigente.
+                SELECT text_hash FROM (
+                    SELECT text_hash, is_ai_prefiltered FROM read_parquet(
+                        'data/interim/prefilter_predictions_unique/prefilter_predictions__run=*.parquet',
+                        union_by_name=True)
+                    QUALIFY row_number() OVER (
+                        PARTITION BY text_hash ORDER BY model_version DESC) = 1
+                ) WHERE is_ai_prefiltered
+            )
             SELECT p.country_code, p.form, p.accession_number, p.item_key, p.paragraph_index,
                    f.text_hash, up.duplicate_count, f.frame_index, f.has_frame,
                    f.subject, f.ai_type, f.temporal, f.domain, f.concepts,
@@ -887,6 +1051,7 @@ def main(with_text_tables: bool = False):
             FROM paragraphs p
             JOIN latest_frames f ON f.text_hash = p.text_hash
             JOIN unique_paragraphs up ON up.text_hash = f.text_hash
+            JOIN current_population cp ON cp.text_hash = f.text_hash
         """
     elif with_text_tables:
         print(f"  skipping gold_ai_frames (no files matching {frames_glob} — "
@@ -939,9 +1104,40 @@ def main(with_text_tables: bool = False):
             con.execute(f"DROP TABLE IF EXISTS {stage_name}")
 
     print(f"\nCountries: {', '.join(c for c, _ in countries)}")
+    con.close()
+
+    if with_text_tables:
+        # DuckDB never returns freed blocks to the OS: dropping the staging
+        # tables above (and CREATE OR REPLACE over the old text tables)
+        # leaves their blocks as dead space inside the file. Measured
+        # 2026-09-05: 12.7 GiB free blocks on a 17.8 GiB file right after a
+        # fresh build; 25 GiB after a few rebuilds over the same file. Copy
+        # everything into a fresh file and swap it in -- ~1 min, and the
+        # result carries zero free blocks.
+        _compact(DB_PATH)
+
     print(f"Wrote -> {DB_PATH}")
     print("Open with: duckdb duckdb/thesis.duckdb   (then .tables, or SELECT * FROM <view> LIMIT 5;)")
+
+
+def _compact(db_path: Path) -> None:
+    compact_path = db_path.with_suffix(".compact.duckdb")
+    if compact_path.exists():
+        compact_path.unlink()
+    con = duckdb.connect(str(db_path))
+    before = _db_size(con)
+    con.execute(f"ATTACH '{compact_path}' AS compact")
+    con.execute("COPY FROM DATABASE thesis TO compact")
+    con.execute("DETACH compact")
     con.close()
+    compact_path.replace(db_path)
+    after = _db_size(duckdb.connect(str(db_path), read_only=True))
+    print(f"  compacted {before} -> {after}")
+
+
+def _db_size(con) -> str:
+    row = con.execute("PRAGMA database_size").fetchone()
+    return str(row[1]) if row else "?"
 
 
 if __name__ == "__main__":

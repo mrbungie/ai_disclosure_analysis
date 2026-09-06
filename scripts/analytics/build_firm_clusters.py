@@ -3,7 +3,7 @@ from `gold_ai_frames` / `gold_ai_entity_mentions`.
 
 This script did not exist. The parquets under `data/processed/clusters/`
 were produced ad hoc in an earlier session and only the OUTPUTS survived —
-`docs/analytics/01_ai_disclosure_analytics.md` and `06_voice_vs_behavior_
+`docs/analytics/apendice/descriptivos_sql_corpus.md` and `06_voice_vs_behavior_
 clustering.md` describe the method in prose, with abbreviated Python, and
 that prose plus the stored column schemas is what this reconstructs. It is
 therefore NOT guaranteed to reproduce the original numbers bit for bit:
@@ -52,6 +52,7 @@ import duckdb
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
+from sklearn.decomposition import FactorAnalysis
 from sklearn.preprocessing import StandardScaler
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -153,6 +154,67 @@ def voice_metrics(frames: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
     out = df.groupby(keys)[VOICE_FEATURES].mean()
     out["n_frames"] = df.groupby(keys).size()
     return out.reset_index()
+
+
+
+def shrink_rates(rates: pd.DataFrame, counts: pd.Series) -> pd.DataFrame:
+    """Encogimiento empírico-Bayes de cada tasa hacia la media global, en
+    proporción a cuántos frames la sostienen.
+
+    Sin esto una tasa estimada con 5 frames pesa igual que una estimada con
+    500, y `cluster_diagnostics.py` midió lo que eso produce: la partición de
+    4 grupos no es reproducible (Jaccard bootstrap 0,52) y
+    `specificity_index` tiene confiabilidad 0,000 a nivel empresa — su varianza
+    observada entre empresas es MENOR que la varianza de muestreo esperada, o
+    sea que es ruido puro. Prior beta ajustado por momentos sobre las tasas
+    observadas."""
+    out = {}
+    for column in rates.columns:
+        p = rates[column]
+        mean, var = float(p.mean()), float(p.var(ddof=1))
+        if var <= 0 or not 0 < mean < 1:
+            out[column] = p
+            continue
+        strength = max(mean * (1 - mean) / var - 1, 1e-6)
+        alpha, beta = mean * strength, (1 - mean) * strength
+        out[column] = (p * counts + alpha) / (counts + alpha + beta)
+    return pd.DataFrame(out, index=rates.index)
+
+
+def voice_scores(metrics: pd.DataFrame) -> pd.DataFrame:
+    """La representación que los datos SÍ sostienen: dos ejes continuos y una
+    partición binaria, sobre tasas encogidas.
+
+    Los 4 arquetipos A/B/C/D se conservan porque los documentos existentes los
+    citan, pero no son reproducibles: bootstrap remuestreando los frames de
+    cada empresa da Jaccard medio 0,52 con k=4 (por debajo de 0,6 = no
+    reproducible) contra 0,81 con k=2. El primer factor es el eje real del
+    corpus —riesgo hipotético en un extremo, despliegue afirmado y concreto en
+    el otro— y explica más que cualquiera de los cortes de k=4."""
+    rates = metrics[VOICE_FEATURES]
+    counts = metrics["n_frames"]
+    shrunk = shrink_rates(rates, counts)
+    X = StandardScaler().fit_transform(shrunk.values)
+    factors = FactorAnalysis(n_components=2, random_state=SEED).fit(X)
+    scores = factors.transform(X)
+    labels = KMeans(n_clusters=2, random_state=SEED, n_init=10).fit_predict(X)
+    # Orientación estable: el factor 1 crece hacia riesgo/hipotético, y el
+    # grupo 1 es el de mayor `realized_share`. Sin fijarlo, un re-ajuste
+    # invierte los signos y las etiquetas sin que cambie nada de los datos.
+    if np.corrcoef(scores[:, 0], rates["risk_share"])[0, 1] < 0:
+        scores[:, 0] *= -1
+    if np.corrcoef(scores[:, 1], rates["quantified_rate"])[0, 1] < 0:
+        scores[:, 1] *= -1
+    realized_by_group = pd.Series(rates["realized_share"].values).groupby(labels).mean()
+    if realized_by_group.idxmax() != 1:
+        labels = 1 - labels
+    out = metrics[["ticker", "n_frames"]].copy()
+    out["voice_factor_risk_vs_deployment"] = scores[:, 0]
+    out["voice_factor_quantified_vs_governance"] = scores[:, 1]
+    out["voice_group"] = np.where(labels == 1, "deployment_asserted", "risk_hypothetical")
+    for column in VOICE_FEATURES:
+        out[f"shrunk_{column}"] = shrunk[column].values
+    return out
 
 
 def concept_shares(frames: pd.DataFrame, keys: list[str], concepts: list[str]) -> pd.DataFrame:
@@ -342,10 +404,19 @@ def main() -> None:
     repeated = panel.groupby("ticker").size()
     print(f"Empresas en >=2 años: {int((repeated >= 2).sum()):,} de {len(repeated):,}")
 
+    scores = voice_scores(pooled)
+    print("\n=== Voz: representación que los datos sostienen ===")
+    print(scores.groupby("voice_group").agg(
+        empresas=("ticker", "size"), frames_medianos=("n_frames", "median"),
+        factor_riesgo=("voice_factor_risk_vs_deployment", "mean")).round(2).to_string())
+    print("  (los 4 arquetipos A/B/C/D siguen saliendo por compatibilidad con los docs,")
+    print("   pero su partición NO es reproducible — ver cluster_diagnostics.py)")
+
     paths = {
         "firm_behavior_clusters": firm_behavior,
         "voice_x_behavior": crossed,
         "firm_year_archetype_behaviors": panel,
+        "firm_voice_scores": scores,
     }
     for name, table in paths.items():
         destination = args.output_dir / f"{name}.parquet"

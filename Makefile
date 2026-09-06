@@ -101,6 +101,8 @@ prefilter:
 analytics-text:
 	@echo "Arquetipos de voz, clusters de comportamiento y panel empresa-año (build_firm_clusters)..."
 	.venv/bin/python scripts/analytics/build_firm_clusters.py $(ARGS)
+	.venv/bin/python scripts/analytics/build_segments.py $(ARGS)
+	.venv/bin/python scripts/analytics/build_voice_behavior_grid.py $(ARGS)
 
 analytics-financials:
 	@echo "Contables desde XBRL, mercado/beta/CAR y ROIC-WACC (build_firm_financials -> build_market_factors -> build_roic_wacc)..."
@@ -112,6 +114,8 @@ analytics-panels:
 	@echo "Merge texto x finanzas + score de AI-washing (build_firm_panels, washing_score)..."
 	.venv/bin/python scripts/analytics/build_firm_panels.py $(ARGS)
 	.venv/bin/python scripts/analytics/washing_score.py $(ARGS)
+	.venv/bin/python scripts/analytics/shock_analysis.py $(ARGS)
+	.venv/bin/python scripts/analytics/shock_did_simple.py $(ARGS)
 
 analytics: analytics-text analytics-financials analytics-panels
 

@@ -1,8 +1,8 @@
 """Construye el lado de MERCADO del panel empresa-año: retorno de ventana,
 beta, volatilidad, momentum, CAR ajustado por mercado y múltiplos.
 
-Produce los dos parquets que `docs/analytics/02_market_accounting_crosscheck.md`
-y `04_ratios_factors_and_volatility.md` describen en prosa y que hasta ahora
+Produce los dos parquets que `docs/analytics/05_senal_incremental.md`
+y `04_perfiles_economicos.md` describen en prosa y que hasta ahora
 no tenían código en el repo:
 
   firm_year_filing_returns.parquet   retorno CRUDO [-1, +5 días hábiles]
@@ -13,6 +13,8 @@ no tenían código en el repo:
 
 Definiciones (idénticas a las documentadas):
 
+  idio_vol_252d desv. est. de los residuos de esa regresión x sqrt(252): la
+                volatilidad que no explica el mercado
   beta          OLS de `retorno_exceso ~ mktrf` sobre los 252 días hábiles
                 ANTERIORES al filing, mínimo 120 observaciones. Un factor
                 (mercado), no Fama-French de 3 factores.
@@ -95,7 +97,7 @@ def window_metrics(prices: pd.DataFrame, factors: pd.DataFrame,
     cierre del mercado, así que el precio de referencia limpio es el previo."""
     dates = prices["date"].values
     idx = int(np.searchsorted(dates, np.datetime64(filing_date), side="left"))
-    result = {"beta": np.nan, "vol_pre_60d": np.nan, "vol_post_60d": np.nan,
+    result = {"beta": np.nan, "idio_vol_252d": np.nan, "vol_pre_60d": np.nan, "vol_post_60d": np.nan,
               "momentum_12_1": np.nan, "ret_m1_p5": np.nan, "car_m1_p5": np.nan,
               "price_pre": np.nan}
     if idx - EVENT_PRE < 0 or idx >= len(prices):
@@ -113,8 +115,13 @@ def window_metrics(prices: pd.DataFrame, factors: pd.DataFrame,
     if len(merged) >= BETA_MIN_OBS:
         excess = merged["ret"] - merged["rf"]
         design = np.column_stack([np.ones(len(merged)), merged["mktrf"].values])
-        beta = float(np.linalg.lstsq(design, excess.values, rcond=None)[0][1])
+        coef = np.linalg.lstsq(design, excess.values, rcond=None)[0]
+        beta = float(coef[1])
         result["beta"] = beta
+        # volatilidad idiosincrática: desv. est. de los residuos del modelo de
+        # mercado sobre la misma ventana de 252 días, anualizada
+        residuals = excess.values - design @ coef
+        result["idio_vol_252d"] = float(residuals.std(ddof=2) * np.sqrt(252))
         event = prices.iloc[idx - EVENT_PRE:idx + EVENT_POST + 1].merge(
             factors, on="date", how="inner").dropna(subset=["ret", "mktrf", "rf"])
         if len(event) > 1:
@@ -189,7 +196,7 @@ def main() -> None:
     panel["ev_ebitda"] = safe_div(enterprise_value, panel["ebitda"])
 
     columns = ["ticker", "year", "market_cap", "pe_ratio", "ps_ratio", "pb_ratio",
-               "ev_revenue", "ev_ebitda", "beta", "vol_pre_60d", "vol_post_60d",
+               "ev_revenue", "ev_ebitda", "beta", "idio_vol_252d", "vol_pre_60d", "vol_post_60d",
                "momentum_12_1", "car_m1_p5"]
     market_factors = panel[columns].sort_values(["ticker", "year"])
 

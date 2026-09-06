@@ -12,3 +12,6 @@ __pycache__/
 scratch/
 .edgartools_data/
 .rclone-bisync-state/
+
+# ui-validator: la muestra se regenera; las anotaciones humanas sí se versionan
+ui-validator/data.json
