@@ -15,10 +15,13 @@
 #   scripts/common/finish_and_stop.sh --dry-run   # informa, nunca apaga
 #   scripts/common/finish_and_stop.sh             # apaga si todo pasa
 #
-# Requiere VAST_API_KEY con permiso de escritura sobre la instancia. La
-# CONTAINER_API_KEY del contenedor puede no tenerlo; si el apagado falla,
-# el script lo dice y NO se queda en un estado a medias — el trabajo ya
-# está subido igual.
+# El apagado usa CONTAINER_API_KEY + CONTAINER_ID, que vast inyecta en el
+# contenedor. Esa key está restringida a ESTA instancia y, según la doc de
+# vast, puede exactamente start/stop/destroy sobre ella — que es lo que hace
+# falta y nada más. No está probada acá: comprobarlo requiere apagar la
+# máquina. Si no funciona, el script lo registra y sale distinto de cero con
+# el trabajo YA sincronizado: el modo de falla es "sigue facturando", nunca
+# "se perdió trabajo".
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -37,7 +40,7 @@ cd "$REPO_ROOT"
 # no encontrar la API key, justo cuando ya no hay nadie mirando.
 if [[ -r /proc/1/environ ]]; then
   while IFS='=' read -r -d '' k v; do
-    case "$k" in VAST_*|CONTAINER_API_KEY) [[ -z "${!k:-}" ]] && export "$k=$v" ;; esac
+    case "$k" in VAST_*|CONTAINER_API_KEY|CONTAINER_ID) [[ -z "${!k:-}" ]] && export "$k=$v" ;; esac
   done < /proc/1/environ
 fi
 if [[ -f "$REPO_ROOT/.env" ]]; then
@@ -151,12 +154,21 @@ if [[ $DRY_RUN -eq 1 ]]; then
   say "--dry-run: todo listo y sincronizado; acá apagaría la instancia"; exit 0
 fi
 KEY="${VAST_API_KEY:-${CONTAINER_API_KEY:-}}"
-ID="${VAST_INSTANCE_ID:-$(echo "${VAST_CONTAINERLABEL:-}" | tr -d 'C.')}"
+# CONTAINER_ID es la variable que vast documenta para esto. El label
+# (VAST_CONTAINERLABEL, "C.<id>") queda de reserva por si el contenedor se
+# lanzó sin ella.
+ID="${CONTAINER_ID:-$(echo "${VAST_CONTAINERLABEL:-}" | tr -d 'C.')}"
 if [[ -z "$KEY" || -z "$ID" ]]; then
-  say "sin VAST_API_KEY/instance id — no puedo apagar. Trabajo ya sincronizado."; exit 1
+  say "sin api key / id de instancia — no puedo apagar. Trabajo YA sincronizado."; exit 1
 fi
 say "apagando instancia $ID"
-RESP="$(curl -sS -X PUT -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
-        -d '{"state": "stopped"}' "https://console.vast.ai/api/v1/instances/$ID/" 2>&1)"
+# El CLI oficial primero: conoce el endpoint correcto y sobrevive a que vast
+# lo cambie. curl como reserva por si el CLI no está instalado.
+if [[ -x "$REPO_ROOT/.venv/bin/vastai" ]]; then
+  RESP="$("$REPO_ROOT/.venv/bin/vastai" stop instance "$ID" --api-key "$KEY" --raw 2>&1)"
+else
+  RESP="$(curl -sS -X PUT -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+          -d '{"state": "stopped"}' "https://console.vast.ai/api/v0/instances/$ID/" 2>&1)"
+fi
 say "respuesta: $RESP"
 echo "stop solicitado: $RESP" >> "$REPORT"
