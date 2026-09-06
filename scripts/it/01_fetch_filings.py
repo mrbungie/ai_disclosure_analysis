@@ -48,7 +48,8 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
 
 import pipeline_logger
 import manifest_store
-from xbrl_filings_client import download_report, iter_filings, probe_report
+from xbrl_filings_client import (
+    download_report, download_report_from_package, iter_filings, probe_report)
 
 CHECKPOINT_EVERY = 25
 #: Verbatim regulator label, kept next to the normalized `filing_type` so a
@@ -125,6 +126,11 @@ def main() -> None:
         # the source of truth even if the manifest was lost.
         if local_path.exists():
             continue
+        # A filing with neither a report link nor a package is genuinely
+        # unfetchable; one with only a package is not (see
+        # download_report_from_package).
+        if not (attributes.get("report_url") or attributes.get("package_url")):
+            continue
         pending.append((document_id, attributes, name, lei, period_end, local_path))
 
     if args.limit:
@@ -152,7 +158,10 @@ def main() -> None:
             report_url=attributes.get("report_url") or "",
             package_sha256=attributes.get("sha256") or "")
         try:
-            xhtml = download_report(attributes["report_url"])
+            if attributes.get("report_url"):
+                xhtml = download_report(attributes["report_url"])
+            else:
+                xhtml = download_report_from_package(attributes["package_url"])
             probe = probe_report(xhtml)
             local_path.parent.mkdir(parents=True, exist_ok=True)
             with gzip.open(local_path, "wb") as fh:
