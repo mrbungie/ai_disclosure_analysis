@@ -82,10 +82,10 @@ precisión/recall del prefiltro reponderados por estrato. Falta anotar.
   empresas; sin ellos, en 8. Cuál es la pregunta ("¿habla más que el
   corpus?" vs. "¿más que su industria?") es una decisión, no técnica.
 - **`14_brecha_entre_canales.md`**: la brecha call-filing es un segundo score
-  de washing, ortogonal al de `09` (Spearman −0,06). Hay que decidir cuál va
+  de washing, ortogonal al de `09` (Spearman −0,07). Hay que decidir cuál va
   al centro de la tesis; el de `14` es el que corresponde al mecanismo que
   persigue la SEC, y es donde está el único efecto post-SEC del proyecto (el
-  10-K se vuelve menos específico, la call no).
+  filing agrega gobernanza de IA; la call no cambia).
 - Entrada endógena al panel empresa-año (una empresa entra sólo si tuvo ≥3
   frames ese año; `docs/problemas_academicos.md` #12).
 
@@ -99,8 +99,8 @@ precisión/recall del prefiltro reponderados por estrato. Falta anotar.
   `WINDOW`; merece un flag.
 - `12_grilla_voz_conducta.md`: el manifiesto no guarda la estabilidad 2×2 ni
   la de esquinas; se calculan a mano.
-- Las transcripciones de earnings calls terminan en 2025Q2 (el dataset fuente
-  cubre hasta 2025) y son ~3,2 de 4 por empresa-año. Traer 2025H2-2026 le da
+- Las transcripciones de earnings calls terminan a mediados de 2025 (el
+  dataset fuente cubre hasta 2025) y son ~3,2 de 4 por empresa-ejercicio. Traer 2025H2-2026 le da
   un año más de post a `14_brecha_entre_canales.md`; el fetch es
   `scripts/us/earnings_calls/01_fetch_transcripts.py --from-year 2025 --to-year 2026`
   si la fuente se actualiza, y después prefiltro + clasificación (aditivas).

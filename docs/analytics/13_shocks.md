@@ -124,9 +124,9 @@ observaciones detrás: es una anécdota, no un hallazgo.
    contra earnings calls (sin ella). Las transcripciones ya están clasificadas
    (16.267 frames de 403 empresas, `earnings_calls_analysis.py`) y el diseño
    empresa × trimestre × canal está en `14_brecha_entre_canales.md`: la brecha
-   promocional entre call y filing es de +9,6 p.p., el escrutinio de la SEC
-   no la cerró (b=+0,017, p=0,34) y abrió la brecha de especificidad: el 10-K
-   se volvió menos concreto sobre IA mientras la call no cambió.
+   promocional entre call y filing es de +10 p.p. y el escrutinio de la SEC
+   no la cerró (b=+0,015, p=0,36); lo que cambió después de 2024 es que el
+   filing agregó gobernanza de IA, no que la call bajara el tono.
 
 ## Limitaciones
 

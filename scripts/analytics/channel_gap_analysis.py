@@ -17,13 +17,28 @@ el estimador es la diferencia dentro de la celda:
 Todo lo que es común a la empresa en ese período (el boom de IA, su
 sector, su ciclo, cuánto habla de IA) se cancela en la resta.
 
-PERÍODO = AÑO CALENDARIO por defecto. Los filings con frames de IA son
-anuales (10-K en Q1, DEF 14A en Q2; el 10-Q casi nunca tiene frames), así
-que parear por trimestre deja celdas sólo donde un 10-K coincide con una
-call: 590 celdas de 173 empresas. Por año, la celda junta el 10-K, la DEF
-14A, los 10-Q y las ~3-4 calls del año: 619 celdas de 237 empresas y 115
-empresas a ambos lados del corte. `--period quarter` conserva la versión
-trimestral.
+PERÍODO = AÑO FISCAL, alineado por lo que el documento CUBRE, no por la
+fecha en que se presenta. El 10-K de febrero de 2025 habla del ejercicio
+2024 y las calls de 2024 discuten los trimestres de 2024: parearlos por
+año calendario de la fecha mezcla ejercicios. Asignación:
+  10-K, 10-Q       año fiscal de `period_end_date`
+  earnings call    año fiscal del `document_id` (`TICKER_YYYYQn` = trimestre
+                   fiscal discutido)
+  8-K, DEF 14A     año fiscal en que se presentan (no cubren un período;
+                   el proxy mezcla compensación pasada y gobernanza actual)
+El año fiscal de una fecha se calcula con el mes de cierre de cada empresa
+(mes de `period_end_date` de sus 10-K). Los filings con frames de IA son
+anuales (el 10-Q casi nunca tiene frames), así que la unidad natural es el
+año: por trimestre calendario sólo hay celda donde un 10-K coincide con
+una call. `--period quarter` conserva esa versión, por fecha calendario.
+
+`post` = año fiscal ≥ 2024. Una celda puede mezclar documentos anteriores
+y posteriores al 2024-03-01 (p. ej. el 10-K de FY2023 presentado en febrero
+y el proxy de abril): se guarda `share_post_docs` por celda y se reporta la
+estimación sin las celdas mixtas como robustez. También se reporta la
+estimación ponderada por frames (min de los dos canales): las tasas de
+celdas chicas son ruidosas y una regresión sin pesos las trata igual que
+las de 100 frames.
 
 Se estima con efectos fijos de empresa sobre la brecha y errores
 clusterizados por empresa; se reporta el event study por período (base =
@@ -55,7 +70,8 @@ CALLS_MANIFEST = REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
 FILING_FORMS = ("10-K", "10-Q", "DEF 14A", "8-K")
 MIN_FRAMES = 3
-EVENT = {"year": 2024, "quarter": pd.Period("2024Q2", freq="Q")}
+EVENT = {"fy": 2024, "quarter": pd.Period("2024Q2", freq="Q")}
+EVENT_DATE = "2024-03-01"      # escrutinio de la SEC sobre AI-washing
 OUTCOMES = ["promotional_rate", "quantified_rate", "specificity_index", "realized_share",
             "hypothetical_share", "gov_share"]
 NOTORIOUS = ["WELL", "NVDA", "PLTR", "TSLA", "ORCL", "GOOGL", "CRM", "MSFT", "META", "AMZN",
@@ -69,12 +85,13 @@ def load_frames(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     `document_id` es el `accession_number` sintético `TICKER_YYYYQn`."""
     filings = con.execute(f"""
         WITH manifest AS (
-            SELECT country_code, accession_number, ticker, filing_date FROM filing_manifest
+            SELECT country_code, accession_number, ticker, filing_date, period_end_date FROM filing_manifest
             WHERE form_type != 'Earnings call transcript'
             UNION ALL
-            SELECT country_code, accession_number, ticker, filing_date FROM filing_manifest_10q
+            SELECT country_code, accession_number, ticker, filing_date, period_end_date FROM filing_manifest_10q
         )
-        SELECT 'filing' AS channel, f.form, m.ticker, m.filing_date AS fecha, f.text_hash,
+        SELECT 'filing' AS channel, f.form, m.ticker, m.filing_date AS fecha,
+               TRY_CAST(m.period_end_date AS DATE) AS period_end, f.text_hash,
                f.frame_index, f.rhetoric_promotional, f.specificity_quantified_metric,
                f.specificity_business_process, f.specificity_product_or_system,
                f.specificity_vendor_or_partner, f.specificity_date_or_timeline,
@@ -86,6 +103,7 @@ def load_frames(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     """).df()
     calls = con.execute(f"""
         SELECT 'call' AS channel, f.form, m.ticker, CAST(m.filing_date AS DATE) AS fecha,
+               NULL::DATE AS period_end, CAST(regexp_extract(m.document_id, '_([0-9]{{4}})Q', 1) AS INTEGER) AS call_fy,
                f.text_hash, f.frame_index, f.rhetoric_promotional, f.specificity_quantified_metric,
                f.specificity_business_process, f.specificity_product_or_system,
                f.specificity_vendor_or_partner, f.specificity_date_or_timeline,
@@ -100,6 +118,23 @@ def load_frames(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     frames = frames.drop_duplicates(["channel", "ticker", "fecha", "text_hash", "frame_index"])
     frames["quarter"] = pd.to_datetime(frames["fecha"]).dt.to_period("Q")
     frames["year"] = frames["quarter"].dt.year
+    # mes de cierre fiscal por empresa: el de sus 10-K (moda); diciembre si no hay
+    fye = (frames[(frames.form == "10-K") & frames.period_end.notna()]
+           .assign(m=lambda d: pd.to_datetime(d.period_end).dt.month)
+           .groupby("ticker")["m"].agg(lambda s: int(s.mode().iloc[0])))
+    frames["fye_month"] = frames["ticker"].map(fye).fillna(12).astype(int)
+    def fiscal_year(dates: pd.Series, fye_month: pd.Series) -> pd.Series:
+        d = pd.to_datetime(dates)
+        return (d.dt.year + (d.dt.month > fye_month).astype(int)).astype("Int64")
+    fy = pd.Series(pd.NA, index=frames.index, dtype="Int64")
+    is_pe = frames.form.isin(["10-K", "10-Q"]) & frames.period_end.notna()
+    fy[is_pe] = fiscal_year(frames.loc[is_pe, "period_end"], frames.loc[is_pe, "fye_month"])
+    is_call = frames.channel == "call"
+    fy[is_call] = frames.loc[is_call, "call_fy"].astype("Int64")
+    rest = fy.isna()
+    fy[rest] = fiscal_year(frames.loc[rest, "fecha"], frames.loc[rest, "fye_month"])
+    frames["fy"] = fy.astype(int)
+    frames["post_doc"] = (pd.to_datetime(frames["fecha"]) >= pd.Timestamp(EVENT_DATE)).astype(float)
     spec_cols = ["specificity_business_process", "specificity_product_or_system",
                  "specificity_vendor_or_partner", "specificity_quantified_metric",
                  "specificity_date_or_timeline"]
@@ -119,41 +154,56 @@ def cells(frames: pd.DataFrame, period: str) -> pd.DataFrame:
         realized_share=("temporal", lambda s: float((s == "realized").mean())),
         hypothetical_share=("temporal", lambda s: float((s == "hypothetical").mean())),
         gov_share=("is_gov", "mean"),
+        share_post_docs=("post_doc", "mean"),
     ).reset_index()
     cell = cell[cell["n_frames"] >= MIN_FRAMES]
-    wide = cell.pivot(index=["ticker", period], columns="channel", values=OUTCOMES + ["n_frames"])
+    wide = cell.pivot(index=["ticker", period], columns="channel", values=OUTCOMES + ["n_frames", "share_post_docs"])
     wide.columns = [f"{v}_{ch}" for v, ch in wide.columns]
     wide = wide.dropna(subset=["n_frames_call", "n_frames_filing"]).reset_index().rename(columns={period: "t"})
     for y in OUTCOMES:
         wide[f"gap_{y}"] = wide[f"{y}_call"] - wide[f"{y}_filing"]
     wide["post"] = (wide["t"] >= EVENT[period]).astype(int)
+    wide["share_post_docs"] = (wide["share_post_docs_call"] * wide["n_frames_call"] + wide["share_post_docs_filing"] * wide["n_frames_filing"]) / (wide["n_frames_call"] + wide["n_frames_filing"])
+    wide["mixed"] = (wide["share_post_docs"] > 0) & (wide["share_post_docs"] < 1)
+    wide["weight"] = np.minimum(wide["n_frames_call"], wide["n_frames_filing"])
     return wide
 
 
-def _fe_ols(y: pd.Series, X: pd.DataFrame, groups: pd.Series):
-    """Demeaning por empresa (efectos fijos) + OLS con SE cluster por empresa."""
-    yd = y - y.groupby(groups).transform("mean")
+def _fe_ols(y: pd.Series, X: pd.DataFrame, groups: pd.Series, weights: pd.Series | None = None):
+    """Efectos fijos de empresa por demeaning (ponderado si hay pesos) + OLS/WLS
+    con SE cluster por empresa."""
+    if weights is None:
+        wm = lambda s: s.groupby(groups).transform("mean")
+    else:
+        w = weights.astype(float)
+        wm = lambda s: (s * w).groupby(groups).transform("sum") / w.groupby(groups).transform("sum")
+    yd = y - wm(y)
     Xd = X.copy()
     for c in Xd.columns:
-        Xd[c] = Xd[c] - Xd[c].groupby(groups).transform("mean")
-    res = sm.OLS(yd.to_numpy(dtype=float), Xd.to_numpy(dtype=float)).fit(
-        cov_type="cluster", cov_kwds={"groups": pd.factorize(groups)[0]})
+        Xd[c] = Xd[c] - wm(Xd[c])
+    model = sm.WLS(yd.to_numpy(dtype=float), Xd.to_numpy(dtype=float), weights=weights.to_numpy(dtype=float)) if weights is not None \
+        else sm.OLS(yd.to_numpy(dtype=float), Xd.to_numpy(dtype=float))
+    res = model.fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(groups)[0]})
     return res, list(Xd.columns)
 
 
-def estimate(paired: pd.DataFrame, outcome: str) -> dict:
-    d = paired[["ticker", "t", "post", f"gap_{outcome}"]].dropna().rename(columns={f"gap_{outcome}": "y"})
+def estimate(paired: pd.DataFrame, outcome: str, weighted: bool = False, drop_mixed: bool = False) -> dict:
+    cols = ["ticker", "t", "post", "weight", "mixed", f"gap_{outcome}"]
+    d = paired[cols].dropna().rename(columns={f"gap_{outcome}": "y"})
+    if drop_mixed:
+        d = d[~d["mixed"]]
     both = d.groupby("ticker")["post"].nunique()
     d = d[d["ticker"].isin(both[both == 2].index)]
-    out = {"n_obs": int(len(d)), "n_firms": int(d["ticker"].nunique())}
+    out = {"n_obs": int(len(d)), "n_firms": int(d["ticker"].nunique()), "weighted": weighted, "drop_mixed": drop_mixed}
     if out["n_firms"] < 10:
         out["usable"] = False; return out
-    res, _ = _fe_ols(d["y"], pd.DataFrame({"post": d["post"].astype(float)}), d["ticker"])
+    wts = d["weight"] if weighted else None
+    res, _ = _fe_ols(d["y"], pd.DataFrame({"post": d["post"].astype(float)}), d["ticker"], wts)
     out.update({"did_coef": float(res.params[0]), "did_se": float(res.bse[0]), "did_p": float(res.pvalues[0]),
                 "pre_mean_gap": float(d.loc[d.post == 0, "y"].mean()), "post_mean_gap": float(d.loc[d.post == 1, "y"].mean())})
     periods = sorted(d["t"].unique()); base = periods[0]
     X = pd.DataFrame({f"t{p}": (d["t"] == p).astype(float) for p in periods[1:]})
-    res2, cols = _fe_ols(d["y"], X, d["ticker"])
+    res2, cols = _fe_ols(d["y"], X, d["ticker"], wts)
     out["event_study"] = [{"t": str(p), "coef": float(res2.params[i]), "se": float(res2.bse[i]), "p": float(res2.pvalues[i])}
                           for i, p in enumerate(periods[1:])]
     out["event_base"] = str(base)
@@ -186,7 +236,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--database", type=Path, default=DB)
     parser.add_argument("--output-dir", type=Path, default=OUT_DIR)
-    parser.add_argument("--period", choices=("year", "quarter"), default="year")
+    parser.add_argument("--period", choices=("fy", "quarter"), default="fy",
+                        help="fy = año fiscal alineado por período cubierto (default); quarter = trimestre calendario de la fecha")
     args = parser.parse_args()
     PERIOD = args.period
 
@@ -197,7 +248,8 @@ def main() -> None:
           f"| calls cubren {frames.loc[frames.channel == 'call', 'quarter'].min()}–{frames.loc[frames.channel == 'call', 'quarter'].max()}")
     paired = cells(frames, PERIOD)
     print(f"celdas empresa×{PERIOD} con ambos canales (≥{MIN_FRAMES} frames cada uno): {len(paired):,} "
-          f"| empresas {paired.ticker.nunique():,} | por período {paired.groupby('t').size().to_dict()}")
+          f"| empresas {paired.ticker.nunique():,} | por período {paired.groupby('t').size().to_dict()} "
+          f"| celdas mixtas pre/post: {int(paired['mixed'].sum())}")
 
     desc = {}
     print("\nbrecha call − filing (media sobre celdas):")
@@ -220,6 +272,13 @@ def main() -> None:
         print(f"  {y:20s} b={r['did_coef']:+.4f} (se {r['did_se']:.4f}, p={r['did_p']:.3f}) | pretrend {flag} "
               f"(p={r.get('pretrend_p', float('nan')):.3f}) | n={r['n_obs']}, {r['n_firms']} empresas | ES vs {r['event_base']}: {es}")
         levels[y] = channel_levels(paired, y)
+    robust = {}
+    print("\nrobustez (mismo estimador): ponderado por frames | sin celdas mixtas pre/post | ambas")
+    for y in ("promotional_rate", "quantified_rate", "specificity_index"):
+        robust[y] = {"weighted": estimate(paired, y, weighted=True), "no_mixed": estimate(paired, y, drop_mixed=True),
+                     "weighted_no_mixed": estimate(paired, y, weighted=True, drop_mixed=True)}
+        print(f"  {y:18s} " + " | ".join(f"{k}: b={r.get('did_coef', float('nan')):+.4f} (p={r.get('did_p', float('nan')):.3f}, pretrend p={r.get('pretrend_p', float('nan')):.2f}, n={r['n_obs']})"
+                                       for k, r in robust[y].items()))
     print("\ndescomposición por canal (event study de cada canal, coef vs primer período):")
     for y in ("promotional_rate", "quantified_rate", "specificity_index"):
         for ch in ("call", "filing"):
@@ -230,7 +289,7 @@ def main() -> None:
         gap_specificity=("gap_specificity_index", "mean"), gap_quantified=("gap_quantified_rate", "mean"),
         promotional_call=("promotional_rate_call", "mean"), promotional_filing=("promotional_rate_filing", "mean"),
     ).reset_index()
-    min_cells = 2 if PERIOD == "year" else 3
+    min_cells = 2 if PERIOD == "fy" else 3
     firm = firm[firm["n_cells"] >= min_cells].sort_values("gap_promotional", ascending=False)
     firm["z_gap_promotional"] = (firm["gap_promotional"] - firm["gap_promotional"].mean()) / firm["gap_promotional"].std(ddof=1)
     print(f"\nempresas con ≥{min_cells} celdas: {len(firm)} | brecha promocional mediana {firm.gap_promotional.median():+.3f} | top 10:")
@@ -269,7 +328,7 @@ def main() -> None:
                "calls_coverage": [str(frames.loc[frames.channel == 'call', 'quarter'].min()), str(frames.loc[frames.channel == 'call', 'quarter'].max())],
                "n_cells": int(len(paired)), "n_firms": int(paired.ticker.nunique()),
                "cells_by_t": {str(k): int(v) for k, v in paired.groupby("t").size().items()},
-               "descriptive": desc, "did_on_gap": results, "channel_levels": levels,
+               "descriptive": desc, "did_on_gap": results, "robustness": robust, "channel_levels": levels,
                "firm_score": {"n_firms": int(len(firm)), "median_gap_promotional": float(firm.gap_promotional.median()),
                               "top10": firm.head(10)[["ticker", "gap_promotional"]].values.tolist()},
                "notorious": notorious, "cross": cross}
@@ -277,7 +336,7 @@ def main() -> None:
     print(f"\n-> {args.output_dir / 'channel_gap_analysis.json'}")
 
 
-PERIOD = "year"
+PERIOD = "fy"
 
 if __name__ == "__main__":
     main()
