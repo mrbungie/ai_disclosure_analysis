@@ -18,18 +18,20 @@ devuelve, por cada actividad distinta, una estructura chica:
     function    para qué (snake_case normalizado: customer_service, coding, ...)
     target      para quién (enum: employees, customers, developers, ...)
     stage       en qué etapa (enum: exploring, piloting, deployed, scaled)
-    providers   proveedores o modelos EXTERNOS nombrados (lista, todos)
-    own_brands  marcas o productos PROPIOS de la empresa nombrados (lista)
-    is_own_ai   si la IA de la actividad es de la propia empresa (autoreferencia)
+    ai_source   de dónde sale la IA (enum: own, third_party, co_developed, acquired,
+                open_source, mixed, unspecified; `target=customers` ya dice si se vende)
+    named_entities  TODAS las entidades nombradas con su rol (own_product_or_brand,
+                external_provider, external_model, partner, acquired_company,
+                customer, distribution_channel, competitor_or_reference)
     evidence    fuerza de la evidencia (enum: named_product_or_process, metric, vendor, generic)
     sentence_ids
 
 v2 (2026-09-06): el prompt dice QUÉ EMPRESA presenta el documento (ticker y
 nombre), para que el modelo distinga proveedor externo de autoreferencia:
-`providers_or_models` es la lista de proveedores o modelos externos (todos:
-v1 guardaba uno solo y perdía el segundo en el 2% de las actividades),
-`own_brands` la de marcas propias nombradas e `is_own_ai` dice si la IA es de
-la propia empresa. Además el prompt exige una actividad por cada acción·objeto·función
+`ai_source` dice de dónde sale la IA y `named_entities` lista TODAS las
+entidades nombradas con su rol (v1 guardaba un solo proveedor como string,
+perdía el segundo en el 2% de las actividades y confundía la marca propia con
+un proveedor). Además el prompt exige una actividad por cada acción·objeto·función
 distinta del párrafo (v1 pedía "el mínimo" y dejó una sola actividad en el
 57% de los párrafos, 43% de los de ocho o más oraciones). Las partes v1 están
 archivadas en `data/archive/interim/ai_activities/`.
@@ -78,6 +80,22 @@ BEHAVIOURAL_CONCEPTS = ["deployed", "pilot_or_testing", "exploring", "expansion_
 
 Action = Literal["deploy", "develop", "integrate", "buy_or_license", "partner", "invest_infrastructure",
                  "hire_or_train", "pilot_or_explore", "scale", "measure_outcome", "govern_or_control", "restrict"]
+AISource = Literal["own", "third_party", "co_developed", "acquired", "open_source", "mixed", "unspecified"]
+EntityRole = Literal["own_product_or_brand", "external_provider", "external_model", "partner", "acquired_company",
+                     "customer", "distribution_channel", "competitor_or_reference"]
+
+
+class NamedEntity(BaseModel):
+    name: str = Field(description="The entity as named in the text, 1-4 words (e.g. 'NVIDIA', 'Azure OpenAI', 'Ryzen AI', 'Fermyon').")
+    role: EntityRole = Field(description=(
+        "own_product_or_brand = the filing firm's own AI product, model or brand, including its subsidiaries and product lines "
+        "('our X', 'the X platform' when X is the firm's); external_provider = a vendor whose AI, chips, "
+        "cloud or tools the firm uses; external_model = a named third-party model or tool (ChatGPT, Gemini, Llama); partner = "
+        "co-development, alliance or joint venture; acquired_company = a company or asset acquired for its AI; customer = a named "
+        "customer where the firm's AI is deployed; distribution_channel = a marketplace or cloud through which the firm's AI is "
+        "offered; competitor_or_reference = named only as competitor or comparison."))
+
+
 Target = Literal["employees", "customers", "developers", "internal_process", "partners_or_suppliers", "unspecified"]
 Stage = Literal["exploring", "piloting", "deployed", "scaled", "unspecified"]
 Evidence = Literal["named_product_or_process", "metric", "vendor", "generic"]
@@ -104,17 +122,17 @@ class AIActivity(BaseModel):
         "'unspecified' if the text gives none."))
     target: Target = Field(description="Who the AI serves: employees, customers, developers, an internal process, partners, or unspecified.")
     stage: Stage = Field(description="Adoption stage as stated: exploring, piloting, deployed, scaled, or unspecified.")
-    providers_or_models: list[str] = Field(default_factory=list, description=(
-        "EVERY EXTERNAL provider, partner or model named for this activity, each in 1-3 words "
-        "(e.g. ['NVIDIA', 'Intel'], ['OpenAI', 'Azure OpenAI'], ['Gemini']). The filing firm itself and "
-        "its own products are NOT external: put those in own_brands. Empty list when none is named."))
-    own_brands: list[str] = Field(default_factory=list, description=(
-        "The filing firm's OWN AI products, models or brands named for this activity, each in 1-3 words "
-        "(e.g. ['Ryzen AI', 'Instinct'] for AMD, ['Copilot'] for Microsoft, ['Erica'] for Bank of America). "
-        "Empty when none is named."))
-    is_own_ai: bool = Field(description=(
-        "True when the AI involved is the filing firm's own (built, owned or branded by the firm, or the firm "
-        "is itself the AI vendor); False when it relies on an external provider or the text does not say."))
+    ai_source: AISource = Field(description=(
+        "Where the AI in this activity comes from. own = the filing firm built it, owns it or sells it as its product "
+        "('our models', 'we build', a product of the firm or its subsidiaries); third_party = ONLY when the text names or "
+        "explicitly refers to an external vendor, tool or model that the firm uses ('third-party AI tools', 'ChatGPT', 'Azure "
+        "OpenAI'); co_developed = built with a named partner or customer; acquired = obtained through an acquisition; open_source "
+        "= based on open-source models; mixed = own product that embeds third-party models. When the text does not say, use "
+        "unspecified, never third_party."))
+    named_entities: list[NamedEntity] = Field(default_factory=list, description=(
+        "EVERY company, product, model or brand named in connection with this activity, each with its role. Name both when "
+        "two are named (e.g. NVIDIA and Intel both as external_provider). The filing firm's own products are "
+        "own_product_or_brand, never external. Empty when nothing is named."))
     evidence_strength: Evidence = Field(description=(
         "Strongest evidence attached: named_product_or_process (a named product, system or "
         "process), metric (a number), vendor (a named provider), generic (none of those)."))
@@ -144,19 +162,25 @@ those statements into activities of the form
 
     the firm performs ACTION on OBJECT for FUNCTION (target, stage, provider, evidence).
 
-You are told which firm files the document (ticker and name): mentions of that firm or \
-its products are self-references, not external providers.
+You are told which firm files the document (ticker and name): that firm, its subsidiaries and \
+its products ('our X') are self-references (own_product_or_brand, ai_source=own), never external \
+providers. Only a clearly different company or its tool is external.
+
+The object of every activity must be AI or machine learning, or something the text explicitly \
+calls AI-enabled or AI-driven. Generic technology, R&D, digital or data investments with no AI \
+stated are NOT activities. Every activity needs at least one supporting sentence index; if no \
+sentence supports it, do not create it.
 
 Rules. Be exhaustive: list EVERY distinct activity, one per distinct (action, object, \
 function); a paragraph that deploys a product, invests in infrastructure and partners \
 with a provider yields three activities, not one. Cover every behavioural frame you are \
-given unless it is too generic to name an object. Name EVERY external provider or model the text \
-attaches to an activity (both when two are named), keep the firm's own brands in own_brands, \
-and set is_own_ai when the AI is the firm's own. Report only what the text states the \
+given unless it is too generic to name an object. Name EVERY entity the text attaches to an activity, \
+with its role (both when two are named); the filing firm's own products are own_product_or_brand; \
+say where the AI comes from in ai_source. Report only what the text states the \
 FIRM does or did or plans; never what customers, the market or competitors do. Do not invent an object or function the \
 text does not give: use 'unspecified'. Prefer generic objects ('copilot', 'chatbot', \
-'fraud model') over brand names; put brand names of models or providers in \
-providers_or_models, all of them. One activity per distinct (action, object, function); \
+'fraud model') over brand names; put every brand, company or model in named_entities \
+with its role. One activity per distinct (action, object, function); \
 merge only exact repetitions. Return sentence indices as evidence, never sentence text. Zero \
 activities is a valid answer when the statements are too generic to name any \
 action-object pair (e.g. 'AI is important to our strategy')."""
@@ -177,8 +201,9 @@ ACTIVITY_SCHEMA = pa.schema([
     ("item_key", pa.string()), ("paragraph_index", pa.int64()), ("text_hash", pa.uint64()),
     ("activity_index", pa.int64()), ("has_activity", pa.bool_()),
     ("action", pa.string()), ("object", pa.string()), ("function", pa.string()), ("target", pa.string()),
-    ("stage", pa.string()), ("providers_or_models", pa.list_(pa.string())), ("own_brands", pa.list_(pa.string())),
-    ("is_own_ai", pa.bool_()), ("firm", pa.string()), ("evidence_strength", pa.string()),
+    ("stage", pa.string()), ("ai_source", pa.string()),
+    ("named_entities", pa.list_(pa.struct([("name", pa.string()), ("role", pa.string())]))),
+    ("firm", pa.string()), ("evidence_strength", pa.string()),
     ("evidence_sentence_ids", pa.list_(pa.int64())), ("sentence_indices", pa.list_(pa.int64())),
     ("source_frame_indices", pa.list_(pa.int64())),
     ("judge_model", pa.string()), ("prompt_version", pa.string()), ("session_id", pa.string()),
@@ -209,24 +234,25 @@ def _base(row: dict, judge_model: str, session_id: str) -> dict:
 def _rows(row: dict, judge_model: str, session_id: str, out: ParagraphActivities) -> list[dict]:
     base = _base(row, judge_model, session_id)
     empty = {"action": None, "object": None, "function": None, "target": None, "stage": None,
-             "providers_or_models": [], "own_brands": [], "is_own_ai": None, "evidence_strength": None, "evidence_sentence_ids": []}
+             "ai_source": None, "named_entities": [], "evidence_strength": None, "evidence_sentence_ids": []}
     if not out.activities:
         return [{**base, **empty, "activity_index": 0, "has_activity": False}]
     n = len(row["sentences"])
     return [{**base, "activity_index": i, "has_activity": True, "action": a.action,
              "object": a.object.strip().lower()[:80], "function": a.function.strip().lower()[:60],
              "target": a.target, "stage": a.stage,
-             "providers_or_models": [p.strip()[:60] for p in a.providers_or_models if p and p.strip()],
-             "own_brands": [p.strip()[:60] for p in a.own_brands if p and p.strip()], "is_own_ai": bool(a.is_own_ai),
+             "ai_source": a.ai_source,
+             "named_entities": [{"name": e.name.strip()[:60], "role": e.role} for e in a.named_entities if e.name and e.name.strip()],
              "evidence_strength": a.evidence_strength,
              "evidence_sentence_ids": [s for s in a.sentence_ids if 0 <= s < n]}
-            for i, a in enumerate(out.activities)]
+            for i, a in enumerate(out.activities) if any(0 <= s < n for s in a.sentence_ids)] or \
+        [{**base, **empty, "activity_index": 0, "has_activity": False}]
 
 
 def _error_row(row: dict, judge_model: str, session_id: str, error: Exception) -> dict:
     return {**_base(row, judge_model, session_id), "activity_index": 0, "has_activity": False,
             "action": None, "object": None, "function": None, "target": None, "stage": None,
-            "providers_or_models": [], "own_brands": [], "is_own_ai": None, "evidence_strength": None, "evidence_sentence_ids": [],
+            "ai_source": None, "named_entities": [], "evidence_strength": None, "evidence_sentence_ids": [],
             "error": f"{type(error).__name__}: {error}"[:2000]}
 
 
@@ -385,6 +411,7 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_DIR)
     parser.add_argument("--judge-model", default=DEFAULT_JUDGE_MODEL)
     parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument("--sample", type=int, default=0, help="Tomar N pendientes al azar (semilla 7) en vez de los primeros; para probar el esquema")
     parser.add_argument("--concurrency", type=int, default=8)
     parser.add_argument("--part-rows", type=int, default=250)
     parser.add_argument("--progress-every", type=int, default=50)
@@ -393,7 +420,10 @@ def main() -> None:
     if not os.environ.get("OPENROUTER_API_KEY"):
         sys.exit("Falta OPENROUTER_API_KEY en .env")
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    pending, pop = fetch_pending(args.database, args.output_dir, args.limit)
+    pending, pop = fetch_pending(args.database, args.output_dir, 0 if args.sample else args.limit)
+    if args.sample:
+        import random
+        pending = random.Random(7).sample(pending, min(args.sample, len(pending)))
     print(f"Modelo: {args.judge_model} | prompt {PROMPT_VERSION}")
     print(f"Población: {pop['population_texts']:,} textos únicos con frames conductuales | hechos: {pop['already_done']:,} | pendientes: {pop['pending_texts']:,}")
     if args.limit and pop["pending_texts"] > len(pending):
