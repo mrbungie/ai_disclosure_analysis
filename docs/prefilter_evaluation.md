@@ -1387,6 +1387,98 @@ validar).
 
 ---
 
+### 8.16 Prefiltro v2: puntuar la ORACIÓN, señales de forma del texto, y árboles (2026-09-06)
+
+§8.15 dejó medido el problema: F1 ponderado 0,925 en 10-K/10-Q contra 0,755 y
+0,647 en DEF 14A y 8-K. Esta sección lo ataca. Todo lo que sigue se mide contra
+las **1.500 etiquetas de DEF 14A / 8-K de validación, que nunca entran a ningún
+ajuste ni a la elección del umbral** — generalización fuera de dominio, no
+ajuste dentro de él.
+
+**Diagnóstico: los falsos positivos comparten FORMA, no tema.** Leyendo los 182
+falsos positivos del modelo desplegado:
+
+| patrón | ejemplo real |
+|---|---|
+| matriz de habilidades del directorio | tabla de 14.350 caracteres donde "artificial intelligence" es una celda |
+| biografía de director | *"Mr. Wang is the founder and CEO of Scale AI"* |
+| resultado de votación (8-K) | *"a stockholder proposal regarding risks of discrimination in GenAI was not approved"* |
+| regulación de terceros | *"Export Control Framework for Artificial Intelligence Diffusion… Federal Register"* |
+| viñeta de temas de comité | *"•emerging technologies, including artificial intelligence"* |
+
+Ninguno es "habla de IA de otra manera": son documentos donde el término aparece
+sin que la empresa afirme nada sobre su propia IA.
+
+**a) Puntuar la oración, no el párrafo.** Es el arreglo estructural, y el que
+§9 anotaba como pendiente ("contexto en el embedding") desde el otro lado: no
+falta contexto, sobra. De las **226.139 oraciones** de los 66.972 textos
+candidatos, sólo **30.792 (14%) mencionan IA** — el otro 86% es lo que el vector
+del párrafo venía promediando. `scripts/common/ai_prefilter_sentences.py` embebe
+sólo esas oraciones con el mismo modelo (`bge-m3`, fp16) y los mismos anchors, y
+agrega por texto el máximo/promedio del margen y el máximo por categoría. Costo:
+**42 segundos** en la RTX 5090.
+
+**b) Señales de forma del texto**, en `ai_prefilter_classify.text_feature_columns()`:
+densidad del término por mil caracteres, marcado de tabla y viñeta, largo,
+primera persona (`we`/`our`/`the company`), contexto de biografía / votación /
+regulación, sigla suelta vs. término escrito completo, nitidez del mejor anchor,
+y las de oración (`ai_sent_share`, `ai_sent_first_person`).
+
+**El formulario NO es una señal, deliberadamente.** Sería un atajo: el modelo
+aprendería "los proxies mencionan más IA" en vez de leer el párrafo, y como el
+hallazgo central del proyecto ES una comparación entre formularios (`01_...md`
+#8), la medición quedaría circular. Todas las señales se calculan del texto y
+valen igual en cualquier documento.
+
+**c) Árboles en vez de logística.** Las señales nuevas se usan en interacción
+("hay término" Y "densidad baja" Y "mucho marcado de tabla" → negativo), y una
+logística sólo puede sumarlas por separado.
+
+**d) Etiquetas de ajuste de los formularios nuevos.** Las señales mejoraban el
+ORDENAMIENTO fuera de dominio (AP 0,725 → 0,775 con logística) pero el F1 con
+umbral fijo no subía: el umbral elegido en 10-K/10-Q no viaja. Se muestrearon
+**2.394 párrafos de DEF 14A / 8-K disjuntos de la validación**
+(`prefilter_form_validation.py sample --purpose train`, escriben en un
+directorio aparte para que ningún glob los mezcle) y se etiquetaron con el mismo
+juez. Costo: US$0,10.
+
+### Resultado
+
+Ablación, todo entrenado sin tocar las 1.500 de validación:
+
+| variante | CV en dominio | AP fuera de dominio | F1 fuera de dominio |
+|---|---:|---:|---:|
+| logística, 11 señales (v1 desplegado) | 0,925 | 0,725 | 0,750 |
+| logística + señales de texto | 0,971 | 0,775 | 0,782 |
+| árboles, 11 señales | 0,874 | 0,714 | 0,763 |
+| árboles + texto | 0,975 | 0,852 | 0,792 |
+| árboles + oración | 0,879 | 0,790 | 0,774 |
+| **árboles + texto + oración** | **0,976** | **0,865** | 0,797 |
+| **+ etiquetas de proxy/8-K en el ajuste (desplegado)** | **0,961** | **0,885** | **0,813** |
+
+| | v1 desplegado | **v2** |
+|---|---:|---:|
+| F1 ponderado, holdout total | 0,750 | **0,813** |
+| DEF 14A | 0,755 | **0,821** |
+| 8-K | 0,647 | **0,683** |
+| Precisión (holdout) | 0,678 | **0,731** |
+| Recall (holdout) | 0,839 | **0,916** |
+| Average precision | 0,725 | **0,885** |
+
+La brecha con el dominio de origen se achica de 17 puntos de F1 a 8. El 8-K
+sigue siendo el peor caso y hay una razón medible: sus estratos léxicos son
+diminutos (231 párrafos con término fuerte en TODO el formulario), así que su
+muestra de ajuste es de 31 filas.
+
+**Desplegado** (`run=20260906T005225Z`, `scripts/common/ai_prefilter_deploy.py`):
+árboles de profundidad 3, umbral 0,36, 39 señales (12 de párrafo + 15 de texto +
+12 de oración), **19.560 textos únicos marcados** (0,45% del corpus, 22.107
+instancias). El modelo se guarda en `.joblib` junto al manifiesto, que ahora
+registra features, profundidad, umbral, conteo de etiquetas por fuente y las
+métricas de holdout.
+
+---
+
 ## 9. Qué falta
 
 1. ~~**Completar el golden set.**~~ Resuelto 2026-09-04 (9.884 etiquetas

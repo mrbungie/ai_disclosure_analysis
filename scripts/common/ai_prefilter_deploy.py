@@ -136,15 +136,28 @@ def load_form_labels(con, subdir: str, source: str) -> pd.DataFrame:
     return frame
 
 
-def weighted_f1(y: np.ndarray, predicted: np.ndarray, w: np.ndarray) -> dict:
+def weighted_f1(y: np.ndarray, predicted: np.ndarray, w: np.ndarray,
+                beta: float = 1.0) -> dict:
+    """Precisión, recall y F-beta ponderados.
+
+    `beta` es una decisión de proyecto, no un detalle: en este pipeline un
+    FALSO POSITIVO del prefiltro cuesta una llamada al juez LLM y se descarta
+    (pasó literal con `claude` en proxies: 191 textos rescatados, 5 con frame),
+    mientras que un FALSO NEGATIVO no se recupera nunca — el párrafo no vuelve a
+    aparecer en ninguna etapa posterior. La asimetría es de costo marginal
+    (centavos) contra sesgo permanente en la población de análisis, así que el
+    umbral se elige con beta > 1."""
     tp = w[y & predicted].sum(); fp = w[~y & predicted].sum(); fn = w[y & ~predicted].sum()
     precision = tp / (tp + fp) if tp + fp else 0.0
     recall = tp / (tp + fn) if tp + fn else 0.0
+    denominator = (beta ** 2) * precision + recall
+    fbeta = (1 + beta ** 2) * precision * recall / denominator if denominator else 0.0
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-    return {"precision": float(precision), "recall": float(recall), "f1": float(f1)}
+    return {"precision": float(precision), "recall": float(recall),
+            "f1": float(f1), "fbeta": float(fbeta)}
 
 
-def nested_cv(X, y, w, groups) -> dict:
+def nested_cv(X, y, w, groups, beta: float = 1.0) -> dict:
     """Profundidad y umbral se eligen SÓLO dentro de cada fold de entrenamiento.
     Es la única forma de comparar un modelo flexible contra uno lineal sin
     regalarle el corte."""
@@ -163,7 +176,7 @@ def nested_cv(X, y, w, groups) -> dict:
                 inner_proba[b] = model.predict_proba(X[train_idx][b])[:, 1]
             for cut in THRESHOLD_GRID:
                 score = weighted_f1(y[train_idx].astype(bool), inner_proba >= cut,
-                                    w[train_idx])["f1"]
+                                    w[train_idx], beta)["fbeta"]
                 if score > best[0]:
                     best = (score, depth, float(cut))
         model = model_factory(best[1])
@@ -171,7 +184,7 @@ def nested_cv(X, y, w, groups) -> dict:
         oof[test_idx] = model.predict_proba(X[test_idx])[:, 1]
         chosen.append({"depth": best[1], "threshold": best[2]})
     threshold = float(np.median([c["threshold"] for c in chosen]))
-    metrics = weighted_f1(y.astype(bool), oof >= threshold, w)
+    metrics = weighted_f1(y.astype(bool), oof >= threshold, w, beta)
     metrics["ap_pond"] = float(average_precision_score(y, oof, sample_weight=w))
     return {"metrics": metrics, "folds": chosen, "threshold": threshold,
             "depth": int(np.median([c["depth"] for c in chosen]))}
@@ -181,6 +194,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--judge-model", default=pc.DEFAULT_JUDGE_MODEL)
+    parser.add_argument("--beta", type=float, default=2.0,
+                        help="Peso del recall frente a la precisión al elegir el umbral. "
+                             "2.0 (default) = el recall vale el doble; 1.0 = F1 clásico. "
+                             "Ver el docstring de weighted_f1 para por qué acá el default "
+                             "no es 1.")
     parser.add_argument("--dry-run", action="store_true",
                         help="Ajusta y evalúa, pero no escribe predicciones del corpus.")
     args = parser.parse_args()
@@ -201,9 +219,10 @@ def main() -> None:
     print(f"CV anidado sobre {len(columns)} señales "
           f"({len(pc.ALL_SIGNAL_COLUMNS)} párrafo + {len(pc.TEXT_FEATURE_NAMES)} texto + "
           f"{len(pc.SENTENCE_FEATURE_NAMES)} oración)...")
-    cv = nested_cv(X, y, w, groups)
-    print(f"  F1 pond. {cv['metrics']['f1']:.3f} | prec {cv['metrics']['precision']:.3f} | "
-          f"recall {cv['metrics']['recall']:.3f} | AP {cv['metrics']['ap_pond']:.3f}")
+    cv = nested_cv(X, y, w, groups, args.beta)
+    print(f"  F1 pond. {cv['metrics']['f1']:.3f} | F{args.beta:g} {cv['metrics']['fbeta']:.3f} | "
+          f"prec {cv['metrics']['precision']:.3f} | recall {cv['metrics']['recall']:.3f} | "
+          f"AP {cv['metrics']['ap_pond']:.3f}")
     print(f"  profundidad {cv['depth']}, umbral {cv['threshold']:.2f} "
           f"(mediana de los folds: {[c['threshold'] for c in cv['folds']]})")
 
@@ -218,16 +237,26 @@ def main() -> None:
         yh = holdout["y"].astype(bool).to_numpy()
         wh = holdout["inclusion_weight"].astype(float).to_numpy()
         proba_h = model.predict_proba(Xh)[:, 1]
-        holdout_metrics["total"] = weighted_f1(yh, proba_h >= threshold, wh)
+        holdout_metrics["total"] = weighted_f1(yh, proba_h >= threshold, wh, args.beta)
         holdout_metrics["total"]["ap"] = float(average_precision_score(yh, proba_h, sample_weight=wh))
         for form, group in holdout.groupby("form"):
             mask = (holdout["form"] == form).to_numpy()
-            holdout_metrics[form] = weighted_f1(yh[mask], (proba_h >= threshold)[mask], wh[mask])
+            holdout_metrics[form] = weighted_f1(yh[mask], (proba_h >= threshold)[mask],
+                                                wh[mask], args.beta)
         print("\nHOLDOUT (1.500 etiquetas de DEF 14A / 8-K que nunca entraron al ajuste):")
         for name, values in holdout_metrics.items():
             print(f"  {name:10s} F1 {values['f1']:.3f} | prec {values['precision']:.3f} | "
                   f"recall {values['recall']:.3f}"
                   + (f" | AP {values['ap']:.3f}" if "ap" in values else ""))
+
+    if not holdout.empty:
+        print("\ncurva de decisión (umbral -> recall/precisión fuera de dominio):")
+        print(f"  {'umbral':>7s} {'recall':>7s} {'prec':>7s} {'F2':>7s}")
+        for cut in (0.5, 0.36, 0.25, 0.2, 0.15, 0.12, 0.1, 0.07, 0.05):
+            point = weighted_f1(yh, proba_h >= cut, wh, 2.0)
+            marker = "  <- desplegado" if abs(cut - threshold) < 0.005 else ""
+            print(f"  {cut:7.2f} {point['recall']:7.3f} {point['precision']:7.3f} "
+                  f"{point['fbeta']:7.3f}{marker}")
 
     if args.dry_run:
         con.close()
@@ -282,7 +311,7 @@ def main() -> None:
         "model_path": str(model_path), "features": columns, "threshold": threshold,
         "depth": cv["depth"], "judge_model": args.judge_model,
         "labels_golden": int(len(golden)), "labels_form_train": int(len(form_train)),
-        "cv_metrics": cv["metrics"], "cv_folds": cv["folds"],
+        "cv_metrics": cv["metrics"], "cv_folds": cv["folds"], "beta": args.beta,
         "holdout_form_metrics": holdout_metrics,
         "named_ai_entities": list(pc.NAMED_AI_ENTITIES),
         "named_entity_used_in_deployment": True,
