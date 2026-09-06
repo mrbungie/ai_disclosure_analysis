@@ -194,6 +194,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--judge-model", default=pc.DEFAULT_JUDGE_MODEL)
+    parser.add_argument("--threshold", type=float, default=None,
+                        help="Forzar el umbral en vez de tomar el del CV. Se usa cuando el "
+                             "umbral se elige sobre las muestras de VALIDACIÓN de varios "
+                             "canales (10-K/10-Q, DEF 14A/8-K, earnings calls) en vez de "
+                             "sólo sobre el conjunto de ajuste — ver §8.17.")
     parser.add_argument("--beta", type=float, default=2.0,
                         help="Peso del recall frente a la precisión al elegir el umbral. "
                              "2.0 (default) = el recall vale el doble; 1.0 = F1 clásico. "
@@ -203,7 +208,7 @@ def main() -> None:
                         help="Ajusta y evalúa, pero no escribe predicciones del corpus.")
     args = parser.parse_args()
 
-    con = duckdb.connect(str(pc.DB), read_only=True)
+    con = pc.connect_read_only()
     golden = load_golden_labels(con, args.judge_model)
     form_train = load_form_labels(con, "train", "form_train")
     labels = pd.concat([golden, form_train], ignore_index=True)
@@ -228,7 +233,9 @@ def main() -> None:
 
     model = model_factory(cv["depth"])
     model.fit(X, y, sample_weight=np.sqrt(w))
-    threshold = cv["threshold"]
+    threshold = cv["threshold"] if args.threshold is None else float(args.threshold)
+    if args.threshold is not None:
+        print(f"  umbral forzado a {threshold:.2f} (el CV había elegido {cv['threshold']:.2f})")
 
     holdout = load_form_labels(con, ".", "form_validation")
     holdout_metrics = {}
@@ -310,6 +317,7 @@ def main() -> None:
         "run_id": run_id, "anchors_run": anchors_run, "model_kind": "hist_gradient_boosting",
         "model_path": str(model_path), "features": columns, "threshold": threshold,
         "depth": cv["depth"], "judge_model": args.judge_model,
+        "threshold_source": "validación multicanal" if args.threshold is not None else "CV",
         "labels_golden": int(len(golden)), "labels_form_train": int(len(form_train)),
         "cv_metrics": cv["metrics"], "cv_folds": cv["folds"], "beta": args.beta,
         "holdout_form_metrics": holdout_metrics,

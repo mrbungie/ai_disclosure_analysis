@@ -97,6 +97,41 @@ def current_scores_run(con) -> str:
         f"SELECT max(run_id) FROM {scores_relation()}").fetchone()[0]
 
 
+
+def connect_read_only(database: Path | str = None, timeout_seconds: int = 1800,
+                      poll_seconds: int = 20) -> duckdb.DuckDBPyConnection:
+    """Conexión de sólo lectura que ESPERA si otro proceso tiene el archivo.
+
+    DuckDB permite varios lectores simultáneos, pero si algún proceso lo abrió
+    para escritura rechaza a todos los demás — también a los read-only, y con un
+    error inmediato, no una espera:
+
+        IO Error: Could not set lock on file "duckdb/thesis.duckdb":
+        Conflicting lock is held in /usr/bin/python3.12 (PID 160957)
+
+    Con varias corridas conviviendo en la misma máquina (fetch de un país nuevo,
+    rebuild de vistas, analytics) eso mata pasos largos por una razón
+    transitoria. Reintentar es lo correcto: el que escribe termina, y esto sigue.
+    Ver https://duckdb.org/docs/stable/connect/concurrency"""
+    import time
+    target = str(database or DB)
+    deadline = time.time() + timeout_seconds
+    announced = False
+    while True:
+        try:
+            return duckdb.connect(target, read_only=True)
+        except duckdb.IOException as error:
+            if "lock" not in str(error).lower() or time.time() > deadline:
+                raise
+            if not announced:
+                holder = str(error).split("Conflicting lock is held in ")[-1].split(".")[0]
+                print(f"  esperando el lock de duckdb (lo tiene {holder.strip()}); "
+                      f"reintento cada {poll_seconds}s hasta {timeout_seconds//60} min",
+                      flush=True)
+                announced = True
+            time.sleep(poll_seconds)
+
+
 def scores_relation() -> str:
     """Every score part written under the CURRENT (model, anchors, dtype),
     across however many runs produced them — not one hardcoded run id.

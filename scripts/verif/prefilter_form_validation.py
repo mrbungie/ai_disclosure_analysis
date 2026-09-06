@@ -64,7 +64,13 @@ SAMPLING_VERSION = "forms-v1"
 # proporcional daría un puñado de positivos y no permitiría medir precisión.
 # `inclusion_weight` devuelve la muestra a la escala de la población.
 QUOTAS = {("DEF 14A", "strong"): 400, ("DEF 14A", "weak"): 300, ("DEF 14A", "none"): 300,
-          ("8-K", "strong"): 200, ("8-K", "weak"): 150, ("8-K", "none"): 150}
+          ("8-K", "strong"): 200, ("8-K", "weak"): 150, ("8-K", "none"): 150,
+          # Earnings calls: es HABLA, no documento escrito — preguntas de
+          # analistas, muletillas, y un registro estructuralmente más
+          # promocional. El modelo nunca vio ese canal, así que su error ahí es
+          # desconocido hasta que se mida, igual que pasó con proxy y 8-K.
+          ("Earnings call", "strong"): 400, ("Earnings call", "weak"): 200,
+          ("Earnings call", "none"): 200}
 # Muestra de ENTRENAMIENTO, disjunta de la de validación (`--purpose train`).
 # Existe porque el umbral del prefiltro se elige sobre el golden set, que sólo
 # tiene 10-K y 10-Q: medido en `prefilter_feature_eval.py`, las señales de texto
@@ -84,6 +90,8 @@ TRAIN_SAMPLE_PATH = OUT_DIR / "form_train_sample.parquet"
 # separación train/holdout existe para impedir. Separar por carpeta lo hace
 # imposible en vez de depender de renombrar al final.
 TRAIN_DIR = OUT_DIR / "train"
+CALLS_DIR = OUT_DIR / "calls"
+CALLS_SAMPLE_PATH = OUT_DIR / "calls_validation_sample.parquet"
 
 
 def cmd_sample(args) -> None:
@@ -93,13 +101,13 @@ def cmd_sample(args) -> None:
             SELECT up.country_code, up.form, up.accession_number, up.item_key,
                    up.paragraph_index, up.content_type, up.paragraph_text,
                    {gs._keyword_case_sql('up.paragraph_text')} AS keyword_tier,
-                   coalesce(CAST(extract(year from fm.filing_date) AS VARCHAR), 'NA') AS filing_year
+                   coalesce(CAST(extract(year from CAST(fm.filing_date AS DATE)) AS VARCHAR), 'NA') AS filing_year
             FROM unique_paragraphs up
             LEFT JOIN filing_manifest fm
                    ON fm.country_code = up.country_code
                   AND fm.accession_number = up.accession_number
             WHERE up.country_code = 'us' AND up.is_scorable
-              AND up.form IN ('DEF 14A', '8-K')
+              AND up.form IN ('DEF 14A', '8-K', 'Earnings call')
         """).fetchdf()
     finally:
         con.close()
@@ -119,7 +127,10 @@ def cmd_sample(args) -> None:
 
     chunks = []
     quotas = TRAIN_QUOTAS if args.purpose == "train" else QUOTAS
+    forms = getattr(args, "forms", None)
     for (form, tier), quota in quotas.items():
+        if forms and form not in forms:
+            continue
         stratum = pool[(pool["form"] == form) & (pool["keyword_tier"] == tier)]
         if stratum.empty:
             print(f"  aviso: estrato vacío {form}/{tier}")
@@ -261,6 +272,9 @@ def main() -> None:
 
     sampler = subparsers.add_parser("sample", help="Muestra estratificada por forma y tier")
     sampler.add_argument("--seed", type=int, default=42)
+    sampler.add_argument("--forms", nargs="*", default=None,
+                         help="Limitar el muestreo a estos formularios (default: todos "
+                              "los que tengan cuota definida).")
     sampler.add_argument("--purpose", choices=("validation", "train"), default="validation",
                          help="'validation' (default) escribe la muestra intocable; 'train' "
                               "escribe una muestra DISJUNTA para meter al ajuste.")
