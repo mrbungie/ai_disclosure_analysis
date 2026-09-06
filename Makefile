@@ -114,6 +114,7 @@ analytics-panels:
 	@echo "Merge texto x finanzas + score de AI-washing (build_firm_panels, washing_score)..."
 	.venv/bin/python scripts/analytics/build_firm_panels.py $(ARGS)
 	.venv/bin/python scripts/analytics/washing_score.py $(ARGS)
+	.venv/bin/python scripts/analytics/shock_analysis.py $(ARGS)
 
 analytics: analytics-text analytics-financials analytics-panels
 
