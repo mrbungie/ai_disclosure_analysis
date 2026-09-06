@@ -633,6 +633,30 @@ financieros.
 
 ## SEC 2024 y DeepSeek: ¿cambió la TENDENCIA, no el nivel?
 
+> **RETIRADO (2026-09-06).** Rehecho como event study empresa-trimestre con
+> efectos fijos de empresa y de trimestre y errores estándar clusterizados por
+> empresa (`scripts/analytics/sec_event_study.py`), **todos los outcomes fallan
+> el test de tendencias paralelas**: la diferencia entre el grupo "vago" y el
+> "específico" ya está presente y es significativa SEIS TRIMESTRES ANTES del
+> corte, y no cambia después. Ejemplo con `specificity_index` (grupo binario):
+> t−4 = −0,145\*, t−3 = −0,159\*, t−2 = −0,108\*, t+1 = −0,090\*, t+4 = −0,138\*.
+>
+> Eso es una diferencia permanente entre grupos —que es lo esperable, porque
+> los grupos se definieron justamente por esas métricas— y no un efecto del
+> evento. La lectura de abajo ("el grupo específico reacciona, el vago no") es
+> un artefacto del diseño anterior: una regresión segmentada sobre medias
+> trimestrales por grupo, sin efectos fijos, con la composición del grupo
+> cambiando cada trimestre y con reversión a la media incorporada por
+> construcción.
+>
+> Además el panel correcto es chico: 257 observaciones y 54 empresas, porque el
+> 10-Q aporta pocos frames por trimestre. **No hay evidencia de que el
+> escrutinio de la SEC de 2024 cambiara la divulgación de IA en este corpus**, y
+> el diseño anterior no podía haberla detectado aunque existiera.
+>
+> Lo que sigue se conserva como registro de lo que se intentó.
+
+
 Las preguntas extendidas de la tesis (`docs/thesis_proposal.md`) piden
 comparar empresas con divulgación pre-2024 vaga vs. específica,
 antes/después del escrutinio SEC, y ver si DeepSeek afectó el framing.

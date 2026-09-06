@@ -1,5 +1,29 @@
 # Voz vs. comportamiento: dos clusterings separados, cruzados
 
+> **La partición de 4 grupos NO es reproducible (medido 2026-09-06).**
+> `scripts/analytics/cluster_diagnostics.py` la sometió a tres pruebas que
+> antes no existían:
+>
+> | prueba | resultado |
+> |---|---|
+> | Confiabilidad de `specificity_index` a nivel empresa | **0,000** — su varianza entre empresas es MENOR que la varianza de muestreo esperada: es ruido |
+> | Confiabilidad de `promotional_rate` / `quantified_rate` | 0,47 / 0,51 — la mitad es ruido |
+> | Estabilidad bootstrap, k=4 (Jaccard medio) | **0,53** — por debajo de 0,6 = no reproducible |
+> | Estabilidad bootstrap, k=2 | **0,81** — sólido |
+> | Varianza explicada por 2 factores | 49% (hacen falta 5 componentes para 83%) |
+>
+> El bootstrap remuestrea los FRAMES de cada empresa, que es la incertidumbre
+> que importa: si a una empresa le hubieran tocado otros de sus propios frames,
+> ¿seguiría en el mismo grupo? Con k=4, la mitad de las veces no.
+>
+> **Reemplazo, ya en el pipeline** (`firm_voice_scores.parquet`): tasas con
+> encogimiento empírico-Bayes, dos factores continuos y una partición binaria
+> estable — `risk_hypothetical` (229 empresas) vs. `deployment_asserted` (265).
+> El primer factor es el eje real del corpus: riesgo hipotético en un extremo,
+> despliegue afirmado y concreto en el otro. Los cuatro arquetipos A/B/C/D se
+> siguen calculando por compatibilidad con lo ya escrito, pero **no deberían
+> titular ningún resultado**.
+
 > **Recalculado 2026-09-05 con DEF 14A y 8-K** (población: 24.328 frames,
 > 446 empresas con ≥5 frames), vía `scripts/analytics/build_firm_clusters.py`.
 > La versión anterior corría sobre 10-K solamente (421 empresas). K-means

@@ -21,9 +21,9 @@ está el script que lo produce.
 | 6 | Marco muestral y potencia (sólo large caps) | **DESCARTADO por decisión del autor** |
 | 7 | `gold_ai_frames` acumulaba la unión histórica de despliegues | **CERRADO** |
 | 8 | El lado contable/mercado no tenía código que lo generara | **CERRADO** |
-| 9 | El "DiD de tendencia" SEC/DeepSeek no es un DiD | **ABIERTO** |
+| 9 | El "DiD de tendencia" SEC/DeepSeek no es un DiD | **CERRADO — y el hallazgo se cae** |
 | 10 | ROIC−WACC mezcla valor libro y de mercado | **PARCIAL** (ERP corregido; libro/mercado no) |
-| 11 | K-means con silhouette 0,15 sostiene 4 categorías | **ABIERTO** |
+| 11 | K-means con silhouette 0,15 sostiene 4 categorías | **CERRADO — con reemplazo** |
 | 12 | El panel empresa-año tiene entrada endógena | **ABIERTO** |
 
 ---
@@ -147,7 +147,7 @@ script original nunca se versionó y se perdió. Escritos y verificados contra l
 copias archivadas (retornos idénticos a 1e-6, ratios con correlación 0,98-1,00);
 ver `10_builders_y_recalculo.md`. Todo corre con `make analytics`.
 
-## 9. El "DiD de tendencia" SEC/DeepSeek no es un DiD — ABIERTO
+## 9. El "DiD de tendencia" SEC/DeepSeek no es un DiD — CERRADO, y el hallazgo no sobrevive
 
 `01_...md` compara empresas "vagas" contra "específicas" antes y después de
 marzo 2024 con una regresión segmentada sobre medias trimestrales por grupo.
@@ -164,9 +164,21 @@ Problemas, en orden de gravedad:
 5. Cuatro métricas × dos cortes sin corrección por comparaciones múltiples, en
    un proyecto que aplica FDR en otras secciones.
 
-**Qué lo cerraría**: panel empresa-trimestre con efectos fijos de empresa y de
-tiempo, SE clusterizados por empresa, event-study con leads y lags en vez de dos
-tramos, y el mismo FDR que se usa en `05_...md`.
+**Hecho** (`scripts/analytics/sec_event_study.py`): panel empresa-trimestre,
+efectos fijos de empresa y de trimestre, SE clusterizados por empresa, y un
+coeficiente por trimestre relativo al evento (los previos SON el test de
+tendencias paralelas).
+
+**Resultado: los cuatro outcomes fallan el test.** La diferencia entre grupos
+está presente y es significativa seis trimestres ANTES de marzo 2024 y no
+cambia después — es una diferencia permanente entre empresas, que es lo
+esperable porque los grupos se definieron por esas mismas métricas. El
+"quiebre de tendencia" que reportaba `01_...md` era del diseño, no de los
+datos, y esa sección quedó retirada.
+
+Limitación que queda registrada: el panel correcto tiene 257 observaciones y 54
+empresas (el 10-Q aporta pocos frames por trimestre), así que tampoco habría
+potencia para detectar un efecto chico si existiera.
 
 ## 10. ROIC−WACC mezcla libro y mercado — PARCIAL
 
@@ -176,11 +188,30 @@ usa capital invertido a valor LIBRO mientras los ponderadores del WACC usan
 market cap: el spread queda sesgado con el market-to-book, que es una dimensión
 donde los segmentos difieren.
 
-## 11. K-means con silhouette 0,15 — ABIERTO
+## 11. K-means con silhouette 0,15 — CERRADO, con reemplazo
 
-`06_...md` mide silhouette entre 0,150 y 0,162 para todo k probado y aun así los
-clusters 0 y 1 se reportan como grupos distintos en `07_...md` y `08_...md`. Con
-esa separación lo defendible es un score continuo (como el 09) o k=2.
+`scripts/analytics/cluster_diagnostics.py` mide lo que faltaba:
+
+| prueba | resultado |
+|---|---|
+| Confiabilidad de `specificity_index` a nivel empresa | **0,000** (varianza observada < varianza de muestreo) |
+| `promotional_rate` / `quantified_rate` | 0,47 / 0,51 |
+| Estabilidad bootstrap k=4 (Jaccard) | **0,53** — no reproducible |
+| Estabilidad bootstrap k=2 | **0,81** — sólido |
+| PCA: 2 factores | 49% de la varianza (5 componentes para 83%) |
+
+Las 9 features **no son booleanos crudos**: son medias por empresa de banderas
+booleanas, o sea tasas en [0,1] estandarizadas. El problema no es el tipo de
+dato, es que k-means trata una tasa estimada con 5 frames como igual de
+confiable que una estimada con 500 — el mismo defecto que ya había hundido la
+definición de washing por clusters (`09_...md`).
+
+**Reemplazo, ya en el pipeline** (`firm_voice_scores.parquet`, producido por
+`build_firm_clusters.py`): tasas con encogimiento empírico-Bayes hacia la media
+global, dos factores continuos, y una partición binaria estable —
+`risk_hypothetical` (229 empresas) vs. `deployment_asserted` (265). Los cuatro
+arquetipos se siguen calculando por compatibilidad, marcados como no
+reproducibles.
 
 ## 12. Entrada endógena al panel empresa-año — ABIERTO
 
