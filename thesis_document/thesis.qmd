@@ -1,0 +1,9 @@
+---
+bibliography: references.bib
+format:
+  docx:
+    reference-doc: template/reference.docx
+    toc: true
+    toc-depth: 3
+    number-sections: true
+---
