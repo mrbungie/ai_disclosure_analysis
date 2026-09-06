@@ -277,52 +277,63 @@ The ordering is monotonic on every row except early-stage and third-party AI, wh
 
 ## What firms say they are doing with AI
 
-The segmentation says that Product Deployers devote more of their AI statements to deployment and outcomes; it does not say what they deploy. A second, narrower pass of the language model over the 17,420 paragraphs that carry a firm-subject behavioural frame (deployment, piloting, scaling, capabilities, infrastructure, talent, investment, or an outcome) turns each such statement into a *disclosed AI activity*: the firm performs an action (deploy, develop, integrate, buy or license, partner, invest in infrastructure, hire or train, pilot, scale, measure an outcome, govern, restrict) on an object (a copilot, a fraud model, a data centre) for a function (customer service, software development, underwriting), with a target (customers, employees, an internal process), a stage, a named provider where there is one, and the strength of the evidence attached (a named product or process, a metric, a vendor, or none). Objects and functions are free text normalised afterwards into families, so that no ontology had to anticipate every use case. Each activity is counted once per firm. The pass yields 27,468 activities for 471 of the 510 firms; 48% of them appear only on earnings calls. As throughout, these are activities the firm *says* it performs, with the supporting sentences as evidence.
+The segmentation says that Product Deployers devote more of their AI statements to deployment and outcomes; it does not say what they deploy. A second, narrower pass of the language model over the 17,420 paragraphs that carry a firm-subject behavioural frame turns each such statement into a *disclosed AI activity*: the firm performs an action (deploy, develop, integrate, buy or license, partner, invest in infrastructure, hire or train, pilot, scale, measure an outcome, govern, restrict) on an object (a copilot, a fraud model, a data centre) for a function (customer service, software development, underwriting), with a target, a stage, a named provider where there is one, and the strength of the evidence attached (a named product or process, a metric, a vendor, or none). Objects and functions are free text normalised afterwards into families. Each activity is counted once per firm. The pass yields 27,468 activities for 471 of the 510 firms; 48% appear only on earnings calls. These are activities the firm *says* it performs, with the supporting sentences as evidence.
 
-Six in ten activities are deployments and three in four are declared deployed or scaled: the register is one of use, not exploration. But the typical activity is thin. Almost a third names no business function, 46% attach no product, metric or vendor, and providers are almost never named: 88% of activities are "proprietary" or unspecified, and OpenAI/Microsoft, NVIDIA and Google together account for under 4%. Firms say what they do with AI far more than what they do it with.
+Six in ten activities are deployments and three in four are declared deployed or scaled: the register is one of use, not exploration. But the typical activity is thin. The largest object family, present in 87% of firms, is "AI" with an empty noun ("AI capabilities", "generative AI tools"); a third of activities name no business function; and providers are almost never named: 88% of activities are proprietary or unspecified. What firms say they do, concretely, is in @tbl-concrete.
 
-| Type of disclosed activity | % of 510 firms | Filings only |
-|---|---:|---:|
-| Internal deployment (employees or processes) | 84.5 | 76.1 |
-| Proprietary AI (develops, or states its own) | 78.2 | 66.1 |
-| Names a product, system or process | 74.9 | 59.6 |
-| Customer-facing deployment | 67.8 | 54.7 |
-| Infrastructure investment | 55.7 | 40.0 |
-| Quantified outcome | 55.7 | 34.9 |
-| Named third-party provider | 53.3 | 38.8 |
-| Piloting or exploring | 52.4 | 30.8 |
-| Talent or training | 35.3 | 30.2 |
-| Partnership with an AI provider | 31.4 | 18.4 |
-| Governance or restriction of use | 28.2 | 25.3 |
-| Acquisition or licensing | 16.5 | 12.7 |
-| Developer tools | 8.0 | 5.3 |
+| Action · object | % of firms | Literal objects, examples |
+|---|---:|---|
+| deploy · product or service with AI | 54.3 | AI engine, Firefly services, advertising tools |
+| deploy · ML or predictive model | 45.7 | machine learning models, AI algorithms |
+| deploy · analytics or data platform | 44.3 | AI platform, AI-powered analytics |
+| deploy · named product or platform | 41.8 | AIP, AIOps, DSO.ai, Firefly |
+| deploy · automation | 38.0 | automation, intelligent automation |
+| hire or train · talent | 28.6 | AI talent, workforce |
+| develop · product or service | 25.9 | AI-driven software, interconnect products |
+| invest · compute and infrastructure | 22.5 | AI infrastructure, data centres, compute capacity |
+| deploy · copilot or assistant | 20.4 | Copilot, AI assistant, Agentforce, AI Overviews |
+| deploy · compute and infrastructure | 20.2 | AI PC, AI accelerators, AI workloads |
+| integrate · product or service | 19.4 | AI into products, AI into offerings |
+| develop · ML or predictive model | 19.0 | AI models, machine learning models |
+| deploy · vision, robotics or autonomy | 16.7 | autonomous driving software, autonomous database |
+| develop · named product or platform | 16.7 | Omniverse, MI350 series, Blackwell |
+| deploy · AI agents | 14.5 | AI agents, agentic AI |
+| deploy · LLM or foundation model | 13.3 | large language models |
+| deploy · search or recommendation | 13.1 | recommendation engine, personalisation engine, search engine |
+| measure outcome · financial outcome | 12.5 | AI revenue, productivity savings, cost savings |
+| deploy · chatbot | 12.7 | chatbot, conversational AI |
+| deploy · security tool | 12.5 | ML-powered firewall, threat graph |
 
-: Top disclosed AI activities of the S&P 500: share of firms with at least one activity of each type, filings and calls pooled, and filings only. {#tbl-top-activities}
+: The most common disclosed AI activities of the S&P 500: share of the 510 firms with at least one activity of each action · object type, filings and calls pooled. {#tbl-concrete}
 
-The activity layer gives the segments tangible content (@tbl-activities-seg). Product Deployers do everything, and do it with names and numbers: every one of them deploys customer-facing AI, 92% invest in infrastructure, 90% name a provider and 90% report a quantified result; half acquire or license and two-thirds partner; their median firm has 108 activities. Governance Adopters deploy mostly inward (58% of their activities are internal), in operations, fraud and risk, with proprietary AI and no named provider; a third pilot or train. Risk Listers have six activities at the median, three in five never scale anything, and what little they describe is internal deployment in operations with no product, metric or provider attached. The functions differ less than the depth: operations and supply chain lead in every segment; IT, cybersecurity and software development are heavier among Deployers, fraud and risk among Adopters.
+With the function attached, the most common things an S&P 500 firm says it does with AI are: deploy an AI product or tool in operations (28% of firms), automate operations (27%), deploy a named product in operations (19%: AIOps, Cortex XSIAM, Mist AI, AIP), run predictive models in operations (18%), put AI into the product itself (15%: full self-driving, Apple Intelligence, cockpits), deploy an AI product for customer service (12.5%: virtual try-on, guest-journey tools), a copilot or assistant for customer service (9.6%), predictive models for marketing (8.4%) and for fraud and risk (7.3%), a recommendation engine for marketing (7.1%), and coding tools (7.1%). On providers, 246 of 510 firms name an external one somewhere: OpenAI/Microsoft in 16.3% of firms (OpenAI, GitHub Copilot, Azure OpenAI), NVIDIA in 9.4%, Google in 6.3%, AWS in 3.9%; Meta, Anthropic, IBM and Salesforce each in about 1%. Another 42.5% name a provider outside those families, often the firm's own branded product (Firefly, Sensei, Mist AI, Kensho, Palantir).
+
+The activity layer gives the segments tangible content (@tbl-activities-seg). Product Deployers *sell* AI: 96% deploy an AI product, 90% a named product or platform, 82% an analytics platform, 61% invest in data centres and compute, 60% ship compute (AI PCs, accelerators), 56% hire AI talent; 90% name a provider and 90% report a figure; the median Deployer has 108 activities. Governance Adopters automate operations (39%), deploy predictive models (46%) and analytics (45%) mostly inward (58% of their activities are internal), in fraud, risk and forecasting, with proprietary AI and no named provider; they are also the segment of industrial vision and robotics (19%: fire-sensing cameras, autonomous mobile robots). Risk Listers have six activities at the median: some automation (21%) and some model (27%), almost always without product, metric or provider, and three in five never scale anything.
 
 | | Product Deployers | Governance Adopters | Risk Listers |
 |---|---:|---:|---:|
 | Activities per firm (median) | **108** | 19.5 | 6 |
-| Customer-facing deployment | **100** | 71 | 45 |
-| Internal deployment | 97 | 88 | 78 |
-| Proprietary AI | 99 | 86 | 59 |
-| Named third-party provider | **90** | 53 | 32 |
-| Infrastructure investment | **92** | 57 | 33 |
-| Quantified outcome | **90** | 62 | 27 |
-| Piloting or exploring | 78 | 55 | 35 |
-| Partnership | 68 | 28 | 13 |
-| Talent or training | 66 | 33 | 20 |
-| Acquisition or licensing | 50 | 8 | 6 |
-| Governance or restriction | 49 | 29 | 15 |
-| Developer tools | 29 | 2 | 2 |
-| Share of activities aimed at customers (mean) | 45 | 25 | 18 |
-| Share of activities internal (mean) | 35 | 58 | 62 |
+| deploy · AI product or service | 96 | 52 | 32 |
+| deploy · named product or platform | **90** | 38 | 17 |
+| deploy · analytics or data platform | 82 | 45 | 20 |
+| deploy · ML or predictive model | 78 | 46 | 27 |
+| deploy · automation | 65 | 39 | 21 |
+| invest · compute and infrastructure | **61** | 16 | 7 |
+| deploy · copilot or assistant | 43 | 18 | 6 |
+| hire or train · talent | 56 | 26 | 16 |
+| Customer-facing deployment (any) | **100** | 71 | 45 |
+| Named third-party provider (any) | **90** | 53 | 32 |
+| Quantified outcome (any) | **90** | 62 | 27 |
+| Share of activities aimed at customers / internal (mean) | 45 / 35 | 25 / 58 | 18 / 62 |
 | Highest stage reached is "scaled" | 93 | 61 | 32 |
 
 : Disclosed AI activities by segment: % of the segment's firms with at least one activity of each type. {#tbl-activities-seg}
 
-Firm cards make the difference concrete. **Microsoft** (950 activities) integrates generative AI into customer-facing products, deploys copilots in internal workflows, invests in AI infrastructure and compute capacity, relies on OpenAI and Azure, and attaches a number to one activity in five. **ServiceNow** (418) deploys and integrates AI agents and a platform for operations and customer service, with Now Assist and NVIDIA named. **Etsy** (172) applies machine-learning and large-language models to search and content, 61% of it customer-facing. **JPMorgan** (53) deploys mostly inward (60%), in operations and fraud, with proprietary AI, and almost never names a product (4%) or a figure (6%); **State Street** (30) is the same profile at 73% internal; **Cincinnati Financial** (25) builds underwriting and pricing models and reports a director with AI skills. **Nike** (28) describes internal machine-learning applications in operations and marketing; **Howmet** and **TransDigm** offer one to three sentences about test automation. **Bank of America** (63 activities, Erica, explicit governance) is the atypical Risk Lister, which shows that the segment is defined by the share of risk language in the filing, not by the absence of activity.
+Firm inventories make the difference concrete. **Microsoft** (950 activities) deploys copilots (Copilot, GitHub Copilot, Microsoft 365 Copilot; 154 activities, 96% with a named product) for customers and employees, invests in and scales AI infrastructure and compute capacity (163) with OpenAI named as partner, deploys Azure OpenAI and Azure AI to customers, hires AI and responsible-AI talent, and attaches a number to one activity in five. **ServiceNow** (418) deploys Now Assist and AI agents for operations and customer service, a text-to-code tool for developers, and integrates AI with Accenture, Deloitte, EY and KPMG. **HPE** (385) ships AI servers and Private Cloud AI with NVIDIA, and GreenLake as the platform. **Etsy** (172) runs search algorithms, a recommendation engine and machine translation for buyers and sellers, uses third-party foundation models, and hires ML engineers. **Paychex** (163) deploys labour-forecasting models, a retention-insights tool and a recruiting copilot for HR clients.
+
+**JPMorgan** (53) deploys "AI/ML" in fraud, risk and operations, inward, at scale, and in twenty such statements names no product, metric or provider; it invests in "AI/ML capabilities" and hires talent. **State Street** (30) runs quantitative models in operations and fraud, automates NAV calculation and fund accounting, and reports productivity metrics. **Cincinnati Financial** (25) builds underwriting and pricing models and has appointed a director with AI skills. **Danaher** (25) uses Microsoft Copilot for software development, an AI immunoassay analyser, and digital pathology with Indica Labs. **Lowe's** (19) pilots generative AI in operations, deploys a virtual advisor, and explores with NVIDIA, OpenAI and Palantir.
+
+**Bank of America** (63) is the atypical Risk Lister: Erica, a virtual financial assistant and an advisor-insights tool for customers, predictive language models for fraud, and explicit model-risk governance; the segment is defined by the share of risk language in the filing, not by the absence of activity. **Nike** (28) scales machine-learning applications in operations and marketing, runs a search model and an insights model, and bought the Datalogue platform. **Comerica** (3) has a real-time payments system and mobile cheque scanning. **Howmet** (3) says "AI" and "AI in tests". **TransDigm** (1) is exploring process and test automation.
 
 ## Voice against disclosed behaviour: two axes, nine cells
 

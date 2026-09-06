@@ -57,10 +57,82 @@ operaciones". **Los proveedores casi no se nombran**: 88% es propio o sin
 especificar; OpenAI/Microsoft, NVIDIA y Google suman 3,6%. Las empresas
 cuentan qué hacen con IA mucho más que con qué la hacen.
 
+## Qué hacen, concretamente: acción · objeto
+
+El objeto de cada actividad se agrupa en familias (copilot o asistente,
+agentes, chatbot, LLM o modelo fundacional, modelo de ML o predictivo,
+cómputo e infraestructura, talento, automatización, búsqueda o
+recomendación, plataforma de analítica o datos, herramienta de seguridad,
+visión/robótica/autonomía, producto o servicio, producto con nombre propio,
+proveedor o modelo externo, resultado financiero, marco de gobernanza,
+empresa adquirida o licencia, caso de uso o proyecto). "IA, objeto sin
+especificar" es la palabra IA con un sustantivo vacío ("ai capabilities",
+"generative ai tools"): 87% de las empresas tienen al menos una así, y es la
+familia más grande.
+
+% de las 510 empresas con al menos una actividad de cada tipo, con objetos
+literales de ejemplo:
+
+| acción · objeto | % empresas | ejemplos literales |
+|---|---:|---|
+| deploy · producto o servicio | 54,3 | ai engine, firefly services, advertising tools |
+| deploy · modelo de ML o predictivo | 45,7 | machine learning models, ai algorithms |
+| deploy · plataforma de analítica o datos | 44,3 | ai platform, ai-powered analytics, data analytics |
+| deploy · producto con nombre propio | 41,8 | AIP, AIOps, DSO.ai, Firefly |
+| deploy · automatización | 38,0 | automation, intelligent automation |
+| hire_or_train · talento | 28,6 | ai talent, workforce |
+| develop · producto o servicio | 25,9 | ai-driven software, interconnect products |
+| invest_infrastructure · cómputo e infraestructura | 22,5 | ai infrastructure, data centers, compute capacity |
+| deploy · copilot o asistente | 20,4 | copilot, ai assistant, agentforce, ai overviews |
+| deploy · cómputo e infraestructura | 20,2 | ai pc, ai accelerators, ai workloads |
+| integrate · producto o servicio | 19,4 | ai into products, ai into offerings |
+| develop · modelo de ML o predictivo | 19,0 | ai models, machine learning models |
+| deploy · visión, robótica o autonomía | 16,7 | autonomous driving software, autonomous database |
+| develop · producto con nombre propio | 16,7 | Omniverse, MI350 series, Blackwell |
+| integrate · producto con nombre propio | 15,3 | Meta AI, Firefly, ADEM |
+| deploy · agentes de IA | 14,5 | ai agents, agentic ai |
+| partner · proveedor o modelo externo | ~14 | OpenAI, NVIDIA, cloud providers |
+| deploy · LLM o modelo fundacional | 13,3 | large language models, llms |
+| deploy · búsqueda o recomendación | 13,1 | recommendation engine, personalization engine, search engine |
+| measure_outcome · resultado financiero | 12,5 | ai revenue, productivity savings, cost savings |
+| deploy · chatbot | 12,7 (objeto) | chatbot, conversational ai |
+| deploy · herramienta de seguridad | 12,5 (objeto) | ml-powered firewall, threat graph |
+
+Con la función declarada (acción · objeto · función), lo más común en el
+S&P 500 es **desplegar un producto o herramienta de IA en operaciones**
+(28%), **automatizar operaciones** (27%), **desplegar un producto con nombre
+propio en operaciones** (19%: AIOps, Cortex XSIAM, Mist AI, AIP), **modelos
+predictivos en operaciones** (18%), **IA en el producto mismo** (15%: FSD,
+Apple Intelligence, cockpits), **producto de IA para atención al cliente**
+(12,5%: virtual try-on, guest journey), **copilot o asistente para atención
+al cliente** (9,6%), **modelos predictivos para marketing** (8,4%) y **para
+fraude y riesgo** (7,3%), **motor de recomendación para marketing** (7,1%),
+**herramientas de código** (7,1%: text-to-code, coding tools).
+
+## Con qué: proveedores nombrados
+
+246 de 510 empresas nombran algún proveedor o modelo externo en alguna
+actividad; 88% de las actividades no lo hacen.
+
+| familia | % empresas | nombres literales más frecuentes |
+|---|---:|---|
+| proveedor nombrado fuera de las grandes (incluye productos propios de vendedores de IA) | 42,5 | Firefly, Adobe Sensei, Mist AI, Kensho, Palantir, AMD, Oracle, Nuance |
+| OpenAI / Microsoft | 16,3 | OpenAI, Microsoft, GitHub Copilot, Azure OpenAI |
+| NVIDIA | 9,4 | NVIDIA, NVIDIA AI Enterprise, Hopper |
+| Google | 6,3 | Gemini, Google Cloud, Vertex AI |
+| Amazon / AWS | 3,9 | AWS, Rekognition, Bedrock |
+| Meta | 1,2 | Meta AI, Llama |
+| Anthropic | 1,0 | Anthropic, Claude (junto a Cohere, Mistral, Stability, AI21 en listas de modelos) |
+| IBM | 1,0 | watsonx, Watson |
+| Salesforce | 1,0 | Einstein, Agentforce |
+
+OpenAI/Microsoft es el proveedor externo dominante (uno de cada seis), NVIDIA
+el segundo; Google, AWS, Meta y Anthropic son marginales en el discurso.
+
 ## Top behaviours del S&P 500
 
 % de las 510 empresas con filings que divulgan al menos una actividad de cada
-tipo (pooled filings + calls; entre paréntesis, sólo filings):
+tipo (pooled filings + calls; sólo filings entre paréntesis):
 
 | tipo de actividad | % empresas | sólo filings |
 |---|---:|---:|
@@ -79,21 +151,43 @@ tipo (pooled filings + calls; entre paréntesis, sólo filings):
 | herramientas para desarrolladores | 8,0 | 5,3 |
 
 Etapa máxima alcanzada por empresa: escalado 57,5%, desplegado 30,8%,
-ninguna actividad 7,6%, sólo explorando o pilotando 3,2%.
+ninguna actividad 7,6%, sólo explorando o pilotando 3,2%. La brecha entre
+pooled y sólo filings es la de `06` vista desde las actividades: el resultado
+cuantificado y el piloto se cuentan en la call; el despliegue interno y la
+gobernanza casi no cambian de canal.
 
-La brecha entre pooled y sólo filings es la de `06` vista desde las
-actividades: el resultado cuantificado y el piloto se cuentan en la call
-(55,7 → 34,9 y 52,4 → 30,8); el despliegue interno y la gobernanza casi no
-cambian de canal.
+## Qué hace cada segmento
 
-## Composición conductual de los segmentos
+Top acción · objeto por segmento (`02_segmentacion.md`), % de empresas del
+segmento:
 
-% de empresas del segmento (`02_segmentacion.md`) con al menos una actividad
-de cada tipo:
+| Desplegadores de producto (113) | % | Adoptantes con gobernanza (222) | % | Listadores de riesgo (158) | % |
+|---|---:|---|---:|---|---:|
+| deploy · producto o servicio | 96 | deploy · producto o servicio | 52 | deploy · producto o servicio | 32 |
+| deploy · producto con nombre propio (AIP, AIOps, DSO.ai, Firefly) | 90 | deploy · modelo predictivo | 46 | deploy · modelo predictivo | 27 |
+| deploy · plataforma de analítica | 82 | deploy · plataforma de analítica | 45 | deploy · automatización | 21 |
+| deploy · modelo predictivo | 78 | deploy · automatización | 39 | deploy · plataforma de analítica | 20 |
+| deploy · automatización | 65 | deploy · producto con nombre propio (Apple Intelligence, Compliance Coach) | 38 | deploy · producto con nombre propio (Erica, Photo Selector) | 17 |
+| develop · producto o servicio | 64 | hire_or_train · talento | 26 | hire_or_train · talento | 16 |
+| invest_infrastructure · cómputo (data centers, compute capacity) | 61 | develop · producto o servicio | 21 | integrate · producto o servicio | 9 |
+| deploy · cómputo (AI PC, aceleradores) | 60 | deploy · visión/robótica/autonomía (cámaras, robots móviles, vehículos) | 19 | pilot_or_explore | 8 |
+| hire_or_train · talento | 56 | deploy · copilot o asistente | 18 | develop · producto o servicio | 8 |
+| integrate · producto o servicio | 51 | invest_infrastructure · cómputo | 16 | invest_infrastructure · cómputo | 7 |
 
-| | Desplegadores de producto | Adoptantes con gobernanza | Listadores de riesgo | Sin IA |
+Con función: los desplegadores despliegan producto de IA en operaciones
+(64%), producto con nombre en operaciones (49%), automatizan (43%), ponen IA
+en el producto (42%), en IT y ciberseguridad (32%) y en analítica (31%). Los
+adoptantes con gobernanza automatizan operaciones (28%), despliegan producto
+en operaciones (24%), modelos predictivos en operaciones (17%) y en fraude y
+riesgo (9%), y atención al cliente (9,5%). Los listadores de riesgo:
+automatización en operaciones (15%), producto en operaciones (11%), modelos
+predictivos (9%), y nada más pasa de 7%.
+
+Composición conductual, % de empresas del segmento con ≥1 actividad de cada
+tipo:
+
+| | Desplegadores | Adoptantes c/gob. | Listadores de riesgo | Sin IA |
 |---|---:|---:|---:|---:|
-| empresas | 113 | 222 | 158 | 17 |
 | actividades (mediana) | **108** | 19,5 | 6 | 0 |
 | despliegue de cara al cliente | **100** | 71 | 45 | 24 |
 | despliegue interno | 97 | 88 | 78 | 24 |
@@ -107,61 +201,106 @@ de cada tipo:
 | adquisición o licencia | 50 | 8 | 6 | 0 |
 | gobernanza o restricción | 49 | 29 | 15 | 0 |
 | herramientas para desarrolladores | 29 | 2 | 2 | 0 |
-| % de actividades para clientes (media) | 45 | 25 | 18 | — |
-| % de actividades internas (media) | 35 | 58 | 62 | — |
+| % de actividades para clientes / internas (media) | 45 / 35 | 25 / 58 | 18 / 62 | — |
 | etapa máxima = escalado | 93 | 61 | 32 | 12 |
 
-(Las 17 "sin IA" con alguna actividad la tienen en calls; el segmento se
-define sobre filings.)
-
-Funciones por segmento (% de las actividades del segmento): operaciones 13
-/ 22 / 19; IT y ciberseguridad 7,5 / 3 / 2; desarrollo de software 5 / 3 /
-3; fraude y riesgo 2 / 5 / 4; atención al cliente 4 / 6 / 5; marketing y
-ventas 4 / 5 / 6; sin especificar 32 / 26 / 30.
+(Las "sin IA" con alguna actividad la tienen en calls; el segmento se define
+sobre filings.)
 
 **Los segmentos ahora tienen contenido tangible.** Los desplegadores de
-producto hacen de todo, y lo hacen con nombre y número: 100% despliega de
-cara al cliente, 92% invierte en infraestructura, 90% nombra un proveedor y
-90% reporta un resultado con cifra; la mitad compra o licencia y dos tercios
-tienen alianzas. Los adoptantes con gobernanza despliegan sobre todo hacia
-adentro (58% de sus actividades son internas), en operaciones, fraude y
-riesgo, y con IA propia sin proveedor nombrado; un tercio pilota o entrena.
-Los listadores de riesgo tienen seis actividades en la mediana, tres de
-cada cinco escalan nada, y lo poco que describen es despliegue interno en
-operaciones sin producto, métrica ni proveedor.
+producto venden IA: producto con nombre propio, plataforma, aceleradores,
+copilots, y lo hacen con proveedor y con cifra. Los adoptantes con
+gobernanza automatizan operaciones y despliegan modelos predictivos hacia
+adentro (fraude, riesgo, forecasting), con IA propia y sin proveedor
+nombrado, y son el segmento de la visión y la robótica industrial. Los
+listadores de riesgo tienen seis actividades en la mediana: automatización y
+algún modelo, casi siempre sin producto, métrica ni proveedor.
 
-## Fichas
+## Fichas: inventario de actividades por empresa
 
-| empresa | segmento | n | acciones principales | funciones | objetos típicos | etapa | clientes / interno | proveedores | con nombre / con cifra |
-|---|---|---:|---|---|---|---|---|---|---|
-| MSFT | Desplegadores | 950 | deploy, invest_infrastructure, integrate | operaciones, desarrollo de software | ai infrastructure, copilot, compute capacity, ai talent | escalado | 39% / 30% | proprietary, OpenAI, Azure | 35% / 21% |
-| NOW | Desplegadores | 418 | deploy, integrate, partner | operaciones, atención al cliente | generative ai, ai platform, ai agents | escalado | 45% / 39% | proprietary, Now Assist, NVIDIA | 48% / 12% |
-| HPE | Desplegadores | 385 | deploy, develop, invest_infrastructure | operaciones, IT | ai systems, ai servers, ai solutions | escalado | 48% / 23% | proprietary, NVIDIA, Determined AI | 43% / 12% |
-| ETSY | Desplegadores | 172 | deploy, invest_infrastructure, pilot_or_explore | contenido, marketing | search engine, ml models, llms | escalado | 61% / 30% | proprietary, modelos fundacionales de terceros | 33% / 9% |
-| PAYX | Desplegadores | 163 | deploy, invest_infrastructure, develop | RR.HH., atención al cliente | ai models, flex assistant | escalado | 49% / 43% | proprietary, Flex Assistant | 36% / 10% |
-| JPM | Adoptantes c/gob. | 53 | deploy, invest_infrastructure, hire_or_train | operaciones, fraude y riesgo | ai/ml technologies, ai research and capabilities | escalado | 21% / 60% | proprietary | 4% / 6% |
-| STT | Adoptantes c/gob. | 30 | deploy, integrate, develop | operaciones, fraude y riesgo | quantitative models, automation | escalado | 7% / 73% | proprietary | 13% / 13% |
-| DHR | Adoptantes c/gob. | 25 | deploy, invest_infrastructure, partner | operaciones, producto | ai technologies, ai expert | escalado | 28% / 56% | proprietary, Microsoft Copilot | 40% / 0% |
-| CINF | Adoptantes c/gob. | 25 | deploy, develop, hire_or_train | marketing, operaciones financieras, gobernanza | underwriting and pricing models, predictive models, director with ai skills | escalado | 0% / 88% | proprietary | 24% / 4% |
-| LOW | Adoptantes c/gob. | 19 | deploy, develop, pilot_or_explore | atención al cliente, operaciones | virtual advisor, ai cybersecurity strategy | escalado | 47% / 37% | proprietary, NVIDIA, OpenAI, Palantir | 32% / 0% |
-| BAC | Listadores de riesgo | 63 | deploy, invest_infrastructure, govern_or_control | atención al cliente, fraude y riesgo | erica, models, predictive language program | escalado | 27% / 59% | proprietary, Erica | 37% / 14% |
-| NKE | Listadores de riesgo | 28 | deploy, scale, invest_infrastructure | operaciones, marketing, producto | machine learning applications, ai-enabled tools | escalado | 29% / 68% | proprietary, Datalogue | 39% / 7% |
-| CMA | Listadores de riesgo | 3 | deploy, integrate | operaciones financieras | real-time payments system, mobile check scanning | desplegado | 67% / 33% | — | 100% / 0% |
-| HWM | Listadores de riesgo | 3 | deploy | operaciones | ai, ai in tests | desplegado | 0% / 100% | — | 0% / 0% |
-| TDG | Listadores de riesgo | 1 | invest_infrastructure | operaciones | process and test automation | explorando | 0% / 100% | — | 0% / 0% |
+Cada línea es acción · familia de objeto (n): objetos literales | función |
+destinatario | etapa | proveedor | % con producto, cifra o proveedor.
 
-Ahora se puede decir, en vez de "MSFT = desplegador, 42% despliegue":
+**Microsoft** (Desplegadores, 950 actividades)
+
+- deploy · copilot (154): Copilot, GitHub Copilot, Microsoft 365 Copilot | operaciones, desarrollo de software | clientes y empleados | escalado | 96% concreto
+- invest_infrastructure · cómputo (132): AI infrastructure, compute capacity | interno | escalado | OpenAI | 48%
+- deploy · proveedor/modelo externo (40): Azure OpenAI Service, Azure AI | IT | clientes | escalado | OpenAI | 90%
+- deploy · producto (38): Cognitive Services, AI-backed tools | operaciones | clientes y empleados | 68%
+- hire_or_train · talento (33): AI talent, responsible AI team | empleados | 15%
+- scale · cómputo (31): data center capacity, edge workloads | 35%
+- deploy · producto con nombre (27): intelligent recaps, Azure SQL | clientes y desarrolladores | 100%
+
 Microsoft integra IA generativa en productos de cara al cliente, despliega
-copilots en flujos internos, invierte en infraestructura y capacidad de
-cómputo, se apoya en OpenAI y Azure, y cuantifica resultados en una de cada
-cinco actividades. JPMorgan despliega sobre todo hacia adentro (60%), en
-operaciones y fraude, con IA propia, casi sin nombrar productos (4%) ni
-cifras (6%). Nike describe aplicaciones de machine learning internas en
-operaciones y marketing; Howmet y TransDigm, una o tres frases sobre
-automatización de pruebas. BAC es el listador de riesgo atípico: 63
-actividades, Erica, y gobernanza explícita, lo que muestra que el segmento
-se define por la proporción de riesgo en el filing y no por la ausencia de
-actividad.
+copilots para empleados y desarrolladores, invierte y escala infraestructura
+de cómputo, se apoya en OpenAI y Azure, y una de cada cinco actividades trae
+una cifra.
+
+**ServiceNow** (Desplegadores, 418): deploy · copilot (43: Now Assist) para
+operaciones y atención al cliente, escalado, 98% concreto; deploy · agentes
+(41: AI agents, agentic AI) para empleados y clientes; deploy · plataforma
+(30: Now Platform, AI Platform); producto (23: text-to-code tool); integra IA
+con Accenture, Deloitte, EY, KPMG; automatización de workflows (15).
+
+**HPE** (Desplegadores, 385): deploy · cómputo (31: AI servers) a clientes,
+84% concreto; producto (28: networking, integrated systems) en IT; producto
+con nombre (21: Private Cloud AI, ML development environment) con NVIDIA;
+plataforma (19: GreenLake edge-to-cloud); invest_infrastructure · HPC y
+soluciones de IA con NVIDIA.
+
+**Etsy** (Desplegadores, 172): deploy · modelos de ML (23: search algorithms,
+ML models) para contenido y marketing, 83% concreto; deploy · búsqueda y
+recomendación (21: search engine, recommendation engine, XWalk); machine
+translation y shop manager chat; LLMs de terceros (10); contrata ML
+engineers (6); desarrolla modelos neuronales (semantic bridge model).
+
+**Paychex** (Desplegadores, 163): deploy · modelos predictivos (28:
+AI-powered labor forecasting) para analítica, 61%; plataforma de analítica
+(21: retention insights tool, people analytics) para RR.HH.; producto (12:
+AI-driven HCM, WISE engine, proposal system); copilot (7: recruiting copilot,
+voice assistant) para RR.HH. y finanzas, 100% concreto.
+
+**JPMorgan** (Adoptantes con gobernanza, 53): deploy · IA sin objeto (20:
+"AI/ML") para fraude y riesgo, interno, escalado, **0% concreto**;
+invest_infrastructure · "AI/ML capabilities" (5); hire_or_train · talento (4);
+workflow tools (3) para fraude y operaciones; develop · automated solutions
+(2) para fraude. JPMorgan despliega hacia adentro, en fraude, riesgo y
+operaciones, con IA propia, sin nombrar un solo producto ni proveedor.
+
+**State Street** (Adoptantes, 30): deploy · modelos cuantitativos (9) para
+operaciones y fraude, interno; automatización (3); NAV calculation y fund
+accounting (2); HR inquiry system en piloto; mide productividad (2).
+
+**Cincinnati Financial** (Adoptantes, 25): deploy · modelos predictivos (20:
+underwriting models, pricing models) para marketing y operaciones de seguros,
+interno, escalado; develop · underwriting and pricing models (2); un director
+con habilidades de IA (gobernanza).
+
+**Danaher** (Adoptantes, 25): copilot (2: Microsoft Copilot) para desarrollo
+de software; immunoassay analyzer con IA; AI-powered digital pathology con
+Indica Labs; predictive algorithms en producto; AI expert contratado para
+gobernanza.
+
+**Lowe's** (Adoptantes, 19): pilotea IA generativa en operaciones (3);
+herramientas de atención al cliente (2); virtual advisor; forecasting and
+planning tools; desarrolla con NVIDIA, OpenAI y Palantir (1, explorando).
+
+**Bank of America** (Listadores de riesgo, 63): deploy · copilot (8: Erica,
+virtual financial assistant, advisor insights tool) para clientes y
+empleados, 100% concreto; chatbot (3: Erica); modelos (9: predictive language
+program) para fraude y operaciones; govern_or_control · model risk (3);
+patentes de IA (5). Es el listador de riesgo atípico: el segmento se define
+por la proporción de riesgo en el filing, no por la ausencia de actividad.
+
+**Nike** (Listadores, 28): scale · machine learning applications (4) en
+operaciones y marketing, piloto; ML search model, insights model (3);
+analítica y data science (3+3); compra la plataforma Datalogue (1); robotics
+and automation (1).
+
+**Comerica** (Listadores, 3): real-time payments system, mobile check
+scanning (2) para clientes; intelligent automation (1).
+**Howmet** (3): "AI" (2), "AI in tests" (1), 0% concreto.
+**TransDigm** (1): process and test automation, explorando.
 
 ## Limitaciones
 

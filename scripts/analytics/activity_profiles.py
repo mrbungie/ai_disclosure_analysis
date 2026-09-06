@@ -76,7 +76,55 @@ PROVIDER_FAMILIES = [
     ("Salesforce", r"salesforce|einstein"),
     ("other_named", r"."),
 ]
+OBJECT_FAMILIES = [
+    ("copilot or assistant", r"copilot|assistant|assist\b|agentforce|ai overviews|advisor|concierge"),
+    ("AI agents", r"agent"),
+    ("chatbot", r"chatbot|chat bot|conversational|virtual agent"),
+    ("LLM or foundation model", r"large language|llm|foundation model|generative ai model|gpt|language model"),
+    ("ML or predictive model", r"machine learning model|ml model|predictive|algorithm|\bmodels?\b|forecasting|scoring"),
+    ("compute and infrastructure", r"data cent|compute|gpu|accelerat|chip|server|infrastructure|cloud capacity|supercomput|workload|ai training|ai pc|silicon|processor|hardware"),
+    ("talent", r"talent|employee|workforce|engineer|scientist|team|hiring|training program|upskill"),
+    ("automation", r"automation|robotic process|rpa|automat"),
+    ("search or recommendation", r"\bsearch|recommend|personali|ranking|discovery engine|matching"),
+    ("external model or provider", r"openai|nvidia|gemini|anthropic|claude|microsoft|azure|google|aws|bedrock|llama|chatgpt|gpt|third.party|partner|vendor|supplier|hyperscaler"),
+    ("financial outcome", r"revenue|saving|cost|margin|efficienc|productivity|profit|growth|booking|sales|return"),
+    ("governance framework", r"governance|responsible ai|policy|policies|framework|ethic|oversight|control|guardrail|committee"),
+    ("acquired company or license", r"acquisition|acquire|company|companies|license|startup|business unit"),
+    ("use case or project", r"use case|project|proof of concept|poc|roadmap|pilot|initiative|program"),
+    ("analytics or data platform", r"analytic|data (cloud|platform|lake)|insight|dashboard|data science|big data|platform"),
+    ("security tool", r"security|firewall|threat|fraud|detection|malware|surveillance"),
+    ("vision, robotics or autonomy", r"vision|autonom|self-driving|driving|robot|drone|imaging|sensor|vehicle|camera"),
+    ("product feature or service", r"feature|product|offering|solution|service|application|app\b|tool|software|capabilit|experience|engine|system"),
+    ("AI, unspecified object", r"^ai$|^artificial intelligence|^generative ai$|^gen ?ai$|^ai technolog|^ai and|^ai/ml|^machine learning$|^ai initiative|^ai strateg|^ai use|^ai program|^ai investment|^technolog|^new technolog|^ai$"),
+]
 STAGE_RANK = {"unspecified": 0, "exploring": 1, "piloting": 2, "deployed": 3, "scaled": 4}
+
+
+GENERIC_TOKENS = {"ai", "artificial", "intelligence", "generative", "gen", "genai", "ml", "machine", "learning", "and", "or", "&",
+                  "capabilities", "capability", "technologies", "technology", "tools", "tool", "solutions", "solution", "systems",
+                  "system", "applications", "application", "services", "service", "products", "product", "offerings", "offering",
+                  "initiatives", "initiative", "strategy", "strategies", "use", "uses", "usage", "programs", "program", "investments",
+                  "investment", "features", "feature", "powered", "driven", "enabled", "based", "new", "advanced", "technological",
+                  "capabilities", "efforts", "effort", "adoption", "innovation", "innovations", "opportunities", "techniques",
+                  "approaches", "methods", "models", "model", "algorithms", "algorithm", "automation", "the", "of", "our", "in",
+                  "across", "business", "operations", "various", "other", "related", "a", "an", "unspecified", "technologies,"}
+GENERIC_KEEP = {"models", "model", "algorithms", "algorithm", "automation"}   # solos sí dicen algo: se evalúan por regex
+
+
+def is_generic_object(value: str | None) -> bool:
+    """'ai capabilities', 'generative ai tools', 'ai and machine learning' no
+    nombran ningún objeto: son la palabra IA con un sustantivo vacío."""
+    if value is None:
+        return True
+    tokens = [w.strip(",.;:()") for w in str(value).lower().replace("/", " ").replace("-", " ").split()]
+    tokens = [w for w in tokens if w]
+    if not tokens:
+        return True
+    if any(w in GENERIC_KEEP for w in tokens) and not all(w in GENERIC_TOKENS for w in tokens if w not in GENERIC_KEEP):
+        return False
+    if any(w in GENERIC_KEEP for w in tokens):
+        return False
+    return all(w in GENERIC_TOKENS for w in tokens)
 
 
 def family(value: str | None, table: list[tuple[str, str]], default: str) -> str:
@@ -124,6 +172,12 @@ def load() -> pd.DataFrame:
     a["function_family"] = a["function"].map(lambda v: family(v, FUNCTION_FAMILIES, "unspecified"))
     a["provider_family"] = a["provider_or_model"].map(lambda v: family(v, PROVIDER_FAMILIES, "unspecified"))
     a["stage_rank"] = a["stage"].map(STAGE_RANK).fillna(0).astype(int)
+    a["object_family"] = a["object"].map(lambda v: "AI, unspecified object" if is_generic_object(v) else family(v, OBJECT_FAMILIES, "AI, unspecified object"))
+    # lo que no cae en ninguna familia pero trae producto o proceso con nombre es un objeto concreto con marca
+    named = (a["object_family"] == "other") & (a["evidence_strength"] == "named_product_or_process")
+    a.loc[named, "object_family"] = "named product or platform"
+    a["activity"] = a["action"] + " · " + a["object_family"]
+    a["activity_function"] = a["activity"] + " · " + a["function_family"]
     a.attrs["n_texts"] = int(n_texts)
     return a
 
@@ -201,7 +255,32 @@ def main() -> None:
     top_f = (filings_only[any_cols].mean() * 100).round(1).rename(lambda c: c[4:])
     for k, v in top.items():
         print(f"  {k:32s} {v:5.1f}%   (sólo filings: {top_f[k]:5.1f}%)")
-    print("  etapa máxima alcanzada: " + " | ".join(f"{k} {v}%" for k, v in stage_share.items()))
+
+    def firm_share(frame: pd.DataFrame, key: str, denom: int, k: int = 30) -> pd.DataFrame:
+        """% de empresas (sobre `denom`) con ≥1 actividad de cada valor de `key`,
+        con los objetos literales más frecuentes como ejemplo."""
+        g = frame.groupby(key)
+        out = pd.DataFrame({"firms": g["ticker"].nunique(), "activities": g.size(),
+                            "examples": g["object"].apply(lambda s: ", ".join(s.value_counts().index[:4]))})
+        out["pct_firms"] = (100 * out["firms"] / denom).round(1)
+        return out.sort_values("firms", ascending=False).head(k)
+
+    print("\nACTIVIDADES CONCRETAS MÁS COMUNES — acción · objeto: % de las 510 empresas, con objetos literales de ejemplo")
+    concrete = a[a["object_family"] != "AI, unspecified object"]
+    top_act = firm_share(concrete, "activity", n_firms, 30)
+    print(top_act[["pct_firms", "firms", "activities", "examples"]].to_string())
+    print("\nACCIÓN · OBJETO · FUNCIÓN (con función declarada) — % de las 510 empresas")
+    top_actf = firm_share(concrete[concrete["function_family"].isin(["unspecified", "other"]) == False], "activity_function", n_firms, 30)
+    print(top_actf[["pct_firms", "firms", "activities", "examples"]].to_string())
+    print("\nOBJETOS (familia) — % de empresas que nombran al menos uno")
+    top_obj = firm_share(a, "object_family", n_firms, 20)
+    print(top_obj[["pct_firms", "firms", "examples"]].to_string())
+    print("\nPROVEEDORES NOMBRADOS — % de empresas que nombran cada familia, y los nombres literales más frecuentes")
+    named = a[~a["provider_family"].isin(["proprietary", "unspecified", "third_party_unnamed"])]
+    prov_firms = firm_share(named, "provider_family", n_firms, 12)
+    prov_firms["examples"] = named.groupby("provider_family")["provider_or_model"].apply(lambda s: ", ".join(s.value_counts().index[:5]))
+    print(prov_firms[["pct_firms", "firms", "examples"]].to_string())
+    print("  empresas que nombran algún proveedor externo:", named["ticker"].nunique(), "de", n_firms)
 
     print("\nCOMPOSICIÓN CONDUCTUAL DE LOS SEGMENTOS — % de empresas del segmento con ≥1 actividad de cada tipo")
     by_seg = (prof.groupby("segmento")[any_cols].mean() * 100).round(1).rename(columns=lambda c: c[4:])
@@ -213,38 +292,64 @@ def main() -> None:
     by_seg = by_seg.reindex(order)
     print(by_seg.T.to_string())
     seg_stage = pd.crosstab(prof["segmento"], prof["max_stage"], normalize="index").reindex(order) * 100
-    print("\netapa máxima por segmento (%):"); print(seg_stage.round(1).to_string())
-    seg_func = pd.crosstab(a.merge(seg, on="ticker")["segmento"], a.merge(seg, on="ticker")["function_family"], normalize="index").reindex(order[:3]) * 100
-    print("\nfunciones por segmento (% de actividades):"); print(seg_func.round(1).T.to_string())
+    aseg = a.merge(seg, on="ticker")
+    seg_func = pd.crosstab(aseg["segmento"], aseg["function_family"], normalize="index").reindex(order[:3]) * 100
 
-    print("\nFICHAS — empresas ejemplares")
+    print("\nACTIVIDADES CONCRETAS POR SEGMENTO — top 12 acción · objeto, % de empresas del segmento")
+    seg_top = {}
+    for s in order[:3]:
+        sub = aseg[(aseg["segmento"] == s) & (aseg["object_family"] != "AI, unspecified object")]
+        tbl = firm_share(sub, "activity", int(by_seg.loc[s, "n_firms"]), 12)
+        seg_top[s] = json.loads(tbl.to_json(orient="index"))
+        print(f"  [{SEGMENT_LABELS[s]}]")
+        for k, r in tbl.iterrows():
+            print(f"    {r.pct_firms:5.1f}%  {k:45s} e.g. {r.examples}")
+    seg_actf = {}
+    print("\nACCIÓN · OBJETO · FUNCIÓN POR SEGMENTO — top 10 con función declarada, % de empresas del segmento")
+    for s in order[:3]:
+        sub = aseg[(aseg["segmento"] == s) & (aseg["object_family"] != "AI, unspecified object") & ~aseg["function_family"].isin(["unspecified", "other"])]
+        tbl = firm_share(sub, "activity_function", int(by_seg.loc[s, "n_firms"]), 10)
+        seg_actf[s] = json.loads(tbl.to_json(orient="index"))
+        print(f"  [{SEGMENT_LABELS[s]}]")
+        for k, r in tbl.iterrows():
+            print(f"    {r.pct_firms:5.1f}%  {k}")
+
+    print("\nFICHAS — inventario de actividades concretas por empresa ejemplar")
     cards = {}
     for s, tickers in EXEMPLARS.items():
         print(f"  [{SEGMENT_LABELS[s]}]")
-        for t in tickers:
-            r = prof[prof.ticker == t]
-            if r.empty:
+        for t_ in tickers:
+            sub = a[a.ticker == t_]
+            if sub.empty:
                 continue
-            r = r.iloc[0]
-            sub = a[a.ticker == t]
-            objs = ", ".join(v for v in sub["object"].value_counts().index[:5])
-            provs = ", ".join(v for v in sub["provider_or_model"].value_counts().index[:4] if v.lower() not in ("unspecified",))
-            card = {"segment": SEGMENT_LABELS[s], "n_activities": int(r.n_activities), "main_actions": r.main_actions,
-                    "main_functions": r.main_functions, "main_objects": objs, "max_stage": r.max_stage,
-                    "share_customers": round(float(r.share_customers or 0), 2), "share_internal": round(float(r.share_internal or 0), 2),
-                    "providers": provs, "share_quantified": round(float(r.share_quantified_outcome or 0), 2),
-                    "share_named": round(float(r.share_named_product_or_process or 0), 2)}
-            cards[t] = card
-            print(f"    {t:6s} n={card['n_activities']:4d} | {card['main_actions']} | {card['main_functions']} | objects: {objs} | "
-                  f"stage {card['max_stage']} | customers {card['share_customers']:.0%} internal {card['share_internal']:.0%} | "
-                  f"providers: {provs} | named {card['share_named']:.0%} quantified {card['share_quantified']:.0%}")
+            g = sub.groupby(["action", "object_family"])
+            inv = pd.DataFrame({"n": g.size(),
+                                "functions": g["function_family"].apply(lambda x: ", ".join(v for v in x.value_counts().index[:2] if v not in ("unspecified", "other"))),
+                                "targets": g["target"].apply(lambda x: ", ".join(v for v in x.value_counts().index[:2] if v != "unspecified")),
+                                "objects": g["object"].apply(lambda x: ", ".join(x.value_counts().index[:3])),
+                                "providers": g["provider_or_model"].apply(lambda x: ", ".join(v for v in x.value_counts().index[:3] if v.lower() not in ("unspecified", "proprietary"))),
+                                "stage": g["stage_rank"].max().map({v: k for k, v in STAGE_RANK.items()}),
+                                "named_or_metric": g["evidence_strength"].apply(lambda x: float(x.isin(["named_product_or_process", "metric", "vendor"]).mean()))
+                                }).sort_values("n", ascending=False).head(8).reset_index()
+            lines = [f"{r.action} · {r.object_family} ({r.n}): {r.objects}" + (f" | for {r.functions}" if r.functions else "")
+                     + (f" | {r.targets}" if r.targets else "") + f" | {r.stage}" + (f" | {r.providers}" if r.providers else "")
+                     + f" | concrete {r.named_or_metric:.0%}" for r in inv.itertuples()]
+            cards[t_] = {"segment": SEGMENT_LABELS[s], "n_activities": int(len(sub)), "lines": lines}
+            print(f"    {t_} ({len(sub)} activities)")
+            for ln in lines:
+                print(f"      - {ln}")
 
     payload = {"n_activities": int(len(a)), "n_texts": a.attrs["n_texts"], "n_firms": n_firms,
                "firms_with_activity": int((prof.n_activities > 0).sum()), "share_from_calls": float((a.channel == "call").mean()),
                "distributions": dist, "function_families": fam.to_dict(), "provider_families": prov.to_dict(),
                "top_behaviours": top.to_dict(), "top_behaviours_filings_only": top_f.to_dict(), "max_stage": stage_share.to_dict(),
                "by_segment": json.loads(by_seg.to_json(orient="index")), "stage_by_segment": json.loads(seg_stage.round(1).to_json(orient="index")),
-               "functions_by_segment": json.loads(seg_func.round(1).to_json(orient="index")), "exemplars": cards}
+               "functions_by_segment": json.loads(seg_func.round(1).to_json(orient="index")), "exemplars": cards,
+               "top_concrete_activities": json.loads(top_act.to_json(orient="index")),
+               "top_activity_function": json.loads(top_actf.to_json(orient="index")),
+               "object_families": json.loads(top_obj.to_json(orient="index")),
+               "named_providers": json.loads(prov_firms.to_json(orient="index")), "firms_naming_provider": int(named["ticker"].nunique()),
+               "segment_top_activities": seg_top, "segment_top_activity_function": seg_actf}
     (OUT_DIR / "activity_profiles.json").write_text(json.dumps(payload, indent=2, default=float) + "\n")
     print(f"\n-> {OUT_DIR}/activity_profiles.json, firm_activity_profiles.parquet, firm_activities.parquet")
 
