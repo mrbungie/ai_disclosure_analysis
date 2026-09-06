@@ -1,6 +1,8 @@
 """Resume las anotaciones exportadas desde la UI (`annotations/*.json`).
 
-Reporta, para los frames: existencia, acuerdo humano–juez y κ de Cohen en
+Reporta, para las actividades divulgadas: existencia y precisión por campo
+(acción, objeto, función, destinatario, etapa, proveedor, evidencia). Para
+los frames: existencia, acuerdo humano–juez y κ de Cohen en
 promocional y temporal, acuerdo en specificity y evidencia. Para el
 prefiltro: precisión y recall del prefiltro contra el humano, crudos y
 reponderados por estrato (la muestra sobre-representa la zona gris y los
@@ -84,6 +86,26 @@ def main() -> None:
         print(f"  specificity correcta: {100*sum(spec)/len(spec):.1f}% (n={len(spec)})")
     if evid:
         print(f"  evidencia correcta: {100*sum(evid)/len(evid):.1f}% (n={len(evid)})")
+
+    # ---- actividades ----
+    verd = Counter(); wrong = Counter(); n_fields = 0
+    for it in data.get("activities", []):
+        a = ann.get(it["id"])
+        if not a or not a.get("veredicto"):
+            continue
+        verd[a["veredicto"]] += 1
+        if a["veredicto"] in ("ok", "mal"):
+            n_fields += 1
+            for k, v in (a.get("mal") or {}).items():
+                if v:
+                    wrong[k] += 1
+    if verd:
+        n = sum(verd.values())
+        print(f"\nACTIVIDADES (n anotado = {n})")
+        print(f"  existe y está bien: {verd['ok']}/{n} ({100*verd['ok']/n:.1f}%) | existe con algún campo mal: {verd['mal']} | no existe: {verd['no_existe']} ({100*verd['no_existe']/n:.1f}%)")
+        print("  precisión por campo, entre las actividades que existen:")
+        for k in ("action", "object", "function", "target", "stage", "provider", "evidence_strength"):
+            print(f"    {k:18s} {100*(1 - wrong[k]/max(1, n_fields)):.1f}%  ({wrong[k]} marcadas mal de {n_fields})")
 
     # ---- prefiltro, reponderado por estrato ----
     run = REPO_ROOT / "data" / "interim" / "prefilter_predictions_unique" / data["predictions_run"]

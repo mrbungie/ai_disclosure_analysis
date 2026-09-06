@@ -7,6 +7,12 @@ parquets del prefiltro — sin LLM, sin red:
              (como lo vio el juez) y cada frame con sus etiquetas. La persona
              valida frame por frame: ¿existe?, ¿promocional?, ¿temporal?,
              ¿specificity? — las dimensiones que sostienen 09/11/12/13.
+  activities N actividades divulgadas (`ai_activities_from_frames.py`): el
+             párrafo con la evidencia resaltada y la actividad escrita como
+             frase ("la empresa despliega copilot para desarrollo de software,
+             empleados, escalado, proveedor OpenAI"). La persona dice si está
+             bien o marca qué campo está mal. Sostiene `09` y lo que `02`, `03`,
+             `05`, `06` y `08` toman de ahí.
   prefilter  N párrafos con la decisión del prefiltro v2, estratificados por
              probabilidad (positivos seguros, zona gris, negativos con
              término de IA). La persona dice si menciona IA. Sirve para
@@ -87,6 +93,42 @@ def sample_frames(con: duckdb.DuckDBPyConnection, n: int, seed: int) -> list[dic
     return items
 
 
+def sample_activities(con: duckdb.DuckDBPyConnection, n: int, seed: int) -> list[dict]:
+    """Una actividad por ítem, estratificada por formulario y por fuerza de
+    evidencia (para que las genéricas y las con producto nombrado entren por
+    igual), con el párrafo completo y las oraciones que la sostienen."""
+    acts = REPO_ROOT / "data" / "processed" / "clusters" / "firm_activities.parquet"
+    if not acts.exists():
+        print("sin firm_activities.parquet: corré activity_profiles.py; se omite la muestra de actividades")
+        return []
+    per = max(1, n // (len(FORMS) * 4))
+    rows = con.execute(f"""
+        WITH a AS (
+            SELECT DISTINCT country_code, form, accession_number, item_key, paragraph_index, text_hash, activity_index,
+                   action, object, function, target, stage, provider_or_model, evidence_strength, evidence_sentence_ids
+            FROM read_parquet('{acts}')
+        ), s AS (
+            SELECT *, row_number() OVER (PARTITION BY form, evidence_strength ORDER BY hash(text_hash + activity_index * 7919 + {seed})) AS rn FROM a
+        ), chosen AS (SELECT * FROM s WHERE rn <= {per})
+        SELECT c.*, list(struct_pack(idx := se.sentence_index, text := se.sentence_text) ORDER BY se.sentence_index) AS sentences
+        FROM chosen c JOIN sentences se USING (country_code, form, accession_number, item_key, paragraph_index)
+        GROUP BY ALL
+    """).df()
+    items = []
+    for r in rows.itertuples():
+        sents = [{"idx": int(s["idx"]), "text": s["text"]} for s in list(r.sentences)]
+        ev_pos = [int(x) for x in (list(r.evidence_sentence_ids) if r.evidence_sentence_ids is not None else [])]
+        ev_idx = [sents[i]["idx"] for i in ev_pos if 0 <= i < len(sents)]   # posiciones del prompt -> sentence_index real
+        items.append({
+            "id": f"A:{r.text_hash}:{int(r.activity_index)}", "form": r.form, "accession_number": r.accession_number,
+            "text_hash": str(r.text_hash), "activity_index": int(r.activity_index), "sentences": sents, "evidence": ev_idx,
+            "action": r.action, "object": r.object, "function": r.function, "target": r.target, "stage": r.stage,
+            "provider": r.provider_or_model, "evidence_strength": r.evidence_strength,
+        })
+    random.Random(seed).shuffle(items)
+    return items
+
+
 def sample_prefilter(con: duckdb.DuckDBPyConnection, n: int, seed: int) -> list[dict]:
     """Tres estratos por formulario: positivos (proba ≥ umbral), zona gris
     (0,05 ≤ proba < umbral) y negativos con término de IA (proba < 0,05 y
@@ -125,6 +167,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--frames", type=int, default=300)
     parser.add_argument("--prefilter", type=int, default=300)
+    parser.add_argument("--activities", type=int, default=180)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--database", type=Path, default=DB)
     parser.add_argument("--out", type=Path, default=OUT)
@@ -132,11 +175,12 @@ def main() -> None:
     con = duckdb.connect(str(args.database), read_only=True)
     frames = sample_frames(con, args.frames, args.seed)
     prefilter = sample_prefilter(con, args.prefilter, args.seed)
+    activities = sample_activities(con, args.activities, args.seed)
     payload = {"seed": args.seed, "predictions_run": latest_predictions().name,
-               "frames": frames, "prefilter": prefilter}
+               "frames": frames, "prefilter": prefilter, "activities": activities}
     args.out.write_text(json.dumps(payload, ensure_ascii=False))
     print(f"frames: {len(frames)} párrafos ({sum(len(i['frames']) for i in frames)} frames) | "
-          f"prefilter: {len(prefilter)} párrafos -> {args.out}")
+          f"prefilter: {len(prefilter)} párrafos | activities: {len(activities)} -> {args.out}")
 
 
 if __name__ == "__main__":

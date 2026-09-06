@@ -38,6 +38,19 @@
   dialog textarea { min-height:260px; font-family:ui-monospace, monospace; font-size:12px; }
   .stats { font-size:13px; }
   .stats td { padding:2px 10px 2px 0; }
+  .act { background:#fff; border:1px solid var(--line); border-left:4px solid #6a1b9a; border-radius:8px; padding:14px 16px; margin-bottom:12px; }
+  .act .sentence { font-size:17px; line-height:1.5; margin:4px 0 10px; }
+  .act .sentence b { color:#6a1b9a; }
+  .act .sentence i { background:#f3e5f5; padding:0 5px; border-radius:4px; font-style:normal; }
+  .big { display:flex; gap:10px; margin:12px 0; }
+  .big button { font-size:16px; padding:12px 18px; flex:1; }
+  .big button.ok.on, .big .ok.on { background:#e8f5e9; border-color:var(--ok); }
+  .big button.bad.on { background:#ffebee; border-color:var(--bad); }
+  .big button.nx.on { background:#eceff1; border-color:#455a64; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+  .chips button { border-radius:16px; }
+  .chips button.on { background:#ffebee; border-color:var(--bad); color:var(--bad); }
+  .hint { color:var(--muted); font-size:13px; }
 </style>
 </head>
 <body>
@@ -45,6 +58,7 @@
   <b>Validador</b>
   <button id="tab-frames" class="on">Frames</button>
   <button id="tab-prefilter">Prefiltro</button>
+  <button id="tab-activities">Actividades</button>
   <span class="sp"></span>
   <span class="prog" id="prog"></span>
   <button id="btn-stats">Resumen</button>
@@ -60,7 +74,7 @@
 const KEY = 'validador.v1';
 let DATA = null;
 let task = 'frames';
-let pos = { frames: 0, prefilter: 0 };
+let pos = { frames: 0, prefilter: 0, activities: 0 };
 let ann = load();
 
 function load() { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } }
@@ -71,7 +85,8 @@ function set(id, k, v) { const a = get(id); a[k] = v; a.ts = new Date().toISOStr
 // ---------- carga ----------
 fetch('data.json').then(r => r.json()).then(d => {
   DATA = d;
-  pos.frames = firstPending('frames'); pos.prefilter = firstPending('prefilter');
+  if (!DATA.activities) DATA.activities = [];
+  pos.frames = firstPending('frames'); pos.prefilter = firstPending('prefilter'); pos.activities = firstPending('activities');
   render();
 }).catch(e => { document.getElementById('main').innerHTML = '<p>No se pudo leer <code>data.json</code>. Corre <code>build_sample.py</code> y sirve la carpeta con <code>python -m http.server</code>.</p>'; });
 
@@ -79,6 +94,7 @@ function items() { return DATA[task]; }
 function isDone(it) {
   const a = ann[it.id]; if (!a) return false;
   if (task === 'prefilter') return a.menciona_ia !== undefined;
+  if (task === 'activities') return a.veredicto !== undefined;
   if (!it.frames.length) return a.sin_frames !== undefined;
   return it.frames.every(f => a['f' + f.frame_index + '.existe'] !== undefined);
 }
@@ -90,10 +106,14 @@ function render() {
   const list = items(); const it = list[pos[task]];
   const done = list.filter(isDone).length;
   document.getElementById('prog').textContent = `${task}: ${done}/${list.length} · #${pos[task] + 1}`;
+  document.getElementById('tab-activities').className = task === 'activities' ? 'on' : '';
   document.getElementById('tab-frames').className = task === 'frames' ? 'on' : '';
   document.getElementById('tab-prefilter').className = task === 'prefilter' ? 'on' : '';
   const m = document.getElementById('main');
-  m.innerHTML = task === 'frames' ? renderFrames(it) : renderPrefilter(it);
+  if (!it) { m.innerHTML = '<p>No hay ítems de esta tarea en <code>data.json</code>. Regenerá con <code>build_sample.py</code>.</p>'; return; }
+  m.innerHTML = task === 'frames' ? renderFrames(it) : task === 'prefilter' ? renderPrefilter(it) : renderActivity(it);
+  m.querySelectorAll('[data-verdict]').forEach(b => b.onclick = () => verdict(it, b.dataset.verdict));
+  m.querySelectorAll('[data-chip]').forEach(b => b.onclick = () => { const a = get(it.id); a.mal = a.mal || {}; a.mal[b.dataset.chip] = !a.mal[b.dataset.chip]; a.ts = new Date().toISOString(); save(); render(); });
   m.querySelectorAll('[data-set]').forEach(b => b.onclick = () => {
     const [id, k, v] = JSON.parse(b.dataset.set); set(id, k, v);
   });
@@ -105,7 +125,7 @@ function render() {
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function btn(id, k, v, label, cls, cur) { return `<button class="${cls || ''} ${cur === v ? 'on' : ''}" data-set='${JSON.stringify([id, k, v])}'>${label}</button>`; }
 function yesno(id, k, cur) { return btn(id, k, true, 'sí', 'ok', cur) + btn(id, k, false, 'no', 'bad', cur); }
-function nav() { return `<nav><button id="prev">← anterior</button><button id="next" class="primary">siguiente →</button><button id="pend">ir al primero pendiente</button><span class="kbd">atajos: ← → · 1 sí · 2 no</span></nav>`; }
+function nav() { return `<nav><button id="prev">← anterior</button><button id="next" class="primary">siguiente →</button><button id="pend">ir al primero pendiente</button><span class="kbd">atajos: ← → · 1 sí · 2 no · (actividades: 1 bien · 2 algo mal · 3 no existe)</span></nav>`; }
 
 function renderFrames(it) {
   const a = get(it.id);
@@ -134,6 +154,37 @@ function renderFrames(it) {
   return h;
 }
 
+// ---------- actividades: pensado para responder en dos segundos ----------
+const ACTION_ES = { deploy: 'despliega / usa', develop: 'desarrolla', integrate: 'integra', buy_or_license: 'compra o licencia', partner: 'se alía con', invest_infrastructure: 'invierte en infraestructura:', hire_or_train: 'contrata o capacita', pilot_or_explore: 'pilotea o explora', scale: 'escala', measure_outcome: 'reporta un resultado:', govern_or_control: 'gobierna o controla', restrict: 'restringe' };
+const TARGET_ES = { employees: 'empleados', customers: 'clientes', developers: 'desarrolladores', internal_process: 'proceso interno', partners_or_suppliers: 'socios o proveedores', unspecified: 'no dice' };
+const STAGE_ES = { exploring: 'explorando', piloting: 'piloto', deployed: 'desplegado', scaled: 'escalado', unspecified: 'no dice' };
+const EVID_ES = { named_product_or_process: 'producto o proceso con nombre', metric: 'cifra', vendor: 'proveedor nombrado', generic: 'genérica (sin nombre ni cifra)' };
+const FIELDS = [['action', 'acción'], ['object', 'objeto'], ['function', 'función'], ['target', 'destinatario'], ['stage', 'etapa'], ['provider', 'proveedor'], ['evidence_strength', 'evidencia']];
+function verdict(it, v) { const a = get(it.id); a.veredicto = v; if (v !== 'mal') a.mal = {}; a.ts = new Date().toISOString(); save();
+  if (v !== 'mal') { const list = items(); if (pos[task] < list.length - 1) pos[task]++; } render(); }
+function renderActivity(it) {
+  const a = get(it.id); const ev = new Set(it.evidence); const mal = a.mal || {};
+  const fn = it.function && it.function !== 'unspecified' ? ` para <i>${esc(it.function.replace(/_/g, ' '))}</i>` : ' <span class="hint">(no dice para qué)</span>';
+  const prov = it.provider && it.provider.toLowerCase() !== 'unspecified' ? esc(it.provider) : 'no dice';
+  let h = `<div class="meta">${esc(it.form)} · ${esc(it.accession_number)} · actividad ${it.activity_index}</div>`;
+  h += `<div class="para">` + it.sentences.map(s => `<div class="sent ${ev.has(s.idx) ? 'ev' : ''}"><span class="n">[${s.idx}]</span>${esc(s.text)}</div>`).join('') + `</div>`;
+  h += `<div class="act"><div class="hint">Según el modelo, este párrafo dice que:</div>
+    <div class="sentence">la empresa <b>${esc(ACTION_ES[it.action] || it.action)}</b> <i>${esc(it.object)}</i>${fn}</div>
+    <div class="tags"><span class="tag">destinatario: ${esc(TARGET_ES[it.target] || it.target)}</span><span class="tag">etapa: ${esc(STAGE_ES[it.stage] || it.stage)}</span><span class="tag">proveedor / modelo: ${prov}</span><span class="tag spec">evidencia: ${esc(EVID_ES[it.evidence_strength] || it.evidence_strength)}</span></div>
+    <div class="hint">¿Eso es lo que dice el texto resaltado? Mirá la frase, no los detalles: si está bien en lo esencial, es "Sí".</div>
+    <div class="big">
+      <button class="ok ${a.veredicto === 'ok' ? 'on' : ''}" data-verdict="ok">1 · Sí, está bien</button>
+      <button class="bad ${a.veredicto === 'mal' ? 'on' : ''}" data-verdict="mal">2 · Casi, algo está mal</button>
+      <button class="nx ${a.veredicto === 'no_existe' ? 'on' : ''}" data-verdict="no_existe">3 · No, el texto no dice eso</button>
+    </div>`;
+  if (a.veredicto === 'mal') {
+    h += `<div class="hint">Tocá lo que está mal (uno o varios):</div><div class="chips">` +
+      FIELDS.map(([k, label]) => `<button class="${mal[k] ? 'on' : ''}" data-chip="${k}">${label}: ${esc(k === 'target' ? (TARGET_ES[it[k]] || it[k]) : k === 'stage' ? (STAGE_ES[it[k]] || it[k]) : k === 'evidence_strength' ? (EVID_ES[it[k]] || it[k]) : k === 'action' ? (ACTION_ES[it[k]] || it[k]) : (it[k] || 'no dice'))}</button>`).join('') + `</div>`;
+  }
+  h += `</div><textarea data-note="${it.id}" placeholder="nota (opcional)">${esc(a.nota || '')}</textarea>` + nav();
+  return h;
+}
+
 function renderPrefilter(it) {
   const a = get(it.id);
   let h = `<div class="meta">${esc(it.form)} · estrato ${esc(it.estrato)} · text_hash ${esc(it.text_hash)}</div>`;
@@ -151,6 +202,7 @@ document.addEventListener('keydown', e => {
   const list = items && DATA ? items() : null; if (!list) return;
   if (e.key === 'ArrowRight') { pos[task] = Math.min(list.length - 1, pos[task] + 1); render(); }
   if (e.key === 'ArrowLeft') { pos[task] = Math.max(0, pos[task] - 1); render(); }
+  if (task === 'activities' && (e.key === '1' || e.key === '2' || e.key === '3')) { verdict(list[pos[task]], { '1': 'ok', '2': 'mal', '3': 'no_existe' }[e.key]); return; }
   if (e.key === '1' || e.key === '2') {
     const it = list[pos[task]]; const v = e.key === '1';
     if (task === 'prefilter') set(it.id, 'menciona_ia', v);
@@ -159,6 +211,7 @@ document.addEventListener('keydown', e => {
 });
 document.getElementById('tab-frames').onclick = () => { task = 'frames'; render(); };
 document.getElementById('tab-prefilter').onclick = () => { task = 'prefilter'; render(); };
+document.getElementById('tab-activities').onclick = () => { task = 'activities'; render(); };
 
 // ---------- export / import / stats ----------
 const dlg = document.getElementById('dlg'), body = document.getElementById('dlg-body');
@@ -190,7 +243,13 @@ document.getElementById('btn-stats').onclick = () => {
   for (const it of DATA.prefilter) { const a = ann[it.id]; if (!a || a.menciona_ia === undefined) continue;
     const k = (it.prefilter_says_ai ? (a.menciona_ia ? 'tp' : 'fp') : (a.menciona_ia ? 'fn' : 'tn')); pf[k]++; }
   const prec = pf.tp / Math.max(1, pf.tp + pf.fp), rec = pf.tp / Math.max(1, pf.tp + pf.fn);
+  let av = { ok: 0, mal: 0, no_existe: 0 }, wrong = {};
+  for (const it of (DATA.activities || [])) { const a = ann[it.id]; if (!a || !a.veredicto) continue; av[a.veredicto]++;
+    for (const [k, v] of Object.entries(a.mal || {})) if (v) wrong[k] = (wrong[k] || 0) + 1; }
+  const an = av.ok + av.mal + av.no_existe;
+  const wrongTxt = Object.entries(wrong).sort((x, y) => y[1] - x[1]).map(([k, v]) => `${k} ${v}`).join(', ') || '—';
   body.innerHTML = `<table class="stats">
+    <tr><td>Actividades: bien / algo mal / no existe</td><td>${av.ok} / ${av.mal} / ${av.no_existe} de ${an} (${(100 * av.ok / Math.max(1, an)).toFixed(1)}% bien; campos marcados: ${wrongTxt})</td></tr>
     <tr><td>Frames que existen</td><td>${exist}/${ne} (${(100 * exist / Math.max(1, ne)).toFixed(1)}%)</td></tr>
     <tr><td>Acuerdo humano–juez en promocional</td><td>${agree}/${n} (${(100 * agree / Math.max(1, n)).toFixed(1)}%)</td></tr>
     <tr><td>Prefiltro: precisión / recall (sobre lo anotado)</td><td>${(100 * prec).toFixed(1)}% / ${(100 * rec).toFixed(1)}% (tp ${pf.tp}, fp ${pf.fp}, fn ${pf.fn}, tn ${pf.tn})</td></tr>
