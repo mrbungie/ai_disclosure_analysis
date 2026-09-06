@@ -237,6 +237,31 @@ def load_golden(judge_model: str | None = None) -> pd.DataFrame:
         con.close()
 
 
+def load_golden_judges(judge_model: str | None = None) -> pd.Series:
+    """Qué juez etiquetó cada fila que entra al fit. Va al manifiesto: un
+    despliegue tiene que poder decir con qué criterio se definió su target."""
+    con = duckdb.connect(str(DB), read_only=True)
+    try:
+        clause = f"AND l.judge_model = '{judge_model}'" if judge_model else ""
+        return con.execute(f"""
+            SELECT l.judge_model
+            FROM read_parquet('data/interim/golden_set/golden_set_labels__session=*__part=*.parquet',
+                               union_by_name=True) l
+            JOIN paragraphs par
+                ON par.country_code = l.country_code AND par.form = l.form
+               AND par.accession_number = l.accession_number AND par.item_key = l.item_key
+               AND par.paragraph_index = l.paragraph_index
+            JOIN unique_paragraphs up ON up.text_hash = par.text_hash
+            JOIN {scores_relation()} p
+                ON p.country_code = up.country_code AND p.form = up.form
+               AND p.accession_number = up.accession_number AND p.item_key = up.item_key
+               AND p.paragraph_index = up.paragraph_index
+            WHERE l.error IS NULL AND up.is_scorable {clause}
+        """).df()["judge_model"]
+    finally:
+        con.close()
+
+
 C_GRID = (0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0)
 
 
@@ -528,7 +553,8 @@ def main(judge_model: str | None = DEFAULT_JUDGE_MODEL) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     print(f"Cargando golden set (juez: {judge_model or 'TODOS — mezcla, ver load_golden'})...")
     golden = load_golden(judge_model)
-    print(f"{len(golden):,} etiquetas")
+    golden_judges = load_golden_judges(judge_model)
+    print(f"{len(golden):,} etiquetas | jueces: {golden_judges.value_counts().to_dict()}")
 
     y = golden["is_ai_mention"].astype(int).values
     weights = golden["inclusion_weight"].astype(float).values
@@ -666,6 +692,11 @@ def main(judge_model: str | None = DEFAULT_JUDGE_MODEL) -> None:
     manifest = {
         "run_id": run_id, "anchors_run": LATEST_PREFILTER_RUN,
         "golden_set_labels": int(len(golden)),
+        # Provenance del target: sin esto el manifiesto no dice con qué criterio
+        # se decidió "esto menciona IA", y el golden set tiene dos jueces.
+        "judge_model": judge_model or "MEZCLA (todos los jueces del golden set)",
+        "labels_by_judge": {str(k): int(v) for k, v in
+                            golden_judges.value_counts().items()},
         "deploy_c": deploy_c, "threshold": threshold,
         "cv_metrics": cv_metrics, "cv_metrics_with_named_entity": combined_metrics,
         "named_entity_used_in_deployment": use_named_entity,
