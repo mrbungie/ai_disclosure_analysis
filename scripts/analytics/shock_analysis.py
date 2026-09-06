@@ -190,16 +190,24 @@ def report_segments(panel: pd.DataFrame, treatment: pd.DataFrame, event_name: st
     data = prepare(panel, treatment.dropna(subset=["segmento"]), EVENTS[event_name])
     data["post"] = (data["event_time"] >= 0).astype(float)
     main_outcome = MAIN_OUTCOME
-    formula = (f"{main_outcome} ~ post:C(segmento) + C(ticker) + C(ev) + {CONTROLS}")
+    # Con todas las empresas segmentadas, `post` por segmento es colineal con el
+    # efecto fijo de trimestre: se reporta la DIFERENCIA de cada segmento contra
+    # los listadores de riesgo (referencia), que es la pregunta de heterogeneidad.
+    reference = "listadores_de_riesgo"
+    others = sorted(s for s in data["segmento"].unique() if s != reference)
+    for s in others:
+        data[f"post_x_{s}"] = data["post"] * (data["segmento"] == s).astype(float)
+    formula = (f"{main_outcome} ~ " + " + ".join(f"post_x_{s}" for s in others)
+               + f" + C(ticker) + C(ev) + {CONTROLS}")
     data["ev"] = pd.Categorical(data["event_time"])
     model = smf.ols(formula, data=data).fit(
         cov_type="cluster", cov_kwds={"groups": data["ticker"]})
-    print(f"\ncambio post por segmento ({event_name}, outcome = {main_outcome}):")
+    print(f"\ncambio post por segmento, diferencia contra listadores de riesgo ({event_name}, outcome = {main_outcome}):")
     rows = {}
     for name, value in model.params.items():
-        if not name.startswith("post:"):
+        if not name.startswith("post_x_"):
             continue
-        segment = name.split("[")[-1].rstrip("]").replace("T.", "")
+        segment = name.replace("post_x_", "")
         pval = float(model.pvalues[name])
         if not np.isfinite(pval):        # colinealidad perfecta: no hay contraste que reportar
             continue

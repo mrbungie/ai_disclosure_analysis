@@ -52,10 +52,11 @@ las empresas-año de 2021 hablaba de IA, el 92% de 2025— y un corte en marzo d
 especificidad por párrafo (+0,70), tiene su salto en t+3, que es 2025Q1: la
 temporada de 10-K, no el evento (+2,37 en t+3 contra +0,46 y +0,48 en t+1 y t+2).
 
-Por segmento de divulgación (`11_segmentacion.md`), cambio post en promocionales
-por 1.000 párrafos: adoptantes con gobernanza +0,40, desplegadores de producto
-+0,92, listadores de riesgo +0,32, todos con p<0,001 y todos con la misma
-advertencia: es la curva, no el corte.
+Por segmento de divulgación (`11_segmentacion.md`, las 510 empresas), cambio
+post en promocionales por 1.000 párrafos contra los listadores de riesgo:
+desplegadores de producto +0,56 (p<0,001), adoptantes con gobernanza +0,04
+(p=0,06). Los desplegadores aceleran más que el resto después de 2024, con la
+misma advertencia: es la curva, no el corte.
 
 **Lo defendible: no hay ninguna evidencia de que el escrutinio de la SEC haya
 cambiado la divulgación de IA, y el diseño no puede producirla, porque no hay

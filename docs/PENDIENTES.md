@@ -40,9 +40,10 @@ Todo lo demás es CPU: clasificación (I/O contra OpenRouter) y analytics
 **Margen extensivo**: todo agregado sobre empresas o períodos se calcula sobre
 todos los documentos, con cero cuando el documento no habla de IA, en
 intensidad por 1.000 párrafos (`scripts/analytics/ai_intensity.py`;
-`docs/analytics/10_builders_y_recalculo.md`). Nada condiciona a hablar de IA
-salvo los objetos que son, por construcción, sobre cómo se habla (arquetipos,
-segmentos, grilla, test binomial de 09). El funnel completo del corpus está en
+`docs/analytics/10_builders_y_recalculo.md`). Segmentos y grilla se
+construyen sobre las 510 empresas con la intensidad de IA como dimensión.
+Nada condiciona a hablar de IA salvo los arquetipos de voz de `07`/`08` y el
+test binomial de `09`. El funnel completo del corpus está en
 `docs/analytics/00_funnel_del_corpus.md`.
 
 ## Corpus final
@@ -98,9 +99,8 @@ precisión/recall del prefiltro reponderados por estrato. Falta anotar.
   persigue la SEC, y es donde está el único efecto post-SEC del proyecto (el
   filing agrega gobernanza de IA; la call no cambia).
 - Entrada endógena al panel (`docs/problemas_academicos.md` #12): cerrada
-  con el modo extensivo para todo lo que agrega sobre empresas o períodos.
-  Sigue por construcción en los objetos sobre cómo se habla (arquetipos,
-  segmentos, grilla, test binomial), que no existen para quien no habla.
+  con el modo extensivo, incluidos segmentos y grilla. Sigue por construcción
+  en los arquetipos de voz y el test binomial de `09`.
 
 ### 3. Deuda técnica
 

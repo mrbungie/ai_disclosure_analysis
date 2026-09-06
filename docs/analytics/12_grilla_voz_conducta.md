@@ -2,24 +2,24 @@
 
 Producido por `scripts/analytics/build_voice_behavior_grid.py`. Es la forma
 directa de la pregunta de la tesis —¿habla más de lo que hace?— con los dos ejes
-explícitos en vez de escondidos dentro de un clustering.
+explícitos en vez de escondidos dentro de un clustering. **Modo de análisis
+final: las 510 empresas con filings entran**; las 17 sin ningún frame de IA
+quedan con los dos ejes en el prior, en el centro de la grilla.
 
 ## Los dos ejes
 
 | eje | definición | media del corpus |
 |---|---|---|
-| **VOZ** | % de las afirmaciones de IA de la empresa en registro promocional o estratégico | 14,9% |
-| **COMPORTAMIENTO** | % que describe conducta concreta: etapa de uso, resultado o capacidad | 48,5% |
+| **VOZ** | % de las afirmaciones de IA de la empresa en registro promocional o estratégico | 14,4% |
+| **COMPORTAMIENTO** | % que describe conducta concreta: etapa de uso, resultado o capacidad | 44,9% |
 
 Los dos son **porcentajes sobre los frames de la misma empresa**, así que ninguno
 premia a la que más habla. La confianza que merece cada tasa sí depende del
-volumen, y de eso se encarga el encogimiento empírico-Bayes (una empresa con 9
-frames se corre hacia el promedio del corpus).
+volumen, y de eso se encarga el encogimiento empírico-Bayes: una empresa con 9
+frames se corre hacia el promedio del corpus, y una con 0 queda en él.
 
-**Correlación entre ejes: 0,297.** No son el mismo eje — que es la condición
-para que la grilla tenga contenido. (Con la medición del cruce de clusters de `06_...md`, tasas crudas de
-15 conceptos, los bloques compartían 82% de la varianza y la matriz no decía
-nada; ver `06_...md`.)
+**Correlación entre ejes: 0,286.** No son el mismo eje — que es la condición
+para que la grilla tenga contenido.
 
 Cada eje se corta en terciles → 9 celdas.
 
@@ -27,62 +27,63 @@ Cada eje se corta en terciles → 9 celdas.
 
 |  | conducta baja | conducta media | conducta alta |
 |---|---:|---:|---:|
-| **voz alta** | **washing: 26** | 40 | **vocales sustantivos: 74** |
-| **voz media** | 48 | 54 | 36 |
-| **voz baja** | **silenciosos: 66** | 45 | **sustancia callada: 30** |
+| **voz alta** | **washing: 36** | 44 | **vocales sustantivos: 90** |
+| **voz media** | 60 | 68 | 42 |
+| **voz baja** | **silenciosos: 79** | 53 | **sustancia callada: 38** |
+
+Las 17 empresas sin frames están en voz media / conducta media.
 
 Las cuatro esquinas son las categorías que la tesis necesita nombrar:
 
-| esquina | empresas | % voz | % conducta | ejemplos (por volumen) |
-|---|---:|---:|---:|---|
-| **Washing** (voz alta, conducta baja) | 26 | 28,6 | 26,2 | UNH, CI, AAPL, PYPL, ELV, DISCA, AMT, AAL |
-| **Sustancia callada** (voz baja, conducta alta) | 30 | 4,7 | 71,3 | FTNT, OKTA, STX, DDOG, FFIV, NET, EXPE, ZTS |
-| **Vocales sustantivos** | 74 | 27,3 | 72,5 | MSFT, NVDA, GOOGL, ADBE, INTC, CRM, SNOW, HPE |
-| **Silenciosos** | 66 | 2,9 | 23,0 | BAC, MCHP, ISRG, BAX, WLTW, DVA, WELL, UAL |
+| esquina | empresas | % voz | % conducta | frames (mediana) | ejemplos (por volumen) |
+|---|---:|---:|---:|---:|---|
+| **Washing** (voz alta, conducta baja) | 36 | 33,1 | 22,8 | 17 | UNH, CI, AAPL, PYPL, ELV, DISCA, AMT, AAL, MPWR, SO |
+| **Sustancia callada** (voz baja, conducta alta) | 38 | 4,3 | 70,5 | 30 | FTNT, OKTA, DDOG, STX, FFIV, NET, EXPE, ZBH, ZTS, HOLX |
+| **Vocales sustantivos** | 90 | 28,7 | 72,6 | 77 | MSFT, NVDA, GOOGL, ADBE, INTC, CRM, HPE, SNOW, WDAY, AMD |
+| **Silenciosos** | 79 | 1,8 | 19,0 | 14 | BAC, MCHP, ISRG, BAX, WLTW, WELL, UAL, FOX, LNC, PGR |
 
 ## Qué tan estable es (leer antes de usarla)
 
-Remuestreando los frames de cada empresa, 20 réplicas:
+Remuestreando los frames de cada empresa, 25 réplicas:
 
-| medida | 3×3 | 2×2 |
-|---|---:|---:|
-| cae en la MISMA celda | 60,4% | 76,2% |
-| cae en la misma o una ADYACENTE | **99,1%** | 100% |
-| se mantiene en la esquina "washing" | 61,5% | 69,5% |
-| se mantiene en "vocales sustantivos" | 74,7% | 81,8% |
+| medida | 3×3 |
+|---|---:|
+| cae en la MISMA celda | 61,2% |
+| cae en la misma o una ADYACENTE | **98,8%** |
 
 **Cuando una empresa se mueve, se mueve un paso; nunca cruza la grilla.** El
 azar con 9 celdas sería 11%.
 
 Cada empresa trae su propia **`confianza_celda`**: en qué fracción de los
-remuestreos cae en la celda que se le asignó. 86 de 419 superan 0,80. La
-confianza mediana por celda va de 0,44 (el centro de la grilla, donde todo está
-al borde de un corte) a 0,78 (vocales sustantivos). **Para análisis río abajo:
-filtrar por confianza, no usar las 419 por igual.** Con confianza ≥0,70 las
-esquinas quedan en 10 / 10 / 43 / 37 empresas (washing / callada / vocales /
-silenciosos).
+remuestreos cae en la celda que se le asignó. 149 de 510 superan 0,80. La
+confianza mediana por celda va de 0,46 (voz media / conducta baja, al borde
+de dos cortes) a 0,80 (silenciosos). **Para análisis río abajo: filtrar por
+confianza, no usar las 510 por igual.** Con confianza ≥0,70 las esquinas
+quedan en 16 / 15 / 49 / 52 empresas (washing / callada / vocales /
+silenciosos). Las 17 sin frames tienen confianza 1 por construcción: no hay
+frames que remuestrear.
 
-Persistencia año a año en el panel: 36,4%. Es baja y no hay que disimularla: una
-empresa-año necesita apenas 4 frames para entrar, y con 4 frames el porcentaje
-salta solo. **Para series de tiempo conviene usar los ejes continuos, no la
-celda.**
+Persistencia año a año en el panel (2.964 empresas-año): 49,0%. Es baja y no
+hay que disimularla: con pocos frames el porcentaje salta solo. **Para series
+de tiempo conviene usar los ejes continuos, no la celda.**
 
 ## Las esquinas separan cosas que no entraron a construirlas
 
-Medianas sobre empresa-año:
+Medianas por empresa (`firm_year_master_v2`):
 
 | | Washing | Sustancia callada | Vocales sustantivos | Silenciosos |
 |---|---:|---:|---:|---:|
-| I+D / ingresos | **1,8%** | 8,3% | **12,6%** | 3,6% |
-| Margen bruto | 38,7% | 50,5% | **56,5%** | 41,3% |
-| Beta | **0,60** | 0,96 | **1,06** | 0,77 |
-| P/E | 21,9 | **30,6** | 26,9 | 20,7 |
-| Crecimiento ingresos t+1 | 6,4% | **7,5%** | 7,0% | 4,9% |
+| frames de IA por 1.000 párrafos | 1,3 | 2,8 | **7,7** | 1,1 |
+| I+D / ingresos | **1,5%** | 6,9% | **11,7%** | 2,2% |
+| Margen bruto | 35,5% | 43,8% | **56,2%** | 45,5% |
+| Beta | **0,76** | 0,97 | **1,05** | 0,78 |
+| P/E | 21,1 | 25,6 | **26,8** | 22,2 |
+| Crecimiento ingresos t+1 | 8,0% | 7,3% | 6,9% | 6,5% |
 
-La esquina de washing es **bajo I+D, bajo beta, no-tech**: empresas que hablan de
-IA en registro estratégico sin describir casi ninguna conducta. La de sustancia
-callada es lo contrario y se parece financieramente a los vocales sustantivos —
-mismo perfil tech, distinto volumen de discurso.
+La esquina de washing es **bajo I+D, bajo beta, no-tech, y habla poco de IA en
+volumen**: empresas que dedican poco filing a IA pero lo poco que dicen es
+estratégico, sin conducta. La de sustancia callada se parece a los vocales
+sustantivos en beta y valuación con la mitad de la intensidad.
 
 ## Cómo se relaciona con el score de `09_washing_score.md`
 
@@ -91,21 +92,21 @@ Son dos definiciones distintas y ambas hacen falta:
 | | grilla (esta) | score exacto (09) |
 |---|---|---|
 | pregunta | ¿habla mucho y describe poco, **en absoluto**? | ¿habla más de lo que **su propia** conducta predice? |
-| unidad | esquina de una grilla | test binomial con FDR |
-| resultado | 26 empresas | 8 empresas |
+| unidad | esquina de una grilla | test binomial con FDR, y residuo de intensidad para las 510 |
+| resultado | 36 empresas | 8 empresas |
 | dónde caen las 8 del score | **7 en "vocales sustantivos"**, 1 (YUM) en voz alta / conducta media | — |
 
 O sea: el score marca empresas que describen MUCHA conducta y aun así hablan más
 de lo que eso justifica (GOOGL, PANW, CRWD); la grilla marca empresas que hablan
 sin describir conducta (UNH, CI, AAPL). **No se contradicen: son washing
-relativo y washing absoluto.** Para la tesis, la grilla ordena la muestra y el
-score dice dónde hay evidencia estadística.
+relativo y washing absoluto.** La brecha entre canales (`14_...md`) es una
+tercera definición, ortogonal a las dos.
 
 ## Limitaciones
 
-- 419 de 493 empresas (≥8 frames). Las que quedan afuera son las que menos
-  divulgan.
-- La celda del centro de la grilla es la menos confiable (0,44): son empresas
-  que están al borde de los dos cortes.
+- Las 17 empresas sin frames están en el centro por construcción, no por
+  evidencia.
+- La celda del centro de la grilla es la menos confiable: son empresas que
+  están al borde de los dos cortes.
 - Todo descansa en etiquetas de un LLM sin validación humana
   (`docs/problemas_academicos.md` #1).

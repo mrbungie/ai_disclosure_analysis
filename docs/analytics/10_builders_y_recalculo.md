@@ -63,12 +63,13 @@ frames"— selecciona sobre el propio fenómeno y se descarta como diseño
 | brecha entre canales (14) | 2.281 empresa-ejercicio con ≥1 transcripción y ≥1 filing | `channel_gap_analysis.py` |
 | score de washing (09) | las 510 empresas, exceso promocional por 1.000 párrafos dado conducta y volumen, junto al test binomial sobre quienes tienen frames | `washing_score.py` |
 | cohorte (03) | todas las empresas con filings, por año | `firm_year_master_v2` |
+| segmentos (11), grilla (12) | las 510 empresas con filings; las 17 sin frames entran con sus tasas en el prior; la intensidad de IA es una dimensión de la segmentación | `build_segments.py`, `build_voice_behavior_grid.py` |
 
-Lo que queda condicionado por construcción son los **objetos sobre cómo se
-habla de IA**: arquetipos de voz, clusters de comportamiento (07),
-segmentos (11), grilla (12) y el test binomial de 09. Son particiones y tests
-sobre los frames, y una empresa sin frames no tiene voz que clasificar. Los
-docs lo dicen en su cabecera.
+Lo que queda condicionado por construcción son los arquetipos de voz y los
+clusters de comportamiento de `07`/`08` (particiones sobre quienes hablan,
+conservados porque los documentos los citan) y el test binomial de `09`, que
+necesita frames para existir y convive con el score de intensidad para las
+510.
 
 ## Qué queda pendiente
 

@@ -54,8 +54,9 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_firm_clusters import BEHAVIOR_CONCEPTS, DB, OUT_DIR, SEED, load_frames, shrink_rates
 
-MIN_FRAMES = 8
-MIN_FRAMES_YEAR = 4
+# Todas las empresas con filings entran; la que no habla de IA queda con los
+# dos ejes en el prior (centro de la grilla) y confianza 1 por construcción.
+from ai_intensity import firm_intensity
 LEVELS = {3: ["baja", "media", "alta"], 2: ["baja", "alta"], 4: ["q1", "q2", "q3", "q4"]}
 CORNERS = {
     ("alta", "baja"): "washing (voz alta, conducta baja)",
@@ -76,6 +77,13 @@ def axes(frames: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
     out = df.groupby(keys)[["voz", "comportamiento"]].mean()
     out["n_frames"] = df.groupby(keys).size()
     return out.reset_index()
+
+
+def with_universe(table: pd.DataFrame, universe: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
+    out = universe[keys + ["frames_per_1k"]].merge(table, on=keys, how="left")
+    out["n_frames"] = out["n_frames"].fillna(0).astype(int)
+    out[["voz", "comportamiento"]] = out[["voz", "comportamiento"]].fillna(0.0)
+    return out
 
 
 def shrink_axes(table: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
@@ -119,8 +127,8 @@ def stability(frames: pd.DataFrame, reference: pd.DataFrame, bins: int,
         positions = np.concatenate([
             rng.choice(idx, size=len(idx), replace=True)
             for idx in frames.groupby("ticker").indices.values()])
-        sample = axes(frames.iloc[positions], ["ticker"])
-        sample = sample[sample["ticker"].isin(baseline.index)]
+        sample = with_universe(axes(frames.iloc[positions], ["ticker"]),
+                               reference[["ticker", "frames_per_1k"]], ["ticker"])
         labels = assign(sample, ["ticker"], bins)[0].set_index("ticker")
         common = baseline.index.intersection(labels.index)
         matched = baseline.loc[common, "celda"].values == labels.loc[common, "celda"].values
@@ -163,11 +171,13 @@ def main() -> None:
     con = duckdb.connect(str(args.database), read_only=True)
     try:
         frames = load_frames(con)
+        universe = firm_intensity(con, ["ticker"])
+        universe_year = firm_intensity(con, ["ticker", "year"])
     finally:
         con.close()
-    pooled = axes(frames, ["ticker"])
-    pooled = pooled[pooled["n_frames"] >= MIN_FRAMES].reset_index(drop=True)
-    print(f"{len(frames):,} frames | {len(pooled):,} empresas con >= {MIN_FRAMES} frames")
+    pooled = with_universe(axes(frames, ["ticker"]), universe, ["ticker"])
+    print(f"{len(frames):,} frames | {len(pooled):,} empresas con filings, "
+          f"{int((pooled['n_frames'] == 0).sum())} sin ningún frame de IA")
     print(f"eje VOZ: media {pooled['voz'].mean()*100:.1f}% de las afirmaciones | "
           f"eje CONDUCTA: media {pooled['comportamiento'].mean()*100:.1f}%")
     correlation = pooled[["voz", "comportamiento"]].corr().iloc[0, 1]
@@ -203,8 +213,7 @@ def main() -> None:
     print("\nconfianza mediana por celda:")
     print(assigned.groupby("celda")["confianza_celda"].median().round(2).to_string())
 
-    panel = axes(frames, ["ticker", "year"])
-    panel = panel[panel["n_frames"] >= MIN_FRAMES_YEAR].reset_index(drop=True)
+    panel = with_universe(axes(frames, ["ticker", "year"]), universe_year, ["ticker", "year"])
     # Mismos cortes que el pooled: las celdas tienen que significar lo mismo en
     # 2021 y en 2026 o la serie de tiempo no dice nada.
     panel_assigned, _ = assign(panel, ["ticker", "year"], args.bins, edges)

@@ -24,7 +24,7 @@ está el script que lo produce.
 | 9 | El "DiD de tendencia" SEC/DeepSeek estaba mal construido | **CERRADO** — rehecho; el estimando original era mecánico, el nuevo es un cambio diferencial válido (no causal) |
 | 10 | ROIC−WACC mezclaba valor libro y de mercado | **CERRADO** — y medido: no cambiaba el ordenamiento |
 | 11 | K-means con silhouette 0,15 sostiene 4 categorías | **CERRADO** — reemplazado por 3 segmentos estables (`11_segmentacion.md`) |
-| 12 | El panel empresa-año tiene entrada endógena | **MITIGADO** (paneles extensivos en 02/05/13/14; abierto en 09/11/12) |
+| 12 | El panel empresa-año tiene entrada endógena | **CERRADO** en el modo extensivo (02-05, 08, 11-14); queda en los arquetipos de 07/08 y el test binomial de 09 |
 
 ---
 
@@ -281,9 +281,10 @@ afirmación más expuesta.
 tabla de todos los documentos con sus párrafos y conteos de frames, cero
 incluido, y sobre ella corren el cruce financiero (`firm_year_master_v2`,
 2.964 empresas-año), los shocks, la brecha entre canales y el score de
-washing en intensidad. Queda por construcción en los objetos sobre cómo se
-habla de IA —arquetipos, segmentos, grilla, test binomial— que no existen para
-quien no habla.
+washing en intensidad; segmentos (`11`) y grilla (`12`) se construyen sobre
+las 510 empresas con la intensidad como dimensión. Queda por construcción en
+los arquetipos de voz de `07`/`08` y en el test binomial de `09`, que
+necesitan frames para existir.
 
 ## Qué NO arregla el trabajo del prefiltro
 

@@ -59,8 +59,10 @@ from sklearn.preprocessing import StandardScaler
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_firm_clusters import DB, OUT_DIR, SEED, load_frames, shrink_rates
 
-MIN_FRAMES = 8          # por empresa, para el pooled
-MIN_FRAMES_YEAR = 4     # por empresa-año, para el panel
+# Todas las empresas con filings entran. La que no habla de IA tiene sus tasas
+# en el prior (encogimiento con n=0) y su intensidad en cero: es una empresa
+# más, no una excluida. Nada condiciona a hablar de IA.
+from ai_intensity import firm_intensity
 K_RANGE = (2, 3, 4, 5)
 STABILITY_FLOOR = 0.60
 
@@ -82,6 +84,11 @@ FEATURES = {
 DERIVED = ("pct_riesgo", "pct_gobernanza", "pct_promocional", "pct_cuantificado",
            "pct_hipotetico", "pct_producto")
 ALL_FEATURES = list(FEATURES) + list(DERIVED)
+# Cuánto del filing se dedica a IA (frames por 1.000 párrafos, en log). Es la
+# dimensión que separa a quien no habla de quien habla; las tasas de arriba
+# sólo dicen cómo habla quien habla.
+INTENSITY = "intensidad_ia"
+MATRIX_FEATURES = ALL_FEATURES + [INTENSITY]
 
 
 def firm_features(frames: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
@@ -103,15 +110,31 @@ def firm_features(frames: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
     return out.reset_index()
 
 
+def with_universe(features: pd.DataFrame, universe: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
+    """Reindexa las tasas a TODAS las unidades con filings. Sin frames: tasas 0
+    con n_frames 0 (el encogimiento las lleva exactamente al prior) e
+    intensidad = log(1 + frames por 1.000 párrafos)."""
+    out = universe[keys + ["frames_per_1k"]].merge(features, on=keys, how="left")
+    out["n_frames"] = out["n_frames"].fillna(0).astype(int)
+    out[ALL_FEATURES] = out[ALL_FEATURES].fillna(0.0)
+    out[INTENSITY] = np.log1p(out["frames_per_1k"])
+    return out
+
+
+def shrunk_matrix(features: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
+    idx = features.set_index(keys)
+    shrunk = shrink_rates(idx[ALL_FEATURES], idx["n_frames"])
+    shrunk[INTENSITY] = idx[INTENSITY]
+    return shrunk
+
+
 def matrix(features: pd.DataFrame) -> np.ndarray:
-    """Tasas encogidas hacia el promedio y estandarizadas.
+    """Tasas encogidas hacia el promedio, más la intensidad, estandarizadas.
 
     El encogimiento es lo que impide que una empresa con 8 frames pese igual
     que una con 500: su tasa se corre hacia el promedio del corpus en
-    proporción a lo poco que se sabe de ella."""
-    rates = features.set_index("ticker")[ALL_FEATURES]
-    shrunk = shrink_rates(rates, features.set_index("ticker")["n_frames"])
-    return StandardScaler().fit_transform(shrunk.values)
+    proporción a lo poco que se sabe de ella; con 0 frames queda en el prior."""
+    return StandardScaler().fit_transform(shrunk_matrix(features, ["ticker"]).values)
 
 
 def jaccard(a: np.ndarray, b: np.ndarray) -> float:
@@ -119,10 +142,10 @@ def jaccard(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.logical_and(a, b).sum() / union) if union else 0.0
 
 
-def stability(frames: pd.DataFrame, k: int, replicates: int, seed: int = SEED) -> np.ndarray:
+def stability(frames: pd.DataFrame, universe: pd.DataFrame, k: int, replicates: int,
+              seed: int = SEED) -> np.ndarray:
     """Jaccard medio por segmento remuestreando los frames de cada empresa."""
-    base = firm_features(frames, ["ticker"])
-    base = base[base["n_frames"] >= MIN_FRAMES]
+    base = with_universe(firm_features(frames, ["ticker"]), universe, ["ticker"])
     reference = KMeans(n_clusters=k, random_state=SEED, n_init=10).fit_predict(matrix(base))
     rng = np.random.default_rng(seed)
     scores = np.zeros((replicates, k))
@@ -130,10 +153,8 @@ def stability(frames: pd.DataFrame, k: int, replicates: int, seed: int = SEED) -
         positions = np.concatenate([
             rng.choice(idx, size=len(idx), replace=True)
             for idx in frames.groupby("ticker").indices.values()])
-        sample = firm_features(frames.iloc[positions], ["ticker"])
+        sample = with_universe(firm_features(frames.iloc[positions], ["ticker"]), universe, ["ticker"])
         sample = sample.set_index("ticker").reindex(base["ticker"]).reset_index()
-        sample[ALL_FEATURES] = sample[ALL_FEATURES].fillna(sample[ALL_FEATURES].mean())
-        sample["n_frames"] = sample["n_frames"].fillna(MIN_FRAMES)
         labels = KMeans(n_clusters=k, random_state=SEED, n_init=10).fit_predict(matrix(sample))
         for cluster in range(k):
             scores[replicate, cluster] = max(
@@ -154,6 +175,7 @@ FEATURE_NAMES = {
     "pct_promocional": "promocionales",
     "pct_cuantificado": "cuantificadores",
     "pct_terceros": "integradores_de_terceros",
+    INTENSITY: "intensivos_en_ia",
 }
 
 
@@ -169,7 +191,9 @@ def name_segments(profile: pd.DataFrame) -> dict[int, str]:
     z = (profile - profile.mean()) / profile.std(ddof=0).replace(0, np.nan)
     names, used = {}, set()
     for cluster in z.index:
-        ordered = z.loc[cluster].sort_values(ascending=False)
+        if INTENSITY in z.columns and z.loc[cluster, INTENSITY] <= -1.0 and "silentes" not in used:
+            names[cluster] = "silentes"; used.add("silentes"); continue   # casi no habla de IA
+        ordered = z.loc[cluster].drop(labels=[INTENSITY], errors="ignore").sort_values(ascending=False)
         for feature in ordered.index:
             candidate = FEATURE_NAMES.get(feature)
             if candidate and candidate not in used:
@@ -192,18 +216,20 @@ def main() -> None:
     con = duckdb.connect(str(args.database), read_only=True)
     try:
         frames = load_frames(con)
+        universe = firm_intensity(con, ["ticker"])
+        universe_year = firm_intensity(con, ["ticker", "year"])
     finally:
         con.close()
-    pooled = firm_features(frames, ["ticker"])
-    pooled = pooled[pooled["n_frames"] >= MIN_FRAMES].reset_index(drop=True)
-    print(f"{len(frames):,} frames | {len(pooled):,} empresas con >= {MIN_FRAMES} frames\n")
+    pooled = with_universe(firm_features(frames, ["ticker"]), universe, ["ticker"])
+    print(f"{len(frames):,} frames | {len(pooled):,} empresas con filings, "
+          f"{int((pooled['n_frames'] == 0).sum())} sin ningún frame de IA\n")
 
     print("=" * 74)
     print(f"ELECCIÓN DE k POR ESTABILIDAD ({args.bootstrap} réplicas, piso {STABILITY_FLOOR})")
     print("=" * 74)
     chosen, stabilities = None, {}
     for k in K_RANGE:
-        scores = stability(frames, k, args.bootstrap)
+        scores = stability(frames, universe, k, args.bootstrap)
         stabilities[k] = scores
         ok = "sí" if scores.min() >= STABILITY_FLOOR else "NO"
         print(f"k={k}: " + " ".join(f"{s:.2f}" for s in scores) +
@@ -216,7 +242,7 @@ def main() -> None:
     X = matrix(pooled)
     model = KMeans(n_clusters=k, random_state=SEED, n_init=10).fit(X)
     pooled["cluster"] = model.labels_
-    profile = pooled.groupby("cluster")[ALL_FEATURES].mean()
+    profile = pooled.groupby("cluster")[MATRIX_FEATURES].mean()
     labels = name_segments(profile)
     pooled["segmento"] = pooled["cluster"].map(labels)
     pooled["estabilidad_segmento"] = pooled["cluster"].map(
@@ -227,6 +253,7 @@ def main() -> None:
     print("=" * 74)
     display = (pooled.groupby("segmento")[ALL_FEATURES].mean() * 100).round(1)
     display.insert(0, "empresas", pooled.groupby("segmento").size())
+    display.insert(1, "frames_por_1k", pooled.groupby("segmento")["frames_per_1k"].median().round(2))
     display.insert(1, "frames_medianos", pooled.groupby("segmento")["n_frames"].median())
     display.insert(2, "estabilidad", pooled.groupby("segmento")["estabilidad_segmento"]
                    .first().round(2))
@@ -239,13 +266,9 @@ def main() -> None:
         closest = pooled.loc[rows].assign(d=distances[rows, cluster]).nsmallest(8, "d")
         print(f"  {name:28s} {', '.join(closest['ticker'])}")
 
-    panel = firm_features(frames, ["ticker", "year"])
-    panel = panel[panel["n_frames"] >= MIN_FRAMES_YEAR].reset_index(drop=True)
-    panel_rates = panel.set_index(["ticker", "year"])[ALL_FEATURES]
-    panel_shrunk = shrink_rates(panel_rates, panel.set_index(["ticker", "year"])["n_frames"])
-    scaler = StandardScaler().fit(
-        shrink_rates(pooled.set_index("ticker")[ALL_FEATURES],
-                     pooled.set_index("ticker")["n_frames"]).values)
+    panel = with_universe(firm_features(frames, ["ticker", "year"]), universe_year, ["ticker", "year"])
+    panel_shrunk = shrunk_matrix(panel, ["ticker", "year"])
+    scaler = StandardScaler().fit(shrunk_matrix(pooled, ["ticker"]).values)
     panel["cluster"] = model.predict(scaler.transform(panel_shrunk.values))
     panel["segmento"] = panel["cluster"].map(labels)
     transitions = (panel.sort_values(["ticker", "year"])
@@ -260,7 +283,7 @@ def main() -> None:
     panel.to_parquet(args.output_dir / "firm_year_segments.parquet", index=False)
     (args.output_dir / "firm_segments_manifest.json").write_text(json.dumps({
         "k": k, "stability_by_k": {str(kk): list(v) for kk, v in stabilities.items()},
-        "features": ALL_FEATURES, "min_frames": MIN_FRAMES,
+        "features": MATRIX_FEATURES, "min_frames": 0,
         "persistence_year_over_year": persistence,
         "built_at": datetime.now(timezone.utc).isoformat()}, indent=2, default=float))
     print(f"\n-> {args.output_dir}/firm_segments.parquet ({len(pooled):,} empresas)")

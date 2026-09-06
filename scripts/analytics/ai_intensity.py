@@ -128,3 +128,14 @@ if __name__ == "__main__":
                                    parrafos=("n_paragraphs", "sum"), frames=("n_frames", "sum")).to_string())
     fy = aggregate(docs, ["ticker", "fy"], forms=FILING_FORMS)
     print(f"\nempresa-ejercicio (filings): {len(fy):,} | con IA: {int(fy.any_ai.sum()):,} | promo/1k media {fy.promo_per_1k.mean():.2f}")
+
+
+def firm_intensity(con: duckdb.DuckDBPyConnection, keys: list[str] = ("ticker",)) -> pd.DataFrame:
+    """Intensidad de IA de los FILINGS por empresa (o empresa-año): todas las
+    empresas con filings, incluidas las que no hablan de IA (frames_per_1k = 0).
+    Es la lista de unidades sobre la que se construyen segmentos y grilla:
+    una empresa sin frames entra con sus tasas en el prior y su intensidad en
+    cero, no se excluye."""
+    docs = document_table(con)
+    docs = docs[docs["form"].isin(FILING_FORMS)].assign(year=lambda d: d["fecha"].dt.year)
+    return aggregate(docs, list(keys))[list(keys) + ["n_docs", "n_paragraphs", "n_frames", "frames_per_1k", "any_ai"]]
