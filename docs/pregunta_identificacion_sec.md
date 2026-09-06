@@ -136,13 +136,34 @@ SEC, mismo boom.
 *Duda*: la medición no está validada fuera de EE.UU., los regímenes de
 divulgación no son comparables y el idioma cambia.
 
+## 4.bis. Encuadre: qué exige realmente la propuesta de tesis
+
+La propuesta plantea las técnicas cuasi-causales como una **posibilidad** para
+las preguntas extendidas ("timeseries analysis and quasi-causal techniques like
+DiD **may** be used"), y su aporte esperado es un *practical disclosure-risk
+framework* para managers, IR y directorios. El núcleo es medición → arquetipos →
+evolución → análisis de shocks. **No es una tesis de econometría regulatoria cuyo
+aporte sea un ATT limpio.**
+
+Eso separa cuatro afirmaciones que conviene no colapsar:
+
+| nivel | afirmación | exigencia |
+|---|---|---|
+| principal | qué arquetipos de divulgación existen | ninguna |
+| temporal | cómo evolucionan | ninguna |
+| shock | el grupo A cambió distinto que el B tras el evento | tratamiento exógeno al outcome, FE, SE clusterizados, pre-tendencias planas |
+| causal | el enforcement causó el cambio | además, variación que separe el evento de todo lo demás de esa fecha |
+
+El intento 1 falla incluso en el tercer nivel, y no por causalidad: su
+tratamiento ES el outcome. El intento 3 sí sostiene el tercer nivel. Ninguno
+sostiene el cuarto, y probablemente ninguno pueda con estos datos.
+
 ## 5. Las preguntas concretas
 
-1. **¿Corresponde un DiD?** La pregunta extendida ("¿cambiaron las empresas tras
-   el escrutinio?") quizá no sea causalmente respondible con un shock común y sin
-   control limpio. ¿Es más defendible reportar una **serie interrumpida
-   descriptiva** con los confusores declarados, o un diseño de canal, o
-   directamente bajar la pretensión a "describimos qué pasó, sin atribuir"?
+1. **¿Hasta qué nivel de la tabla de 4.bis conviene llegar?** Dado que la
+   propuesta pide "cambio diferencial" y no un ATT, ¿alcanza con el intento 3
+   reportado como asociativo, o vale la pena pagar el costo del diseño de canal
+   para poder decir algo causal?
 2. Si va DiD: de los candidatos A-E, ¿cuál aguanta un referato, y con qué
    supuesto explícito?
 3. ¿Hay una fuente de variación que no se me ocurrió? (¿Timing escalonado por

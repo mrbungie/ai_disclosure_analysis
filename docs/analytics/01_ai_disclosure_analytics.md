@@ -633,7 +633,7 @@ financieros.
 
 ## SEC 2024 y DeepSeek: ¿cambió la TENDENCIA, no el nivel?
 
-> **RETIRADO (2026-09-06).** Rehecho como event study empresa-trimestre con
+> **REINTERPRETADO, no retirado (2026-09-06).** Rehecho como event study empresa-trimestre con
 > efectos fijos de empresa y de trimestre y errores estándar clusterizados por
 > empresa (`scripts/analytics/sec_event_study.py`), **todos los outcomes fallan
 > el test de tendencias paralelas**: la diferencia entre el grupo "vago" y el
@@ -643,7 +643,19 @@ financieros.
 >
 > Eso es una diferencia permanente entre grupos —que es lo esperable, porque
 > los grupos se definieron justamente por esas métricas— y no un efecto del
-> evento. La lectura de abajo ("el grupo específico reacciona, el vago no") es
+> evento.
+>
+> **Qué significa eso y qué no.** La propuesta de tesis plantea técnicas
+> cuasi-causales como una POSIBILIDAD para las preguntas extendidas
+> ("timeseries analysis and quasi-causal techniques like DiD **may** be used"),
+> no como el diseño central. El núcleo es medición → arquetipos → evolución. Así
+> que el problema acá no es que la tesis dependa de identificar el efecto de la
+> SEC: es que **este análisis específico no sostiene ni siquiera su lectura
+> descriptiva**, por una razón que no tiene que ver con causalidad — el grupo se
+> definió por el nivel pre-evento de la misma variable que después se mide, y
+> esa convergencia es mecánica. Un análisis de "cambio diferencial" sigue siendo
+> legítimo y es lo que la propuesta pide; sólo hay que construirlo con un
+> tratamiento que no sea el propio outcome, y llamarlo por su nombre. La lectura de abajo ("el grupo específico reacciona, el vago no") es
 > un artefacto del diseño anterior: una regresión segmentada sobre medias
 > trimestrales por grupo, sin efectos fijos, con la composición del grupo
 > cambiando cada trimestre y con reversión a la media incorporada por
@@ -674,13 +686,20 @@ financieros.
 > corte, referencia t−1): t−6 +0,00, t−5 +0,01, t−4 +0,03, t−3 +0,14, t−2 +0,08
 > | t+0 +0,07, t+1 **+0,12\***, t+2 **+0,08\***, t+4 **+0,11\***.
 >
-> **Lectura, con el caveat que la hace honesta**: las empresas que ya hablaban
-> más de IA se volvieron MÁS promocionales después del primer trimestre de 2024,
-> no menos — lo contrario de la hipótesis de la propuesta. Pero el evento es
-> común en el tiempo, así que ese coeficiente recoge **todo** lo que le pasó a
-> las empresas expuestas a IA después de marzo 2024, y el boom de IA generativa
-> es la explicación alternativa obvia. No se puede atribuir a la SEC sin una
-> fuente de variación que separe a las dos cosas.
+> **Lectura, y con qué fuerza.** Las empresas que ya hablaban más de IA se
+> volvieron MÁS promocionales después del primer trimestre de 2024, no menos —
+> lo contrario de la hipótesis de la propuesta. Esta especificación **sí**
+> sostiene esa afirmación como **cambio diferencial**: el tratamiento no es el
+> outcome, hay efectos fijos de empresa y trimestre, el panel está balanceado,
+> los errores están clusterizados y las tendencias pre-evento son planas
+> (p=0,32).
+>
+> Lo que NO sostiene es la atribución al regulador. El evento es común en el
+> tiempo, así que el coeficiente recoge todo lo que le pasó a las empresas
+> expuestas a IA después de marzo 2024, y el boom de IA generativa es la
+> explicación alternativa obvia. La forma correcta de reportarlo en la tesis es
+> como **cambio diferencial post-evento**, no como efecto del enforcement. Ver
+> `docs/pregunta_identificacion_sec.md` para qué haría falta para lo segundo.
 >
 > El nulo de `risk_share` sí es limpio: pasa tendencias paralelas y el efecto es
 > cero (p=0,71). Las empresas expuestas no agregaron lenguaje de riesgo tras el

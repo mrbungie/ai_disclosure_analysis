@@ -21,7 +21,7 @@ está el script que lo produce.
 | 6 | Marco muestral y potencia (sólo large caps) | **DESCARTADO por decisión del autor** |
 | 7 | `gold_ai_frames` acumulaba la unión histórica de despliegues | **CERRADO** |
 | 8 | El lado contable/mercado no tenía código que lo generara | **CERRADO** |
-| 9 | El "DiD de tendencia" SEC/DeepSeek no es un DiD | **CERRADO** — rehecho identificable; el hallazgo original se cae y aparece uno nuevo |
+| 9 | El "DiD de tendencia" SEC/DeepSeek estaba mal construido | **CERRADO** — rehecho; el estimando original era mecánico, el nuevo es un cambio diferencial válido (no causal) |
 | 10 | ROIC−WACC mezclaba valor libro y de mercado | **CERRADO** — y medido: no cambiaba el ordenamiento |
 | 11 | K-means con silhouette 0,15 sostiene 4 categorías | **CERRADO** — reemplazado por 3 segmentos estables (`11_segmentacion.md`) |
 | 12 | El panel empresa-año tiene entrada endógena | **ABIERTO** |
@@ -147,7 +147,24 @@ script original nunca se versionó y se perdió. Escritos y verificados contra l
 copias archivadas (retornos idénticos a 1e-6, ratios con correlación 0,98-1,00);
 ver `10_builders_y_recalculo.md`. Todo corre con `make analytics`.
 
-## 9. El "DiD de tendencia" SEC/DeepSeek no es un DiD — CERRADO, y el hallazgo no sobrevive
+## 9. El "DiD de tendencia" SEC/DeepSeek estaba mal construido — CERRADO
+
+**Encuadre primero, porque la primera versión de esta ficha lo tenía mal.** La
+propuesta de tesis plantea las técnicas cuasi-causales como posibilidad para las
+preguntas extendidas ("quasi-causal techniques like DiD **may** be used"), no
+como el diseño central; el núcleo es medición → arquetipos → evolución. Evaluar
+este análisis como si la tesis dependiera de identificar el ATT del enforcement
+fue un error de alcance mío. Hay tres niveles distintos y hay que no
+confundirlos:
+
+| afirmación | exigencia |
+|---|---|
+| "las empresas se ven así y se agrupan así" | ninguna |
+| "esto evolucionó de esta forma" | ninguna |
+| "el grupo A cambió distinto que el B después del evento" | tratamiento exógeno al outcome, FE, SE clusterizados, pre-tendencias |
+| "el enforcement lo causó" | además, variación que separe el evento de todo lo demás que pasó esa fecha |
+
+Lo que sigue aplica al tercer nivel, que es el que la propuesta pide.
 
 `01_...md` compara empresas "vagas" contra "específicas" antes y después de
 marzo 2024 con una regresión segmentada sobre medias trimestrales por grupo.
