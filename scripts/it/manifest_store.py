@@ -17,10 +17,13 @@ newest row per `document_id`, which is the same rule
 build_duckdb.py's `ai_prefilter_scores` view uses over its own append-only
 score parts.
 
-`filing_manifest.parquet` still exists, because build_duckdb.py's
-per-country UNION reads it by that exact name. It is now a DERIVED
-SNAPSHOT — recomputed from the parts, never the source of truth — so
-overwriting it destroys nothing that the parts cannot reproduce.
+There is no snapshot file and nothing to rewrite. An earlier version kept
+`filing_manifest.parquet` as a "derived snapshot" recomputed on every
+flush — which is the same whole-file rewrite wearing a different label, and
+still something two processes could fight over. build_duckdb.py reads the
+glob instead, and the pre-existing single file is simply MOVED once to
+`filing_manifest__run=legacy__part=0000.parquet`: it becomes one more part,
+never touched again.
 """
 
 from __future__ import annotations
@@ -40,14 +43,16 @@ def part_paths(manifest_dir: Path) -> list[Path]:
 def read(manifest_dir: Path) -> pd.DataFrame:
     """Every filing known so far, newest row per document_id.
 
-    The legacy single-file snapshot is read FIRST and treated as the oldest
-    source, so a manifest written before this module existed is picked up
-    rather than orphaned — and any part overrides it, which is what makes
-    the migration a no-op instead of a re-fetch.
+    The single legacy file is ALWAYS unioned in when present, not only when
+    no parts exist. A process started before this change is still writing
+    it, and treating it as "superseded once a part appears" would silently
+    drop whatever that process had fetched. Deduplication by
+    `updated_at` sorts that out without either side needing to know about
+    the other.
     """
     frames = []
     legacy = manifest_dir / SNAPSHOT_NAME
-    if legacy.exists() and not part_paths(manifest_dir):
+    if legacy.exists():
         frames.append(pd.read_parquet(legacy))
     for path in part_paths(manifest_dir):
         try:
@@ -72,12 +77,15 @@ def append(rows: list[dict], manifest_dir: Path, run_id: str, part_num: int) -> 
     return path
 
 
-def write_snapshot(manifest_dir: Path) -> Path:
-    """Recomputes `filing_manifest.parquet` from the parts, for
-    build_duckdb.py to read by name. Derived, so this overwrite is safe:
-    delete it and this function rebuilds it exactly."""
-    snapshot = read(manifest_dir)
-    path = manifest_dir / SNAPSHOT_NAME
-    if not snapshot.empty:
-        snapshot.to_parquet(path, index=False)
-    return path
+def adopt_legacy_file(manifest_dir: Path, run_id: str = "legacy") -> Path | None:
+    """One-time MOVE of a pre-existing `filing_manifest.parquet` into the
+    part naming, so it stops being a special case. A rename, never a
+    rewrite: the bytes are untouched and no row is recomputed."""
+    legacy = manifest_dir / SNAPSHOT_NAME
+    if not legacy.exists():
+        return None
+    target = manifest_dir / f"filing_manifest__run={run_id}__part=0000.parquet"
+    if target.exists():
+        return target
+    legacy.rename(target)
+    return target

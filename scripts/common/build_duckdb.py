@@ -107,6 +107,41 @@ def _existing(path_pattern: str) -> bool:
     return len(glob.glob(path_pattern)) > 0
 
 
+def _manifest_source(stem: str) -> str | None:
+    """The FROM clause for one manifest, whether it is a single file or
+    append-only parts.
+
+    Italy's fetchers write `filing_manifest__run=<id>__part=<n>.parquet` and
+    never rewrite one (see scripts/it/manifest_store.py); the US and Chile
+    still write a single file. Both are read here, and a country mid-
+    migration — parts alongside the file it was moved from — reads as one
+    manifest either way.
+
+    With parts, the newest row per `document_id` wins, by `updated_at`.
+    That is the same rule `ai_prefilter_scores` below applies over its own
+    append-only parts, and it is what lets a re-run correct an earlier row
+    by appending rather than by rewriting anything.
+    """
+    single, glob_pattern = f"{stem}.parquet", f"{stem}__run=*__part=*.parquet"
+    sources = []
+    if _existing(single):
+        sources.append(single)
+    if _existing(glob_pattern):
+        sources.append(glob_pattern)
+    if not sources:
+        return None
+    if sources == [single]:
+        return f"read_parquet('{single}')"
+    reads = " UNION ALL BY NAME ".join(f"SELECT * FROM read_parquet('{s}', union_by_name=True)"
+                                       for s in sources)
+    return f"""(
+            SELECT * FROM ({reads})
+            QUALIFY row_number() OVER (
+                PARTITION BY document_id ORDER BY updated_at DESC
+            ) = 1
+        )"""
+
+
 def _filing_manifest_selects(countries: list[tuple[str, dict]], dirs) -> list[str]:
     """One SELECT per country for the `filing_manifest` view, UNIONing in
     `filing_manifest_proxy.parquet` (and, later, 8-K/comment-letter
@@ -121,16 +156,14 @@ def _filing_manifest_selects(countries: list[tuple[str, dict]], dirs) -> list[st
     selects = []
     for country, cfg in countries:
         manifests_dir = dirs(cfg)[0]
-        base_path = f"{manifests_dir}/filing_manifest.parquet"
-        if not _existing(base_path):
+        base_path = _manifest_source(f"{manifests_dir}/filing_manifest")
+        if base_path is None:
             continue
-        parts = [f"SELECT '{country}' AS country_code, * FROM read_parquet('{base_path}')"]
-        proxy_path = f"{manifests_dir}/filing_manifest_proxy.parquet"
-        if _existing(proxy_path):
-            parts.append(f"SELECT '{country}' AS country_code, * FROM read_parquet('{proxy_path}')")
-        eightk_path = f"{manifests_dir}/filing_manifest_8k.parquet"
-        if _existing(eightk_path):
-            parts.append(f"SELECT '{country}' AS country_code, * FROM read_parquet('{eightk_path}')")
+        parts = [f"SELECT '{country}' AS country_code, * FROM {base_path}"]
+        for extra in ("filing_manifest_proxy", "filing_manifest_8k"):
+            source = _manifest_source(f"{manifests_dir}/{extra}")
+            if source:
+                parts.append(f"SELECT '{country}' AS country_code, * FROM {source}")
         selects.append("\n            UNION ALL BY NAME\n            ".join(parts))
     return selects
 

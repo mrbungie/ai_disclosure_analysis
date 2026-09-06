@@ -143,9 +143,6 @@ def main() -> None:
         if manifest_store.append(fetched, manifest_dir, run_id, part_num):
             part_num += 1
             fetched = []
-        # The snapshot build_duckdb.py reads by name, recomputed from the
-        # parts rather than written from memory.
-        manifest_store.write_snapshot(manifest_dir)
 
     done = 0
     for document_id, attributes, name, lei, period_end, local_path in tqdm(pending):

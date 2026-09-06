@@ -135,15 +135,6 @@ def main() -> None:
                 index=False)
             part_num += 1
             written = []
-        # Derived snapshot, rebuildable from the parts at any time.
-        frames = [pd.read_parquet(p) for p in
-                  sorted(manifest_dir.glob("xbrl_facts_manifest__run=*__part=*.parquet"))]
-        if manifest_path.exists() and not frames:
-            return
-        if frames:
-            snap = pd.concat(frames, ignore_index=True)
-            snap.drop_duplicates(subset="document_id", keep="last").to_parquet(
-                manifest_path, index=False)
 
     for i, (attributes, lei, period_end, local_path) in enumerate(tqdm(pending), 1):
         document_id = attributes["fxo_id"]
@@ -168,7 +159,10 @@ def main() -> None:
             flush()
 
     flush()
-    manifest = pd.read_parquet(manifest_path) if manifest_path.exists() else pd.DataFrame()
+    frames = [pd.read_parquet(f) for f in
+              sorted(manifest_dir.glob("xbrl_facts_manifest__run=*__part=*.parquet"))]
+    manifest = (pd.concat(frames, ignore_index=True).drop_duplicates("document_id", keep="last")
+                if frames else pd.DataFrame())
     ok = manifest[manifest.download_status == "completed"] if len(manifest) else manifest
     pipeline_logger.log_event(
         pipeline_step="it_fetch_xbrl", level="SUCCESS",
