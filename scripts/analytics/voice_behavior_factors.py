@@ -50,30 +50,48 @@ from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_firm_clusters import (BEHAVIOR_CONCEPTS, DB, OUT_DIR, POOLED_MIN_FRAMES, SEED,
-                                 VOICE_FEATURES, concept_shares, domain_shares,
-                                 load_frames, shrink_rates, voice_metrics)
+                                 VOICE_FEATURES, load_frames, shrink_rates, voice_metrics)
+from behavior_block_eval import concept_matrix, aggregate
 
-BEHAVIOR_FEATURES = [f"behavior_share_{c}" for c in BEHAVIOR_CONCEPTS] + \
-                    ["domain_share_customer_facing", "domain_share_internal"]
+BEHAVIOR_FEATURES = BEHAVIOR_CONCEPTS + ["domain_customer_facing", "domain_internal"]
 
 
 def firm_blocks(frames: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series]:
-    """Los dos bloques de tasas por empresa, más el conteo que las sostiene."""
+    """Voz como tasas encogidas; conducta como LOG-CONTEOS residualizados por
+    volumen.
+
+    La conducta se agregaba como tasas y eso destruía la señal: medido con
+    confiabilidad split-half (`behavior_block_eval.py`), la mediana de las tasas
+    es 0,53 y la de los log-conteos 0,85 — `ai_infrastructure` pasa de 0,53 a
+    0,85 y `proprietary_ai` de 0,43 a 0,83. Una tasa es una forma pésima de
+    resumir un concepto que aparece en el 2% de los frames: tres menciones sobre
+    300 frames y una sobre 100 dan la misma tasa con evidencia muy distinta.
+
+    Pero el conteo crudo mide en buena parte cuánto habla la empresa (el volumen
+    explica 78-86% del log-conteo de `deployed` y de los dominios), así que se
+    lo residualiza contra `log(n_frames)`. Lo que queda es "cuánta conducta
+    describe MÁS de la que su volumen predice", que es la pregunta correcta y
+    además separa los bloques: la correlación canónica con la voz baja de 0,89 a
+    0,77 (varianza compartida 80% -> 59%) y el bloque pasa de tener un factor a
+    tener tres interpretables."""
     voice = voice_metrics(frames, ["ticker"]).set_index("ticker")
     counts = voice["n_frames"]
-    behavior = concept_shares(frames, ["ticker"], BEHAVIOR_CONCEPTS)
-    behavior.columns = [f"behavior_share_{c}" for c in behavior.columns]
-    domains = domain_shares(frames, ["ticker"])
-    domains.columns = [f"domain_share_{c}" for c in domains.columns]
-    block = behavior.join(domains)
     keep = counts >= POOLED_MIN_FRAMES
-    return (voice.loc[keep, VOICE_FEATURES],
-            block.loc[keep, [c for c in BEHAVIOR_FEATURES if c in block.columns]],
-            counts[keep])
+    matrix = concept_matrix(frames)
+    log_counts = aggregate(matrix, "log_conteo")
+    block = log_counts.loc[voice.index[keep], BEHAVIOR_FEATURES]
+    exposure = np.log(counts[keep].values).reshape(-1, 1)
+    residualized = block.values - LinearRegression().fit(exposure, block.values).predict(exposure)
+    block = pd.DataFrame(residualized, index=block.index, columns=block.columns)
+    return voice.loc[keep, VOICE_FEATURES], block, counts[keep]
 
 
-def standardize(rates: pd.DataFrame, counts: pd.Series) -> np.ndarray:
-    return StandardScaler().fit_transform(shrink_rates(rates, counts).values)
+def standardize(rates: pd.DataFrame, counts: pd.Series, shrink: bool = True) -> np.ndarray:
+    """El encogimiento empírico-Bayes aplica a TASAS. El bloque de conducta ya
+    viene como residuos de log-conteo, que no son tasas: se estandariza y
+    nada más."""
+    values = shrink_rates(rates, counts) if shrink else rates
+    return StandardScaler().fit_transform(values.values)
 
 
 def orient(scores: np.ndarray, reference: pd.Series, column: int = 0) -> np.ndarray:
@@ -102,7 +120,7 @@ def main() -> None:
           f"{len(VOICE_FEATURES)} tasas de voz x {behavior_rates.shape[1]} de comportamiento")
 
     V = standardize(voice_rates, counts)
-    B = standardize(behavior_rates, counts)
+    B = standardize(behavior_rates, counts, shrink=False)
 
     print("\n" + "=" * 74)
     print("1. FACTORES POR BLOQUE (cargas)")
@@ -110,8 +128,7 @@ def main() -> None:
     voice_fa = FactorAnalysis(n_components=2, random_state=SEED).fit(V)
     behavior_fa = FactorAnalysis(n_components=2, random_state=SEED).fit(B)
     voice_scores = orient(voice_fa.transform(V), voice_rates["risk_share"])
-    behavior_scores = orient(behavior_fa.transform(B),
-                             behavior_rates["behavior_share_deployed"])
+    behavior_scores = orient(behavior_fa.transform(B), behavior_rates["deployed"])
     print("VOZ:")
     print(pd.DataFrame(voice_fa.components_.T, index=VOICE_FEATURES,
                        columns=["voz_1", "voz_2"]).round(2).to_string())
@@ -150,7 +167,7 @@ def main() -> None:
         common = vr.index.intersection(voice_rates.index)
         u, t_ = CCA(n_components=1, max_iter=500).fit_transform(
             standardize(vr.loc[common], cn.loc[common]),
-            standardize(br.loc[common], cn.loc[common]))
+            standardize(br.loc[common], cn.loc[common], shrink=False))
         values.append(float(np.corrcoef(u[:, 0], t_[:, 0])[0, 1]))
     print(f"primera correlación canónica: observada {canonical[0]:.3f} | "
           f"bootstrap media {np.mean(values):.3f}, "
