@@ -13,7 +13,7 @@ son mayoritariamente ruido de muestreo a nivel empresa):
   1. **Factores por bloque.** Análisis factorial sobre las 9 tasas de VOZ y
      sobre las 15 de COMPORTAMIENTO por separado, con sus cargas.
   2. **Correlación canónica (CCA) entre bloques.** Responde con un número la
-     premisa de `06_...md`: ¿cuánto comparten "cómo habla" y "qué dice que
+     premisa de `apendice/factores_voz_conducta.md`: ¿cuánto comparten "cómo habla" y "qué dice que
      hace"? Si la primera correlación canónica fuera ~1, los dos ejes son el
      mismo y la matriz voz×comportamiento no tiene contenido; si es intermedia,
      hay una parte compartida y un residuo, y el residuo es justamente lo

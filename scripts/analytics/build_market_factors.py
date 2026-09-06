@@ -1,8 +1,8 @@
 """Construye el lado de MERCADO del panel empresa-año: retorno de ventana,
 beta, volatilidad, momentum, CAR ajustado por mercado y múltiplos.
 
-Produce los dos parquets que `docs/analytics/02_market_accounting_crosscheck.md`
-y `04_ratios_factors_and_volatility.md` describen en prosa y que hasta ahora
+Produce los dos parquets que `docs/analytics/05_senal_incremental.md`
+y `04_perfiles_economicos.md` describen en prosa y que hasta ahora
 no tenían código en el repo:
 
   firm_year_filing_returns.parquet   retorno CRUDO [-1, +5 días hábiles]

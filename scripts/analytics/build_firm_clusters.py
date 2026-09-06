@@ -3,7 +3,7 @@ from `gold_ai_frames` / `gold_ai_entity_mentions`.
 
 This script did not exist. The parquets under `data/processed/clusters/`
 were produced ad hoc in an earlier session and only the OUTPUTS survived —
-`docs/analytics/01_ai_disclosure_analytics.md` and `06_voice_vs_behavior_
+`docs/analytics/apendice/descriptivos_sql_corpus.md` and `06_voice_vs_behavior_
 clustering.md` describe the method in prose, with abbreviated Python, and
 that prose plus the stored column schemas is what this reconstructs. It is
 therefore NOT guaranteed to reproduce the original numbers bit for bit:

@@ -1,7 +1,7 @@
 """Modelo jerárquico del exceso promocional: una estimación con incertidumbre
 para CADA empresa, no ocho banderas.
 
-`09_washing_score.md` corre 451 tests binomiales independientes y marca 8
+`08_definiciones_de_washing.md` corre 451 tests binomiales independientes y marca 8
 empresas al 5% de FDR. El resultado es correcto y es poco: 451 tests
 independientes tiran a la basura la información de que todas las empresas
 vienen de la misma población, y devuelven una etiqueta binaria donde hay una

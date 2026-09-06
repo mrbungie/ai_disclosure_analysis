@@ -87,7 +87,7 @@ volumen**: empresas que dedican poco filing a IA pero lo poco que dicen es
 estratégico, sin conducta. La de sustancia callada se parece a los vocales
 sustantivos en beta y valuación con la mitad de la intensidad.
 
-## Cómo se relaciona con el score de `09_washing_score.md`
+## Cómo se relaciona con el score de `08_definiciones_de_washing.md`
 
 Son dos definiciones distintas y ambas hacen falta:
 
@@ -101,7 +101,7 @@ Son dos definiciones distintas y ambas hacen falta:
 O sea: el score marca empresas que describen MUCHA conducta y aun así hablan más
 de lo que eso justifica (GOOGL, PANW, CRWD); la grilla marca empresas que hablan
 sin describir conducta (UNH, CI, AAPL). **No se contradicen: son washing
-relativo y washing absoluto.** La brecha entre canales (`14_...md`) es una
+relativo y washing absoluto.** La brecha entre canales (`06_brecha_entre_canales.md`) es una
 tercera definición, ortogonal a las dos.
 
 ## Limitaciones

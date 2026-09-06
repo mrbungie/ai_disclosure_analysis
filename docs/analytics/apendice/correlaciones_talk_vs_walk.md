@@ -1,3 +1,5 @@
+> **Apéndice.** Correlaciones simples entre lo declarado y los resultados contables/de mercado, con perfiles por nivel de intensidad de IA. Superado por `05_senal_incremental.md` (regresiones anidadas, ΔR²); se conserva como referencia de los pares y de la lectura sectorial.
+
 # Cruce con mercado y contabilidad (EE.UU.)
 
 **Modo de análisis final: margen extensivo.** El panel son **todas las
@@ -13,7 +15,7 @@ Producido por `build_firm_panels.py` (`firm_year_master_v2.parquet`, sobre
 `ai_intensity.py`) y `report_crosscheck_stats.py`, que reproduce cada tabla
 numérica de este documento y de `04`, `05` y `08`. Lado contable/mercado de
 `build_firm_financials.py`, `build_market_factors.py` y `build_roic_wacc.py`
-(`10_builders_y_recalculo.md`).
+(`10_pipeline.md`).
 
 Cruce de la divulgación de IA con datos externos al texto: XBRL (¿la
 sustancia declarada se refleja en los números?) y precios (¿el mercado
@@ -35,7 +37,7 @@ de [340, 380] días. Crecimientos con |YoY| > 300% se descartan.
 
 **Retornos**: `adj_close` del día hábil anterior al `filing_date` del 10-K
 contra el quinto día hábil posterior (`ret_m1_p5`); `car_m1_p5` resta el
-mercado ajustado por beta (`04_...md`).
+mercado ajustado por beta (`04_perfiles_economicos.md`).
 
 **Texto**: frames de `gold_ai_frames` contados por documento y divididos por
 los párrafos puntuables del conjunto de filings del año. `revenue_outcome`,
@@ -114,7 +116,7 @@ IA como ahorro de costos muestran SG&A creciendo MÁS— no aparece. Cero.
 | alto | **11,9%** |
 
 Monótono y de 3,6x entre extremos. Es lo que predeciría la composición
-sectorial del nivel alto (software/semis); `04_...md` mide cuánto queda
+sectorial del nivel alto (software/semis); `04_perfiles_economicos.md` mide cuánto queda
 dentro de sector.
 
 ## Resultados: reacción de mercado al filing
@@ -149,7 +151,7 @@ empresa cambia.
 Para la tesis, eso acota el uso del cruce financiero: sirve para
 caracterizar segmentos (`04`, `07`, `08`), no para medir washing como
 desviación temporal entre lo dicho y lo hecho. Ese trabajo lo hace la brecha
-entre canales (`14_...md`).
+entre canales (`06_brecha_entre_canales.md`).
 
 ## Limitaciones (leer antes de citar cualquier número de esta sección)
 

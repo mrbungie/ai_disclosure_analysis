@@ -1,7 +1,7 @@
 """¿Los arquetipos de voz son estructura o son ruido? Y si son estructura,
 ¿k-means es la herramienta?
 
-`06_...md` ya reportaba silhouette 0,150-0,162 para todo k probado y aun así
+`apendice/factores_voz_conducta.md` ya reportaba silhouette 0,150-0,162 para todo k probado y aun así
 `01_`, `07_` y `08_` tratan los 4 grupos como categorías. Este script mide tres
 cosas que faltaban antes de decidir eso:
 

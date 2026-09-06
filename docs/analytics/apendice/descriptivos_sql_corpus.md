@@ -1,3 +1,5 @@
+> **Apéndice.** Descriptivos del corpus por consultas SQL: conteos por año, sector, temporalidad, sujeto, riesgos, dominio, tipo de IA y entidades. Complementa `00_funnel_del_corpus.md` y `01_evolucion_2021_2025.md`; no entra al cuerpo.
+
 # Analytics preliminares de divulgación de IA (EE.UU.)
 
 10 preguntas cortas, resueltas con SQL simple sobre `gold_ai_frames` /
@@ -13,7 +15,7 @@ menos un frame y **29.945 frames** semánticos extraídos vía
 4.799.469 textos únicos (30.280 marcados por el prefiltro v2, umbral 0,17,
 `run=20260906T160624Z`). Las earnings calls (9.584 textos, 16.270 frames)
 están en `gold_ai_frames` pero se reportan aparte: son otro canal, con
-otro error de medición (`13_shocks.md`, `14_brecha_entre_canales.md`).
+otro error de medición (`07_shocks_sec_deepseek.md`, `06_brecha_entre_canales.md`).
 
 Composición de la población por formulario:
 

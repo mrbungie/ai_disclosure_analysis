@@ -1,12 +1,14 @@
+> **Apéndice.** Cómo se miden los ejes de voz y conducta y por qué se separan (correlación canónica, log-conteos residualizados por volumen). Sustento técnico de `03_voz_conducta.md`; sólo empresas con frames.
+
 # Voz × comportamiento como factores, no como cruce de clusters
 
 Producido por `scripts/analytics/voice_behavior_factors.py` sobre
 `gold_ai_frames` (corpus final: 10-K, DEF 14A y 8-K, prefiltro v2 con umbral
 0,17). Reemplaza el cruce de clusters "arquetipo de voz × cluster de
 comportamiento" que este documento contenía: los arquetipos A/B/C/D no eran
-reproducibles (`11_segmentacion.md`) y la matriz 2D dependía de denominadores
-de 5 a 500 frames. La segmentación vigente es `11_...md`, la grilla
-`12_...md`, el score de washing `09_...md`.
+reproducibles (`02_segmentacion.md`) y la matriz 2D dependía de denominadores
+de 5 a 500 frames. La segmentación vigente es `02_segmentacion.md`, la grilla
+`03_voz_conducta.md`, el score de washing `08_definiciones_de_washing.md`.
 
 
 `scripts/analytics/voice_behavior_factors.py` reemplaza la matriz 2D de
@@ -103,7 +105,7 @@ RSG, PANW, HON. Residuo negativo (describen conducta y hablan poco, o hablan en
 registro de riesgo): DLTR, DPZ, ETN, VTR, KMI, SPG, VRTX, WEC, LW, ROST —
 retail, utilities y REITs, que mencionan IA sobre todo como riesgo.
 
-Es la misma pregunta que responde `09_washing_score.md` con conteos y un test
+Es la misma pregunta que responde `08_definiciones_de_washing.md` con conteos y un test
 exacto; esta versión no tiene potencia estadística por empresa, pero sí ordena a
 las 457 en una escala continua en vez de marcar 8. Las dos deberían leerse
 juntas: el score dice **dónde hay evidencia**, el residuo dice **dónde mirar**.

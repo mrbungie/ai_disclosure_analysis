@@ -24,7 +24,7 @@ esperar a nadie.
 
 Diferencia deliberada con la vista: acá NO se expande a una fila por instancia
 de párrafo. Un análisis a nivel empresa quiere frames únicos (ver
-`09_washing_score.md`, unidad de análisis); la expansión por instancia sólo
+`08_definiciones_de_washing.md`, unidad de análisis); la expansión por instancia sólo
 sirve para contar apariciones en el corpus.
 
 Uso:

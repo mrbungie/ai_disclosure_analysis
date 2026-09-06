@@ -23,7 +23,7 @@ está el script que lo produce.
 | 8 | El lado contable/mercado no tenía código que lo generara | **CERRADO** |
 | 9 | El "DiD de tendencia" SEC/DeepSeek estaba mal construido | **CERRADO** — rehecho; el estimando original era mecánico, el nuevo es un cambio diferencial válido (no causal) |
 | 10 | ROIC−WACC mezclaba valor libro y de mercado | **CERRADO** — y medido: no cambiaba el ordenamiento |
-| 11 | K-means con silhouette 0,15 sostiene 4 categorías | **CERRADO** — reemplazado por 3 segmentos estables (`11_segmentacion.md`) |
+| 11 | K-means con silhouette 0,15 sostiene 4 categorías | **CERRADO** — reemplazado por 3 segmentos estables (`02_segmentacion.md`) |
 | 12 | El panel empresa-año tiene entrada endógena | **CERRADO** en el modo extensivo (02-05, 08, 11-14); queda en los arquetipos de 07/08 y el test binomial de 09 |
 
 ---
@@ -66,7 +66,7 @@ no datos distintos.
 
 El golden set es 100% 10-K y 10-Q, y el mismo modelo se aplicaba a DEF 14A y
 8-K, que aportan el 24% de los frames y sostienen el hallazgo #8 de
-`analytics/01_...md` (16,4% de frames promocionales en proxy contra 7,2% en
+`analytics/apendice/descriptivos_sql_corpus.md` (16,4% de frames promocionales en proxy contra 7,2% en
 10-K).
 
 **Medido** con 1.500 etiquetas nuevas de esos formularios que nunca entran a
@@ -98,7 +98,7 @@ empresa con proxy extenso parecía promocional por composición documental. La
 cola de washing tenía 41% de frames de proxy contra 23% del resto del corpus, y
 9 de las 22 empresas detectadas salían de ahí.
 
-**Cerrado así** (`washing_score.py`, `09_washing_score.md`): unidad = frame
+**Cerrado así** (`washing_score.py`, `08_definiciones_de_washing.md`): unidad = frame
 único, efectos fijos de formulario en el logit de nivel frame, conteo nulo
 Poisson-binomial exacto, y corrección por dependencia intra-documento (ICC
 medido por ANOVA sobre los residuos). Más una batería de validación
@@ -145,7 +145,7 @@ Cinco parquets (`firm_year_financials`, `..._ratios`, `..._market_factors`,
 `..._filing_returns`, `..._roic_wacc`) existían como datos sin generador: el
 script original nunca se versionó y se perdió. Escritos y verificados contra las
 copias archivadas (retornos idénticos a 1e-6, ratios con correlación 0,98-1,00);
-ver `10_builders_y_recalculo.md`. Todo corre con `make analytics`.
+ver `10_pipeline.md`. Todo corre con `make analytics`.
 
 ## 9. El "DiD de tendencia" SEC/DeepSeek estaba mal construido — CERRADO
 
@@ -166,7 +166,7 @@ confundirlos:
 
 Lo que sigue aplica al tercer nivel, que es el que la propuesta pide.
 
-`01_...md` compara empresas "vagas" contra "específicas" antes y después de
+`apendice/descriptivos_sql_corpus.md` compara empresas "vagas" contra "específicas" antes y después de
 marzo 2024 con una regresión segmentada sobre medias trimestrales por grupo.
 Problemas, en orden de gravedad:
 
@@ -190,7 +190,7 @@ tendencias paralelas).
 está presente y es significativa seis trimestres ANTES de marzo 2024 y no
 cambia después — es una diferencia permanente entre empresas, que es lo
 esperable porque los grupos se definieron por esas mismas métricas. El
-"quiebre de tendencia" que reportaba `01_...md` era del diseño, no de los
+"quiebre de tendencia" que reportaba `apendice/descriptivos_sql_corpus.md` era del diseño, no de los
 datos, y esa sección quedó retirada.
 
 **Segunda vuelta: el diseño SÍ se puede identificar, cambiando el tratamiento.**
@@ -249,7 +249,7 @@ Las 9 features **no son booleanos crudos**: son medias por empresa de banderas
 booleanas, o sea tasas en [0,1] estandarizadas. El problema no es el tipo de
 dato, es que k-means trata una tasa estimada con 5 frames como igual de
 confiable que una estimada con 500 — el mismo defecto que ya había hundido la
-definición de washing por clusters (`09_...md`).
+definición de washing por clusters (`08_definiciones_de_washing.md`).
 
 **Reemplazo, ya en el pipeline** (`firm_voice_scores.parquet`, producido por
 `build_firm_clusters.py`): tasas con encogimiento empírico-Bayes hacia la media
@@ -277,7 +277,7 @@ afirmación más expuesta.
 ---
 
 **Estado.** El modo de análisis final es el margen extensivo
-(`10_builders_y_recalculo.md`): `scripts/analytics/ai_intensity.py` arma la
+(`10_pipeline.md`): `scripts/analytics/ai_intensity.py` arma la
 tabla de todos los documentos con sus párrafos y conteos de frames, cero
 incluido, y sobre ella corren el cruce financiero (`firm_year_master_v2`,
 2.964 empresas-año), los shocks, la brecha entre canales y el score de

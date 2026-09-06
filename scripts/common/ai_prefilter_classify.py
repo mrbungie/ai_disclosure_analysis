@@ -235,7 +235,7 @@ LEXICAL_STEP_COLUMNS = [
 # NINGUNA de estas señales mira el tipo de documento. Meter `form` como feature
 # sería un atajo: el modelo aprendería "los proxies mencionan más IA" en vez de
 # leer el párrafo, y como el hallazgo central del proyecto ES una comparación
-# entre formularios (docs/analytics/01_...md #8), la medición quedaría circular.
+# entre formularios (docs/analytics/apendice/descriptivos_sql_corpus.md #8), la medición quedaría circular.
 # Todo lo de abajo se calcula del texto y valdría igual si el mismo párrafo
 # apareciera en cualquier otro documento.
 STRONG_SPELLED_OUT = (

@@ -2,7 +2,7 @@
 comportamiento declarado — con la mezcla documental controlada y la
 dependencia entre frames contabilizada.
 
-Reemplaza la definición de `06_voice_vs_behavior_clustering.md` ("voz D ×
+Reemplaza la definición de `apendice/factores_voz_conducta.md` ("voz D ×
 comportamiento 1"), que no era medible: los 4 arquetipos de voz se construyen
 sobre 9 TASAS cuyo denominador va de 5 a 500 frames, y K-means trata una tasa
 estimada con 5 frames como igual de confiable que una estimada con 500. Cuatro
@@ -61,7 +61,7 @@ rompe ese lazo sin sesgar el predictor.
 
 Y sigue en pie la limitación de fondo: el comportamiento se mide en el mismo
 texto que la voz. Un diseño limpio lo mediría contra capex/I+D/contrataciones,
-que es lo que intentan `02_...md` y `04_...md` con resultados débiles.
+que es lo que intentan `05_senal_incremental.md` y `04_perfiles_economicos.md` con resultados débiles.
 
 Uso:
     uv run python scripts/analytics/washing_score.py

@@ -40,13 +40,14 @@ from pathlib import Path
 import duckdb
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
-EVENT = pd.Period("2024Q2", freq="Q")
-GROUP_END = "2024-01-01"
+EVENT = pd.Period("2024Q1", freq="Q")   # aviso de Gensler, 5-dic-2023; ver shock_analysis.py
+GROUP_END = "2023-12-01"
 WINDOW = 5
 REFERENCE = -1
 MIN_QUARTERS_EACH_SIDE = 2
@@ -88,10 +89,22 @@ def build(con) -> pd.DataFrame:
     return panel
 
 
+def fe_ols(data: pd.DataFrame, outcome: str, rhs: str):
+    """Efectos fijos de empresa por demeaning + OLS con SE cluster por empresa
+    (ver shock_analysis.fe_ols)."""
+    import patsy
+    X = patsy.dmatrix(rhs, data, return_type="dataframe")
+    X = X.drop(columns=[c for c in X.columns if c == "Intercept"])
+    groups = data["ticker"].to_numpy()
+    y = data[outcome] - data.groupby("ticker")[outcome].transform("mean")
+    Xd = X - X.groupby(groups).transform("mean")
+    Xd = Xd.loc[:, Xd.abs().sum() > 1e-12]
+    return sm.OLS(y.to_numpy(dtype=float), Xd).fit(
+        cov_type="cluster", cov_kwds={"groups": pd.factorize(groups)[0]})
+
+
 def did(panel: pd.DataFrame, outcome: str) -> dict:
-    model = smf.ols(f"{outcome} ~ alto_riesgo:post + C(ticker) + C(trimestre) "
-                    f"+ {CONTROLS}", data=panel).fit(
-        cov_type="cluster", cov_kwds={"groups": panel["ticker"]})
+    model = fe_ols(panel, outcome, f"alto_riesgo:post + C(trimestre) + {CONTROLS}")
     term = [n for n in model.params.index if "alto_riesgo:post" in n][0]
     return {"coef": float(model.params[term]), "se": float(model.bse[term]),
             "p": float(model.pvalues[term]), "n_obs": int(model.nobs),
@@ -115,10 +128,7 @@ def event_study(panel: pd.DataFrame, outcome: str) -> pd.DataFrame:
         name = f"ev_{'m' if period < 0 else 'p'}{abs(period)}"
         data[name] = ((data["event_time"] == period) * data["alto_riesgo"]).astype(float)
         terms.append((period, name))
-    formula = (f"{outcome} ~ " + " + ".join(name for _, name in terms)
-               + f" + C(ticker) + C(trimestre) + {CONTROLS}")
-    model = smf.ols(formula, data=data).fit(
-        cov_type="cluster", cov_kwds={"groups": data["ticker"]})
+    model = fe_ols(data, outcome, " + ".join(name for _, name in terms) + f" + C(trimestre) + {CONTROLS}")
     rows = [{"event_time": period, "coef": float(model.params[name]),
              "se": float(model.bse[name]), "p": float(model.pvalues[name]), "term": name}
             for period, name in terms]

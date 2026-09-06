@@ -58,6 +58,7 @@ from pathlib import Path
 import duckdb
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -65,10 +66,14 @@ DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
 
 EVENTS = {
-    # 18-mar-2024: la SEC anuncia enforcement por AI-washing. 2024Q1 mezcla
-    # filings de antes y después del anuncio, así que el corte va al inicio de
-    # 2024Q2 y 2024Q1 queda como trimestre de referencia.
-    "sec": pd.Period("2024Q2", freq="Q"),
+    # El primer aviso público es el discurso de Gensler sobre "AI washing" del
+    # 5-dic-2023; el enforcement (Delphia, Global Predictions) es del
+    # 18-mar-2024. Los 10-K del ejercicio 2023 se escriben en enero-febrero de
+    # 2024, después del aviso, así que el corte va al inicio de 2024Q1 y 2023Q4
+    # queda como trimestre de referencia. Con el corte en 2024Q2 la temporada
+    # de 10-K de 2024 —donde está el salto de riesgo y gobernanza— quedaba
+    # como referencia y el "efecto" se restaba solo.
+    "sec": pd.Period("2024Q1", freq="Q"),
     # 20-ene-2025: DeepSeek R1. Mismo criterio.
     "deepseek": pd.Period("2025Q2", freq="Q"),
 }
@@ -110,15 +115,28 @@ def build_panel(con) -> tuple[pd.DataFrame, pd.DataFrame]:
     return panel, treatment
 
 
+def fe_ols(data: pd.DataFrame, outcome: str, rhs: str):
+    """Efectos fijos de empresa por demeaning (within) en vez de 489 dummies —
+    idéntico estimador, sin la matriz mal condicionada que hacía fallar la SVD —
+    + OLS con SE cluster por empresa. `rhs` es la fórmula patsy sin C(ticker)."""
+    import patsy
+    X = patsy.dmatrix(rhs, data, return_type="dataframe")
+    X = X.drop(columns=[c for c in X.columns if c == "Intercept"])
+    groups = data["ticker"].to_numpy()
+    y = data[outcome] - data.groupby("ticker")[outcome].transform("mean")
+    Xd = X - X.groupby(groups).transform("mean")
+    Xd = Xd.loc[:, Xd.abs().sum() > 1e-12]           # columnas absorbidas por el FE
+    return sm.OLS(y.to_numpy(dtype=float), Xd).fit(
+        cov_type="cluster", cov_kwds={"groups": pd.factorize(groups)[0]})
+
+
 def fit(data: pd.DataFrame, outcome: str, formula_treat: str) -> tuple:
     data = data.copy()
     data["ev"] = pd.Categorical(data["event_time"],
                                 categories=sorted(data["event_time"].unique()))
-    formula = (f"{outcome} ~ C(ev, Treatment(reference={REFERENCE_OFFSET})):{formula_treat} "
-               f"+ C(ticker) + C(ev) + {CONTROLS}")
-    model = smf.ols(formula, data=data).fit(
-        cov_type="cluster", cov_kwds={"groups": data["ticker"]})
-    return model, data
+    rhs = (f"C(ev, Treatment(reference={REFERENCE_OFFSET})):{formula_treat} "
+           f"+ C(ev) + {CONTROLS}")
+    return fe_ols(data, outcome, rhs), data
 
 
 def coefficients(model, pattern: str = "") -> pd.DataFrame:
@@ -197,11 +215,8 @@ def report_segments(panel: pd.DataFrame, treatment: pd.DataFrame, event_name: st
     others = sorted(s for s in data["segmento"].unique() if s != reference)
     for s in others:
         data[f"post_x_{s}"] = data["post"] * (data["segmento"] == s).astype(float)
-    formula = (f"{main_outcome} ~ " + " + ".join(f"post_x_{s}" for s in others)
-               + f" + C(ticker) + C(ev) + {CONTROLS}")
     data["ev"] = pd.Categorical(data["event_time"])
-    model = smf.ols(formula, data=data).fit(
-        cov_type="cluster", cov_kwds={"groups": data["ticker"]})
+    model = fe_ols(data, main_outcome, " + ".join(f"post_x_{s}" for s in others) + f" + C(ev) + {CONTROLS}")
     print(f"\ncambio post por segmento, diferencia contra listadores de riesgo ({event_name}, outcome = {main_outcome}):")
     rows = {}
     for name, value in model.params.items():

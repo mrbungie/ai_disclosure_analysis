@@ -1,7 +1,7 @@
 """ROIC vs. WACC por empresa-año: ¿el capital rinde más de lo que cuesta?
 
 Produce `firm_year_roic_wacc.parquet`, el insumo de
-`docs/analytics/08_roic_wacc_value_creation.md`, que hasta ahora existía como
+`docs/analytics/04_perfiles_economicos.md`, que hasta ahora existía como
 dato sin código que lo generara.
 
     NOPAT             = operating_income x (1 - tasa efectiva de impuesto)
@@ -21,7 +21,7 @@ documentadas acá porque cambian el NIVEL de las cifras:
      para descontar flujos multi-período. La diferencia NO es neutral entre
      segmentos: como coe = rf + beta x ERP, un ERP inflado infla las
      DIFERENCIAS de WACC en proporción a las diferencias de beta, y los
-     segmentos de 08_...md difieren justamente en beta (0,46 vs 1,00). Se
+     segmentos de 04_perfiles_economicos.md difieren justamente en beta (0,46 vs 1,00). Se
      calcula desde los propios factores del repo y queda registrado en la
      columna `erp` de la salida. `--erp 0.082` reproduce la versión vieja.
   2. **Tasa efectiva de impuesto acotada a [0, 1]**, con fallback a la tasa

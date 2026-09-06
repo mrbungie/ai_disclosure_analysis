@@ -1,32 +1,26 @@
-# AI-washing como score continuo: exceso promocional sobre comportamiento y mezcla documental
+# Tres definiciones de AI-washing, y por qué no seleccionan a las mismas empresas
 
-Reemplaza la definición de `06_voice_vs_behavior_clustering.md` ("arquetipo de
-voz D × cluster de comportamiento 1"), que no era medible. Producido por
-`scripts/analytics/washing_score.py` y validado por
+No hay una definición empírica única de "hablar más de lo que se hace". El
+proyecto tiene tres, cada una responde una pregunta distinta, y casi no
+coinciden en las empresas que marcan. Eso es un resultado, no un problema.
+
+| definición | pregunta | dónde | unidad | qué marca |
+|---|---|---|---|---|
+| **Desacople absoluto voz-conducta** | ¿habla en registro promocional y describe poca conducta, en absoluto? | `03_voz_conducta.md` | esquina de una grilla de terciles | 36 empresas: UNH, CI, AAPL, PYPL… no-tech, bajo I+D, poca IA |
+| **Exceso promocional condicional** (este documento) | ¿promociona más de lo que su propia conducta descrita y su mezcla documental predicen? | `washing_score.py` | test binomial con FDR sobre quienes tienen frames, y residuo de intensidad para las 510 | 8 empresas: GOOGL, CRWD, PANW, CDNS, INTU, ADP, CRM, YUM — todas desplegadoras que describen mucha conducta |
+| **Brecha promocional entre canales** | ¿le dice al analista en la call más de lo que firma en el filing? | `06_brecha_entre_canales.md` | misma empresa, mismo ejercicio, call − filing | +8,2 promocionales por 1.000 párrafos, casi todas las empresas |
+
+Las correlaciones entre ellas son bajas: Spearman −0,07 entre la brecha por
+canal y el exceso condicional; 7 de las 8 del exceso caen en la esquina
+"vocales sustantivos" de la grilla, no en la de washing. **Son tres fenómenos:
+hablar sin hacer, hablar más de lo que lo hecho justifica, y contar cosas
+distintas según a quién.** La SEC persigue el tercero; la literatura de
+greenwashing suele medir el primero; el segundo es el que un score por
+empresa puede testear. Lo que sigue es el segundo: el estimador, sus
+resultados y su validación.
+
+Producido por `scripts/analytics/washing_score.py` y validado por
 `scripts/analytics/validate_washing_score.py`. Determinístico, sin LLM.
-
-## Por qué el cruce de clusters no servía
-
-Los 4 arquetipos de voz se construyen sobre 9 **tasas** cuyo denominador va de
-5 a 500 frames según la empresa, y K-means trata una tasa estimada con 5 frames
-como igual de confiable que una estimada con 500.
-
-| Diagnóstico | Valor |
-|---|---|
-| Tasa promocional del corpus | 9,4% |
-| P(cero frames promocionales por azar) con 4 frames | **67%** |
-| Empresas-año con 3-5 frames y tasa promocional exactamente 0 | **84,6%** |
-| Ídem con 50+ frames | 1,1% |
-| Mediana de frames totales, arquetipo A / B / C / D | 17 / 26 / 36 / 59 |
-
-**La escalera A<B<C<D es también una escalera de volumen de texto.** El caso que
-lo deja fuera de discusión: cuatro empresas con CERO frames promocionales (CMS,
-FE, CHD, TFC, todas con 5-9 frames) quedaban etiquetadas "líderes vocales de
-IA", porque D también se define por `realized_share` alto y `risk_share` bajo.
-
-Ningún umbral de volumen lo arregla: exigir ≥10 frames/año selecciona a las
-tecnológicas grandes, que son el *resto* de D, y elimina por construcción a las
-empresas sobre las que trata la hipótesis.
 
 ## El modelo
 
@@ -222,7 +216,7 @@ industria?") es una decisión de tesis, no técnica.
 ### 5. Criterio externo
 
 Los únicos casos con evidencia independiente son las cartas de comentario de la
-SEC (`01_...md`):
+SEC (`apendice/descriptivos_sql_corpus.md`):
 
 | ticker | percentil | z | promocionales | marcado | caso |
 |---|---:|---:|---|---|---|
@@ -246,16 +240,17 @@ concreto: medir el mismo score sobre transcripciones de earnings calls y
 comparar el exceso de cada empresa entre canales. El corpus de earnings calls
 ya está clasificado (16.270 frames de 403 empresas,
 `scripts/analytics/earnings_calls_analysis.py`) y el diseño por canal está en
-`14_brecha_entre_canales.md`: brecha promocional call − filing de +10,7 p.p.,
+`06_brecha_entre_canales.md`: brecha promocional call − filing de +10,7 p.p.,
 ortogonal a este score (Spearman −0,07).
 
 ## Limitaciones
 
 - **Voz y comportamiento salen del mismo texto.** Se acota midiendo el
   comportamiento en frames no promocionales; no se elimina. Un diseño limpio lo
-  mediría contra capex/I+D/contrataciones — lo que intentan `02_...md` y
-  `04_...md`, hoy sin ninguna correlación que sobreviva FDR
-  (`10_builders_y_recalculo.md`).
+  mediría contra capex/I+D/contrataciones — lo que hace
+  `05_senal_incremental.md`, donde el contenido aporta 2-4 puntos de R²
+  parcial sobre fundamentals y volumen, cargado por la especificidad y no por
+  la promoción.
 - **Potencia concentrada en empresas de mucho texto.** Es limitación del
   corpus, no del estimador, y la tabla de potencia la deja explícita.
 - **`rhetoric_promotional` es una etiqueta de un LLM** (`qwen3.7-flash`), sin

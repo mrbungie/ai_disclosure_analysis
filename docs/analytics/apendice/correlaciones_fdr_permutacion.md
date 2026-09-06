@@ -1,11 +1,13 @@
+> **Apéndice.** Permutación, efectos fijos de empresa y corrección FDR sobre las 11 correlaciones del apéndice anterior. Superado por `05_senal_incremental.md`.
+
 # Circularidad, placebo y corrección por comparaciones múltiples
 
 **Modo de análisis final: margen extensivo** — todas las empresas-año con
 filings (2.964, 510 empresas), intensidad por 1.000 párrafos con ceros
-(`02_...md`). Todo sale de `report_crosscheck_stats.py`.
+(`05_senal_incremental.md`). Todo sale de `report_crosscheck_stats.py`.
 
-Auditoría del diseño de `02_market_accounting_crosscheck.md` /
-`04_ratios_factors_and_volatility.md`: la intensidad de IA está casi
+Auditoría del diseño de `05_senal_incremental.md` /
+`04_perfiles_economicos.md`: la intensidad de IA está casi
 mecánicamente correlacionada con pertenecer a un sector tech, así que "las
 que hablan de IA crecen más" podía ser tautológico. Tres chequeos, todos sobre
 `firm_year_master_v2.parquet`.
@@ -97,12 +99,12 @@ washing más directa del cruce— está en cero.
 
 ## Qué implica para los otros documentos
 
-- `02_...md`: reporta las dos correlaciones que pasan FDR con la advertencia
+- `05_senal_incremental.md`: reporta las dos correlaciones que pasan FDR con la advertencia
   de que son transversales. La "señal de washing" de costos no existe
   (r=−0,013).
-- `04_...md`: los perfiles por nivel de IA son descriptivos de un tipo de
+- `04_perfiles_economicos.md`: los perfiles por nivel de IA son descriptivos de un tipo de
   empresa; el control de sector-año hay que leerlo como en §1.
-- `14_...md`: el washing como desviación temporal entre lo dicho y lo hecho
+- `06_brecha_entre_canales.md`: el washing como desviación temporal entre lo dicho y lo hecho
   no se mide en este cruce; se mide entre canales, dentro de la empresa y el
   ejercicio.
 

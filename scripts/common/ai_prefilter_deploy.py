@@ -25,7 +25,7 @@ NUNCA entran al ajuste (`prefilter_form_validation.py`, muestra de validación):
 Lo que NO se hace, deliberadamente: meter el formulario como feature. Sería un
 atajo — el modelo aprendería "los proxies mencionan más IA" en vez de leer el
 párrafo — y como el hallazgo central del proyecto ES una comparación entre
-formularios (`docs/analytics/01_...md` #8), la medición quedaría circular. Todas
+formularios (`docs/analytics/apendice/descriptivos_sql_corpus.md` #8), la medición quedaría circular. Todas
 las señales se calculan del texto y valen igual en cualquier documento.
 
 Etiquetas de ajuste: golden set (10-K/10-Q, un solo juez) + la muestra de

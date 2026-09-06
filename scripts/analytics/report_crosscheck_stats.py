@@ -1,7 +1,7 @@
 """Reproduce, desde los parquets, las tablas numéricas de los documentos de
-cruce financiero: `02_market_accounting_crosscheck.md`,
-`04_ratios_factors_and_volatility.md`, `05_circularity_and_robustness_checks.md`
-y `08_roic_wacc_value_creation.md`.
+cruce financiero: `05_senal_incremental.md`,
+`04_perfiles_economicos.md`, `apendice/correlaciones_fdr_permutacion.md`
+y `04_perfiles_economicos.md`.
 
 MODO DE ANÁLISIS FINAL: margen extensivo. El panel es `firm_year_master_v2`
 con TODAS las empresas-año que tienen filings (`build_firm_panels.py`), y las
@@ -47,7 +47,7 @@ SEED = 42
 GROWTH_CLIP = 3.0          # |crecimiento YoY| > 300% se descarta como outlier
 PERMUTATIONS = 2000
 
-# Los 11 pares que 05_...md somete a FDR: comportamiento declarado en t contra
+# Los 11 pares que apendice/correlaciones_fdr_permutacion.md somete a FDR: comportamiento declarado en t contra
 # el resultado real, y retórica contra reacción de mercado.
 FDR_PAIRS = [
     ("behavior_share_ai_infrastructure", "next_capex_yoy"),

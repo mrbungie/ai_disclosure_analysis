@@ -118,7 +118,7 @@ def main() -> None:
           f"{cohort['ticker'].nunique():,} empresas de la cohorte 2021")
 
     # --- segmentos: una fila por empresa, MEDIANA de sus años (robusta a un
-    # año atípico; es lo que 07_...md documenta y lo que usan las demás tablas) ---
+    # año atípico; es lo que 04_perfiles_economicos.md documenta y lo que usan las demás tablas) ---
     per_firm = (master.groupby("ticker")[SEGMENT_COLUMNS].median().reset_index()
                 .merge(crossed, on="ticker", how="inner"))
     print(f"segment_financials: {len(per_firm):,} empresas con ambas etiquetas y financieros")

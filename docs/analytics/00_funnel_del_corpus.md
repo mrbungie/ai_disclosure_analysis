@@ -50,7 +50,7 @@ textos únicos puntuables; sólo EE.UU. tiene embeddings, scoring y frames.
 - **8-K**: 34.416 documentos, 206 con algún frame. Ruido casi puro.
 - **Calls**: 7.947 documentos con la décima parte de los párrafos de un 10-K
   y 16.270 frames, casi tantos como el 10-K. Es el canal denso
-  (`14_brecha_entre_canales.md`).
+  (`06_brecha_entre_canales.md`).
 
 ## Consulta
 

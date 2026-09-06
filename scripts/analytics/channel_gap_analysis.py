@@ -72,7 +72,7 @@ OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
 FILING_FORMS = ("10-K", "10-Q", "DEF 14A", "8-K")
 MIN_FRAMES = 3
 EVENT = {"fy": 2024, "quarter": pd.Period("2024Q2", freq="Q")}
-EVENT_DATE = "2024-03-01"      # escrutinio de la SEC sobre AI-washing
+EVENT_DATE = "2023-12-05"      # aviso de Gensler sobre AI-washing; el enforcement es del 2024-03-18
 OUTCOMES = ["promotional_rate", "quantified_rate", "specificity_index", "realized_share",
             "hypothetical_share", "gov_share"]
 NOTORIOUS = ["WELL", "NVDA", "PLTR", "TSLA", "ORCL", "GOOGL", "CRM", "MSFT", "META", "AMZN",

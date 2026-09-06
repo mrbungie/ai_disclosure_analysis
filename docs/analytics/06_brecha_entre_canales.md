@@ -1,4 +1,4 @@
-# Brecha entre canales: la misma empresa, el mismo ejercicio, call contra filing
+# Brecha promocional entre canales: la misma empresa, el mismo ejercicio, call contra filing
 
 Producido por `scripts/analytics/channel_gap_analysis.py`. Determinístico, sin
 LLM. Es el diseño que `docs/pregunta_identificacion_sec.md` plantea como el
@@ -43,7 +43,10 @@ no por la fecha en que se presenta:
 | earnings call | el del `document_id` (`TICKER_YYYYQn` es el trimestre fiscal discutido) |
 | DEF 14A, 8-K | el de presentación (no cubren un período) |
 
-`post` = ejercicio 2024 en adelante (escrutinio de la SEC, marzo 2024).
+`post` = ejercicio 2024 en adelante (aviso de la SEC sobre AI-washing en
+diciembre de 2023, enforcement en marzo de 2024). Las celdas que mezclan
+documentos de antes y después del 5 de diciembre de 2023 se marcan y se
+reporta la estimación sin ellas.
 
 | | |
 |---|---|
@@ -70,7 +73,9 @@ promocionales de IA por párrafo en la call que en el filing**, y 40 veces más
 afirmaciones cuantificadas. El filing tiene más documentos con alguna mención
 de IA (65% contra 55%) pero a una densidad diez veces menor: la IA en el
 filing es un factor de riesgo y una línea de gobernanza; en la call es el
-producto. **Este es el AI-washing en volumen, y está donde la SEC lo busca.**
+producto. **Es una brecha promocional entre canales**, no evidencia de que
+las afirmaciones sean falsas: es el tipo de desajuste entre canales que la SEC
+señaló en el caso Welltower, medido en todo el corpus.
 
 ## Resultado 2: la brecha se disparó con el boom de 2023, y el escrutinio de 2024 no la tocó
 
@@ -101,7 +106,7 @@ que la resta queda en cero.
 
 El test de tendencias previas falla en todo, y tiene que fallar: la curva ya
 subía en 2023. **El escrutinio de la SEC no es identificable sobre la
-brecha**, igual que no lo es entre empresas (`13_shocks.md`). Lo que el
+brecha**, igual que no lo es entre empresas (`07_shocks_sec_deepseek.md`). Lo que el
 diseño sí dice, y con toda la precisión que se le puede pedir, es que la
 distancia entre lo que la empresa vende en la call y lo que firma en el
 filing se multiplicó por tres entre 2022 y 2025 y no se frenó cuando el
@@ -129,7 +134,7 @@ antes de 2025 y las transcripciones terminan a mediados de 2025: no hay serie
 que estimar. Es un caso, no una estimación.
 
 La brecha por empresa **no se correlaciona con el score de exceso promocional
-de `09_washing_score.md`** (Spearman −0,07): ese score mide exceso DENTRO de
+de `08_definiciones_de_washing.md`** (Spearman −0,07): ese score mide exceso DENTRO de
 los filings dado lo que la empresa describe; la brecha mide cuánto más promete
 en la call. Son dos formas de AI-washing distintas y la SEC persigue la
 segunda.

@@ -137,7 +137,7 @@ que hablan — y **las 8 empresas con exceso promocional estadísticamente
 significativo caen todas en un solo segmento**. Los adoptantes y los
 listadores no se distinguen en lo financiero: la distinción entre ellos es
 de discurso, no de tipo de empresa. Las sin IA son las más chicas (mediana
-$13B) y las que más crecen: coincide con el margen extensivo de `02_...md`,
+$13B) y las que más crecen: coincide con el margen extensivo de `05_senal_incremental.md`,
 donde no hablar de IA en 2021-2022 identifica a la empresa chica en
 expansión, no a la rezagada.
 
