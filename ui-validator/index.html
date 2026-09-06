@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Validador</title>
+<style>
+  :root { --bg:#fafafa; --fg:#1a1a1a; --muted:#666; --line:#ddd; --hi:#fff3b0; --ok:#2e7d32; --bad:#c62828; --acc:#1565c0; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.45 -apple-system, system-ui, sans-serif; color:var(--fg); background:var(--bg); }
+  header { display:flex; gap:12px; align-items:center; padding:10px 16px; border-bottom:1px solid var(--line); background:#fff; position:sticky; top:0; }
+  header b { font-size:16px; }
+  header .sp { flex:1; }
+  button { font:inherit; padding:6px 12px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--acc); color:#fff; border-color:var(--acc); }
+  button.on { background:#e3f2fd; border-color:var(--acc); }
+  button.ok.on { background:#e8f5e9; border-color:var(--ok); }
+  button.bad.on { background:#ffebee; border-color:var(--bad); }
+  main { max-width:1100px; margin:0 auto; padding:16px; }
+  .meta { color:var(--muted); font-size:13px; margin-bottom:8px; }
+  .para { background:#fff; border:1px solid var(--line); border-radius:8px; padding:14px 16px; margin-bottom:14px; }
+  .sent { margin:2px 0; padding:2px 6px; border-radius:4px; }
+  .sent .n { color:var(--muted); font-family:ui-monospace, monospace; font-size:12px; margin-right:6px; }
+  .sent.ev { background:var(--hi); }
+  .frame { background:#fff; border:1px solid var(--line); border-left:4px solid var(--acc); border-radius:8px; padding:12px 16px; margin-bottom:12px; }
+  .frame h4 { margin:0 0 6px; font-size:14px; }
+  .tags { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 10px; }
+  .tag { font-size:12px; padding:2px 8px; border-radius:10px; background:#eee; }
+  .tag.promo { background:#ffe0b2; }
+  .tag.spec { background:#c8e6c9; }
+  .q { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:6px 0; }
+  .q label { min-width:150px; color:var(--muted); font-size:13px; }
+  textarea { width:100%; min-height:44px; font:inherit; border:1px solid var(--line); border-radius:6px; padding:6px; }
+  nav { display:flex; gap:8px; align-items:center; margin:16px 0; }
+  .prog { font-size:13px; color:var(--muted); }
+  .kbd { font-family:ui-monospace, monospace; font-size:12px; color:var(--muted); }
+  dialog { border:1px solid var(--line); border-radius:8px; max-width:720px; width:90%; }
+  dialog textarea { min-height:260px; font-family:ui-monospace, monospace; font-size:12px; }
+  .stats { font-size:13px; }
+  .stats td { padding:2px 10px 2px 0; }
+</style>
+</head>
+<body>
+<header>
+  <b>Validador</b>
+  <button id="tab-frames" class="on">Frames</button>
+  <button id="tab-prefilter">Prefiltro</button>
+  <span class="sp"></span>
+  <span class="prog" id="prog"></span>
+  <button id="btn-stats">Resumen</button>
+  <button id="btn-export">Exportar</button>
+  <button id="btn-import">Importar</button>
+  <button id="btn-reset">Borrar</button>
+</header>
+<main id="main"></main>
+<dialog id="dlg"><div id="dlg-body"></div><p style="text-align:right"><button id="dlg-close">Cerrar</button></p></dialog>
+
+<script>
+// ---------- estado ----------
+const KEY = 'validador.v1';
+let DATA = null;
+let task = 'frames';
+let pos = { frames: 0, prefilter: 0 };
+let ann = load();
+
+function load() { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(ann)); } catch (e) { alert('No se pudo guardar en localStorage: ' + e); } }
+function get(id) { return ann[id] || (ann[id] = { ts: null }); }
+function set(id, k, v) { const a = get(id); a[k] = v; a.ts = new Date().toISOString(); save(); render(); }
+
+// ---------- carga ----------
+fetch('data.json').then(r => r.json()).then(d => {
+  DATA = d;
+  pos.frames = firstPending('frames'); pos.prefilter = firstPending('prefilter');
+  render();
+}).catch(e => { document.getElementById('main').innerHTML = '<p>No se pudo leer <code>data.json</code>. Corre <code>build_sample.py</code> y sirve la carpeta con <code>python -m http.server</code>.</p>'; });
+
+function items() { return DATA[task]; }
+function isDone(it) {
+  const a = ann[it.id]; if (!a) return false;
+  if (task === 'prefilter') return a.menciona_ia !== undefined;
+  if (!it.frames.length) return a.sin_frames !== undefined;
+  return it.frames.every(f => a['f' + f.frame_index + '.existe'] !== undefined);
+}
+function firstPending(t) { const prev = task; task = t; const i = DATA[t].findIndex(x => !isDone(x)); task = prev; return i < 0 ? 0 : i; }
+
+// ---------- render ----------
+function render() {
+  if (!DATA) return;
+  const list = items(); const it = list[pos[task]];
+  const done = list.filter(isDone).length;
+  document.getElementById('prog').textContent = `${task}: ${done}/${list.length} · #${pos[task] + 1}`;
+  document.getElementById('tab-frames').className = task === 'frames' ? 'on' : '';
+  document.getElementById('tab-prefilter').className = task === 'prefilter' ? 'on' : '';
+  const m = document.getElementById('main');
+  m.innerHTML = task === 'frames' ? renderFrames(it) : renderPrefilter(it);
+  m.querySelectorAll('[data-set]').forEach(b => b.onclick = () => {
+    const [id, k, v] = JSON.parse(b.dataset.set); set(id, k, v);
+  });
+  m.querySelectorAll('textarea[data-note]').forEach(t => t.onchange = () => { const a = get(t.dataset.note); a.nota = t.value; a.ts = new Date().toISOString(); save(); });
+  m.querySelector('#prev').onclick = () => { pos[task] = Math.max(0, pos[task] - 1); render(); };
+  m.querySelector('#next').onclick = () => { pos[task] = Math.min(list.length - 1, pos[task] + 1); render(); };
+  m.querySelector('#pend').onclick = () => { pos[task] = firstPending(task); render(); };
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function btn(id, k, v, label, cls, cur) { return `<button class="${cls || ''} ${cur === v ? 'on' : ''}" data-set='${JSON.stringify([id, k, v])}'>${label}</button>`; }
+function yesno(id, k, cur) { return btn(id, k, true, 'sí', 'ok', cur) + btn(id, k, false, 'no', 'bad', cur); }
+function nav() { return `<nav><button id="prev">← anterior</button><button id="next" class="primary">siguiente →</button><button id="pend">ir al primero pendiente</button><span class="kbd">atajos: ← → · 1 sí · 2 no</span></nav>`; }
+
+function renderFrames(it) {
+  const a = get(it.id);
+  const ev = new Set(it.frames.flatMap(f => f.evidence));
+  let h = `<div class="meta">${esc(it.form)} · ${esc(it.accession_number)} · text_hash ${esc(it.text_hash)} · ${it.frames.length} frame(s)</div>`;
+  h += `<div class="para">` + it.sentences.map(s => `<div class="sent ${ev.has(s.idx) ? 'ev' : ''}"><span class="n">[${s.idx}]</span>${esc(s.text)}</div>`).join('') + `</div>`;
+  if (!it.frames.length) {
+    h += `<div class="frame"><h4>El juez no extrajo ningún frame de este párrafo.</h4><div class="q"><label>¿Debería haber al menos uno?</label>${yesno(it.id, 'sin_frames', a.sin_frames)}</div></div>`;
+  }
+  for (const f of it.frames) {
+    const p = 'f' + f.frame_index + '.';
+    const spec = Object.entries(f.specificity).filter(([k, v]) => v).map(([k]) => k);
+    h += `<div class="frame"><h4>Frame ${f.frame_index} · evidencia [${f.evidence.join(', ')}]</h4>
+      <div class="tags"><span class="tag">${esc(f.subject)}</span><span class="tag">${esc(f.ai_type)}</span><span class="tag">${esc(f.temporal)}</span><span class="tag">${esc(f.domain)}</span>
+        ${f.concepts.map(c => `<span class="tag">${esc(c)}</span>`).join('')}
+        ${spec.map(c => `<span class="tag spec">spec: ${esc(c)}</span>`).join('')}
+        ${f.promotional ? '<span class="tag promo">promocional</span>' : ''}${f.strategic ? '<span class="tag promo">estratégico</span>' : ''}</div>
+      <div class="q"><label>¿El frame existe en el texto?</label>${yesno(it.id, p + 'existe', a[p + 'existe'])}</div>
+      <div class="q"><label>¿Es promocional?</label>${yesno(it.id, p + 'promocional', a[p + 'promocional'])} <span class="kbd">juez: ${f.promotional ? 'sí' : 'no'}</span></div>
+      <div class="q"><label>Temporal correcto</label>${['realized', 'planned', 'expected', 'hypothetical'].map(v => btn(it.id, p + 'temporal', v, v, '', a[p + 'temporal'])).join('')} <span class="kbd">juez: ${esc(f.temporal)}</span></div>
+      <div class="q"><label>¿Specificity correcta?</label>${yesno(it.id, p + 'specificity_ok', a[p + 'specificity_ok'])}</div>
+      <div class="q"><label>¿Evidencia correcta?</label>${yesno(it.id, p + 'evidencia_ok', a[p + 'evidencia_ok'])}</div>
+    </div>`;
+  }
+  h += `<textarea data-note="${it.id}" placeholder="nota (opcional)">${esc(a.nota || '')}</textarea>` + nav();
+  return h;
+}
+
+function renderPrefilter(it) {
+  const a = get(it.id);
+  let h = `<div class="meta">${esc(it.form)} · estrato ${esc(it.estrato)} · text_hash ${esc(it.text_hash)}</div>`;
+  h += `<div class="para">${esc(it.text)}</div>`;
+  h += `<div class="frame"><div class="q"><label>¿Menciona IA (cualquier mención)?</label>${yesno(it.id, 'menciona_ia', a.menciona_ia)}</div>
+    <div class="q"><label>¿Es divulgación sustantiva sobre la propia empresa?</label>${yesno(it.id, 'sustantivo', a.sustantivo)}</div>
+    <div class="q"><label>Prefiltro dijo</label><span class="kbd">${it.prefilter_says_ai ? 'IA' : 'no IA'} · proba ${it.proba} · umbral ${it.threshold}${it.named_entity_match ? ' · entidad nombrada' : ''}</span></div></div>`;
+  h += `<textarea data-note="${it.id}" placeholder="nota (opcional)">${esc(a.nota || '')}</textarea>` + nav();
+  return h;
+}
+
+// ---------- atajos ----------
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'TEXTAREA') return;
+  const list = items && DATA ? items() : null; if (!list) return;
+  if (e.key === 'ArrowRight') { pos[task] = Math.min(list.length - 1, pos[task] + 1); render(); }
+  if (e.key === 'ArrowLeft') { pos[task] = Math.max(0, pos[task] - 1); render(); }
+  if (e.key === '1' || e.key === '2') {
+    const it = list[pos[task]]; const v = e.key === '1';
+    if (task === 'prefilter') set(it.id, 'menciona_ia', v);
+    else { const f = it.frames.find(f => get(it.id)['f' + f.frame_index + '.existe'] === undefined); if (f) set(it.id, 'f' + f.frame_index + '.existe', v); else if (!it.frames.length) set(it.id, 'sin_frames', v); }
+  }
+});
+document.getElementById('tab-frames').onclick = () => { task = 'frames'; render(); };
+document.getElementById('tab-prefilter').onclick = () => { task = 'prefilter'; render(); };
+
+// ---------- export / import / stats ----------
+const dlg = document.getElementById('dlg'), body = document.getElementById('dlg-body');
+document.getElementById('dlg-close').onclick = () => dlg.close();
+document.getElementById('btn-export').onclick = () => {
+  const out = { exported_at: new Date().toISOString(), predictions_run: DATA && DATA.predictions_run, seed: DATA && DATA.seed, annotations: ann };
+  body.innerHTML = `<p>Copiá esto a un archivo (p. ej. <code>ui-validator/annotations/&lt;nombre&gt;.json</code>). Son ${Object.keys(ann).length} ítems.</p><textarea id="exp"></textarea><p><button id="cp">Copiar</button></p>`;
+  document.getElementById('exp').value = JSON.stringify(out, null, 1);
+  document.getElementById('cp').onclick = () => navigator.clipboard.writeText(document.getElementById('exp').value);
+  dlg.showModal();
+};
+document.getElementById('btn-import').onclick = () => {
+  body.innerHTML = `<p>Pegá un export. Se fusiona con lo que hay (gana el más reciente por ítem).</p><textarea id="imp"></textarea><p><button id="go" class="primary">Importar</button></p>`;
+  document.getElementById('go').onclick = () => {
+    try { const o = JSON.parse(document.getElementById('imp').value); const src = o.annotations || o;
+      for (const [id, a] of Object.entries(src)) { if (!ann[id] || (a.ts || '') > (ann[id].ts || '')) ann[id] = a; }
+      save(); render(); dlg.close(); } catch (e) { alert('JSON inválido: ' + e); }
+  };
+  dlg.showModal();
+};
+document.getElementById('btn-reset').onclick = () => { if (confirm('¿Borrar TODAS las anotaciones de este navegador? Exportá antes.')) { ann = {}; save(); render(); } };
+document.getElementById('btn-stats').onclick = () => {
+  if (!DATA) return;
+  let agree = 0, n = 0, exist = 0, ne = 0, pf = { tp: 0, fp: 0, fn: 0, tn: 0 };
+  for (const it of DATA.frames) { const a = ann[it.id]; if (!a) continue;
+    for (const f of it.frames) { const p = 'f' + f.frame_index + '.';
+      if (a[p + 'existe'] !== undefined) { ne++; if (a[p + 'existe']) exist++; }
+      if (a[p + 'promocional'] !== undefined) { n++; if (a[p + 'promocional'] === f.promotional) agree++; } } }
+  for (const it of DATA.prefilter) { const a = ann[it.id]; if (!a || a.menciona_ia === undefined) continue;
+    const k = (it.prefilter_says_ai ? (a.menciona_ia ? 'tp' : 'fp') : (a.menciona_ia ? 'fn' : 'tn')); pf[k]++; }
+  const prec = pf.tp / Math.max(1, pf.tp + pf.fp), rec = pf.tp / Math.max(1, pf.tp + pf.fn);
+  body.innerHTML = `<table class="stats">
+    <tr><td>Frames que existen</td><td>${exist}/${ne} (${(100 * exist / Math.max(1, ne)).toFixed(1)}%)</td></tr>
+    <tr><td>Acuerdo humano–juez en promocional</td><td>${agree}/${n} (${(100 * agree / Math.max(1, n)).toFixed(1)}%)</td></tr>
+    <tr><td>Prefiltro: precisión / recall (sobre lo anotado)</td><td>${(100 * prec).toFixed(1)}% / ${(100 * rec).toFixed(1)}% (tp ${pf.tp}, fp ${pf.fp}, fn ${pf.fn}, tn ${pf.tn})</td></tr>
+  </table><p class="kbd">El recall del prefiltro acá está sesgado por el muestreo estratificado: la zona gris y los negativos con término están sobre-representados a propósito. Para el número honesto usar <code>summarize.py</code> con los pesos por estrato.</p>`;
+  dlg.showModal();
+};
+</script>
+</body>
+</html>

@@ -1,14 +1,12 @@
 # Ratios contables, factores de mercado y estudio de volatilidad/beta (EE.UU.)
 
-> **Recalculado 2026-09-06 sobre el prefiltro v2 y con builders versionados.**
-> Las tablas de este documento salen de la corrida actual de `make analytics`
-> (`report_crosscheck_stats.py` reproduce las numéricas): panel de 1.426
-> empresas-año y 460 empresas, frames de 10-K, DEF 14A y 8-K, población
-> marcada por el prefiltro v2 (árboles, umbral 0,17 — `prefilter_evaluation.md`
-> §8.16). Lado contable/mercado producido por `build_firm_financials.py`,
-> `build_market_factors.py` y `build_roic_wacc.py` (ERP geométrico 6,48%).
-> Las corridas anteriores y sus deltas están en `10_builders_y_recalculo.md`.
-
+Todas las cifras salen de la corrida vigente de `make analytics`
+(`report_crosscheck_stats.py` reproduce las tablas numéricas) sobre el panel
+de 1.426 empresas-año y 460 empresas: frames de 10-K, DEF 14A y 8-K,
+población marcada por el prefiltro v2 (árboles, umbral 0,17 —
+`prefilter_evaluation.md` §8.16), lado contable/mercado de
+`build_firm_financials.py`, `build_market_factors.py` y `build_roic_wacc.py`
+(ERP geométrico 6,48%, `10_builders_y_recalculo.md`).
 
 Extiende `02_market_accounting_crosscheck.md` de datos contables básicos
 (revenue, R&D, capex, SG&A) a **ratios finales** (rentabilidad,
@@ -21,8 +19,8 @@ composición sectorial que `02_...md` dejó abierto ("no se puede separar
 D-divulga-distinto de D-es-del-sector-que-crece-más").
 
 **Estado: exploratorio.** Un resultado de esta sección **corrige** una
-conclusión de `02_...md` (ver "Lectura conjunta" abajo) — no es un
-descarte del hallazgo anterior, es una versión más precisa del mismo.
+conclusión de `02_...md` (ver "Lectura conjunta" abajo): el CAR ajustado
+por mercado invierte el signo del retorno crudo.
 
 ## Datos y construcción
 
@@ -107,8 +105,7 @@ promociona muestra inversión.
 | C cuantificador | **33,7** | **4,59** | **5,99** | **5,34** | **20,2** | $40,8B |
 | D vocal | 26,6 | 3,54 | 4,42 | 3,82 | 16,7 | **$51,6B** |
 
-**C cotiza más caro que D en todos los múltiplos.** Es una inversión
-respecto de la versión anterior, donde D era el más caro. El mercado paga
+**C cotiza más caro que D en todos los múltiplos.** El mercado paga
 la prima por el grupo que cuantifica, no por el que promociona — un dato
 directamente relevante para la pregunta de AI-washing, aunque no permite
 separar "paga por la sustancia del disclosure" de "paga por el sector".
@@ -124,9 +121,9 @@ separar "paga por la sustancia del disclosure" de "paga por el sector".
 
 C y D empatan arriba (beta 1,04 y 1,05) contra A y B en 0,81.
 **Hablar mucho de IA —cuantificando o promocionando— va de la mano de más
-riesgo sistemático**, con la causalidad sin identificar. Es el resultado
-que menos se mueve entre las tres corridas: la brecha de ~0,25 de beta
-entre los arquetipos vocales y los otros dos está en las tres.
+riesgo sistemático**, con la causalidad sin identificar. La brecha de
+~0,25 de beta entre los arquetipos vocales y los otros dos es el
+resultado más robusto de los tres documentos financieros.
 
 ## Resultados: retorno ajustado por mercado (CAR) — invierte el signo de `02_...md`
 
@@ -141,10 +138,9 @@ CAR [-1, +5] ajustado por mercado:
 
 Una vez descontado el movimiento del mercado, **D es el único arquetipo
 con retorno anormal negativo**, y queda último tanto en media como en
-mediana. C lidera. El orden A > D se mantuvo en todas las corridas; la
-ventaja de C es la parte sensible: con el pase intermedio de umbral 0,30
-había caído a la par de A (+0,33% de mediana), y con 0,17 vuelve a
-+0,87%. Con n=129 es un resultado que se mueve con la población.
+mediana. C lidera, con la salvedad de que con n=129 su ventaja se mueve
+con la población: bajo un umbral de prefiltro más estricto cae a la par
+de A.
 
 Las magnitudes son chicas y la dispersión grande, así que es direccional,
 no concluyente. Pero apunta consistentemente en la misma dirección que
@@ -159,9 +155,8 @@ Correlación `behavior_share_revenue_outcome` (t) vs. `next_revenue_yoy`:
 | Cruda | 0,049 | 939 |
 | Dentro de sector-año (SIC-2 × año, ambas variables demeaned) | **0,019** | 939 |
 
-Igual que en las corridas anteriores (0,09 → 0,03; 0,07 → 0,03), **más de
-la mitad de la correlación cruda es composición sectorial** — y la cruda
-ya es la mitad de lo que era. Lo que queda dentro de sector-año es 0,019,
+**Más de la mitad de la correlación cruda es composición sectorial.** Lo
+que queda dentro de sector-año es 0,019,
 indistinguible de ruido según el test de permutación de `05_...md`
 (p=0,53).
 
@@ -180,9 +175,9 @@ positivo chico que no se puede distinguir de un control imperfecto (SIC-2
 es granularidad gruesa: dentro de "SIC 73 servicios de cómputo" conviven
 perfiles de R&D muy distintos).
 
-## Lectura conjunta y actualización de `02_...md`
+## Lectura conjunta
 
-Sobreviven al cambio de población, sin cambios cualitativos:
+Lo que se sostiene:
 
 - **Los arquetipos vocales (C y D) tienen más beta y volatilidad** — el
   hallazgo más limpio y estable de los tres documentos financieros.
@@ -193,7 +188,7 @@ Sobreviven al cambio de población, sin cambios cualitativos:
   cero.
 - **La ventaja de R&D es mayormente sectorial** (~81%).
 
-Aparece con la población nueva:
+Y además:
 
 - **C cotiza más caro que D en todos los múltiplos y le gana en CAR**
   (+0,87% contra −0,17% de mediana), lo que invierte la lectura original

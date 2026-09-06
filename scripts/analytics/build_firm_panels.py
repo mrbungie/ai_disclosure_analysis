@@ -117,8 +117,9 @@ def main() -> None:
     print(f"cohort_2021_crosscheck: {len(cohort):,} filas, "
           f"{cohort['ticker'].nunique():,} empresas de la cohorte 2021")
 
-    # --- segmentos: una fila por empresa, promediando sus años ---
-    per_firm = (master.groupby("ticker")[SEGMENT_COLUMNS].mean().reset_index()
+    # --- segmentos: una fila por empresa, MEDIANA de sus años (robusta a un
+    # año atípico; es lo que 07_...md documenta y lo que usan las demás tablas) ---
+    per_firm = (master.groupby("ticker")[SEGMENT_COLUMNS].median().reset_index()
                 .merge(crossed, on="ticker", how="inner"))
     print(f"segment_financials: {len(per_firm):,} empresas con ambas etiquetas y financieros")
 

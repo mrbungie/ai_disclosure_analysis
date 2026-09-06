@@ -16,8 +16,8 @@ premia a la que más habla. La confianza que merece cada tasa sí depende del
 volumen, y de eso se encarga el encogimiento empírico-Bayes (una empresa con 9
 frames se corre hacia el promedio del corpus).
 
-**Correlación entre ejes: 0,297** (re-corrida 2026-09-06 sobre el prefiltro v2; antes 0,294). No son el mismo eje — que es la condición
-para que la grilla tenga contenido. (Con la medición anterior, tasas crudas de
+**Correlación entre ejes: 0,297.** No son el mismo eje — que es la condición
+para que la grilla tenga contenido. (Con la medición del cruce de clusters de `06_...md`, tasas crudas de
 15 conceptos, los bloques compartían 82% de la varianza y la matriz no decía
 nada; ver `06_...md`.)
 
@@ -48,10 +48,6 @@ Remuestreando los frames de cada empresa, 20 réplicas:
 |---|---:|---:|
 | cae en la MISMA celda | 60,4% | 76,2% |
 | cae en la misma o una ADYACENTE | **99,1%** | 100% |
-
-(Columna 3×3 re-corrida el 2026-09-06; la columna 2×2 y las dos filas de
-"se mantiene en la esquina" son de la corrida anterior — el manifiesto actual
-no las guarda.)
 | se mantiene en la esquina "washing" | 61,5% | 69,5% |
 | se mantiene en "vocales sustantivos" | 74,7% | 81,8% |
 

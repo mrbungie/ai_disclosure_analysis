@@ -8,11 +8,6 @@ Responde las preguntas extendidas de `docs/thesis_proposal.md`:
 
 Producido por `scripts/analytics/shock_analysis.py`. Determinístico, sin LLM.
 
-> Re-corrido el 2026-09-06 sobre el prefiltro v2 (`shock_analysis.json`,
-> `shock_did_simple.json`). Las conclusiones no se mueven; los números de
-> abajo son los actuales. El barrido de ventanas se re-corrió con copias del
-> script con `WINDOW` = 3…7.
-
 ## El diseño
 
 Event study empresa-trimestre:
@@ -28,10 +23,10 @@ referencia. Los coeficientes previos al evento **son** el test del supuesto, y s
 evalúan con un test conjunto F, no uno por uno.
 
 **El tratamiento es la exposición previa a IA** —volumen de frames antes de
-2023—, no la vaguedad. La versión original definía los grupos con
-`z(promocional) − z(especificidad)` pre-evento y después medía esas mismas
-métricas: la convergencia resultante es mecánica, no un efecto, y las tendencias
-previas no pueden ser paralelas (F=5,11, p=0,001). Con exposición el tratamiento
+2023—, no la vaguedad. Definir los grupos con `z(promocional) −
+z(especificidad)` pre-evento y después medir esas mismas métricas produce una
+convergencia mecánica, no un efecto, y las tendencias previas no pueden ser
+paralelas (F=5,11, p=0,001 con ese diseño). Con exposición el tratamiento
 sale de cuánto habla la empresa del tema, no de cómo.
 
 **Qué afirma este diseño y qué no.** La propuesta pide, para estas preguntas, un
@@ -60,8 +55,8 @@ que las menos expuestas después de marzo de 2024. `specificity_index` da
 
 ### Y la sensibilidad, que es la parte importante
 
-Una versión anterior de este análisis reportó **+8,4 p.p. (p<0,001)** para
-`promotional_rate`. No sobrevive. Barriendo el ancho de ventana:
+Con una ventana ancha aparece un efecto de **+6,0 p.p. (p=0,03)** para
+`promotional_rate`. Barriendo el ancho de ventana:
 
 | ventana | empresas | tendencias previas | cambio post |
 |---:|---:|---|---:|
@@ -127,9 +122,10 @@ observaciones detrás: es una anécdota, no un hallazgo.
 3. Lo que sí sería identificable —y no está hecho— es el **contraste por canal**:
    la misma empresa, el mismo trimestre, filings (con responsabilidad legal)
    contra earnings calls (sin ella). Las transcripciones ya están clasificadas
-   (16.267 frames de 403 empresas, `earnings_calls_analysis.py`, 2026-09-06);
-   falta el diseño empresa × trimestre × canal. Ver
-   `docs/pregunta_identificacion_sec.md` y `docs/PENDIENTES.md` §2.1.
+   (16.267 frames de 403 empresas, `earnings_calls_analysis.py`) y el diseño
+   empresa × trimestre × canal está en `14_brecha_entre_canales.md`: la brecha
+   promocional entre call y filing es de +10,7 p.p. y el escrutinio de la SEC
+   no la cerró (b=+0,001, p=0,96).
 
 ## Limitaciones
 

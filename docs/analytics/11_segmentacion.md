@@ -23,7 +23,7 @@ traducir: *porcentaje de las afirmaciones de IA de esa empresa*.
 | Gobernanza | % gobernanza |
 | Registro | % promocional, % cuantificado, % de cara al producto |
 
-Tres decisiones que hacen la diferencia entre esto y la versión anterior:
+Tres decisiones de construcción:
 
 1. **Los conceptos raros se agrupan en su dimensión.** `ai_investment`,
    `ai_infrastructure`, `ai_talent` y `proprietary_ai` aparecen cada uno en 2-3%
@@ -45,12 +45,12 @@ Tres decisiones que hacen la diferencia entre esto y la versión anterior:
 | 4 | 0,56 / 0,62 / 0,72 / 0,71 | no |
 | 5 | 0,42 / 0,67 / 0,23 / 0,58 / 0,68 | no |
 
-Los cuatro arquetipos anteriores caían justo acá: **k=4 nunca fue reproducible**.
+Los cuatro arquetipos A/B/C/D caían justo acá: **k=4 no es reproducible**.
 
 ## Los tres segmentos
 
-419 empresas con ≥8 frames (re-corrida 2026-09-06 sobre el prefiltro v2; antes
-420). Todos los números son % de las afirmaciones de IA de la empresa.
+419 empresas con ≥8 frames. Todos los números son % de las afirmaciones de IA
+de la empresa.
 
 | | Desplegadores de producto | Adoptantes con gobernanza | Listadores de riesgo |
 |---|---:|---:|---:|
@@ -74,10 +74,10 @@ Empresas típicas (las más cercanas al centroide):
 - **Listadores de riesgo**: DHI, HWM, NKE, EG, ITW, MKC, FITB, PPG.
 
 **Los nombres salen del perfil, no de un orden fijo**: cada segmento se nombra
-por la dimensión donde más se despega del promedio. (Una versión anterior
-llamaba "constructores de capacidad" a un segmento cuya capacidad —8,5%— era
-MENOR que la de los desplegadores —11,5%—: el nombre salía de cuál etiqueta
-quedaba libre. Corregido con z-scores.)
+por la dimensión donde más se despega del promedio, medido en z-scores. (Sin
+eso, un segmento con capacidad de 8,5% podría llamarse "constructores de
+capacidad" sólo porque esa etiqueta quedó libre, aunque los desplegadores
+tengan 11,5%.)
 
 ### Qué dice cada uno
 

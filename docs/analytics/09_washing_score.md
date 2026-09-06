@@ -54,8 +54,9 @@ logit(P(promocional)) = −4,297 + 2,913 × índice_comportamiento
                         + 0,970 × [DEF 14A] + 0,054 × [8-K]
 ```
 
-**El coeficiente del proxy es la mitad del efecto que antes se atribuía a la
-empresa.** La DEF 14A tiene 16,1% de frames promocionales contra 7,2% del 10-K,
+**El coeficiente del proxy es la mitad del efecto que un score sin control de
+formulario atribuiría a la empresa.** La DEF 14A tiene 14,7% de frames
+promocionales contra 7,1% del 10-K,
 así que una empresa cuyo proxy aporta la mitad de sus frames parecía
 promocional por composición documental. Sin ese control la cola de washing
 tiene 41% de frames de proxy contra 23% del resto del corpus.
@@ -87,16 +88,10 @@ predictor.
 
 ## Resultados
 
-449 empresas con ≥5 frames, FDR 5%: **8 en la cola de washing, 3 en la de
-sustancia callada, 438 indistinguibles.**
-
-> Recalculado 2026-09-06 (tarde) sobre la población del prefiltro v2 (árboles,
-> umbral 0,17 — `prefilter_evaluation.md` §8.16): 23.690 frames únicos de 449
-> empresas, frente a 24.141 de 439 en la corrida de la mañana. **La cola de
-> washing casi no se movió**: las mismas 7 empresas más CRM, que vuelve a
-> entrar (estaba en la corrida del 2026-09-05 y salió en la de la mañana); en
-> la callada entra MSCI. El modelo tampoco: coeficiente de comportamiento
-> 3,10 → 3,15, DEF 14A 0,88 → 0,88, ICC documento 0,037 → 0,036.
+449 empresas con ≥5 frames (23.690 frames únicos de 10-K, DEF 14A y 8-K,
+población del prefiltro v2 con umbral 0,17), FDR 5%: **8 en la cola de
+washing, 3 en la de sustancia callada, 438 indistinguibles.** Coeficiente de
+comportamiento 3,15, DEF 14A +0,88, ICC de documento 0,036.
 
 | ticker | frames | promo. obs. | esperados | tasa obs. | tasa esperada | z |
 |---|---:|---:|---:|---:|---:|---:|
@@ -112,10 +107,10 @@ sustancia callada, 438 indistinguibles.**
 Sustancia callada: **MSI** (5 promocionales de 175, esperados 21,6), **MSCI**
 (4 de 187, esperados 20,0) y **STX** (0 de 73, esperados 10,0).
 
-**Con la especificación anterior (instancias, sin control de formulario, sin
-dispersión) eran 22 y 10.** Caen AAPL, ADBE, AMZN, IBM, EFX, GILD, IQV, LUMN,
-SNPS — casi todas por composición documental — y de la cola callada
-desaparecen META, AXP, AVGO, KLAC, NET, ICE y FTNT.
+**Con la especificación ingenua (instancias, sin control de formulario, sin
+dispersión) serían 23 y 9.** Salen AAPL, ADBE, AMZN, IBM, EFX, IQV, LUMN, SNPS,
+MSFT, NVDA, QCOM, WDAY, CHRW, JCI, ACN — casi todas por composición
+documental — y de la cola callada META, AXP, KLAC, NET, SQ y FTNT.
 
 ### Potencia
 
@@ -197,8 +192,8 @@ SEC (`01_...md`):
 | HPE | 29,0 | −1,11 | — | no | falso positivo (segmentos) |
 | NVDA | 97,5 | +4,09 | — | no | falso positivo (ingresos) |
 
-(Conteos de promocionales por caso: corrida anterior 1/43, 28/216, 26/290 y
-85/502; la validación actual guarda percentil y z solamente.)
+(La validación guarda percentil y z; los conteos de promocionales por caso
+salen de `firm_washing_score.parquet`.)
 
 **Welltower —el único caso real— no lo detecta el score, y no es un bug del
 estimador sino una diferencia de constructo.** La SEC no le objetó su 10-K por
@@ -210,9 +205,10 @@ filing; el mecanismo que persigue el regulador es una BRECHA entre canales.
 Es la limitación más importante del instrumento y marca el próximo paso
 concreto: medir el mismo score sobre transcripciones de earnings calls y
 comparar el exceso de cada empresa entre canales. El corpus de earnings calls
-ya está clasificado (16.267 frames de 403 empresas, 2026-09-06 —
-`scripts/analytics/earnings_calls_analysis.py`); el diseño por canal es el
-punto 2.1 de `docs/PENDIENTES.md`.
+ya está clasificado (16.270 frames de 403 empresas,
+`scripts/analytics/earnings_calls_analysis.py`) y el diseño por canal está en
+`14_brecha_entre_canales.md`: brecha promocional call − filing de +10,7 p.p.,
+ortogonal a este score (Spearman 0,10).
 
 ## Limitaciones
 

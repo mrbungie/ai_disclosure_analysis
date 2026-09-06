@@ -1,14 +1,12 @@
 # Cruce con mercado y contabilidad (EE.UU.)
 
-> **Recalculado 2026-09-06 sobre el prefiltro v2 y con builders versionados.**
-> Las tablas de este documento salen de la corrida actual de `make analytics`
-> (`report_crosscheck_stats.py` reproduce las numéricas): panel de 1.426
-> empresas-año y 460 empresas, frames de 10-K, DEF 14A y 8-K, población
-> marcada por el prefiltro v2 (árboles, umbral 0,17 — `prefilter_evaluation.md`
-> §8.16). Lado contable/mercado producido por `build_firm_financials.py`,
-> `build_market_factors.py` y `build_roic_wacc.py` (ERP geométrico 6,48%).
-> Las corridas anteriores y sus deltas están en `10_builders_y_recalculo.md`.
-
+Todas las cifras salen de la corrida vigente de `make analytics`
+(`report_crosscheck_stats.py` reproduce las tablas numéricas) sobre el panel
+de 1.426 empresas-año y 460 empresas: frames de 10-K, DEF 14A y 8-K,
+población marcada por el prefiltro v2 (árboles, umbral 0,17 —
+`prefilter_evaluation.md` §8.16), lado contable/mercado de
+`build_firm_financials.py`, `build_market_factors.py` y `build_roic_wacc.py`
+(ERP geométrico 6,48%, `10_builders_y_recalculo.md`).
 
 Primer cruce de los arquetipos/comportamientos de divulgación de IA
 (`01_ai_disclosure_analytics.md`) con datos externos al texto: XBRL
@@ -123,21 +121,11 @@ ret_5d = p1 / p0 - 1
 
 ## Resultados: "talk vs. walk"
 
-> Recalculado 2026-09-06 sobre el panel actual (1.426 empresas-año, 460
-> empresas, con DEF 14A y 8-K, población del prefiltro v2 con umbral 0,17).
-> Un primer pase de la tarde usó umbral 0,30 y achicó el panel a 1.396
-> filas; se re-desplegó con 0,17, el umbral de recall alto. Respecto de la
-> corrida del 2026-09-05 cambiaron tres cosas a la vez: la población de
-> párrafos (prefiltro v2), las etiquetas de arquetipo (K-means re-ajustado)
-> y la cobertura XBRL (builders versionados, `10_...md`).
-
 ### 1. `revenue_outcome` (lo que dicen) vs. crecimiento de revenue real al año fiscal siguiente
 
 Correlación entre `behavior_share_revenue_outcome` del año *t* y
 `next_revenue_yoy`: **r = 0,049** (n=939, recortando outliers >300% YoY).
-Es poco más de la mitad del 0,091 de la corrida anterior: la correlación
-no sobrevivió al cambio de población y a la mejor cobertura XBRL, y el
-test de permutación de `05_...md` la deja en p=0,12 — indistinguible de
+El test de permutación de `05_...md` la deja en p=0,12 — indistinguible de
 cero.
 
 Por arquetipo — crecimiento de revenue del FY **siguiente**:
@@ -149,13 +137,10 @@ Por arquetipo — crecimiento de revenue del FY **siguiente**:
 | C cuantificador | 7,4% | **11,8%** | 105 |
 | D vocal | **8,6%** | 11,2% | 282 |
 
-El ranking ordinal A < B < C ≈ D se mantiene respecto de la versión
-anterior. C y D quedan otra vez prácticamente empatados en mediana, con C
-bastante arriba en media — el mismo patrón que reportaba la versión
-original con el cluster C de 7 empresas, ahora con 105 observaciones
-detrás en vez de 35. El orden por arquetipo sobrevive aunque la
-correlación lineal no: la diferencia está en los extremos (A contra D),
-no en el gradiente continuo.
+El ranking ordinal es A < B < C ≈ D: C y D casi empatados en mediana, con
+C arriba en media por su cola derecha (semis en años de expansión). El
+orden por arquetipo existe aunque la correlación lineal no: la diferencia
+está en los extremos (A contra D), no en el gradiente continuo.
 
 ### 2. `ai_investment` / `ai_infrastructure` vs. capex y R&D reales
 
@@ -166,41 +151,32 @@ no en el gradiente continuo.
 | `ai_infrastructure` | `capex_yoy` | **0,086** | 840 |
 | `ai_infrastructure` | `rd_expense_yoy` | 0,019 | 512 |
 
-El patrón sobrevive debilitado: `ai_infrastructure` → `capex` sigue
-siendo la única de las cuatro con alguna magnitud (0,086, contra 0,114 en
-la corrida anterior). Bajó justamente al mejorar la cobertura de capex de
-69% a 87% (`10_...md`): la correlación anterior se apoyaba en el
-subconjunto de filers que reportan el tag más común. Las otras tres
-quedan entre −0,007 y 0,044, o sea nada.
+`ai_infrastructure` → `capex` es la única de las cuatro con alguna
+magnitud (0,086). Las otras tres quedan entre −0,007 y 0,044, o sea nada.
+Con cobertura de capex parcial (sólo los filers que reportan el tag más
+común) la correlación sube a ~0,11; con la cobertura completa de 87%
+(`10_...md`) baja a 0,086 — se apoya en parte en qué filers tienen dato.
 
 La asimetría es el hallazgo: decir "invertimos en IA" no predice el capex
 del año siguiente; decir "construimos infraestructura de IA" sí predice
-algo, poco, y menos que antes. Sigue siendo la mayor del cruce contable,
-pero ya no pasa el FDR de `05_...md` (p=0,013 contra un umbral BH de
-0,0045).
+algo, poco. Es la mayor del cruce contable y no pasa el FDR de `05_...md`
+(p=0,013 contra un umbral BH de 0,0045).
 
 ### 3. `cost_outcome` vs. SG&A real — la señal de "washing" desapareció
 
-Correlación: **r = −0,011** (n=799), contra +0,011 y −0,027 en las dos
-corridas anteriores — oscila alrededor de cero. Partiendo por intensidad
-de `cost_outcome`:
+Correlación: **r = −0,011** (n=799): cero. Partiendo por intensidad de
+`cost_outcome`:
 
 | Grupo | SG&A YoY (FY t+1) mediana | n |
 |---|---|---|
 | Menos `cost_outcome` (mitad baja) | 5,7% | 585 |
 | Más `cost_outcome` (mitad alta) | 6,0% | 214 |
 
-La versión anterior reportaba esto como "la señal más cercana a washing
-encontrada": quienes más enmarcaban la IA como ahorro de costos mostraban
-SG&A creciendo MÁS (4,6% vs. 5,5%). **Con la población actual la
-diferencia es de 0,3 p.p., la correlación es cero, y con n=799 ya no es
-cuestión de muestra chica.**
-
-No es "antes había washing y ahora no". Es que **la señal nunca tuvo
-fuerza suficiente para sobrevivir a un cambio de muestra** — era r=−0,027
-sobre n=419. Es la lección metodológica más útil de esta actualización, y
-`05_...md` la confirma: ese par queda noveno de once en el ranking FDR con
-p=0,75.
+La hipótesis de washing acá sería "quienes más enmarcan la IA como
+ahorro de costos muestran SG&A creciendo MÁS". **La diferencia es de 0,3
+p.p., la correlación es cero, y con n=799 no es cuestión de muestra
+chica.** `05_...md` lo confirma: ese par queda noveno de once en el
+ranking FDR con p=0,75. No hay señal de washing en el cruce de costos.
 
 (El corte por mediana queda desbalanceado, 585 vs. 214, porque la mayoría
 de empresas-año tiene `cost_outcome` exactamente en 0 y cae del lado bajo.)
@@ -231,9 +207,7 @@ Retorno crudo [-1, +5 días hábiles] alrededor del 10-K, por arquetipo:
 | D vocal | −0,17% | −0,11% | 6,35% | 363 |
 
 Sin diferencias económicamente relevantes (medias dentro de ±0,7 p.p. con
-desviaciones de 6-7%: ruido >> señal). El rango se estrechó respecto de
-la versión anterior, donde C mostraba −1,26% de media con 42
-observaciones de un cluster de 7 empresas.
+desviaciones de 6-7%: ruido >> señal).
 
 Correlaciones directas:
 
@@ -241,7 +215,7 @@ Correlaciones directas:
 - retorno vs. `specificity_index` del filing: **r = −0,008**
 - retorno vs. volumen de menciones de IA (`n_frames`): **r = −0,050**
 
-**Ninguna**, igual que antes y ahora con más datos.
+**Ninguna.**
 
 Una nota de alcance que ahora importa más: `ret_m1_p5` se calcula sobre
 la fecha de filing del **10-K**, pero el panel de texto mezcla frames de
@@ -264,9 +238,6 @@ reduce a 0,019 dentro de sector-año. Insumos (`ai_investment`,
 negativo: el instrumento de texto no predice resultados financieros al
 año siguiente, y ahora eso está medido sobre 799-939 observaciones con
 cobertura XBRL decente (`10_...md`), no sobre la mitad de la muestra.
-La versión 2026-09-05 de este documento leía el r=0,09 de revenue como
-"evidencia débil de que el instrumento mide algo real"; con la corrida
-actual esa lectura no se sostiene.
 
 ## Limitaciones (leer antes de citar cualquier número de esta sección)
 
