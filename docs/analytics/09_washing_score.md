@@ -208,7 +208,7 @@ comparar el exceso de cada empresa entre canales. El corpus de earnings calls
 ya está clasificado (16.270 frames de 403 empresas,
 `scripts/analytics/earnings_calls_analysis.py`) y el diseño por canal está en
 `14_brecha_entre_canales.md`: brecha promocional call − filing de +10,7 p.p.,
-ortogonal a este score (Spearman 0,10).
+ortogonal a este score (Spearman −0,06).
 
 ## Limitaciones
 
