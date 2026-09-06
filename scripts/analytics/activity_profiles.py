@@ -177,7 +177,16 @@ def load() -> pd.DataFrame:
     a["channel_rank"] = (a["channel"] == "call").astype(int)
     a = a.sort_values("channel_rank").drop_duplicates(["ticker", "text_hash", "activity_index"]).drop(columns="channel_rank")
     a["function_family"] = a["function"].map(lambda v: family(v, FUNCTION_FAMILIES, "unspecified"))
-    a["provider_family"] = a["provider_or_model"].map(lambda v: family(v, PROVIDER_FAMILIES, "unspecified"))
+    # proveedores: lista por actividad. `provider_families` es la lista de familias;
+    # `provider_family` resume la actividad: la primera familia externa nombrada, si no
+    # 'proprietary' si lo declara, si no 'unspecified'. Los conteos por proveedor usan la lista.
+    a["providers_or_models"] = a["providers_or_models"].map(lambda v: [str(x) for x in (list(v) if v is not None else [])])
+    a["provider_or_model"] = a["providers_or_models"].map(lambda v: ", ".join(v) if v else "unspecified")
+    a["provider_families"] = a["providers_or_models"].map(lambda v: sorted({family(x, PROVIDER_FAMILIES, "unspecified") for x in v}))
+    def _summary(fams):
+        ext = [f for f in fams if f not in ("proprietary", "unspecified", "third_party_unnamed")]
+        return ext[0] if ext else ("third_party_unnamed" if "third_party_unnamed" in fams else ("proprietary" if "proprietary" in fams else "unspecified"))
+    a["provider_family"] = a["provider_families"].map(_summary)
     a["stage_rank"] = a["stage"].map(STAGE_RANK).fillna(0).astype(int)
     a["object_family"] = a["object"].map(lambda v: "AI, unspecified object" if is_generic_object(v) else family(v, OBJECT_FAMILIES, "AI, unspecified object"))
     # lo que no cae en ninguna familia pero trae producto o proceso con nombre es un objeto concreto con marca
@@ -190,7 +199,7 @@ def load() -> pd.DataFrame:
     inst_docs = inst_docs.merge(docs.drop(columns="channel"), on="accession_number", how="inner")
     inst_docs["year"] = inst_docs["fecha"].dt.year
     a.attrs["instances"] = a[["text_hash", "activity_index", "action", "target", "stage", "provider_or_model", "provider_family",
-                              "evidence_strength", "function"]].drop_duplicates(["text_hash", "activity_index"]) \
+                              "provider_families", "evidence_strength", "function"]].drop_duplicates(["text_hash", "activity_index"]) \
         .merge(inst_docs, on="text_hash", how="inner")
     return a
 
@@ -202,8 +211,8 @@ def flags(a: pd.DataFrame) -> pd.DataFrame:
     f["customer_facing_deployment"] = used & (a["target"] == "customers")
     f["internal_deployment"] = used & a["target"].isin(["employees", "internal_process"])
     f["developer_tools"] = used & (a["target"] == "developers")
-    f["proprietary_ai"] = (a["action"] == "develop") | (a["provider_family"] == "proprietary")
-    f["third_party_named_provider"] = ~a["provider_family"].isin(["proprietary", "unspecified"])
+    f["proprietary_ai"] = (a["action"] == "develop") | a["provider_families"].map(lambda v: "proprietary" in v)
+    f["third_party_named_provider"] = a["provider_families"].map(lambda v: any(x not in ("proprietary", "unspecified", "third_party_unnamed") for x in v))
     f["infrastructure_investment"] = a["action"] == "invest_infrastructure"
     f["acquisition_or_licensing"] = a["action"] == "buy_or_license"
     f["partnership"] = a["action"] == "partner"
@@ -300,6 +309,8 @@ def main() -> None:
         print(f"  {k:18s} " + " | ".join(f"{kk} {vv}" for kk, vv in v.items()))
     fam = (a["function_family"].value_counts(normalize=True) * 100).round(1)
     prov = (a["provider_family"].value_counts(normalize=True) * 100).round(1)
+    multi = float(a["provider_families"].map(lambda v: len(set(v) - {"proprietary", "unspecified", "third_party_unnamed"}) >= 2).mean())
+    print(f"  actividades con ≥2 proveedores externos nombrados: {100 * multi:.1f}%")
     print("  function family    " + " | ".join(f"{k} {v}" for k, v in fam.items()))
     print("  provider family    " + " | ".join(f"{k} {v}" for k, v in prov.items()))
 
@@ -332,9 +343,11 @@ def main() -> None:
     top_obj = firm_share(a, "object_family", n_firms, 20)
     print(top_obj[["pct_firms", "firms", "examples"]].to_string())
     print("\nPROVEEDORES NOMBRADOS — % de empresas que nombran cada familia, y los nombres literales más frecuentes")
-    named = a[~a["provider_family"].isin(["proprietary", "unspecified", "third_party_unnamed"])]
+    expl = a[["ticker", "object", "providers_or_models"]].explode("providers_or_models").dropna(subset=["providers_or_models"])
+    expl["provider_family"] = expl["providers_or_models"].map(lambda v: family(v, PROVIDER_FAMILIES, "unspecified"))
+    named = expl[~expl["provider_family"].isin(["proprietary", "unspecified", "third_party_unnamed"])]
     prov_firms = firm_share(named, "provider_family", n_firms, 12)
-    prov_firms["examples"] = named.groupby("provider_family")["provider_or_model"].apply(lambda s: ", ".join(s.value_counts().index[:5]))
+    prov_firms["examples"] = named.groupby("provider_family")["providers_or_models"].apply(lambda s: ", ".join(s.value_counts().index[:5]))
     print(prov_firms[["pct_firms", "firms", "examples"]].to_string())
     print("  empresas que nombran algún proveedor externo:", named["ticker"].nunique(), "de", n_firms)
 
@@ -383,7 +396,7 @@ def main() -> None:
                                 "functions": g["function_family"].apply(lambda x: ", ".join(v for v in x.value_counts().index[:2] if v not in ("unspecified", "other"))),
                                 "targets": g["target"].apply(lambda x: ", ".join(v for v in x.value_counts().index[:2] if v != "unspecified")),
                                 "objects": g["object"].apply(lambda x: ", ".join(x.value_counts().index[:3])),
-                                "providers": g["provider_or_model"].apply(lambda x: ", ".join(v for v in x.value_counts().index[:3] if v.lower() not in ("unspecified", "proprietary"))),
+                                "providers": g["providers_or_models"].apply(lambda x: ", ".join(v for v in pd.Series([p for lst in x for p in lst], dtype=object).value_counts().index[:3] if v.lower() not in ("unspecified", "proprietary"))),
                                 "stage": g["stage_rank"].max().map({v: k for k, v in STAGE_RANK.items()}),
                                 "named_or_metric": g["evidence_strength"].apply(lambda x: float(x.isin(["named_product_or_process", "metric", "vendor"]).mean()))
                                 }).sort_values("n", ascending=False).head(8).reset_index()

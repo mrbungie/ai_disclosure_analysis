@@ -88,20 +88,29 @@ def main() -> None:
         print(f"  evidencia correcta: {100*sum(evid)/len(evid):.1f}% (n={len(evid)})")
 
     # ---- actividades ----
-    verd = Counter(); wrong = Counter(); n_fields = 0
+    verd = Counter(); wrong = Counter(); n_fields = 0; falta = []
     for it in data.get("activities", []):
         a = ann.get(it["id"])
-        if not a or not a.get("veredicto"):
+        if not a:
             continue
-        verd[a["veredicto"]] += 1
-        if a["veredicto"] in ("ok", "mal"):
-            n_fields += 1
-            for k, v in (a.get("mal") or {}).items():
-                if v:
-                    wrong[k] += 1
+        if a.get("falta") is not None:
+            falta.append(bool(a["falta"]))
+        for x in it["activities"]:
+            p = f"a{x['activity_index']}."
+            v = a.get(p + "veredicto")
+            if not v:
+                continue
+            verd[v] += 1
+            if v in ("ok", "mal"):
+                n_fields += 1
+                for k, w in (a.get(p + "mal") or {}).items():
+                    if w:
+                        wrong[k] += 1
     if verd:
         n = sum(verd.values())
-        print(f"\nACTIVIDADES (n anotado = {n})")
+        print(f"\nACTIVIDADES (n anotado = {n} actividades en {len(falta)} párrafos)")
+        if falta:
+            print(f"  párrafos a los que falta alguna actividad (recall): {sum(falta)}/{len(falta)} ({100*sum(falta)/len(falta):.1f}%)")
         print(f"  existe y está bien: {verd['ok']}/{n} ({100*verd['ok']/n:.1f}%) | existe con algún campo mal: {verd['mal']} | no existe: {verd['no_existe']} ({100*verd['no_existe']/n:.1f}%)")
         print("  precisión por campo, entre las actividades que existen:")
         for k in ("action", "object", "function", "target", "stage", "provider", "evidence_strength"):

@@ -7,11 +7,12 @@ parquets del prefiltro — sin LLM, sin red:
              (como lo vio el juez) y cada frame con sus etiquetas. La persona
              valida frame por frame: ¿existe?, ¿promocional?, ¿temporal?,
              ¿specificity? — las dimensiones que sostienen 09/11/12/13.
-  activities N actividades divulgadas (`ai_activities_from_frames.py`): el
-             párrafo con la evidencia resaltada y la actividad escrita como
-             frase ("la empresa despliega copilot para desarrollo de software,
-             empleados, escalado, proveedor OpenAI"). La persona dice si está
-             bien o marca qué campo está mal. Sostiene `09` y lo que `02`, `03`,
+  activities N párrafos con TODAS sus actividades divulgadas
+             (`ai_activities_from_frames.py`), cada una escrita como frase ("la
+             empresa despliega copilot para desarrollo de software, empleados,
+             escalado, proveedores OpenAI y Azure") sobre el párrafo con la
+             evidencia resaltada. La persona dice, por actividad, si está bien
+             o qué campo está mal, y si al párrafo le falta alguna actividad. Sostiene `09` y lo que `02`, `03`,
              `05`, `06` y `08` toman de ahí.
   prefilter  N párrafos con la decisión del prefiltro v2, estratificados por
              probabilidad (positivos seguros, zona gris, negativos con
@@ -94,37 +95,52 @@ def sample_frames(con: duckdb.DuckDBPyConnection, n: int, seed: int) -> list[dic
 
 
 def sample_activities(con: duckdb.DuckDBPyConnection, n: int, seed: int) -> list[dict]:
-    """Una actividad por ítem, estratificada por formulario y por fuerza de
-    evidencia (para que las genéricas y las con producto nombrado entren por
-    igual), con el párrafo completo y las oraciones que la sostienen."""
+    """Un ítem por PÁRRAFO con todas las actividades que el modelo le sacó, para
+    que la persona vea el conjunto y pueda decir si falta alguna. Estratificado
+    por formulario y por número de actividades (1 / 2 / 3 o más), para que los
+    párrafos largos con varias actividades no queden sub-representados."""
     acts = REPO_ROOT / "data" / "processed" / "clusters" / "firm_activities.parquet"
     if not acts.exists():
         print("sin firm_activities.parquet: corré activity_profiles.py; se omite la muestra de actividades")
         return []
-    per = max(1, n // (len(FORMS) * 4))
+    per = max(1, n // (len(FORMS) * 3))
     rows = con.execute(f"""
         WITH a AS (
-            SELECT DISTINCT country_code, form, accession_number, item_key, paragraph_index, text_hash, activity_index,
-                   action, object, function, target, stage, provider_or_model, evidence_strength, evidence_sentence_ids
+            SELECT DISTINCT country_code, form, accession_number, item_key, paragraph_index, text_hash, activity_index
             FROM read_parquet('{acts}')
+        ), paras AS (
+            SELECT country_code, form, accession_number, item_key, paragraph_index, text_hash,
+                   count(*) AS n_act, CASE WHEN count(*) = 1 THEN '1' WHEN count(*) = 2 THEN '2' ELSE '3+' END AS estrato
+            FROM a GROUP BY ALL
         ), s AS (
-            SELECT *, row_number() OVER (PARTITION BY form, evidence_strength ORDER BY hash(text_hash + activity_index * 7919 + {seed})) AS rn FROM a
+            SELECT *, row_number() OVER (PARTITION BY form, estrato ORDER BY hash(text_hash + {seed})) AS rn FROM paras
         ), chosen AS (SELECT * FROM s WHERE rn <= {per})
-        SELECT c.*, list(struct_pack(idx := se.sentence_index, text := se.sentence_text) ORDER BY se.sentence_index) AS sentences
+        SELECT c.form, c.accession_number, c.item_key, c.paragraph_index, c.text_hash, c.n_act,
+               list(struct_pack(idx := se.sentence_index, text := se.sentence_text) ORDER BY se.sentence_index) AS sentences
         FROM chosen c JOIN sentences se USING (country_code, form, accession_number, item_key, paragraph_index)
         GROUP BY ALL
+    """).df()
+    con.register("chosen_paras", rows[["text_hash"]])
+    acts_df = con.execute(f"""
+        SELECT DISTINCT a.text_hash, a.activity_index, a.action, a.object, a.function, a.target, a.stage, a.providers_or_models,
+               a.evidence_strength, a.evidence_sentence_ids
+        FROM read_parquet('{acts}') a JOIN chosen_paras USING (text_hash) ORDER BY a.text_hash, a.activity_index
     """).df()
     items = []
     for r in rows.itertuples():
         sents = [{"idx": int(s["idx"]), "text": s["text"]} for s in list(r.sentences)]
-        ev_pos = [int(x) for x in (list(r.evidence_sentence_ids) if r.evidence_sentence_ids is not None else [])]
-        ev_idx = [sents[i]["idx"] for i in ev_pos if 0 <= i < len(sents)]   # posiciones del prompt -> sentence_index real
-        items.append({
-            "id": f"A:{r.text_hash}:{int(r.activity_index)}", "form": r.form, "accession_number": r.accession_number,
-            "text_hash": str(r.text_hash), "activity_index": int(r.activity_index), "sentences": sents, "evidence": ev_idx,
-            "action": r.action, "object": r.object, "function": r.function, "target": r.target, "stage": r.stage,
-            "provider": r.provider_or_model, "evidence_strength": r.evidence_strength,
-        })
+        activities = []
+        for x in acts_df[acts_df.text_hash == r.text_hash].itertuples():
+            ev_pos = [int(v) for v in (list(x.evidence_sentence_ids) if x.evidence_sentence_ids is not None else [])]
+            activities.append({
+                "activity_index": int(x.activity_index), "action": x.action, "object": x.object, "function": x.function,
+                "target": x.target, "stage": x.stage,
+                "providers": [str(v) for v in (list(x.providers_or_models) if x.providers_or_models is not None else [])],
+                "evidence_strength": x.evidence_strength,
+                "evidence": [sents[i]["idx"] for i in ev_pos if 0 <= i < len(sents)],   # posiciones del prompt -> sentence_index real
+            })
+        items.append({"id": f"A:{r.text_hash}", "form": r.form, "accession_number": r.accession_number,
+                      "text_hash": str(r.text_hash), "sentences": sents, "activities": activities})
     random.Random(seed).shuffle(items)
     return items
 
@@ -167,7 +183,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--frames", type=int, default=300)
     parser.add_argument("--prefilter", type=int, default=300)
-    parser.add_argument("--activities", type=int, default=180)
+    parser.add_argument("--activities", type=int, default=120)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--database", type=Path, default=DB)
     parser.add_argument("--out", type=Path, default=OUT)
@@ -180,7 +196,7 @@ def main() -> None:
                "frames": frames, "prefilter": prefilter, "activities": activities}
     args.out.write_text(json.dumps(payload, ensure_ascii=False))
     print(f"frames: {len(frames)} párrafos ({sum(len(i['frames']) for i in frames)} frames) | "
-          f"prefilter: {len(prefilter)} párrafos | activities: {len(activities)} -> {args.out}")
+          f"prefilter: {len(prefilter)} párrafos | activities: {len(activities)} párrafos ({sum(len(i['activities']) for i in activities)} actividades) -> {args.out}")
 
 
 if __name__ == "__main__":
