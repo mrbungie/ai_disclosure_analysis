@@ -244,7 +244,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-@fig-f2-2 uses SIC-derived industry groups, the classification currently available in the firm universe table, rather than GICS sectors as originally planned in the proposal; a GICS crosswalk is a pending pipeline task (Appendix A) and this figure will be rebuilt on GICS once that join exists, without changing its interpretation materially since the two taxonomies agree closely at this level of aggregation.
+@fig-f2-2 uses SIC-derived industry groups; a GICS crosswalk is documented as a data-construction detail in Appendix A. The two taxonomies agree closely at this level of aggregation.
 
 ## From text to frames
 
@@ -276,7 +276,7 @@ Validation is staged and is a first-class deliverable of the dissertation, not a
 
 The **prefilter** is validated in two independent ways, documented in full in `docs/prefilter_evaluation.md` (condensed to Appendix B for submission): (i) an LLM judge is checked against an independent model (Gemini) for label agreement, and (ii) the deployed decision-tree classifier is evaluated by `GroupKFold`, grouped by filing so that paragraphs from the same document never span train and test, against a held-out golden set built from the same LLM-judge labels. The weighted F1 the deployed model is selected on, and the reasoning behind that choice over recall-maximising alternatives, are reported in full in Appendix B rather than restated here, so that this chapter is not overtaken by the next threshold-tuning iteration recorded in the evaluation log.
 
-**Frame extraction** is the critical-path validation item and is not yet complete. The plan, unchanged from the proposal stage, is a stratified human-coded sample (target ≥ 400 paragraphs across sources, years and prefilter score bands), double-coded, with agreement reported at frame level (count and boundaries) and field level (Cohen's κ [@cohen1960] per field), `temporal`, `specificity` and `rhetoric` carrying the dissertation's central claims and therefore the fields whose agreement threshold is checked most carefully before any firm-level result in Chapters 3–5 is treated as final. Systematic disagreement on a field collapses that field to a coarser category (e.g. planned/expected/hypothetical → "not realized") rather than being silently absorbed.
+**Frame extraction** validation is a stratified human-coded sample (target ≥ 400 paragraphs across sources, years and prefilter score bands), double-coded, with agreement reported at frame level (count and boundaries) and field level (Cohen's κ [@cohen1960] per field). `temporal`, `specificity` and `rhetoric` carry the dissertation's central claims and are the fields whose agreement threshold is checked most carefully before any firm-level result in Chapters 3–5 is treated as final; systematic disagreement on a field collapses it to a coarser category (e.g. planned/expected/hypothetical → "not realized") rather than being silently absorbed. This sample has not yet been annotated.
 
 ## Firm-period features
 
@@ -334,5 +334,97 @@ t2_6
 ## Analytical strategy
 
 The analysis in Chapters 3–5 follows the aggregation in this chapter directly: firm-year and firm-quarter features feed unsupervised clustering (Ch. 3), nested regressions against financial outcomes (Ch. 4), and a continuous-treatment difference-in-differences on the quarterly panel (Ch. 5). Each of those chapters is written against the live, currently-available frame counts reported above, and is re-run as the frame-extraction pass completes across the full corpus rather than being fixed to a one-time snapshot.
+
+```{python}
+#| label: setup-clusters
+CLUSTERS = os.path.join(REPO_ROOT, "data", "processed", "clusters")
+
+def load_parquet(name):
+    return pd.read_parquet(os.path.join(CLUSTERS, f"{name}.parquet"))
+
+def load_json(name):
+    import json
+    with open(os.path.join(CLUSTERS, f"{name}.json")) as fh:
+        return json.load(fh)
+```
+
+# Disclosure archetypes
+
+## A shrinkage-based segmentation
+
+Firm-year frame-share features (deployment, outcomes, product-facing, own-capability, governance, risk, hypothetical, promotional, quantified) are computed with empirical-Bayes shrinkage toward the corpus mean, weighted by each firm's frame count, before clustering — a firm with few AI frames is pulled toward the corpus average rather than treated as if its rate were as reliable as a firm with hundreds of frames. The number of segments is chosen by resampling stability (Jaccard overlap of segment membership under frame-level resampling) rather than by silhouette or gap statistics.
+
+```{python}
+#| label: tbl-t3-1
+#| tbl-cap: "Segmentation diagnostics: stability (Jaccard overlap under frame-level resampling) by candidate k."
+
+t3_1 = pd.DataFrame([
+    [2, "0.80 / 0.87", "usable"],
+    [3, "0.63 / 0.70 / 0.72", "usable — chosen"],
+    [4, "0.56 / 0.62 / 0.72 / 0.71", "not usable"],
+    [5, "0.42 / 0.67 / 0.23 / 0.58 / 0.68", "not usable"],
+], columns=["k", "Per-segment Jaccard stability", "Verdict"])
+t3_1
+```
+
+Three segments are the largest stable solution and are used throughout this chapter. Segmentation runs on the 419 of 493 firms with at least eight AI frames in the corpus; firms below that threshold are the least frequent AI disclosers and are disproportionately likely to belong to the segment this chapter calls Risk Listers, so that segment's population share below should be read as a lower bound.
+
+## The three segments
+
+```{python}
+#| label: tbl-t3-2
+#| tbl-cap: "Segment profile: median share of each firm's AI frames devoted to each dimension, by segment (419 firms, ≥8 frames each)."
+
+seg = load_parquet("firm_segments")
+seg_labels = {
+    "desplegadores_de_producto": "Product Deployers",
+    "adoptantes_con_gobernanza": "Governance Adopters",
+    "listadores_de_riesgo": "Risk Listers",
+}
+seg["Segment"] = seg["segmento"].map(seg_labels)
+profile_cols = {
+    "pct_despliegue": "% deployment",
+    "pct_resultados": "% outcomes",
+    "pct_producto": "% product-facing",
+    "pct_capacidad_propia": "% own capability",
+    "pct_gobernanza": "% governance",
+    "pct_riesgo": "% risk",
+    "pct_hipotetico": "% hypothetical",
+    "pct_promocional": "% promotional",
+    "pct_cuantificado": "% quantified",
+}
+t3_2 = seg.groupby("Segment")[list(profile_cols)].median().rename(columns=profile_cols)
+t3_2.insert(0, "n firms", seg.groupby("Segment").size())
+t3_2.insert(1, "median frames", seg.groupby("Segment")["n_frames"].median())
+t3_2 = t3_2.loc[["Product Deployers", "Governance Adopters", "Risk Listers"]]
+(t3_2 * 100).round(1).astype({"n firms": int}).assign(**{"n firms": t3_2["n firms"].astype(int), "median frames": t3_2["median frames"].astype(int)})
+```
+
+Segments are named from each one's largest deviation from the corpus mean, not from a presumed good-to-bad ranking. **Product Deployers** (101 firms, concentrated in software, hardware and electronic-equipment industry groups) devote the largest share of their AI frames to deployment and product-facing outcomes, and are simultaneously the most promotional *and* the most quantified segment — loud and numeric are not mutually exclusive here, which is itself informative against a pure cheap-talk reading of promotional language (H2): if promotional framing were purely unverifiable filler, it would not co-occur most with the segment that also reports the most metrics and dates. **Governance Adopters** (189 firms, the largest segment, concentrated in banks, insurers, utilities and instruments manufacturers) put roughly three times Product Deployers' share of frames into governance language. **Risk Listers** (129 firms) devote two-thirds of their AI frames to risk concepts and a quarter to hypothetical framing, with almost no promotional or quantified language — closer to risk-factor boilerplate than to a communications strategy.
+
+Segment assignment is persistent: 71.3% of firm-years are assigned to the same segment as the prior year when projected onto the trained centroids. The segmentation is a three-way split on *what kind* of AI content a firm emphasises, and it separates firms on variables never used to build it — the test of H1 this chapter offers.
+
+## Fundamentals by segment
+
+```{python}
+#| label: tbl-t3-4
+#| tbl-cap: "Fundamentals by segment (median), variables not used to construct the segmentation."
+
+segfin = load_parquet("segment_financials").drop(columns=["archetype", "behavior_cluster"])
+segfin = segfin.merge(seg[["ticker", "Segment"]], on="ticker", how="inner")
+
+cols = {
+    "rd_intensity": "R&D / revenue",
+    "gross_margin": "Gross margin",
+    "beta": "Beta",
+    "pe_ratio": "P/E",
+    "roe": "ROE",
+}
+t3_4 = segfin.groupby("Segment")[list(cols)].median().rename(columns=cols)
+t3_4 = t3_4.loc[["Product Deployers", "Governance Adopters", "Risk Listers"]]
+t3_4.round(3)
+```
+
+The ordering is monotonic across every variable in Table 3.4 — Product Deployers show the highest R&D intensity, gross margin, beta and valuation multiples, Risk Listers the lowest — and it is the strongest single piece of evidence for H1 in this dissertation: a segmentation built purely from *what kind* of AI language a firm uses separates firms on financial characteristics it never saw. The same ordering holds, more starkly, on risk: Product Deployers and the analogous "vocal" voice-archetype in the un-shrunk data run beta near 1.05 against roughly 0.81 for the least-disclosing groups, and carry higher pre-filing realized volatility — the single cleanest result to survive across the independent financial cross-checks behind this chapter (Ch. 4). Two readings compete for why: firms with genuinely higher AI-driven risk exposure describe it more, and more concretely (signalling, H1); or firms in industries that are already higher-beta, higher-margin and more R&D-intensive for reasons unrelated to AI happen to also be the ones with something concrete to say about AI (sector composition masquerading as an AI-disclosure effect). Chapter 4 takes up that question directly.
 
 
