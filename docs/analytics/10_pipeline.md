@@ -28,9 +28,10 @@ de `03`, que para la empresa sin frames valen "sin IA".
 | `shock_analysis.py`, `shock_did_simple.py` | `shock_analysis.json`, `shock_did_simple.json`, `shock_did_*.png` | `07` |
 | `washing_score.py`, `validate_washing_score.py` | `firm_washing_score`, `firm_washing_score_all`, validación | `08` |
 | `evolution_figures.py` | `fig_evolucion_*.png`, `fig_sec_event_study.png` | `01`, `07` |
+| `scripts/common/ai_activities_from_frames.py` (LLM) → `activity_profiles.py` | `data/interim/ai_activities/` (27.468 actividades) → `firm_activities`, `firm_activity_profiles`, `activity_profiles.json` | `09` |
 | `report_crosscheck_stats.py` | `crosscheck_stats.json` (correlaciones, FDR, perfiles por nivel de IA) | `apendice/` |
 
-Ninguno llama a un LLM. Todo corre en CPU con `uv run --frozen --no-sync
+Ninguno llama a un LLM salvo `ai_activities_from_frames.py` (segunda pasada sobre los frames conductuales, una vez; se reanuda por `text_hash`). Todo corre en CPU con `uv run --frozen --no-sync
 python scripts/analytics/<script>.py` o, para el bloque financiero,
 `make analytics`.
 
@@ -61,6 +62,8 @@ for s in build_segments build_voice_behavior_grid economic_profiles incremental_
          channel_gap_analysis shock_analysis shock_did_simple washing_score validate_washing_score \
          evolution_figures report_crosscheck_stats; do
   uv run --frozen --no-sync python scripts/analytics/$s.py; done
+uv run --frozen --no-sync python scripts/common/ai_activities_from_frames.py --concurrency 20   # LLM, ~85 min
+uv run --frozen --no-sync python scripts/analytics/activity_profiles.py
 scripts/common/sync_data_b2.sh push
 ```
 

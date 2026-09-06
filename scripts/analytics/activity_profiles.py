@@ -42,8 +42,8 @@ OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
 SEGMENT_LABELS = {"desplegadores_de_producto": "Product Deployers", "adoptantes_con_gobernanza": "Governance Adopters",
                   "listadores_de_riesgo": "Risk Listers", "sin_ia": "No AI"}
 EXEMPLARS = {"desplegadores_de_producto": ["MSFT", "HPE", "PAYX", "ETSY", "NOW"],
-             "adoptantes_con_gobernanza": ["JPM", "STT", "PWR", "DHR", "CINF"],
-             "listadores_de_riesgo": ["NKE", "TDG", "CZR", "DHI", "TJX"]}
+             "adoptantes_con_gobernanza": ["JPM", "STT", "LOW", "DHR", "CINF"],
+             "listadores_de_riesgo": ["NKE", "BAC", "CMA", "HWM", "TDG"]}
 
 FUNCTION_FAMILIES = [
     ("governance", r"govern|oversight|responsible[_ ]ai|ai[_ ]ethic|transparen|trust[_ ]and[_ ]safety|policy|compliance[_ ]program"),
