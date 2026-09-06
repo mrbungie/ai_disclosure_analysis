@@ -26,7 +26,12 @@ Inferencia sobre el bloque semántico, además del ΔR²: R² ajustado de cada
 modelo (siete regresores más nunca bajan el R² crudo), test conjunto de Wald
 con SE cluster por empresa (H0: los siete coeficientes son cero) y test de
 permutación del ΔR² permutando las siete features entre empresas DENTRO de
-cada celda sector×año. Robustez de composición: el bloque semántico como
+cada celda sector×año. Descomposición: el mismo ΔR² con un bloque de seis familias de actividad
+divulgada (`activity_profiles.py`: despliegue a clientes, despliegue interno,
+IA propia, proveedor nombrado, infraestructura, resultado cuantificado, por
+1.000 párrafos), solo y junto al semántico, para saber si la señal viene del
+estilo con que se documenta o de la actividad identificable.
+Robustez de composición: el bloque semántico como
 shares del total de frames (frames_k / frames de IA), encogidos hacia la media
 del corpus con el mismo prior empírico-Bayes que los segmentos, para separar
 "cómo se reparte" de "cuánto"; sin frames, los shares quedan en el prior. Fundamentals: log(market cap),
@@ -66,6 +71,11 @@ EXTRA_OUTCOMES = {"volatilidad_total_60d": "vol_pre_60d"}    # robustez, no cabe
 FUNDAMENTALS = ["log_market_cap", "gross_margin", "operating_margin", "asset_turnover"]
 SEMANTIC = {"realizado": "realized_per_1k", "despliegue": "deployed_per_1k", "capacidad": "capability_per_1k",
             "riesgo": "risk_per_1k", "gobernanza": "gov_per_1k", "promocional": "promo_per_1k", "especificidad": "spec_per_1k"}
+# bloque de actividades divulgadas (`activity_profiles.py`): seis familias de
+# acción concreta, por 1.000 párrafos de los filings del año, con ceros
+ACTIVITY = {"despliegue_a_clientes": "customer_facing_deployment_per_1k", "despliegue_interno": "internal_deployment_per_1k",
+            "ia_propia": "proprietary_ai_per_1k", "proveedor_nombrado": "third_party_named_provider_per_1k",
+            "infraestructura": "infrastructure_investment_per_1k", "resultado_cuantificado": "quantified_outcome_per_1k"}
 IT_COMM_SIC2 = {"35", "36", "48", "73"}
 SEED = 42
 
@@ -99,6 +109,8 @@ def load(con) -> pd.DataFrame:
         alpha, beta_ = mean * strength, (1 - mean) * strength
         m[f"share_{name}"] = (s.fillna(0) * m["n_frames"] + alpha) / (m["n_frames"] + alpha + beta_)
     m["sector_year"] = m["sic2"].astype(str) + "_" + m["year"].astype(str)
+    acts = pd.read_parquet(OUT_DIR / "firm_year_activities.parquet")[["ticker", "year"] + list(ACTIVITY.values())]
+    m = m.merge(acts, on=["ticker", "year"], how="left").fillna({c: 0.0 for c in ACTIVITY.values()})
     # texto sólo 10-K, para la robustez
     docs = document_table(con)
     k = aggregate(docs[docs["form"] == "10-K"].assign(year=lambda d: d["fecha"].dt.year), ["ticker", "year"])
@@ -111,11 +123,14 @@ def load(con) -> pd.DataFrame:
 def design(d: pd.DataFrame, y: str, block: str, fe: str, suffix: str = "") -> tuple[np.ndarray, np.ndarray, list[str]]:
     fund = [c for c in FUNDAMENTALS if c != y]
     X = d[fund].copy()
-    if block in ("M1", "M2", "M3"):
+    if block in ("M1", "M2", "M3", "M2A", "M2AB"):
         X["volumen"] = np.log1p(d["frames_per_1k" if suffix == "__share" else f"frames_per_1k{suffix}"])
-    if block == "M2":
+    if block in ("M2", "M2AB"):
         for name, col in SEMANTIC.items():
             X[name] = d[f"share_{name}"] if suffix == "__share" else np.log1p(d[f"{col}{suffix}"])
+    if block in ("M2A", "M2AB"):
+        for name, col in ACTIVITY.items():
+            X[name] = np.log1p(d[col])
     if block == "M3":
         for s in sorted(d["segmento"].unique()):
             if s != "sin_ia":
@@ -153,6 +168,34 @@ def wald_semantic(d: pd.DataFrame, y: str, fe: str, suffix: str) -> dict:
     for r_, i in enumerate(idx): R[r_, i] = 1.0
     ft = res.wald_test(R, use_f=True, scalar=True)
     return {"F": float(ft.statistic), "p": float(ft.pvalue), "df": len(idx)}
+
+
+def wald_block(d: pd.DataFrame, y: str, block: str, names_in_block: list[str], fe: str = "sector_year") -> dict:
+    import statsmodels.api as sm
+    X, yy, names = design(d, y, block, fe, "")
+    res = sm.OLS(yy, X).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(d["ticker"])[0]})
+    idx = [i for i, n in enumerate(names) if n in names_in_block]
+    R = np.zeros((len(idx), len(names)))
+    for r_, i in enumerate(idx): R[r_, i] = 1.0
+    ft = res.wald_test(R, use_f=True, scalar=True)
+    return {"F": float(ft.statistic), "p": float(ft.pvalue), "df": len(idx)}
+
+
+def decomposition(d: pd.DataFrame, y: str, fe: str = "sector_year") -> dict:
+    """¿La señal viene del estilo semántico o de la actividad identificable?
+    Sobre la misma muestra de la especificación principal: M1 + semántica,
+    M1 + actividades, M1 + ambas; cada bloque también condicional al otro."""
+    out = {}
+    r = {b: r2(*design(d, y, b, fe, "")[:2]) for b in ("M1", "M2", "M2A", "M2AB")}
+    out["delta_r2_semantica"] = r["M2"] - r["M1"]
+    out["delta_r2_actividades"] = r["M2A"] - r["M1"]
+    out["delta_r2_ambos"] = r["M2AB"] - r["M1"]
+    out["delta_r2_actividades_dado_semantica"] = r["M2AB"] - r["M2"]
+    out["delta_r2_semantica_dado_actividades"] = r["M2AB"] - r["M2A"]
+    out["wald_actividades_solo"] = wald_block(d, y, "M2A", list(ACTIVITY), fe)
+    out["wald_actividades_dado_semantica"] = wald_block(d, y, "M2AB", list(ACTIVITY), fe)
+    out["wald_semantica_dado_actividades"] = wald_block(d, y, "M2AB", list(SEMANTIC), fe)
+    return out
 
 
 def permutation_semantic(d: pd.DataFrame, y: str, fe: str, suffix: str, observed: float, reps: int, seed: int = SEED) -> dict:
@@ -282,6 +325,15 @@ def main() -> None:
                 print(f"{label:26s} sin muestra ({e})"); continue
             print(f"{label:26s} {res['n']:5d} {res['r2_M1']:6.3f} {res['r2_M2']:6.3f} {res['delta_r2_semantica']:+8.4f} {res['delta_adj_r2_semantica']:+7.4f} {res['partial_r2_semantica']:7.4f} {wald['p']:7.3f}")
             report["robustez"][vname][label] = {**{k: res[k] for k in ("n", "r2_M0", "r2_M1", "r2_M2", "r2_M3", "adj_r2_M1", "adj_r2_M2", "delta_r2_semantica", "delta_adj_r2_semantica", "partial_r2_semantica", "delta_r2_volumen", "delta_r2_segmentos")}, "wald": wald}
+    print("\nDESCOMPOSICIÓN — ¿estilo semántico o actividad identificable? ΔR² sobre M1, misma muestra principal")
+    print(f"{'outcome':26s} {'semánt.':>8s} {'activ.':>8s} {'ambos':>8s} {'act|sem':>8s} {'sem|act':>8s} {'p act':>6s} {'p act|sem':>9s} {'p sem|act':>9s}")
+    report["descomposicion"] = {}
+    for label, y in OUTCOMES.items():
+        _, d = nested(m, y); dec = decomposition(d, y)
+        report["descomposicion"][label] = dec
+        print(f"{label:26s} {dec['delta_r2_semantica']:+8.4f} {dec['delta_r2_actividades']:+8.4f} {dec['delta_r2_ambos']:+8.4f} "
+              f"{dec['delta_r2_actividades_dado_semantica']:+8.4f} {dec['delta_r2_semantica_dado_actividades']:+8.4f} "
+              f"{dec['wald_actividades_solo']['p']:6.3f} {dec['wald_actividades_dado_semantica']['p']:9.3f} {dec['wald_semantica_dado_actividades']['p']:9.3f}")
     print("\nVOLATILIDAD TOTAL (robustez del outcome, especificación principal)")
     for label, y in EXTRA_OUTCOMES.items():
         res, d = nested(m, y); wald = wald_semantic(d, y, "sector_year", "")

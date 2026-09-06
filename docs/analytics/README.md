@@ -15,7 +15,7 @@ cuando no hablan de IA, intensidad por 1.000 párrafos (`10_pipeline.md`).
 | 06 | `06_brecha_entre_canales.md` | la misma empresa en la call y en el filing | `channel_gap_analysis.py` |
 | 07 | `07_shocks_sec_deepseek.md` | SEC 2024 y DeepSeek: no-identificación (RQ5, RQ6) | `shock_analysis.py`, `shock_did_simple.py` |
 | 08 | `08_definiciones_de_washing.md` | tres definiciones de AI-washing y por qué no coinciden | `washing_score.py`, `validate_washing_score.py` |
-| 09 | `09_actividades_ia.md` | qué dicen las empresas que hacen con IA: acciones, funciones, etapa, proveedores; por segmento y por empresa | `ai_activities_from_frames.py`, `activity_profiles.py` |
+| 09 | `09_actividades_ia.md` | qué dicen las empresas que hacen con IA: acciones, funciones, etapa, proveedores; por segmento y por empresa | `ai_activities_from_frames.py`, `activity_profiles.py`, `activity_grounding.py` |
 | 10 | `10_pipeline.md` | cómo se produce todo y cómo se regenera | `make analytics` |
 
 `apendice/`: material secundario que no entra al cuerpo — descriptivos SQL

@@ -10,7 +10,12 @@ evidencia (oraciones) que lo sostiene; nadie verificó el despliegue.
 
 Producido por `scripts/common/ai_activities_from_frames.py` (segunda pasada de
 LLM, `qwen3.7-flash`, prompt `v1`) y `scripts/analytics/activity_profiles.py`.
-No hay re-clustering ni modelo econométrico.
+No hay re-clustering ni modelo econométrico. La capa entra en cuatro
+lugares: la descripción de los segmentos (`02`), la concreción del eje de
+conducta (`03`, `activity_grounding.py`), la descomposición de la señal
+incremental en estilo y actividad (`05`, `incremental_signal.py`) y la brecha
+de actividades entre canales (`06`, `activity_grounding.py`); en `08` separa
+promoción de respaldo conductual.
 
 ## Qué se extrajo
 

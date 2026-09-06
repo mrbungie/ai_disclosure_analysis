@@ -109,6 +109,35 @@ por la dimensión donde más se despega del promedio, medido en z-scores.
   los filings del período. En el panel es el segmento mayoritario hasta 2023
   y residual desde 2025: el boom se ve como el vaciado de este segmento.
 
+## Qué hace cada segmento, en actividades
+
+Las tasas dicen de qué habla cada segmento; las actividades divulgadas
+(`09_actividades_ia.md`: la empresa hace ACCIÓN sobre OBJETO para FUNCIÓN)
+dicen qué dice que hace. % de empresas del segmento con al menos una
+actividad de cada tipo, salvo donde se indica:
+
+| | Desplegadores de producto | Adoptantes con gobernanza | Listadores de riesgo |
+|---|---|---|---|
+| actividades por empresa (mediana) | **108** | 19,5 | 6 |
+| acciones principales | deploy, develop, invest_infrastructure, integrate, partner | deploy, hire_or_train, develop | deploy, hire_or_train |
+| objetos más frecuentes | producto con nombre propio (90%: AIP, AIOps, DSO.ai, Firefly), plataforma de analítica (82%), aceleradores y AI PC (60%), copilots (43%), agentes | modelos predictivos (46%), plataforma de analítica (45%), automatización (39%), visión y robótica industrial (19%), copilots (18%) | modelos predictivos (27%), automatización (21%), plataforma (20%), producto con nombre (17%) |
+| funciones (% de las actividades) | operaciones 13, IT y ciberseguridad 7,5, producto 7,6, desarrollo de software 5 | operaciones 22, atención al cliente 6, fraude y riesgo 5, marketing 5 | operaciones 19, marketing 6, atención al cliente 5, fraude 4 |
+| para clientes / interno (% de las actividades, media) | 45 / 35 | 25 / 58 | 18 / 62 |
+| IA propia / proveedor de terceros nombrado | 99 / **90** | 86 / 53 | 59 / 32 |
+| inversión en infraestructura | **92** | 57 | 33 |
+| resultado cuantificado | **90** | 62 | 27 |
+| etapa máxima: escalado / desplegado / piloto o exploración / ninguna | 93 / 7 / 0 / 0 | 61 / 31 / 3 / 4,5 | 32 / 49 / 6 / 10 |
+
+Los desplegadores de producto venden IA: producto con nombre, plataforma,
+aceleradores, copilots, con proveedor y con cifra, y son los únicos que
+compran (50% adquiere o licencia) y se alían (68%). Los adoptantes con
+gobernanza automatizan operaciones y corren modelos predictivos hacia
+adentro, en fraude, riesgo y forecasting, con IA propia y sin proveedor
+nombrado. Los listadores de riesgo describen seis actividades en la
+mediana, casi siempre automatización o un modelo interno sin producto,
+métrica ni proveedor, y uno de cada diez no describe ninguna. Fichas por
+empresa (Microsoft, ServiceNow, JPMorgan, Nike, Howmet…) en `09`.
+
 ## Que la segmentación sirva río abajo
 
 Persistencia año a año: **65,0%** sobre 2.454 pares empresa-año consecutivos

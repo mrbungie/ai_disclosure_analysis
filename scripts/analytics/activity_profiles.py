@@ -32,7 +32,12 @@ import re
 from pathlib import Path
 
 import duckdb
+import numpy as np
 import pandas as pd
+
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ai_intensity import document_table  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
@@ -151,20 +156,22 @@ def load() -> pd.DataFrame:
     con = duckdb.connect(str(DB), read_only=True)
     try:
         con.register("acts", acts[["text_hash"]].drop_duplicates())
-        inst = con.execute(f"""
+        inst_docs = con.execute(f"""
             WITH docs AS (
                 SELECT accession_number, ticker, form_type AS form FROM filing_manifest WHERE country_code='us'
                 UNION ALL SELECT accession_number, ticker, '10-Q' FROM filing_manifest_10q WHERE country_code='us'
                 UNION ALL SELECT document_id, ticker, 'Earnings call' FROM read_parquet('{CALLS_MANIFEST}')
             )
-            SELECT DISTINCT g.text_hash, d.ticker, CASE WHEN d.form = 'Earnings call' THEN 'call' ELSE 'filing' END AS channel
+            SELECT DISTINCT g.text_hash, g.accession_number, d.ticker, CASE WHEN d.form = 'Earnings call' THEN 'call' ELSE 'filing' END AS channel
             FROM (SELECT DISTINCT text_hash, accession_number FROM gold_ai_frames WHERE country_code='us' AND has_frame) g
             JOIN acts USING (text_hash) JOIN docs d USING (accession_number)
             WHERE d.ticker IS NOT NULL
         """).df()
+        docs = document_table(con)[["accession_number", "fecha", "fy", "n_paragraphs", "channel"]]
     finally:
         con.close()
-    inst["text_hash"] = inst["text_hash"].astype("uint64")
+    inst_docs["text_hash"] = inst_docs["text_hash"].astype("uint64")
+    inst = inst_docs.drop(columns="accession_number").drop_duplicates()
     a = acts.merge(inst, on="text_hash", how="inner")
     # una actividad única por empresa; si el mismo texto aparece en call y filing, se anota el canal 'filing'
     a["channel_rank"] = (a["channel"] == "call").astype(int)
@@ -179,6 +186,12 @@ def load() -> pd.DataFrame:
     a["activity"] = a["action"] + " · " + a["object_family"]
     a["activity_function"] = a["activity"] + " · " + a["function_family"]
     a.attrs["n_texts"] = int(n_texts)
+    # instancias por documento (una fila por actividad × documento), para paneles por año y por canal
+    inst_docs = inst_docs.merge(docs.drop(columns="channel"), on="accession_number", how="inner")
+    inst_docs["year"] = inst_docs["fecha"].dt.year
+    a.attrs["instances"] = a[["text_hash", "activity_index", "action", "target", "stage", "provider_or_model", "provider_family",
+                              "evidence_strength", "function"]].drop_duplicates(["text_hash", "activity_index"]) \
+        .merge(inst_docs, on="text_hash", how="inner")
     return a
 
 
@@ -199,7 +212,45 @@ def flags(a: pd.DataFrame) -> pd.DataFrame:
     f["governance_or_restriction"] = a["action"].isin(["govern_or_control", "restrict"])
     f["piloting_or_exploring"] = a["action"] == "pilot_or_explore"
     f["named_product_or_process"] = a["evidence_strength"] == "named_product_or_process"
+    f["named_function"] = ~a["function"].fillna("unspecified").str.lower().isin(["unspecified", "", "none", "n/a"])
+    f["deployed_or_scaled"] = a["stage"].isin(["deployed", "scaled"])
     return f
+
+
+GROUNDING = ["named_function", "deployed_or_scaled", "named_product_or_process", "quantified_outcome", "third_party_named_provider"]
+ACTIVITY_FAMILIES = ["customer_facing_deployment", "internal_deployment", "proprietary_ai", "third_party_named_provider",
+                     "infrastructure_investment", "quantified_outcome", "talent_or_training", "governance_or_restriction",
+                     "piloting_or_exploring"]
+
+
+def concreteness(prof: pd.DataFrame) -> pd.Series:
+    """Concreción conductual: media de cinco proporciones de las actividades de la
+    empresa (función declarada, desplegada o escalada, producto o proceso con
+    nombre, resultado cuantificado, proveedor nombrado). Sólo interpretación y
+    robustez; no reemplaza el eje de conducta de `03`."""
+    return prof[[f"share_{c}" for c in GROUNDING]].mean(axis=1)
+
+
+def yearly_and_channel_panels(inst: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(1) empresa-año de presentación, sólo filings: actividades de cada familia
+    por 1.000 párrafos, para el bloque de actividades de `05`.
+    (2) empresa × ejercicio fiscal × canal: conteos por familia, para la brecha
+    de actividades de `06`."""
+    inst = inst.copy()
+    fl = flags(inst)
+    for c in ACTIVITY_FAMILIES + ["named_product_or_process", "named_function", "deployed_or_scaled"]:
+        inst[c] = fl[c].astype(float)
+    inst["n_activities"] = 1.0
+    cols = ACTIVITY_FAMILIES + ["named_product_or_process", "named_function", "deployed_or_scaled", "n_activities"]
+    # (1) por año de presentación, filings; el denominador es el de firm_year_master_v2
+    fil = inst[inst["channel"] == "filing"].groupby(["ticker", "year"])[cols].sum().reset_index()
+    master = pd.read_parquet(OUT_DIR / "firm_year_master_v2.parquet")[["ticker", "year", "n_paragraphs"]]
+    fy_panel = master.merge(fil, on=["ticker", "year"], how="left").fillna({c: 0.0 for c in cols})
+    for c in cols:
+        fy_panel[f"{c}_per_1k"] = 1000.0 * fy_panel[c] / fy_panel["n_paragraphs"]
+    # (2) por ejercicio fiscal y canal
+    ch = inst.groupby(["ticker", "fy", "channel"])[cols].sum().reset_index()
+    return fy_panel, ch
 
 
 def firm_profiles(a: pd.DataFrame, universe: pd.DataFrame) -> pd.DataFrame:
@@ -224,15 +275,20 @@ def firm_profiles(a: pd.DataFrame, universe: pd.DataFrame) -> pd.DataFrame:
     for c in [c for c in prof.columns if c.startswith("any_")]:
         prof[c] = prof[c].fillna(False).astype(bool)
     prof["max_stage"] = prof["max_stage"].fillna("none")
+    prof["concrecion_conductual"] = concreteness(prof)
     return prof
 
 
 def main() -> None:
     a = load()
+    instances = a.attrs.pop("instances")
     seg = pd.read_parquet(OUT_DIR / "firm_segments.parquet")[["ticker", "segmento"]]
     prof = firm_profiles(a, seg)
     prof.to_parquet(OUT_DIR / "firm_activity_profiles.parquet", index=False)
     a.drop(columns=["stage_rank"]).to_parquet(OUT_DIR / "firm_activities.parquet", index=False)
+    fy_panel, ch = yearly_and_channel_panels(instances)
+    fy_panel.to_parquet(OUT_DIR / "firm_year_activities.parquet", index=False)
+    ch.to_parquet(OUT_DIR / "channel_activity_cells.parquet", index=False)
     n_firms = len(seg)
     print(f"actividades: {len(a):,} únicas por empresa, de {a.attrs['n_texts']:,} textos únicos procesados | "
           f"empresas con ≥1 actividad: {int((prof.n_activities > 0).sum())} de {n_firms} | "
