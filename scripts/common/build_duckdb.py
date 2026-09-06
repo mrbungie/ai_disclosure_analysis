@@ -416,6 +416,8 @@ CL_PARAGRAPHS_GLOB = str(
 #: wrote a new run ALONGSIDE the old rather than replacing it — nothing was
 #: deleted. So this glob must pin ONE version, or the view unions three
 #: incompatible labellings of the same 554,281 turns.
+IT_PARAGRAPHS_GLOB = str(
+    REPO_ROOT / "data" / "interim" / "sections_it" / "filing_paragraphs__run=*__part=*.parquet")
 EARNINGS_CALLS_VERSION = "3"
 EARNINGS_CALLS_GLOB = str(
     REPO_ROOT / "data" / "interim" / "sections" /
@@ -452,6 +454,46 @@ def _earnings_call_select_sql(source_glob: str) -> str:
             'Earnings call' AS form,
             document_id AS accession_number,
             section AS item_key,
+            content_type,
+            paragraph_index,
+            paragraph_text,
+            text_hash8(paragraph_text) AS text_hash,
+            length(trim(paragraph_text)) > 3
+                AND regexp_matches(paragraph_text, '[A-Za-z0-9]') AS is_scorable
+        FROM read_parquet('{source_glob}', union_by_name=True)
+    """
+
+
+def _it_paragraph_select_sql(source_glob: str) -> str:
+    """Italian ESEF annual reports mapped onto the shared contract.
+
+    Already paragraph-grained on disk, like the Chilean branch, so no
+    line-merging. Two Italy-specific notes:
+
+      - `form` = `filing_type` ('annual'). Italy contributes ONLY annual
+        rows: ESEF covers the annual financial report and nothing else, so
+        there is no Italian counterpart to the 10-Q or to Chile's quarterly
+        Análisis Razonado (docs/international_expansion_plan.md's Italian
+        limitations section). An empty `quarterly` for Italy is a scope
+        fact, not missing data.
+      - `item_key` = constant '0', same as Chile and for the same reason: a
+        Relazione finanziaria annuale has no Item-numbered structure, and
+        these files carry no headings to invent one from either — their
+        structure had to be recovered from font sizes (see
+        scripts/common/pdf/backends/html_typography.py).
+
+    Filings whose management report was published as a separate PDF outside
+    the ESEF mandate (~7%) are NOT filtered out here. They are flagged
+    `has_narrative=false` in the manifest, and excluding them in the view
+    would hide a known sampling limitation behind a smaller corpus instead
+    of leaving it visible and joinable.
+    """
+    return f"""
+        SELECT
+            'it' AS country_code,
+            filing_type AS form,
+            document_id AS accession_number,
+            '0' AS item_key,
             content_type,
             paragraph_index,
             paragraph_text,
@@ -829,6 +871,12 @@ def main(with_text_tables: bool = False):
             )
         else:
             print(f"  skipping earnings calls (no files matching {EARNINGS_CALLS_GLOB})")
+        if _existing(IT_PARAGRAPHS_GLOB):
+            paragraph_stage_specs.append(
+                ("_paragraphs_stage_it", _it_paragraph_select_sql(IT_PARAGRAPHS_GLOB))
+            )
+        else:
+            print(f"  skipping IT paragraphs (no files matching {IT_PARAGRAPHS_GLOB})")
         if _existing(CL_PARAGRAPHS_GLOB):
             paragraph_stage_specs.append(
                 ("_paragraphs_stage_cl", _cl_paragraph_select_sql(CL_PARAGRAPHS_GLOB))
