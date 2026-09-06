@@ -79,7 +79,7 @@ de tiempo conviene usar los ejes continuos, no la celda.**
 
 Medianas por empresa (`firm_year_master_v2`):
 
-| | Washing | Sustancia callada | Vocales sustantivos | Silenciosos |
+| | Desacople absoluto | Sustancia callada | Vocales sustantivos | Silenciosos |
 |---|---:|---:|---:|---:|
 | frames de IA por 1.000 párrafos | 1,3 | 2,8 | **7,7** | 1,1 |
 | I+D / ingresos | **1,5%** | 6,9% | **11,7%** | 2,2% |
