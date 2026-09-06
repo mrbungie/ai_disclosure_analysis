@@ -621,4 +621,95 @@ The firm-level gap correlates weakly with Chapter 4's within-filing washing scor
 
 Across three designs — exposure-based, two-group, and cross-channel — the answer to whether the SEC's 2024 scrutiny changed AI disclosure is a consistently measured null on substance: no design finds firms becoming more concrete, more quantified, or more governance-oriented afterward, and the one channel where the SEC's own enforcement language points — the gap between what a firm tells analysts and what it puts in a filing — did not close. This supports H5's first half (a reduction in promotional framing where the metric and the grouping coincide) more than its second (no rise in realized or specific language), and is consistent with H6 read narrowly: the venue with legal exposure did not become more like the venue without it, nor vice versa — the two venues kept their separate registers.
 
+# Implications for management
+
+## For the disclosing firm
+
+```{python}
+#| label: fig-f6-1
+#| fig-cap: "Positioning map: promotional share vs. quantified share of a firm's AI frames, coloured by segment (419 firms)."
+
+seg_plot = seg.copy()
+colors = {"Product Deployers": "#b0473d", "Governance Adopters": "#3d6cb0", "Risk Listers": "#4c9a6f"}
+fig, ax = plt.subplots(figsize=(6, 4.2))
+for name, group in seg_plot.groupby("Segment"):
+    ax.scatter(group["pct_promocional"] * 100, group["pct_cuantificado"] * 100,
+               s=14, alpha=0.6, label=name, color=colors[name])
+ax.set_xlabel("Promotional share of AI frames (%)")
+ax.set_ylabel("Quantified share of AI frames (%)")
+ax.legend(frameon=False, fontsize=7)
+ax.spines[["top", "right"]].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+A board or IR team can locate its own firm on @fig-f6-1 against the S&P 500 distribution and its own segment. Three questions organise the self-assessment this positioning supports:
+
+```{python}
+#| label: tbl-t6-1
+#| tbl-cap: "Issuer self-assessment."
+
+t6_1 = pd.DataFrame([
+    ["Of your AI statements, what share names a process, product, vendor, metric or date?", "Specificity"],
+    ["What share is promotional in register, and does your quantified share keep pace with it?", "Promotional / quantified balance — Product Deployers run high on both; promotional alone, without quantification, is the profile closest to cheap talk"],
+    ["What share of your AI language is realized rather than planned, expected or hypothetical?", "Realization"],
+    ["Is your promotional tone on earnings calls proportionate to what the same quarter's filings support?", "Cross-channel gap (Ch. 5) — the mechanism the SEC's Welltower letter targeted"],
+    ["Does your DEF 14A cover AI governance, or only your 10-K risk factors?", "Governance presence by venue"],
+], columns=["Question", "Maps to"])
+t6_1
+```
+
+## For capital allocators
+
+```{python}
+#| label: tbl-t6-3
+#| tbl-cap: "Investor screening heuristics, from Chapter 4's results."
+
+t6_3 = pd.DataFrame([
+    ["AI-mention volume", "No relationship to next-year outcomes or filing-window returns (Ch. 4, T4.1)", "Ignore as a standalone signal"],
+    ["Promotional / specificity rate, standalone", "No relationship to next-year outcomes after FDR correction", "Do not price directly"],
+    ["Segment / behavior cluster (Ch. 3)", "Separates beta and realized volatility cleanly, largely a sector-composition effect", "Use for risk assessment, not for stock selection on \"who is really doing AI\""],
+    ["Within-filing washing score (Ch. 4)", "Real, calibrated, but detectable only for high-disclosure-volume firms; flags 8 firms net of sector, 3 with sector FE", "Use as a governance-risk flag for the flagged names, not a ranking of the whole coverage universe"],
+    ["Cross-channel promotional gap (Ch. 5)", "The largest, most stable stylized fact in this corpus (+10.7pp call vs. filing); did not close after SEC scrutiny", "The most defensible AI-washing screen available from this analysis"],
+], columns=["Feature", "What Chapter 4/5 found", "How to use it"])
+t6_3
+```
+
+The two features an allocator might reach for first — how much a firm talks about AI, and how promotional that talk is — carry the least information in this analysis. The feature that does carry information about risk (segment/behavior cluster) carries it mostly through sector composition rather than through disclosure choice per se, and the feature closest to a genuine AI-washing signal is not a firm's tone in any one venue but the *difference* in tone between its filings and its calls.
+
+## For management theory and practice
+
+Two lenses from Chapter 1 receive direct, differentiated support. Signalling (H1) holds at the level of *what kind* of AI content a firm emphasises — the segmentation separates firms on R&D intensity, margins, beta and valuation they never saw — but not at the level of individual promotional or hypothetical claims, which carry no incremental information once volume and fundamentals are controlled (H4 fails at that finer grain). Legitimacy/mimicry (H3) is visible in the sector concentration of Governance Adopters (regulated industries) and Product Deployers (software, hardware) rather than in firm-level economic variation alone. The greenwashing precedent transfers unevenly: Marquis, Toffel and Zhou's [@marquis2016] finding that scrutiny reduces selective disclosure does not reproduce for AI — scrutiny did not raise realized, specific or governance-oriented language in this sample — but the *mechanism* the SEC pursued, a gap between an unregulated and a regulated venue, is present, large, and unmoved by scrutiny, which is a stronger and more specific parallel to Welltower's actual case than a volume-based greenwashing analogy would have suggested.
+
+```{python}
+#| label: tbl-t6-4
+#| tbl-cap: "A generalised X-washing lens: the frame schema restated as questions for any technology narrative."
+
+t6_4 = pd.DataFrame([
+    ["Subject", "Who is the actor making the claim — the firm itself, or industry/peers?"],
+    ["Temporal status", "Is this realized, planned, expected, or hypothetical?"],
+    ["Specificity", "Does the claim name a process, product, vendor, metric, or date?"],
+    ["Rhetoric", "Is the claim promotional in register, and does it claim strategic importance?"],
+    ["Venue", "Does the same claim, at the same time, look the same in a mandated filing as in an unregulated venue?"],
+    ["Persistence", "Does the claim's register hold up across fiscal periods, or only appear around scrutiny?"],
+], columns=["Frame field", "Generalised question"])
+t6_4
+```
+
+This lens does not require AI-specific vocabulary: the same six questions apply to quantum computing, blockchain, or any technology-labelled narrative a firm chooses to attach to its story.
+
+# Conclusions
+
+This dissertation set out to measure how S&P 500 firms differ in what they disclose about AI, not merely in how much they disclose, and to test whether that difference is informative, has shifted under regulatory scrutiny, and supports a coherent management response. Three outcomes stand.
+
+First, AI disclosure separates into a stable three-segment typology — Product Deployers, Governance Adopters, Risk Listers — built from *what kind* of AI content a firm emphasises rather than from how often it mentions AI, and this typology tracks R&D intensity, margins, beta and valuation multiples it was never built to predict. Second, that separation is informative for risk pricing but not, at the strength this panel can detect after correcting for multiple testing, for next-year operating outcomes: AI-disclosure content does not forecast capex, R&D, revenue or return growth beyond noise, while the segmentation's risk gradient (beta, realized volatility, and a market-adjusted return reversal around the 10-K) survives every cross-check run against it. Third, the SEC's 2024 scrutiny is not associated with firms becoming more concrete, quantified or governance-oriented in any of three independent designs, and the specific mechanism the SEC's own enforcement language targets — a gap between what a firm tells analysts on a call and what it commits to in a filing — is large (+10.7 percentage points of promotional share), stable, and unchanged by the scrutiny that was meant to discourage it.
+
+For **issuers**, the practical indication is to audit the gap between venues, not the promotional tone of any one filing in isolation: a 10-K that reads as disciplined is not evidence of disciplined AI communication if the same quarter's earnings call is not. For **capital allocators**, the indication is to discount AI-mention volume and promotional tone as standalone signals, and to treat the cross-channel gap — not the within-filing rate — as the more defensible AI-washing screen. For **regulators**, the finding that scrutiny changed tone convergence that was already under way, without measurably closing the cross-venue gap it was aimed at, is itself evidence for where enforcement attention has and has not landed. For **management scholarship**, AI washing is best understood as a case where the greenwashing framework transfers partially: signalling and legitimacy both operate, but through firm and sector characteristics correlated with disclosure style more than through the verifiability of any single claim, and the regulatory mechanism that matters is cross-venue consistency rather than within-venue tone.
+
+The main open question is measurement, not method: every result in Chapters 3–5 rests on LLM-extracted frame labels — `rhetoric_promotional`, `temporal`, `specificity_*` — that have been checked for agreement between two LLM judges (κ = 0.87 at the prefilter stage) but not yet against human coding at the frame level. The stratified human-coded validation sample described in Chapter 2 is the next concrete step, and the fields it tests most carefully — `temporal`, `specificity` and `rhetoric` — are exactly the fields this dissertation's central claims depend on.
+
+# AI statement {.unnumbered}
+
+A large language model (Qwen 3.7 Flash, via OpenRouter) is used as a classification instrument in the measurement pipeline described in Chapter 2 and Appendix A: it identifies AI-related frames within paragraphs already selected by a separately validated, non-LLM prefilter, and its outputs feed the analysis in Chapters 3–5 subject to the validation status reported in Chapter 2 §Validation. No generative AI is used to fabricate data, quotations, or results; all figures and tables in this document are computed directly from the pipeline's stored outputs at render time (visible in the Quarto source). Generative AI assistance (Claude, Anthropic) is used in drafting and structuring this document's prose from the underlying analysis; all analytical decisions, interpretation and final wording are the author's.
+
 
