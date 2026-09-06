@@ -136,8 +136,9 @@ que estimar. Es un caso, no una estimación.
 La brecha por empresa **no se correlaciona con el score de exceso promocional
 de `08_definiciones_de_washing.md`** (Spearman −0,07): ese score mide exceso DENTRO de
 los filings dado lo que la empresa describe; la brecha mide cuánto más promete
-en la call. Son dos formas de AI-washing distintas y la SEC persigue la
-segunda.
+en la call. Son dos formas de desajuste distintas; la segunda es la que
+coincide con el mecanismo que la SEC señaló en la correspondencia con
+Welltower.
 
 ## Chequeo secundario: tasas condicionadas a hablar de IA
 

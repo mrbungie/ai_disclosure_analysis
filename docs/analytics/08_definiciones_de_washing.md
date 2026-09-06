@@ -14,7 +14,8 @@ Las correlaciones entre ellas son bajas: Spearman −0,07 entre la brecha por
 canal y el exceso condicional; 7 de las 8 del exceso caen en la esquina
 "vocales sustantivos" de la grilla, no en la de washing. **Son tres fenómenos:
 hablar sin hacer, hablar más de lo que lo hecho justifica, y contar cosas
-distintas según a quién.** La SEC persigue el tercero; la literatura de
+distintas según a quién.** El tercero es el que coincide con el mecanismo
+que la SEC señaló en la correspondencia con Welltower; la literatura de
 greenwashing suele medir el primero; el segundo es el que un score por
 empresa puede testear. Lo que sigue es el segundo: el estimador, sus
 resultados y su validación.

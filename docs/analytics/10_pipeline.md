@@ -23,7 +23,7 @@ de `03`, que para la empresa sin frames valen "sin IA".
 | `build_segments.py` | `firm_segments`, `firm_year_segments` (k=3 + sin IA, 510 empresas) | `02`, `04`, `05`, `07` |
 | `build_voice_behavior_grid.py` | `firm_voice_behavior_grid`, `firm_year_voice_behavior_grid` | `03` |
 | `economic_profiles.py` | `economic_profiles.json` (paneles A y B) | `04` |
-| `incremental_signal.py` | `incremental_signal.json` (M0-M3, ΔR², bootstrap, robustez) | `05` |
+| `incremental_signal.py` | `incremental_signal.json` (M0-M3, R² ajustado, ΔR², bootstrap, Wald conjunto, permutación sector×año, robustez) | `05` |
 | `channel_gap_analysis.py` | `channel_gap_cells`, `channel_gap_firm`, `channel_gap_analysis.json` | `06` |
 | `shock_analysis.py`, `shock_did_simple.py` | `shock_analysis.json`, `shock_did_simple.json`, `shock_did_*.png` | `07` |
 | `washing_score.py`, `validate_washing_score.py` | `firm_washing_score`, `firm_washing_score_all`, validación | `08` |

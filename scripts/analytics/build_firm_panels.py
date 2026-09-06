@@ -58,7 +58,7 @@ RATIO_COLUMNS = ["gross_margin", "operating_margin", "net_margin", "roa", "roe",
                  "current_ratio", "debt_to_equity", "asset_turnover",
                  "rd_intensity", "capex_intensity", "sic2"]
 MARKET_COLUMNS = ["market_cap", "pe_ratio", "ps_ratio", "pb_ratio", "ev_revenue",
-                  "ev_ebitda", "beta", "vol_pre_60d", "vol_post_60d",
+                  "ev_ebitda", "beta", "idio_vol_252d", "vol_pre_60d", "vol_post_60d",
                   "momentum_12_1", "car_m1_p5"]
 # docs/analytics/07 aggregates these per firm; sic2 is categorical and
 # entities_named is text, so neither belongs in a mean.

@@ -29,7 +29,7 @@ Cada eje se corta en terciles → 9 celdas.
 
 |  | conducta baja | conducta media | conducta alta |
 |---|---:|---:|---:|
-| **voz alta** | **washing: 36** | 44 | **vocales sustantivos: 90** |
+| **voz alta** | **desacople absoluto: 36** | 44 | **vocales sustantivos: 90** |
 | **voz media** | 60 | 68 | 42 |
 | **voz baja** | **silenciosos: 79** | 53 | **sustancia callada: 38** |
 
@@ -39,7 +39,7 @@ Las cuatro esquinas son las categorías que la tesis necesita nombrar:
 
 | esquina | empresas | % voz | % conducta | frames (mediana) | ejemplos (por volumen) |
 |---|---:|---:|---:|---:|---|
-| **Washing** (voz alta, conducta baja) | 36 | 33,1 | 22,8 | 17 | UNH, CI, AAPL, PYPL, ELV, DISCA, AMT, AAL, MPWR, SO |
+| **Desacople absoluto voz-conducta** (voz alta, conducta baja; región consistente con washing) | 36 | 33,1 | 22,8 | 17 | UNH, CI, AAPL, PYPL, ELV, DISCA, AMT, AAL, MPWR, SO |
 | **Sustancia callada** (voz baja, conducta alta) | 38 | 4,3 | 70,5 | 30 | FTNT, OKTA, DDOG, STX, FFIV, NET, EXPE, ZBH, ZTS, HOLX |
 | **Vocales sustantivos** | 90 | 28,7 | 72,6 | 77 | MSFT, NVDA, GOOGL, ADBE, INTC, CRM, HPE, SNOW, WDAY, AMD |
 | **Silenciosos** | 79 | 1,8 | 19,0 | 14 | BAC, MCHP, ISRG, BAX, WLTW, WELL, UAL, FOX, LNC, PGR |
