@@ -103,6 +103,8 @@ OBJECT_FAMILIES = [
     ("AI, unspecified object", r"^ai$|^artificial intelligence|^generative ai$|^gen ?ai$|^ai technolog|^ai and|^ai/ml|^machine learning$|^ai initiative|^ai strateg|^ai use|^ai program|^ai investment|^technolog|^new technolog|^ai$"),
 ]
 STAGE_RANK = {"unspecified": 0, "exploring": 1, "piloting": 2, "deployed": 3, "scaled": 4}
+EXTERNAL_ROLES = {"external_provider", "external_model", "partner"}
+SOURCES = ["own", "third_party", "co_developed", "acquired", "open_source", "mixed", "unspecified"]
 
 
 GENERIC_TOKENS = {"ai", "artificial", "intelligence", "generative", "gen", "genai", "ml", "machine", "learning", "and", "or", "&",
@@ -180,9 +182,13 @@ def load() -> pd.DataFrame:
     # proveedores: lista por actividad. `provider_families` es la lista de familias;
     # `provider_family` resume la actividad: la primera familia externa nombrada, si no
     # 'proprietary' si lo declara, si no 'unspecified'. Los conteos por proveedor usan la lista.
-    a["providers_or_models"] = a["providers_or_models"].map(lambda v: [str(x) for x in (list(v) if v is not None else [])])
-    a["own_brands"] = a["own_brands"].map(lambda v: [str(x) for x in (list(v) if v is not None else [])])
-    a["is_own_ai"] = a["is_own_ai"].fillna(False).astype(bool)
+    # entidades nombradas con rol (v2): proveedores externos = external_provider, external_model, partner;
+    # marcas propias = own_product_or_brand. `ai_source` dice de dónde sale la IA.
+    a["named_entities"] = a["named_entities"].map(lambda v: [dict(e) for e in (list(v) if v is not None else [])])
+    a["ai_source"] = a["ai_source"].fillna("unspecified")
+    a["providers_or_models"] = a["named_entities"].map(lambda es: [e["name"] for e in es if e["role"] in EXTERNAL_ROLES])
+    a["own_brands"] = a["named_entities"].map(lambda es: [e["name"] for e in es if e["role"] == "own_product_or_brand"])
+    a["is_own_ai"] = a["ai_source"].isin(["own", "mixed"])
     a["provider_or_model"] = a["providers_or_models"].map(lambda v: ", ".join(v) if v else "unspecified")
     a["provider_families"] = a.apply(lambda r: sorted({family(x, PROVIDER_FAMILIES, "unspecified") for x in r["providers_or_models"]} | ({"proprietary"} if r["is_own_ai"] else set())), axis=1)
     def _summary(fams):
@@ -201,7 +207,7 @@ def load() -> pd.DataFrame:
     inst_docs = inst_docs.merge(docs.drop(columns="channel"), on="accession_number", how="inner")
     inst_docs["year"] = inst_docs["fecha"].dt.year
     a.attrs["instances"] = a[["text_hash", "activity_index", "action", "target", "stage", "provider_or_model", "provider_family",
-                              "provider_families", "own_brands", "is_own_ai", "evidence_strength", "function"]].drop_duplicates(["text_hash", "activity_index"]) \
+                              "provider_families", "own_brands", "is_own_ai", "ai_source", "named_entities", "evidence_strength", "function"]].drop_duplicates(["text_hash", "activity_index"]) \
         .merge(inst_docs, on="text_hash", how="inner")
     return a
 
@@ -213,8 +219,11 @@ def flags(a: pd.DataFrame) -> pd.DataFrame:
     f["customer_facing_deployment"] = used & (a["target"] == "customers")
     f["internal_deployment"] = used & a["target"].isin(["employees", "internal_process"])
     f["developer_tools"] = used & (a["target"] == "developers")
-    f["proprietary_ai"] = (a["action"] == "develop") | a["is_own_ai"]
+    f["proprietary_ai"] = (a["action"] == "develop") | (a["ai_source"] == "own")
     f["own_brand_named"] = a["own_brands"].map(lambda v: len(v) > 0)
+    f["third_party_ai"] = a["ai_source"].isin(["third_party", "mixed", "open_source"])
+    f["co_developed_or_acquired"] = a["ai_source"].isin(["co_developed", "acquired"])
+    f["named_customer"] = a["named_entities"].map(lambda es: any(e["role"] == "customer" for e in es))
     f["third_party_named_provider"] = a["provider_families"].map(lambda v: any(x not in ("proprietary", "unspecified", "third_party_unnamed") for x in v))
     f["infrastructure_investment"] = a["action"] == "invest_infrastructure"
     f["acquisition_or_licensing"] = a["action"] == "buy_or_license"
@@ -307,13 +316,14 @@ def main() -> None:
           f"{(a.channel == 'call').mean():.0%} provienen sólo de calls")
 
     print("\nACCIONES (% de actividades) y ETAPA, DESTINATARIO, EVIDENCIA")
-    dist = {k: (a[k].value_counts(normalize=True) * 100).round(1).to_dict() for k in ("action", "stage", "target", "evidence_strength")}
+    dist = {k: (a[k].value_counts(normalize=True) * 100).round(1).to_dict() for k in ("action", "stage", "target", "evidence_strength", "ai_source")}
     for k, v in dist.items():
         print(f"  {k:18s} " + " | ".join(f"{kk} {vv}" for kk, vv in v.items()))
     fam = (a["function_family"].value_counts(normalize=True) * 100).round(1)
     prov = (a["provider_family"].value_counts(normalize=True) * 100).round(1)
     multi = float(a["provider_families"].map(lambda v: len(set(v) - {"proprietary", "unspecified", "third_party_unnamed"}) >= 2).mean())
-    print(f"  actividades con ≥2 proveedores externos nombrados: {100 * multi:.1f}% | IA propia (is_own_ai): {100 * a['is_own_ai'].mean():.1f}% | con marca propia nombrada: {100 * (a['own_brands'].map(len) > 0).mean():.1f}%")
+    roles = pd.Series([e["role"] for es in a["named_entities"] for e in es]).value_counts()
+    print(f"  actividades con ≥2 proveedores externos nombrados: {100 * multi:.1f}% | con marca propia nombrada: {100 * (a['own_brands'].map(len) > 0).mean():.1f}% | entidades nombradas por rol: " + ", ".join(f"{k} {v}" for k, v in roles.items()))
     print("  function family    " + " | ".join(f"{k} {v}" for k, v in fam.items()))
     print("  provider family    " + " | ".join(f"{k} {v}" for k, v in prov.items()))
 
@@ -401,11 +411,12 @@ def main() -> None:
                                 "objects": g["object"].apply(lambda x: ", ".join(x.value_counts().index[:3])),
                                 "providers": g["providers_or_models"].apply(lambda x: ", ".join(v for v in pd.Series([p for lst in x for p in lst], dtype=object).value_counts().index[:3] if v.lower() not in ("unspecified", "proprietary"))),
                                 "own": g["own_brands"].apply(lambda x: ", ".join(pd.Series([p for lst in x for p in lst], dtype=object).value_counts().index[:3])),
+                                "source": g["ai_source"].apply(lambda x: x.value_counts().index[0]),
                                 "stage": g["stage_rank"].max().map({v: k for k, v in STAGE_RANK.items()}),
                                 "named_or_metric": g["evidence_strength"].apply(lambda x: float(x.isin(["named_product_or_process", "metric", "vendor"]).mean()))
                                 }).sort_values("n", ascending=False).head(8).reset_index()
             lines = [f"{r.action} · {r.object_family} ({r.n}): {r.objects}" + (f" | for {r.functions}" if r.functions else "")
-                     + (f" | {r.targets}" if r.targets else "") + f" | {r.stage}" + (f" | providers: {r.providers}" if r.providers else "") + (f" | own: {r.own}" if r.own else "")
+                     + (f" | {r.targets}" if r.targets else "") + f" | {r.stage}" + f" | {r.source}" + (f" | providers: {r.providers}" if r.providers else "") + (f" | own: {r.own}" if r.own else "")
                      + f" | concrete {r.named_or_metric:.0%}" for r in inv.itertuples()]
             cards[t_] = {"segment": SEGMENT_LABELS[s], "n_activities": int(len(sub)), "lines": lines}
             print(f"    {t_} ({len(sub)} activities)")

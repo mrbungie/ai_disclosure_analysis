@@ -152,8 +152,8 @@ def sample_activities(con: duckdb.DuckDBPyConnection, n: int, seed: int) -> list
     """).df()
     con.register("chosen_paras", rows[["text_hash"]])
     acts_df = con.execute(f"""
-        SELECT DISTINCT a.text_hash, a.activity_index, a.action, a.object, a.function, a.target, a.stage, a.providers_or_models,
-               a.own_brands, a.is_own_ai, a.evidence_strength, a.evidence_sentence_ids
+        SELECT DISTINCT a.text_hash, a.activity_index, a.action, a.object, a.function, a.target, a.stage, a.ai_source,
+               a.named_entities, a.evidence_strength, a.evidence_sentence_ids
         FROM read_parquet('{acts}') a JOIN chosen_paras USING (text_hash) ORDER BY a.text_hash, a.activity_index
     """).df()
     firms = firm_of(con, rows["accession_number"].tolist())
@@ -166,9 +166,8 @@ def sample_activities(con: duckdb.DuckDBPyConnection, n: int, seed: int) -> list
             activities.append({
                 "activity_index": int(x.activity_index), "action": x.action, "object": x.object, "function": x.function,
                 "target": x.target, "stage": x.stage,
-                "providers": [str(v) for v in (list(x.providers_or_models) if x.providers_or_models is not None else [])],
-                "own_brands": [str(v) for v in (list(x.own_brands) if x.own_brands is not None else [])],
-                "is_own_ai": bool(x.is_own_ai) if x.is_own_ai is not None else False,
+                "ai_source": x.ai_source,
+                "entities": [{"name": str(e["name"]), "role": str(e["role"])} for e in (list(x.named_entities) if x.named_entities is not None else [])],
                 "evidence_strength": x.evidence_strength,
                 "evidence": [sents[i]["idx"] for i in ev_pos if 0 <= i < len(sents)],   # posiciones del prompt -> sentence_index real
             })
