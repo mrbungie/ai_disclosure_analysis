@@ -246,8 +246,9 @@ ortogonal a este score (Spearman −0,07).
 
 ## Limitaciones
 
-- **Voz y comportamiento salen del mismo texto.** Se acota midiendo el
-  comportamiento en frames no promocionales; no se elimina. Un diseño limpio lo
+- **Voz y conducta salen del mismo texto: el índice mide conducta
+  divulgada, no operativa.** Se acota midiendo la conducta en frames no
+  promocionales; no se elimina. Un diseño limpio lo
   mediría contra capex/I+D/contrataciones — lo que hace
   `05_senal_incremental.md`, donde el contenido aporta 2-4 puntos de R²
   parcial sobre fundamentals y volumen, cargado por la especificidad y no por

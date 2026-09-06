@@ -12,7 +12,13 @@ En el panel empresa-año esa celda es el 66% de 2021 y el 8% de 2026.
 | eje | definición | media del corpus |
 |---|---|---|
 | **VOZ** | % de las afirmaciones de IA de la empresa en registro promocional o estratégico | 14,4% |
-| **COMPORTAMIENTO** | % que describe conducta concreta: etapa de uso, resultado o capacidad | 44,9% |
+| **CONDUCTA DIVULGADA** | % que describe conducta concreta: etapa de uso, resultado o capacidad | 44,9% |
+
+**El eje de conducta mide conducta divulgada, no conducta operativa observada.**
+Si la empresa dice "desplegamos IA en X", eso cuenta como conducta; nadie
+verificó el despliegue. Lo que sí es externo al texto son los perfiles
+financieros de `04` y los outcomes de `05`: ahí "hablar contra hacer" se
+mide contra I+D, beta y valuación, no contra otra frase del mismo filing.
 
 Los dos son **porcentajes sobre los frames de la misma empresa**, así que ninguno
 premia a la que más habla. La confianza que merece cada tasa sí depende del
