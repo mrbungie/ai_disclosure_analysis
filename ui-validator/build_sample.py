@@ -48,6 +48,34 @@ def latest_predictions() -> Path:
     return runs[-1]
 
 
+CALLS_MANIFEST = REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls.parquet"
+
+
+def register_firms(con: duckdb.DuckDBPyConnection) -> None:
+    """Vista `doc_firm`: accession_number -> ticker y nombre de la empresa, para
+    que la persona sepa de quién es el párrafo (si dice "AMD" y la empresa es
+    AMD, no es un proveedor externo)."""
+    con.execute(f"""
+        CREATE OR REPLACE TEMP VIEW doc_firm AS
+        WITH docs AS (
+            SELECT accession_number, ticker FROM filing_manifest WHERE country_code = 'us'
+            UNION ALL SELECT accession_number, ticker FROM filing_manifest_10q WHERE country_code = 'us'
+            UNION ALL SELECT document_id, ticker FROM read_parquet('{CALLS_MANIFEST}')
+        ), names AS (
+            SELECT ticker, any_value(company_name) AS company_name FROM firm_universe WHERE country_code = 'us' GROUP BY 1
+        )
+        SELECT DISTINCT d.accession_number, d.ticker, n.company_name FROM docs d LEFT JOIN names n USING (ticker)
+    """)
+
+
+def firm_of(con: duckdb.DuckDBPyConnection, accessions: list[str]) -> dict:
+    if not accessions:
+        return {}
+    con.register("acc_list", __import__("pandas").DataFrame({"accession_number": list(set(accessions))}))
+    rows = con.execute("SELECT f.accession_number, f.ticker, f.company_name FROM doc_firm f JOIN acc_list USING (accession_number)").fetchall()
+    return {a: {"ticker": t, "company": c} for a, t, c in rows}
+
+
 def sample_frames(con: duckdb.DuckDBPyConnection, n: int, seed: int) -> list[dict]:
     per_form = max(1, n // len(FORMS))
     rows = con.execute(f"""
@@ -71,6 +99,7 @@ def sample_frames(con: duckdb.DuckDBPyConnection, n: int, seed: int) -> list[dic
     """).df()
     frames = frames.merge(rows[["form", "accession_number", "item_key", "paragraph_index"]],
                           on=["form", "accession_number", "item_key", "paragraph_index"])
+    firms = firm_of(con, rows["accession_number"].tolist())
     items = []
     for _, r in rows.iterrows():
         fr = frames[(frames.accession_number == r.accession_number) & (frames.item_key == r.item_key)
@@ -78,6 +107,7 @@ def sample_frames(con: duckdb.DuckDBPyConnection, n: int, seed: int) -> list[dic
         items.append({
             "id": f"F:{r.form}:{r.accession_number}:{r.item_key}:{int(r.paragraph_index)}",
             "form": r.form, "accession_number": r.accession_number, "text_hash": str(r.text_hash),
+            **firms.get(r.accession_number, {"ticker": None, "company": None}),
             "sentences": [{"idx": int(s["idx"]), "text": s["text"]} for s in list(r.sentences)],
             "frames": [{
                 "frame_index": int(f.frame_index), "subject": f.subject, "ai_type": f.ai_type,
@@ -126,6 +156,7 @@ def sample_activities(con: duckdb.DuckDBPyConnection, n: int, seed: int) -> list
                a.evidence_strength, a.evidence_sentence_ids
         FROM read_parquet('{acts}') a JOIN chosen_paras USING (text_hash) ORDER BY a.text_hash, a.activity_index
     """).df()
+    firms = firm_of(con, rows["accession_number"].tolist())
     items = []
     for r in rows.itertuples():
         sents = [{"idx": int(s["idx"]), "text": s["text"]} for s in list(r.sentences)]
@@ -140,6 +171,7 @@ def sample_activities(con: duckdb.DuckDBPyConnection, n: int, seed: int) -> list
                 "evidence": [sents[i]["idx"] for i in ev_pos if 0 <= i < len(sents)],   # posiciones del prompt -> sentence_index real
             })
         items.append({"id": f"A:{r.text_hash}", "form": r.form, "accession_number": r.accession_number,
+                      **firms.get(r.accession_number, {"ticker": None, "company": None}),
                       "text_hash": str(r.text_hash), "sentences": sents, "activities": activities})
     random.Random(seed).shuffle(items)
     return items
@@ -169,8 +201,16 @@ def sample_prefilter(con: duckdb.DuckDBPyConnection, n: int, seed: int) -> list[
             SELECT *, row_number() OVER (PARTITION BY form, estrato ORDER BY hash(text_hash + {seed})) AS rn FROM p
         ) WHERE rn <= {per}
     """).df()
+    con.register("pref_hashes", rows[["text_hash"]])
+    acc = con.execute("""
+        SELECT p.text_hash, any_value(p.accession_number) AS accession_number
+        FROM paragraphs p JOIN pref_hashes h USING (text_hash) WHERE p.country_code = 'us' GROUP BY 1
+    """).df()
+    firms = firm_of(con, acc["accession_number"].tolist())
+    firm_by_hash = {int(r.text_hash): firms.get(r.accession_number, {}) for r in acc.itertuples()}
     items = [{
         "id": f"P:{r.text_hash}", "form": r.form, "text_hash": str(r.text_hash), "estrato": r.estrato,
+        **firm_by_hash.get(int(r.text_hash), {"ticker": None, "company": None}),
         "text": r.paragraph_text, "proba": round(float(r.predicted_proba), 3),
         "prefilter_says_ai": bool(r.is_ai_prefiltered), "threshold": float(r.threshold),
         "named_entity_match": bool(r.named_entity_match),
@@ -189,6 +229,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args()
     con = duckdb.connect(str(args.database), read_only=True)
+    register_firms(con)
     frames = sample_frames(con, args.frames, args.seed)
     prefilter = sample_prefilter(con, args.prefilter, args.seed)
     activities = sample_activities(con, args.activities, args.seed)

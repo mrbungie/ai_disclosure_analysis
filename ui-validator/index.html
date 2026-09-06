@@ -41,6 +41,7 @@
   .act { background:#fff; border:1px solid var(--line); border-left:4px solid #6a1b9a; border-radius:8px; padding:14px 16px; margin-bottom:12px; }
   .act .sentence { font-size:17px; line-height:1.5; margin:4px 0 10px; }
   .act .sentence b { color:#6a1b9a; }
+  .meta b { color:var(--fg); font-size:14px; }
   .act .sentence i { background:#f3e5f5; padding:0 5px; border-radius:4px; font-style:normal; }
   .big { display:flex; gap:10px; margin:12px 0; }
   .big button { font-size:16px; padding:12px 18px; flex:1; }
@@ -122,6 +123,7 @@ function render() {
   m.querySelector('#next').onclick = () => { pos[task] = Math.min(list.length - 1, pos[task] + 1); render(); };
   m.querySelector('#pend').onclick = () => { pos[task] = firstPending(task); render(); };
 }
+function firm(it) { return it.ticker ? `<b>${esc(it.ticker)}</b>${it.company ? ' · ' + esc(it.company) : ''} · ` : ''; }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function btn(id, k, v, label, cls, cur) { return `<button class="${cls || ''} ${cur === v ? 'on' : ''}" data-set='${JSON.stringify([id, k, v])}'>${label}</button>`; }
 function yesno(id, k, cur) { return btn(id, k, true, 'sí', 'ok', cur) + btn(id, k, false, 'no', 'bad', cur); }
@@ -130,7 +132,7 @@ function nav() { return `<nav><button id="prev">← anterior</button><button id=
 function renderFrames(it) {
   const a = get(it.id);
   const ev = new Set(it.frames.flatMap(f => f.evidence));
-  let h = `<div class="meta">${esc(it.form)} · ${esc(it.accession_number)} · text_hash ${esc(it.text_hash)} · ${it.frames.length} frame(s)</div>`;
+  let h = `<div class="meta">${firm(it)}${esc(it.form)} · ${esc(it.accession_number)} · text_hash ${esc(it.text_hash)} · ${it.frames.length} frame(s)</div>`;
   h += `<div class="para">` + it.sentences.map(s => `<div class="sent ${ev.has(s.idx) ? 'ev' : ''}"><span class="n">[${s.idx}]</span>${esc(s.text)}</div>`).join('') + `</div>`;
   if (!it.frames.length) {
     h += `<div class="frame"><h4>El juez no extrajo ningún frame de este párrafo.</h4><div class="q"><label>¿Debería haber al menos uno?</label>${yesno(it.id, 'sin_frames', a.sin_frames)}</div></div>`;
@@ -164,9 +166,9 @@ function verdict(it, ai, v) { const a = get(it.id); a['a' + ai + '.veredicto'] =
 function pendingActivity(it) { const a = get(it.id); return it.activities.find(x => a['a' + x.activity_index + '.veredicto'] === undefined); }
 function renderActivity(it) {
   const a = get(it.id); const ev = new Set(it.activities.flatMap(x => x.evidence));
-  let h = `<div class="meta">${esc(it.form)} · ${esc(it.accession_number)} · ${it.activities.length} actividad(es) extraída(s)</div>`;
+  let h = `<div class="meta">${firm(it)}${esc(it.form)} · ${esc(it.accession_number)} · ${it.activities.length} actividad(es) extraída(s)</div>`;
   h += `<div class="para">` + it.sentences.map(s => `<div class="sent ${ev.has(s.idx) ? 'ev' : ''}"><span class="n">[${s.idx}]</span>${esc(s.text)}</div>`).join('') + `</div>`;
-  h += `<div class="hint" style="margin:0 0 8px">Según el modelo, este párrafo dice que la empresa hace esto (una tarjeta por actividad). Para cada una: ¿lo dice el texto? Mirá la frase, no los detalles.</div>`;
+  h += `<div class="hint" style="margin:0 0 8px">Según el modelo, este párrafo de <b>${esc(it.company || it.ticker || 'la empresa')}</b> dice que la empresa hace esto (una tarjeta por actividad). Para cada una: ¿lo dice el texto? Mirá la frase, no los detalles. Si "proveedores" está vacío y el texto nombra a la propia empresa o sus productos, está bien: proveedor es alguien externo.</div>`;
   const pend = pendingActivity(it);
   for (const x of it.activities) {
     const p = 'a' + x.activity_index + '.'; const ver = a[p + 'veredicto']; const mal = a[p + 'mal'] || {};
@@ -174,7 +176,7 @@ function renderActivity(it) {
     const prov = x.providers && x.providers.length ? x.providers.map(esc).join(', ') : 'no dice';
     const focus = pend && pend.activity_index === x.activity_index ? ' style="box-shadow:0 0 0 2px #6a1b9a33"' : '';
     h += `<div class="act"${focus}><div class="hint">actividad ${x.activity_index} · evidencia [${x.evidence.join(', ')}]</div>
-      <div class="sentence">la empresa <b>${esc(ACTION_ES[x.action] || x.action)}</b> <i>${esc(x.object)}</i>${fn}</div>
+      <div class="sentence">${esc(it.ticker || 'la empresa')} <b>${esc(ACTION_ES[x.action] || x.action)}</b> <i>${esc(x.object)}</i>${fn}</div>
       <div class="tags"><span class="tag">destinatario: ${esc(TARGET_ES[x.target] || x.target)}</span><span class="tag">etapa: ${esc(STAGE_ES[x.stage] || x.stage)}</span><span class="tag">proveedores / modelos: ${prov}</span><span class="tag spec">evidencia: ${esc(EVID_ES[x.evidence_strength] || x.evidence_strength)}</span></div>
       <div class="big">
         <button class="ok ${ver === 'ok' ? 'on' : ''}" data-verdict='${JSON.stringify([x.activity_index, 'ok'])}'>1 · Sí, está bien</button>
@@ -195,7 +197,7 @@ function renderActivity(it) {
 
 function renderPrefilter(it) {
   const a = get(it.id);
-  let h = `<div class="meta">${esc(it.form)} · estrato ${esc(it.estrato)} · text_hash ${esc(it.text_hash)}</div>`;
+  let h = `<div class="meta">${firm(it)}${esc(it.form)} · estrato ${esc(it.estrato)} · text_hash ${esc(it.text_hash)}</div>`;
   h += `<div class="para">${esc(it.text)}</div>`;
   h += `<div class="frame"><div class="q"><label>¿Menciona IA (cualquier mención)?</label>${yesno(it.id, 'menciona_ia', a.menciona_ia)}</div>
     <div class="q"><label>¿Es divulgación sustantiva sobre la propia empresa?</label>${yesno(it.id, 'sustantivo', a.sustantivo)}</div>
