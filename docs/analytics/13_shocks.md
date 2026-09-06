@@ -132,3 +132,75 @@ observaciones detrás: es una anécdota, no un hallazgo.
   (`docs/problemas_academicos.md` #1).
 - El panel exige ≥3 frames por empresa-trimestre, así que la entrada al panel es
   endógena a cuánto habla la empresa de IA ese trimestre (#12).
+
+---
+
+# Versión simple: dos grupos, pre/post, con figura
+
+`scripts/analytics/shock_did_simple.py`. Es la especificación que se lleva a la
+tesis, porque se explica en dos líneas y es la que la propuesta pide como
+extensión:
+
+```
+Y[i,t] = a[i] + lambda[t] + beta * (AltoRiesgo[i] x Post[t]) + e[i,t]
+```
+
+`AltoRiesgo` = la mitad de empresas cuya divulgación de IA **pre-2024** era más
+promocional que la mediana. `Post` = desde 2024Q2. Efectos fijos de empresa y de
+trimestre, errores clusterizados por empresa, ventana ±5 trimestres. **38
+empresas de alto riesgo, 26 de bajo, 452 empresa-trimestre.**
+
+**La decisión que hace que el diseño funcione**: el grupo se define con una
+dimensión (retórica promocional) y los outcomes se miden en OTRAS —
+cuantificación, gobernanza, especificidad. Definir el grupo por el nivel
+pre-evento de la misma variable que después se mide produce convergencia
+mecánica: el grupo alto sólo puede bajar, haya pasado algo o no.
+`promotional_rate` se reporta igual, pero **como control interno**: es donde el
+artefacto debe aparecer.
+
+| outcome | DiD | SE | p | tendencias previas (p) |
+|---|---:|---:|---:|---:|
+| `promotional_rate` *(misma dimensión que el grupo)* | **−9,46 p.p.** | 2,30 | **0,000** | 0,100 |
+| `quantified_rate` | +3,32 p.p. | 4,40 | 0,450 | 0,586 |
+| `gov_share` | +1,59 p.p. | 2,14 | 0,456 | 0,059 |
+| `specificity_index` | −0,02 p.p. | 1,68 | 0,992 | 0,991 |
+
+## Cómo se lee
+
+**En la dimensión que define los grupos hay convergencia grande (−9,5 p.p.) y en
+las demás no pasa nada.** Y la trayectoria por trimestre muestra por qué hay que
+desconfiar de la primera: el diferencial ya venía bajando **antes** del evento
+(+8,1\* → +8,2 → +5,0 → −3,5 en los cuatro trimestres previos), con el test
+conjunto de tendencias previas en p=0,100 — no falla al 5%, pero tampoco es
+plano. Es el perfil de una reversión a la media que empezó antes del corte.
+
+En cambio `quantified_rate` (p=0,586) y `specificity_index` (p=0,991) tienen
+tendencias previas planas y limpias, y ahí el efecto es **cero**.
+
+**La afirmación defendible para la tesis:**
+
+> Después del escrutinio de la SEC, las empresas que ex ante se veían más
+> expuestas a AI-washing **no se volvieron más concretas, ni más cuantificadas,
+> ni más orientadas a gobernanza** que las demás. Su tono promocional converge
+> hacia el del resto, pero esa convergencia ya estaba en marcha antes del evento.
+
+Es un resultado, no un no-resultado: la hipótesis natural —"el escrutinio empuja
+a las vagas hacia divulgación más sustantiva"— **no se verifica en las
+dimensiones donde el diseño se sostiene**.
+
+## Las figuras
+
+`data/processed/clusters/shock_did_<outcome>.png`: coeficiente estimado por
+trimestre con intervalo de 95%, normalizado a t−1. Se grafica **lo que el modelo
+estima** (la diferencia entre grupos ajustada por efectos fijos), no medias
+crudas — con 64 empresas, las medias crudas son puro ruido y no muestran el
+supuesto. En la figura se lee de una si las barras previas cruzan el cero y si
+las posteriores se despegan.
+
+## Detalle técnico que hay que dejar escrito
+
+La primera versión del event study usaba `C(ev, Treatment(reference=-1))` sobre
+un categórico de enteros y **patsy ignoraba la referencia**: estimaba todos los
+períodos, el coeficiente de t−1 salía +9,7 p.p. en vez de cero, y el test de
+tendencias previas heredaba ese salto de nivel (daba p=0,000 cuando en realidad
+es 0,100). Corregido con dummies explícitas y el período omitido a mano.

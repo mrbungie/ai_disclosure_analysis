@@ -115,6 +115,7 @@ analytics-panels:
 	.venv/bin/python scripts/analytics/build_firm_panels.py $(ARGS)
 	.venv/bin/python scripts/analytics/washing_score.py $(ARGS)
 	.venv/bin/python scripts/analytics/shock_analysis.py $(ARGS)
+	.venv/bin/python scripts/analytics/shock_did_simple.py $(ARGS)
 
 analytics: analytics-text analytics-financials analytics-panels
 
