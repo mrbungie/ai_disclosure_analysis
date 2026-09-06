@@ -152,12 +152,83 @@ def sector_demeaned(frame: pd.DataFrame, column: str) -> pd.Series:
     return frame[column] - frame.groupby("sic2")[column].transform("median")
 
 
+EXTENSIVE_MAP = {  # misma pregunta, medida en intensidad por 1.000 párrafos con ceros
+    "behavior_share_ai_infrastructure": "ai_infrastructure_per_1k",
+    "behavior_share_revenue_outcome": "revenue_outcome_per_1k",
+    "behavior_share_ai_investment": "ai_investment_per_1k",
+    "behavior_share_cost_outcome": "cost_outcome_per_1k",
+    "n_frames": "frames_per_1k",
+    "promotional_rate": "promo_per_1k",
+    "specificity_index": "spec_per_1k",
+}
+
+
+def main_extensive(args) -> None:
+    """§1 y §2 sobre el panel extensivo: todas las empresas-año con filings,
+    intensidad por 1.000 párrafos, cero cuando no hablan de IA. §3 y §4 no
+    aplican (no hay etiquetas de arquetipo para quien no habla de IA)."""
+    master = pd.read_parquet(args.clusters_dir / "firm_year_extensive.parquet")
+    report: dict = {"panel": "extensive", "n_firm_years": int(len(master)),
+                    "n_firms": int(master["ticker"].nunique()),
+                    "share_any_ai": float(master["any_ai"].mean())}
+    print(f"panel EXTENSIVO: {len(master):,} empresas-año, {master['ticker'].nunique():,} empresas, "
+          f"{master['any_ai'].mean()*100:.0f}% con algún frame de IA\n")
+    print("=" * 78); print("§1  TALK VS. WALK — revenue_outcome por 1.000 párrafos (con ceros) contra revenue real en t+1"); print("=" * 78)
+    x, y = "revenue_outcome_per_1k", "next_revenue_yoy"
+    r_raw, p_raw, n_raw = correlation(master, x, y)
+    r_sector, n_sector = within_group_correlation(master, x, y, ["sic2", "year"])
+    r_firm, n_firm = within_group_correlation(master, x, y, ["ticker"])
+    r_diff, n_diff = first_difference_correlation(master, x, y)
+    p_perm_raw = permutation_p(master, x, y)
+    sector_frame = master.copy()
+    for column in (x, y):
+        sector_frame[column] = sector_frame[column] - sector_frame.groupby(["sic2", "year"])[column].transform("mean")
+    p_perm_sector = permutation_p(sector_frame, x, y)
+    rows = [("cruda", r_raw, n_raw, p_perm_raw), ("dentro de sector-año", r_sector, n_sector, p_perm_sector),
+            ("dentro de empresa (demeaning = efectos fijos)", r_firm, n_firm, np.nan),
+            ("primeras diferencias dentro de empresa", r_diff, n_diff, np.nan)]
+    print(f"{'especificación':46s} {'r':>7s} {'n':>6s} {'p(perm)':>9s}")
+    for label, r, n, p in rows:
+        print(f"{label:46s} {r:7.3f} {n:6d} {'' if np.isnan(p) else f'{p:9.3f}'}")
+    report["talk_vs_walk"] = [{"spec": s, "r": r, "n": n, "p_perm": p} for s, r, n, p in rows]
+    # también: ¿hablar de IA en absoluto (any_ai / frames_per_1k) predice algo?
+    print("\n" + "=" * 78); print("§2  LAS 11 CORRELACIONES, MISMOS PARES EN INTENSIDAD, CON FDR (Benjamini-Hochberg 5%)"); print("=" * 78)
+    results = []
+    for x0, y in FDR_PAIRS:
+        x = EXTENSIVE_MAP.get(x0, x0)
+        if x not in master.columns or y not in master.columns:
+            continue
+        r, p, n = correlation(master, x, y)
+        results.append({"x": x, "y": y, "r": r, "p": p, "n": n})
+    results.sort(key=lambda row: (np.inf if np.isnan(row["p"]) else row["p"]))
+    flags = benjamini_hochberg([row["p"] for row in results]); m = len(results)
+    print(f"{'par':62s} {'r':>7s} {'p':>8s} {'BH':>7s} {'pasa':>5s}")
+    for rank, (row, keep) in enumerate(zip(results, flags), start=1):
+        row["passes_fdr"] = bool(keep)
+        print(f"{row['x'] + ' ~ ' + row['y']:62s} {row['r']:7.3f} {row['p']:8.4f} {rank / m * 0.05:7.4f} {'sí' if keep else 'no':>5s}")
+    report["fdr"] = results
+    print("\n§2b  ¿Hablar de IA en absoluto predice algo? (any_ai y frames_per_1k)")
+    extra = []
+    for x in ("any_ai", "frames_per_1k"):
+        for y in ("next_revenue_yoy", "next_capex_yoy", "next_rd_expense_yoy", "ret_m1_p5", "car_m1_p5"):
+            r, p, n = correlation(master, x, y); extra.append({"x": x, "y": y, "r": r, "p": p, "n": n})
+            print(f"  {x:14s} ~ {y:20s} r={r:+.3f} p={p:.4f} n={n}")
+    report["any_ai"] = extra
+    if args.json:
+        args.json.write_text(json.dumps(report, indent=2, default=float) + "\n"); print(f"\n-> {args.json}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--clusters-dir", type=Path, default=CLUSTERS)
     parser.add_argument("--json", type=Path, default=None)
+    parser.add_argument("--panel", choices=("intensive", "extensive"), default="intensive",
+                        help="intensive = panel condicionado a ≥3 frames/año (tasas); extensive = "
+                             "todas las empresas-año con filings, intensidades por 1.000 párrafos con ceros")
     args = parser.parse_args()
 
+    if args.panel == "extensive":
+        return main_extensive(args)
     master = pd.read_parquet(args.clusters_dir / "firm_year_master_v2.parquet")
     full = pd.read_parquet(args.clusters_dir / "firm_year_full_crosscheck.parquet")
     roic = pd.read_parquet(args.clusters_dir / "firm_year_roic_wacc.parquet")

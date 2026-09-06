@@ -46,6 +46,28 @@ disco local: se baja con
    de beta, y los segmentos de `08_...md` difieren justamente en beta (0,46
    vs 1,00). `--erp 0.082` reproduce la versión vieja.
 
+## Dos márgenes en todos los análisis
+
+Cada tabla de texto condiciona a hablar de IA: el panel empresa-año entra
+con ≥3 frames, el score de washing con ≥5, los segmentos y la grilla con
+≥8. Eso selecciona sobre el propio fenómeno (`docs/problemas_academicos.md`
+#12). `scripts/analytics/ai_intensity.py` arma la tabla de todos los
+documentos —10-K, 10-Q, DEF 14A, 8-K y calls— con sus párrafos y sus
+conteos de frames, cero incluido, y desde ahí:
+
+| análisis | condicionado (tasas) | extensivo (intensidad por 1.000 párrafos, con ceros) |
+|---|---|---|
+| panel empresa-año, cruce financiero (02, 04, 05) | `firm_year_master_v2` | `firm_year_extensive` (`build_firm_panels.py`), `report_crosscheck_stats.py --panel extensive` |
+| shocks (13) | `shock_analysis.py`, `shock_did_simple.py` | los mismos con `--margin extensive` |
+| brecha entre canales (14) | celdas con ≥3 frames por canal | celdas con ≥1 documento por canal (Resultado 3b) |
+| score de washing (09), segmentos (11), grilla (12) | por construcción: son tests y particiones sobre lo que se dice de IA | no tienen versión extensiva; la intensidad de IA es un eje aparte, no un cero de la retórica |
+
+Los dos márgenes responden preguntas distintas y los docs reportan ambos:
+el condicionado mide CÓMO se habla de IA dado que se habla; el extensivo
+mide CUÁNTO del documento se dedica a IA. Donde difieren (02: el cruce
+contable pasa FDR en intensidad y no en proporción; 13: el shock no
+identifica en el extensivo), el doc lo dice.
+
 ## Qué queda pendiente
 
 - El panel empresa-año sigue condicionado a ≥3 frames en el año, así que

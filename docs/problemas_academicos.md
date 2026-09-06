@@ -24,7 +24,7 @@ está el script que lo produce.
 | 9 | El "DiD de tendencia" SEC/DeepSeek estaba mal construido | **CERRADO** — rehecho; el estimando original era mecánico, el nuevo es un cambio diferencial válido (no causal) |
 | 10 | ROIC−WACC mezclaba valor libro y de mercado | **CERRADO** — y medido: no cambiaba el ordenamiento |
 | 11 | K-means con silhouette 0,15 sostiene 4 categorías | **CERRADO** — reemplazado por 3 segmentos estables (`11_segmentacion.md`) |
-| 12 | El panel empresa-año tiene entrada endógena | **ABIERTO** |
+| 12 | El panel empresa-año tiene entrada endógena | **MITIGADO** (paneles extensivos en 02/05/13/14; abierto en 09/11/12) |
 
 ---
 
@@ -267,7 +267,7 @@ conducta declarada no son dos ejes, son casi el mismo**, y lo que queda para
 "washing" es el residuo — que ahora es una variable continua por empresa
 (`firm_voice_behavior_factors.parquet`) en vez de un cruce de etiquetas.
 
-## 12. Entrada endógena al panel empresa-año — ABIERTO
+## 12. Entrada endógena al panel empresa-año — MITIGADO
 
 Una empresa-año entra al panel sólo si tiene ≥3 frames ese año, así que las
 series temporales y la matriz de transición mezclan cambio de discurso, cambio
@@ -275,6 +275,16 @@ de mezcla documental y ruido de denominador chico. La fuga C→D de 35,3% es la
 afirmación más expuesta.
 
 ---
+
+**Estado.** `scripts/analytics/ai_intensity.py` arma la tabla de todos los
+documentos con sus párrafos y conteos de frames, cero incluido, y sobre
+ella corren versiones extensivas del cruce financiero
+(`report_crosscheck_stats.py --panel extensive`, `firm_year_extensive`),
+de los shocks (`--margin extensive`) y de la brecha entre canales
+(`14_...md`, Resultado 3b). Los docs reportan los dos márgenes; donde
+difieren, lo dicen (`10_builders_y_recalculo.md`, "Dos márgenes"). Queda
+abierto por construcción para el score de washing, los segmentos y la
+grilla, que son objetos definidos sobre lo que se dice de IA.
 
 ## Qué NO arregla el trabajo del prefiltro
 

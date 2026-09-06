@@ -111,6 +111,47 @@ Cambio post en `promotional_rate` por segmento de divulgación
 Ninguno significativo. El −11 p.p. de los listadores de riesgo tiene 9
 observaciones detrás: es una anécdota, no un hallazgo.
 
+## Resultado 4: margen extensivo — con las empresas que no hablan de IA adentro, el diseño no identifica
+
+Todo lo anterior condiciona a ≥3 frames por empresa-trimestre: la empresa
+que deja de hablar de IA sale del panel en vez de contar como cero.
+`shock_analysis.py --margin extensive` y `shock_did_simple.py --margin
+extensive` corren los mismos diseños sobre **todos los filings** (10-K,
+10-Q, DEF 14A, 8-K) por empresa-trimestre, con intensidad por 1.000
+párrafos y cero cuando el documento no habla de IA (`ai_intensity.py`):
+11.302 empresa-trimestre, 510 empresas; 5.355 y 488 en la ventana del
+evento SEC. Exposición = frames de IA por 1.000 párrafos antes de 2023.
+
+| outcome por 1.000 párrafos | tendencias previas | cambio post (SEC) |
+|---|---|---:|
+| promocionales | **falla** (p=0,024) | +0,40 |
+| especificidad | pasa (p=0,20) | +0,70 |
+| riesgo | **falla** (p=0,003) | +0,64 |
+| hipotético | **falla** (p<0,001) | +0,44 |
+| frames de IA | **falla** (p=0,002) | +3,6 |
+
+DiD simple (grupo = mitad más promocional por párrafo antes de 2024; 108
+tratadas, 381 controles, 5.364 empresa-trimestre):
+
+| outcome por 1.000 párrafos | DiD | p | tendencias previas |
+|---|---:|---:|---|
+| promocionales *(dimensión del grupo)* | +0,32 | 0,040 | **falla** (p=0,003) |
+| cuantificados | +0,29 | 0,140 | límite (p=0,058) |
+| gobernanza | +0,30 | 0,037 | **falla** (p=0,017) |
+| especificidad | +0,60 | 0,007 | **falla** (p<0,001) |
+
+**En el margen extensivo las tendencias previas fallan casi en todo.** Las
+empresas más expuestas venían aumentando su intensidad de IA relativa desde
+antes de 2024, en todas las dimensiones, porque el margen extensivo es
+donde vive el boom de 2023: el 36% de las empresas-año de 2021 hablaba de
+IA y el 92% de 2025. Un antes/después de marzo de 2024 sobre esa curva
+captura la curva. El único outcome con tendencias previas planas
+(especificidad por párrafo, +0,70) tiene su salto en t+3, que es 2025Q1: la
+temporada de 10-K, no el evento. El diseño de arriba, condicionado a hablar
+de IA, es el que puede decir algo sobre el regulador precisamente porque
+normaliza por cuánto se habla; el extensivo describe el boom y no puede
+separarlo del escrutinio.
+
 ## Qué queda para la tesis
 
 1. **La respuesta a la pregunta extendida es un nulo bien medido**: no hay

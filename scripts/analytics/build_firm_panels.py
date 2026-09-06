@@ -123,7 +123,35 @@ def main() -> None:
                 .merge(crossed, on="ticker", how="inner"))
     print(f"segment_financials: {len(per_firm):,} empresas con ambas etiquetas y financieros")
 
-    for name, table in (("firm_year_full_crosscheck", full),
+    # --- margen extensivo: TODAS las empresas-año con filings, con ceros ---
+    # El panel de arriba entra si la empresa tuvo ≥3 frames en el año, o sea
+    # condiciona a hablar de IA. Este panel toma cada empresa-año con al menos
+    # un filing puntuable y mide intensidad de IA por 1.000 párrafos (cero si
+    # no habla), y se une a los mismos financieros. `year` = año de
+    # presentación, igual que los financieros y el panel de texto.
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from ai_intensity import document_table, aggregate, FILING_FORMS
+    import duckdb
+    con = duckdb.connect(str(REPO_ROOT / "duckdb" / "thesis.duckdb"), read_only=True)
+    try:
+        docs = document_table(con)
+    finally:
+        con.close()
+    docs = docs[docs["form"].isin(FILING_FORMS)].assign(year=lambda d: d["fecha"].dt.year)
+    extensive = aggregate(docs, ["ticker", "year"])
+    extensive = (extensive
+                 .merge(ratios[["ticker", "year"] + RATIO_COLUMNS + GROWTH_COLUMNS], on=["ticker", "year"], how="left")
+                 .merge(market[["ticker", "year"] + MARKET_COLUMNS], on=["ticker", "year"], how="left")
+                 .merge(returns[["ticker", "year", "ret_m1_p5"]], on=["ticker", "year"], how="left")
+                 .merge(text_side[["ticker", "year", "archetype"]], on=["ticker", "year"], how="left"))
+    extensive["in_text_panel"] = extensive["archetype"].notna()
+    print(f"firm_year_extensive: {len(extensive):,} empresas-año con filings, "
+          f"{int(extensive['any_ai'].sum()):,} con algún frame de IA, "
+          f"{int(extensive['in_text_panel'].sum()):,} en el panel condicionado")
+
+    for name, table in (("firm_year_extensive", extensive),
+                        ("firm_year_full_crosscheck", full),
                         ("firm_year_master_v2", master),
                         ("cohort_2021_crosscheck", cohort),
                         ("segment_financials", per_firm)):

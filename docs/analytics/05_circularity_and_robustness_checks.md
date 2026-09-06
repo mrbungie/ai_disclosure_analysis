@@ -105,6 +105,35 @@ con el 69% de filers que reportan el tag más común da r≈0,11, con la
 cobertura completa de 87% da 0,086. La relación "infraestructura
 declarada → capex real" se apoya en parte en qué filers tienen dato.
 
+## 4. Margen extensivo: los mismos chequeos sin condicionar a hablar de IA
+
+`report_crosscheck_stats.py --panel extensive` corre §1 y §2 sobre
+`firm_year_extensive.parquet`: 2.964 empresas-año (todas las que tienen
+filings), intensidad por 1.000 párrafos con ceros (`02_...md`, sección
+"margen extensivo").
+
+| especificación (`revenue_outcome` por 1.000 párrafos ~ revenue t+1) | r | n | p (perm.) |
+|---|---:|---:|---:|
+| cruda | 0,112 | 2.313 | <0,001 |
+| dentro de sector-año | 0,167 | 2.313 | <0,001 |
+| dentro de empresa (efectos fijos) | 0,038 | 2.313 | |
+| primeras diferencias | 0,114 | 1.820 | |
+
+FDR sobre los mismos once pares en intensidad: pasan **dos**,
+`revenue_outcome` ~ revenue t+1 (r=0,112, p<0,0001) y `ai_infrastructure`
+~ capex t+1 (r=0,107, p<0,0001); los otros nueve no.
+
+Lo que esto le hace a la lectura de circularidad es distinto de lo que uno
+esperaría: el panel condicionado tenía una señal within-firm (0,08) mayor
+que la cruda (0,05); el extensivo tiene una señal cruda y dentro de
+sector-año (0,11 y 0,17) mucho mayor que la within-firm (0,04). **Son dos
+señales distintas.** La del panel condicionado —proporción de frames que
+son de revenue— es temporal y débil. La del extensivo —cuánto del filing se
+dedica a resultados de IA— es transversal y no débil. El control sectorial
+no la reduce, la aumenta, así que no es composición de industria; y el
+efecto fijo de empresa la elimina, así que es un rasgo de la empresa, no
+una respuesta a algo que la empresa hizo ese año.
+
 ## Lectura conjunta: ¿qué tan circular es, entonces?
 
 Con evidencia, no sólo con intuición:
@@ -141,9 +170,13 @@ cruce financiero.
 - `04_...md`, `ai_investment`/`ai_infrastructure`: `ai_infrastructure`/
   `capex` (r=0,086) no pasa FDR. No queda ningún par del cruce contable
   para reportar como señal.
-- Hallazgo más defendible de todo el cruce contable: el resultado de
-  efectos fijos de empresa (§2), within-firm > within-sector. Sigue sin ser
-  fuerte.
+- Hallazgo más defendible de todo el cruce contable, panel condicionado: el
+  resultado de efectos fijos de empresa (§2), within-firm > within-sector.
+  Sigue sin ser fuerte.
+- **Panel extensivo (§4)**: `revenue_outcome` y `ai_infrastructure`, medidos
+  como intensidad por párrafo con ceros, pasan FDR (r≈0,11) y sobreviven al
+  control de sector-año. Son transversales. `02_...md` los reporta con esa
+  advertencia.
 
 ## Limitaciones
 

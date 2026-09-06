@@ -195,6 +195,60 @@ es exactamente lo que predeciría la composición sectorial de D
 (software/servicios) sin que el disclosure tenga nada que ver.
 `04_...md` muestra que dentro de sector-año la brecha se reduce ~85%.
 
+## Resultados: margen extensivo — la misma pregunta sin condicionar a hablar de IA
+
+Todo lo anterior mide "cuánto de lo que la empresa dice de IA es X" sobre
+un panel que entra sólo si la empresa tuvo ≥3 frames en el año. Eso
+selecciona sobre el fenómeno: la empresa que no habla de IA no es un cero,
+es una fila que no existe. `firm_year_extensive.parquet`
+(`build_firm_panels.py`, sobre `ai_intensity.py`) toma **todas las
+empresas-año con filings** —2.964 filas, 510 empresas— y mide intensidad:
+frames de cada tipo por 1.000 párrafos del conjunto de filings del año,
+cero cuando no hay ninguno. El 36% de las empresas-año no tiene ningún
+frame de IA (64% en 2021, 6% en 2026); sólo 17 empresas de 510 no hablan de
+IA en ningún año.
+
+`report_crosscheck_stats.py --panel extensive`, mismos pares, medidos en
+intensidad:
+
+| par | r | p | pasa FDR 5% |
+|---|---:|---:|---|
+| `revenue_outcome` por 1.000 párrafos ~ crecimiento de revenue t+1 | **0,112** | <0,0001 | **sí** |
+| `ai_infrastructure` por 1.000 párrafos ~ crecimiento de capex t+1 | **0,107** | <0,0001 | **sí** |
+| promocional por 1.000 párrafos ~ CAR | −0,046 | 0,018 | no |
+| especificidad por 1.000 párrafos ~ CAR | −0,039 | 0,041 | no |
+| los otros siete | entre −0,025 y 0,059 | ≥0,06 | no |
+
+| `revenue_outcome` ~ revenue t+1 | r | n |
+|---|---:|---:|
+| cruda | 0,112 (p perm. <0,001) | 2.313 |
+| dentro de sector-año | **0,167** (p perm. <0,001) | 2.313 |
+| dentro de empresa (efectos fijos) | 0,038 | 2.313 |
+| primeras diferencias | 0,114 | 1.820 |
+
+**Con los ceros adentro, dos cruces sobreviven al FDR y la correlación de
+revenue es tres veces la del panel condicionado.** No es el margen
+extensivo por sí solo: entre las empresas que sí hablan de IA la
+correlación es 0,20, y dentro de sector-año 0,24. Lo que cambia es la
+medida: intensidad (frames de revenue por párrafo del filing) en vez de
+proporción (frames de revenue sobre frames de IA). Una empresa que dedica
+más de su 10-K a resultados de IA crece más al año siguiente que sus pares
+de sector; una que reparte sus pocos frames de IA igual que otra no se
+distingue de ella.
+
+Dos advertencias que la lectura tiene que cargar:
+
+- **Es transversal, no temporal.** Dentro de empresa la correlación cae a
+  0,04. Dedicar más filing a IA identifica un TIPO de empresa que crece más,
+  no predice que la misma empresa crezca más el año que habla más. Es lo
+  contrario del panel condicionado, donde lo poco que había era within-firm.
+- **El margen extensivo puro va al revés.** Las empresas-año sin ningún
+  frame de IA crecen más (12,0% contra 8,8% de mediana), y `any_ai` tiene
+  r=−0,07 con el crecimiento: en 2021-2022 quien no hablaba de IA era la
+  empresa chica en expansión, y quien hablaba, la grande. Hablar de IA en
+  absoluto no es señal de nada; cuánto del filing se dedica a resultados de
+  IA, sí.
+
 ## Resultados: reacción de mercado al filing
 
 Retorno crudo [-1, +5 días hábiles] alrededor del 10-K, por arquetipo:
@@ -228,7 +282,10 @@ trabajo pendiente.
 
 De los tres tipos de cruce (revenue, insumos de inversión, mercado),
 **ninguno muestra una relación que sobreviva a la corrección por
-comparaciones múltiples** (`05_...md`). Lo que queda de revenue es un
+comparaciones múltiples en el panel condicionado a hablar de IA**
+(`05_...md`); **en el panel extensivo, medido en intensidad por párrafo,
+dos sobreviven** (revenue y capex, r≈0,11) y son transversales, no
+within-firm. Lo que queda de revenue es un
 orden por arquetipo (D y C crecen más al año fiscal siguiente que A y
 B, 8,6% y 7,4% contra 5,0% y 7,1% de mediana) con una correlación lineal
 de 0,049 que la permutación no distingue de cero, y que `04_...md`
