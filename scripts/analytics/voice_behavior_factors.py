@@ -179,10 +179,17 @@ def main() -> None:
     # El eje de voz que interesa es el 1 (riesgo hipotético <-> despliegue
     # afirmado). Se lo regresa sobre TODO el bloque de comportamiento y el
     # residuo es "habla distinto de lo que su comportamiento declarado predice".
-    model = LinearRegression().fit(B, voice_scores[:, 0])
+    # SIGNO: el eje de voz va de riesgo/hipotético (+) a despliegue afirmado
+    # (-), así que el residuo crudo tiene el signo invertido respecto de la
+    # pregunta que interesa. Se lo da vuelta para que POSITIVO signifique
+    # siempre "habla en registro de despliegue MÁS de lo que su conducta
+    # descrita predice" — la dirección de washing — y negativo, lo contrario:
+    # conducta por delante del discurso.
+    target = -voice_scores[:, 0]
+    model = LinearRegression().fit(B, target)
     predicted = model.predict(B)
-    residual = voice_scores[:, 0] - predicted
-    r2 = float(np.corrcoef(predicted, voice_scores[:, 0])[0, 1] ** 2)
+    residual = target - predicted
+    r2 = float(np.corrcoef(predicted, target)[0, 1] ** 2)
     print(f"el comportamiento explica {r2:.1%} de la varianza del eje de voz; "
           f"el resto es el residuo")
     out = pd.DataFrame({
@@ -204,9 +211,10 @@ def main() -> None:
                  "conducta_alta_voz_baja", "voz_y_conducta_bajas"))
     print(out.groupby("quadrant").agg(empresas=("ticker", "size"),
                                       frames=("n_frames", "median")).to_string())
-    print("\nresiduo más alto (habla más de lo que su conducta predice):")
+    print("\nresiduo POSITIVO: habla como desplegador más de lo que su conducta predice")
+    print("  (dirección de washing):")
     print(", ".join(out.nlargest(10, "voice_residual").ticker))
-    print("residuo más bajo (conducta por delante del discurso):")
+    print("residuo NEGATIVO: conducta por delante del discurso:")
     print(", ".join(out.nsmallest(10, "voice_residual").ticker))
 
     destination = args.output_dir / "firm_voice_behavior_factors.parquet"

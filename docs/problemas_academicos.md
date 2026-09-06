@@ -23,7 +23,7 @@ está el script que lo produce.
 | 8 | El lado contable/mercado no tenía código que lo generara | **CERRADO** |
 | 9 | El "DiD de tendencia" SEC/DeepSeek no es un DiD | **CERRADO — y el hallazgo se cae** |
 | 10 | ROIC−WACC mezclaba valor libro y de mercado | **CERRADO** — y medido: no cambiaba el ordenamiento |
-| 11 | K-means con silhouette 0,15 sostiene 4 categorías | **CERRADO — con reemplazo y cruce voz×conducta** |
+| 11 | K-means con silhouette 0,15 sostiene 4 categorías | **CERRADO** — reemplazado por 3 segmentos estables (`11_segmentacion.md`) |
 | 12 | El panel empresa-año tiene entrada endógena | **ABIERTO** |
 
 ---

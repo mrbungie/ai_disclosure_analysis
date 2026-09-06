@@ -328,10 +328,17 @@ Cuadrantes (mediana de cada eje):
 | **voz alta, conducta baja** | 89 | 43 |
 | **conducta alta, voz baja** | 90 | 16 |
 
-Residuo más alto (hablan más de lo que su conducta declarada predice): DLTR,
-DPZ, ETN, VTR, KMI, SPG, VRTX, WEC, LW, ROST — retail, utilities y REITs.
-Residuo más bajo (conducta por delante del discurso): AMZN, ALLE, USB, ANSS,
-IQV, ADP, APH, RSG, PANW, HON.
+**Signo del residuo** (corregido 2026-09-06 — la versión anterior de esta
+sección lo tenía invertido): el eje de voz va de riesgo/hipotético (+) a
+despliegue afirmado (−), así que el residuo se reporta con el signo dado vuelta.
+**Positivo = habla en registro de despliegue más de lo que su conducta descrita
+predice**, que es la dirección de AI-washing. Negativo = conducta por delante
+del discurso.
+
+Residuo positivo (dirección de washing): AMZN, ALLE, USB, ANSS, IQV, ADP, APH,
+RSG, PANW, HON. Residuo negativo (describen conducta y hablan poco, o hablan en
+registro de riesgo): DLTR, DPZ, ETN, VTR, KMI, SPG, VRTX, WEC, LW, ROST —
+retail, utilities y REITs, que mencionan IA sobre todo como riesgo.
 
 Es la misma pregunta que responde `09_washing_score.md` con conteos y un test
 exacto; esta versión no tiene potencia estadística por empresa, pero sí ordena a

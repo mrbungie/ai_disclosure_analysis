@@ -101,6 +101,7 @@ prefilter:
 analytics-text:
 	@echo "Arquetipos de voz, clusters de comportamiento y panel empresa-año (build_firm_clusters)..."
 	.venv/bin/python scripts/analytics/build_firm_clusters.py $(ARGS)
+	.venv/bin/python scripts/analytics/build_segments.py $(ARGS)
 
 analytics-financials:
 	@echo "Contables desde XBRL, mercado/beta/CAR y ROIC-WACC (build_firm_financials -> build_market_factors -> build_roic_wacc)..."
