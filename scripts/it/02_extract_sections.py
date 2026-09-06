@@ -102,16 +102,43 @@ def main() -> None:
             log_dir=manifest_dir)
         return
 
+    # What is already extracted is derived from the OUTPUT PARTS, not from
+    # a parse_status column in filing_manifest.parquet.
+    #
+    # This matters because 01_fetch_filings.py owns that file and rewrites
+    # it wholesale every 25 downloads. Running extraction alongside a live
+    # fetch — which is the point, so filings get processed as they land —
+    # would have the two processes clobbering each other's writes: the
+    # fetcher would drop every parse_status, the extractor would drop every
+    # filing downloaded since it last read. Deriving state from the parts
+    # already on disk is the same "the file is the source of truth"
+    # contract the fetcher itself uses for downloads, and it needs no lock.
+    # A per-run LEDGER of every filing attempted, not just the ones that
+    # produced rows. Deriving `already` from the paragraph parts alone
+    # looked equivalent and is not: a filing that yields zero paragraphs
+    # never appears in them, so a loop re-parsing whatever is pending would
+    # retry those same failures on every pass, forever.
     df = pd.read_parquet(manifest_path)
-    if "parse_status" not in df.columns:
-        df["parse_status"] = "pending"
-    df["parse_status"] = df["parse_status"].fillna("pending")
-    pending = df[(df.download_status == "completed") & (df.parse_status == "pending")]
+    already = set()
+    for ledger in sections_dir.glob("extracted_documents__run=*.parquet"):
+        try:
+            already.update(pd.read_parquet(ledger, columns=["document_id"]).document_id)
+        except Exception:  # noqa: BLE001 — a ledger still being written is not fatal
+            continue
+    for part in sections_dir.glob("filing_paragraphs__run=*__part=*.parquet"):
+        # Parts written before the ledger existed still count as done.
+        try:
+            already.update(pd.read_parquet(part, columns=["document_id"]).document_id.unique())
+        except Exception:  # noqa: BLE001
+            continue
+    pending = df[(df.download_status == "completed") & (~df.document_id.isin(already))]
     if args.limit:
         pending = pending.head(args.limit)
     if pending.empty:
-        pipeline_logger.log_event(pipeline_step="it_extract_sections", level="INFO",
-                                  message="Nothing pending.", log_dir=manifest_dir)
+        pipeline_logger.log_event(
+            pipeline_step="it_extract_sections", level="INFO",
+            message=f"Nothing pending ({len(already):,} filings already extracted).",
+            log_dir=manifest_dir)
         return
 
     run_id = datetime.now().strftime("%Y%m%dT%H%M%S")
@@ -127,6 +154,12 @@ def main() -> None:
 
     jobs = [{**row.to_dict(), "_idx": idx} for idx, row in pending.iterrows()]
     buffer, part_num, since_checkpoint = [], 0, 0
+    ledger: list[dict] = []
+    ledger_path = sections_dir / f"extracted_documents__run={run_id}.parquet"
+
+    def flush_ledger():
+        if ledger:
+            pd.DataFrame(ledger).to_parquet(ledger_path, index=False)
 
     def flush():
         nonlocal buffer, part_num
@@ -146,8 +179,11 @@ def main() -> None:
         futures = [executor.submit(_process_one, job) for job in jobs]
         for future in tqdm(as_completed(futures), total=len(futures)):
             result = future.result()
-            df.at[result["idx"], "parse_status"] = result["parse_status"]
             buffer.extend(result["paragraphs"])
+            ledger.append({"document_id": result["document_id"],
+                           "parse_status": result["parse_status"],
+                           "n_paragraphs": len(result["paragraphs"]),
+                           "run_id": run_id, "extracted_at": datetime.now()})
             if result["error"]:
                 pipeline_logger.log_event(
                     pipeline_step="it_extract_sections", level="ERROR",
@@ -155,17 +191,18 @@ def main() -> None:
                     log_dir=manifest_dir)
             since_checkpoint += 1
             if since_checkpoint >= CHECKPOINT_EVERY:
-                # Paragraphs first, then the manifest — a row is only marked
-                # completed once its text is actually on disk.
+                # Paragraphs first, then the ledger — a document is only
+                # recorded as done once its text is actually on disk.
                 flush()
-                df.to_parquet(manifest_path, index=False)
+                flush_ledger()
                 since_checkpoint = 0
 
     flush()
-    df.to_parquet(manifest_path, index=False)
+    flush_ledger()
     pipeline_logger.log_event(
         pipeline_step="it_extract_sections", level="SUCCESS",
-        message=f"Finished run_id={run_id}; parts in {sections_dir}", log_dir=manifest_dir)
+        message=f"Finished run_id={run_id}; {len(already) + len(jobs):,} filings extracted "
+                f"in total; parts in {sections_dir}", log_dir=manifest_dir)
 
 
 if __name__ == "__main__":
