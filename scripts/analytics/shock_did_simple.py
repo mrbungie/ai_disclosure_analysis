@@ -158,19 +158,19 @@ def plot(table: pd.DataFrame, outcome: str, destination: Path, pretrend_p: float
 
     figure, axis = plt.subplots(figsize=(8, 4.5))
     x = table["event_time"].to_numpy(dtype=float)
-    y = table["coef"].to_numpy(dtype=float) * 100
-    error = 1.96 * table["se"].to_numpy(dtype=float) * 100
+    y = table["coef"].to_numpy(dtype=float)
+    error = 1.96 * table["se"].to_numpy(dtype=float)
     pre = x < 0
     axis.errorbar(x[pre], y[pre], yerr=error[pre], fmt="o", color="#4c72b0",
-                  capsize=3, label="antes del evento")
+                  capsize=3, label="before the event")
     axis.errorbar(x[~pre], y[~pre], yerr=error[~pre], fmt="s", color="#c44e52",
-                  capsize=3, label="después")
+                  capsize=3, label="after")
     axis.axhline(0, color="grey", linewidth=1)
     axis.axvline(-0.5, color="black", linestyle=":", linewidth=1)
-    axis.annotate("SEC, 18-mar-2024", xy=(-0.42, max(y + error) * 0.92), fontsize=9)
-    axis.set_xlabel("trimestres desde el evento (t = 0 es 2024Q2; t−1 es la referencia)")
-    axis.set_ylabel(f"{outcome}: alto riesgo − bajo riesgo, p.p.")
-    axis.set_title(f"{outcome} — test de tendencias previas: p = {pretrend_p:.3f}")
+    axis.annotate("SEC, Dec-2023 / Mar-2024", xy=(-0.42, max(y + error) * 0.92), fontsize=9)
+    axis.set_xlabel("quarters from the event (t = 0 is 2024Q1; t−1 is the reference)")
+    axis.set_ylabel(f"{outcome}: high-risk − low-risk group")
+    axis.set_title(f"{outcome} — pre-trend test: p = {pretrend_p:.3f}")
     axis.legend(fontsize=9, loc="lower left")
     figure.tight_layout()
     figure.savefig(destination, dpi=150)

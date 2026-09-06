@@ -34,23 +34,23 @@ def evolution() -> None:
                               realized=("realized_per_1k", "mean"), n=("ticker", "nunique"))
     main, ytd = y.loc[y.index <= 2025], y.loc[y.index >= 2025]
     fig, ax = plt.subplots(figsize=(7.5, 4.2))
-    ax.plot(main.index, main.frames, "o-", color="#1f77b4", label="frames de IA por 1.000 párrafos")
+    ax.plot(main.index, main.frames, "o-", color="#1f77b4", label="AI frames per 1,000 paragraphs")
     ax.plot(ytd.index, ytd.frames, "o:", color="#1f77b4")
-    ax.set_ylabel("frames de IA por 1.000 párrafos"); ax.set_xlabel("año de presentación")
+    ax.set_ylabel("AI frames per 1,000 paragraphs"); ax.set_xlabel("filing year")
     ax2 = ax.twinx()
-    ax2.plot(main.index, main.any_ai * 100, "s-", color="#d62728", label="% empresas con algún frame")
-    ax2.plot(ytd.index, ytd.any_ai * 100, "s:", color="#d62728"); ax2.set_ylabel("% de empresas con algún frame de IA"); ax2.set_ylim(0, 100)
+    ax2.plot(main.index, main.any_ai * 100, "s-", color="#d62728", label="% of firms with any AI frame")
+    ax2.plot(ytd.index, ytd.any_ai * 100, "s:", color="#d62728"); ax2.set_ylabel("% of firms with any AI frame"); ax2.set_ylim(0, 100)
     h1, l1 = ax.get_legend_handles_labels(); h2, l2 = ax2.get_legend_handles_labels()
     ax.legend(h1 + h2, l1 + l2, loc="upper left", fontsize=9)
-    ax.set_title("Intensidad de la divulgación de IA en filings SEC, todas las empresas (2026 = YTD, punteado)", fontsize=10)
+    ax.set_title("AI disclosure intensity in SEC filings, all firms (2026 = YTD, dotted)", fontsize=10)
     fig.tight_layout(); fig.savefig(OUT_DIR / "fig_evolucion_intensidad.png", dpi=150); plt.close(fig)
 
     fig, ax = plt.subplots(figsize=(7.5, 4.2))
-    for col, label, color in (("promo", "promocional", "#ff7f0e"), ("risk", "riesgo", "#d62728"), ("gov", "gobernanza", "#2ca02c"),
-                              ("deployed", "despliegue", "#1f77b4"), ("realized", "realizado", "#9467bd")):
+    for col, label, color in (("promo", "promotional", "#ff7f0e"), ("risk", "risk", "#d62728"), ("gov", "governance", "#2ca02c"),
+                              ("deployed", "deployment", "#1f77b4"), ("realized", "realized", "#9467bd")):
         ax.plot(main.index, main[col], "o-", color=color, label=label); ax.plot(ytd.index, ytd[col], "o:", color=color)
-    ax.set_ylabel("frames por 1.000 párrafos"); ax.set_xlabel("año de presentación"); ax.legend(fontsize=9)
-    ax.set_title("Composición: la cantidad creció, la mezcla cambió más (riesgo y gobernanza > promoción)", fontsize=10)
+    ax.set_ylabel("frames per 1,000 paragraphs"); ax.set_xlabel("filing year"); ax.legend(fontsize=9)
+    ax.set_title("Composition: volume grew, the mix changed more (risk and governance > promotion)", fontsize=10)
     fig.tight_layout(); fig.savefig(OUT_DIR / "fig_evolucion_composicion.png", dpi=150); plt.close(fig)
     print(y.round(3).to_string())
 
@@ -58,16 +58,16 @@ def evolution() -> None:
 def sec_event_study() -> None:
     d = json.load(open(OUT_DIR / "shock_analysis.json"))
     fig, axes = plt.subplots(1, 2, figsize=(11, 4), sharey=False)
-    for ax, (outcome, title) in zip(axes, (("promo_per_1k", "promocionales por 1.000 párrafos"), ("risk_per_1k", "riesgo por 1.000 párrafos"))):
+    for ax, (outcome, title) in zip(axes, (("promo_per_1k", "promotional frames per 1,000 paragraphs"), ("risk_per_1k", "risk frames per 1,000 paragraphs"))):
         o = d["sec"]["outcomes"][outcome]; t = pd.DataFrame(o["coefficients"]).sort_values("event_time")
         pre = t.event_time < 0
-        ax.errorbar(t.event_time[pre], t.coef[pre], yerr=1.96 * t.se[pre], fmt="o", color="#4c72b0", capsize=3, label="antes")
-        ax.errorbar(t.event_time[~pre], t.coef[~pre], yerr=1.96 * t.se[~pre], fmt="s", color="#c44e52", capsize=3, label="después")
+        ax.errorbar(t.event_time[pre], t.coef[pre], yerr=1.96 * t.se[pre], fmt="o", color="#4c72b0", capsize=3, label="before")
+        ax.errorbar(t.event_time[~pre], t.coef[~pre], yerr=1.96 * t.se[~pre], fmt="s", color="#c44e52", capsize=3, label="after")
         ax.axhline(0, color="grey", lw=1); ax.axvline(-0.5, color="black", ls=":", lw=1)
-        ax.set_title(f"{title}\ntendencias previas: p = {o['pretrend_p']:.3f}", fontsize=10)
-        ax.set_xlabel("trimestres desde 2024Q1 (t−1 = referencia)"); ax.set_ylabel("exposición × trimestre")
+        ax.set_title(f"{title}\npre-trend test: p = {o['pretrend_p']:.3f}", fontsize=10)
+        ax.set_xlabel("quarters from 2024Q1 (t−1 = reference)"); ax.set_ylabel("exposure × quarter")
         ax.legend(fontsize=8, loc="upper left")
-    fig.suptitle("Event study SEC: las empresas más expuestas ya divergían antes del aviso", fontsize=11)
+    fig.suptitle("SEC event study: the most exposed firms were already diverging before the warning", fontsize=11)
     fig.tight_layout(); fig.savefig(OUT_DIR / "fig_sec_event_study.png", dpi=150); plt.close(fig)
 
 
