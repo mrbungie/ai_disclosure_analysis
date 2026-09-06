@@ -65,6 +65,25 @@ SAMPLING_VERSION = "forms-v1"
 # `inclusion_weight` devuelve la muestra a la escala de la población.
 QUOTAS = {("DEF 14A", "strong"): 400, ("DEF 14A", "weak"): 300, ("DEF 14A", "none"): 300,
           ("8-K", "strong"): 200, ("8-K", "weak"): 150, ("8-K", "none"): 150}
+# Muestra de ENTRENAMIENTO, disjunta de la de validación (`--purpose train`).
+# Existe porque el umbral del prefiltro se elige sobre el golden set, que sólo
+# tiene 10-K y 10-Q: medido en `prefilter_feature_eval.py`, las señales de texto
+# mejoran el ORDENAMIENTO fuera de dominio (AP 0,725 -> 0,775) pero el umbral
+# elegido en 10-K/10-Q no viaja, y el F1 con ese corte no sube. La solución es
+# que el conjunto donde se elige el corte cubra los formularios donde se aplica
+# — el mismo argumento por el que existe stage3_random.
+# En 8-K los estratos léxicos son minúsculos (231 strong y 213 weak en TODO el
+# formulario) y la validación ya se llevó 350, así que acá entra lo que queda.
+TRAIN_QUOTAS = {("DEF 14A", "strong"): 800, ("DEF 14A", "weak"): 600, ("DEF 14A", "none"): 600,
+                ("8-K", "strong"): 200, ("8-K", "weak"): 200, ("8-K", "none"): 300}
+TRAIN_SAMPLE_PATH = OUT_DIR / "form_train_sample.parquet"
+# Directorio aparte, no un prefijo distinto dentro del mismo: `gs.label_rows`
+# nombra sus partes con el patrón del golden set, así que una corrida de
+# entrenamiento a medio camino escribiría archivos con el MISMO nombre que los
+# de validación y cualquier lectura con glob los mezclaría — justo lo que la
+# separación train/holdout existe para impedir. Separar por carpeta lo hace
+# imposible en vez de depender de renombrar al final.
+TRAIN_DIR = OUT_DIR / "train"
 
 
 def cmd_sample(args) -> None:
@@ -88,8 +107,19 @@ def cmd_sample(args) -> None:
     sizes = pool.groupby(["form", "keyword_tier"]).size()
     print(sizes.to_string())
 
+    if args.purpose == "train":
+        # Excluir lo ya muestreado para validación: si un párrafo entrenara y
+        # validara a la vez, la métrica de generalización sería una ilusión.
+        validation = pd.read_parquet(SAMPLE_PATH)
+        before = len(pool)
+        pool = pool.merge(validation[list(gs.PARAGRAPH_KEY)], on=list(gs.PARAGRAPH_KEY),
+                          how="left", indicator=True)
+        pool = pool[pool["_merge"] == "left_only"].drop(columns=["_merge"])
+        print(f"excluidos {before - len(pool):,} párrafos ya usados en validación")
+
     chunks = []
-    for (form, tier), quota in QUOTAS.items():
+    quotas = TRAIN_QUOTAS if args.purpose == "train" else QUOTAS
+    for (form, tier), quota in quotas.items():
         stratum = pool[(pool["form"] == form) & (pool["keyword_tier"] == tier)]
         if stratum.empty:
             print(f"  aviso: estrato vacío {form}/{tier}")
@@ -107,19 +137,23 @@ def cmd_sample(args) -> None:
 
     sample = pd.concat(chunks, ignore_index=True)
     sample["sector"] = "na"
-    sample["sampling_version"] = SAMPLING_VERSION
+    sample["sampling_version"] = SAMPLING_VERSION + ("-train" if args.purpose == "train" else "")
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    sample.to_parquet(args.sample_path, index=False)
-    print(f"\n-> {args.sample_path} ({len(sample):,} filas)")
+    destination = TRAIN_SAMPLE_PATH if args.purpose == "train" else args.sample_path
+    sample.to_parquet(destination, index=False)
+    print(f"\n-> {destination} ({len(sample):,} filas)")
 
 
 def cmd_label(args) -> None:
     load_dotenv(REPO_ROOT / ".env")
     if not gs.os.environ.get("OPENROUTER_API_KEY"):
         sys.exit("Falta OPENROUTER_API_KEY en .env")
-    sample = pd.read_parquet(args.sample_path)
+    training = args.purpose == "train"
+    sample = pd.read_parquet(TRAIN_SAMPLE_PATH if training else args.sample_path)
+    output_dir = TRAIN_DIR if training else args.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
     done = set()
-    for part in sorted(args.output_dir.glob(gs.LABEL_GLOB)):
+    for part in sorted(output_dir.glob(gs.LABEL_GLOB)):
         table = pd.read_parquet(part)
         table = table[table["error"].isna()]
         done |= set(map(tuple, table[list(gs.PARAGRAPH_KEY)].to_numpy()))
@@ -133,7 +167,7 @@ def cmd_label(args) -> None:
         return
     session_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     written, stats = asyncio.run(gs.label_rows(
-        pending, args.output_dir, session_id, args.judge_model, args.concurrency,
+        pending, output_dir, session_id, args.judge_model, args.concurrency,
         args.part_rows, args.progress_every, start_index=0))
     print(f"\n{stats['labeled']:,} etiquetados, {stats['failed']:,} con error "
           f"| partes: {len(written)}")
@@ -227,10 +261,14 @@ def main() -> None:
 
     sampler = subparsers.add_parser("sample", help="Muestra estratificada por forma y tier")
     sampler.add_argument("--seed", type=int, default=42)
+    sampler.add_argument("--purpose", choices=("validation", "train"), default="validation",
+                         help="'validation' (default) escribe la muestra intocable; 'train' "
+                              "escribe una muestra DISJUNTA para meter al ajuste.")
     sampler.set_defaults(func=cmd_sample)
 
     labeler = subparsers.add_parser("label", help="Etiqueta con el juez del golden set")
     labeler.add_argument("--judge-model", default=gs.DEFAULT_JUDGE_MODEL)
+    labeler.add_argument("--purpose", choices=("validation", "train"), default="validation")
     labeler.add_argument("--limit", type=int, default=0)
     labeler.add_argument("--concurrency", type=int, default=8)
     labeler.add_argument("--part-rows", type=int, default=250)

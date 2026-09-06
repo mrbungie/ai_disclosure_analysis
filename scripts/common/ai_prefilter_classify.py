@@ -172,6 +172,142 @@ LEXICAL_STEP_COLUMNS = [
     ("strong_ge2", "len(p.strong_matched_terms) >= 2"),
     ("weak_ge1", "len(p.weak_matched_terms) >= 1"),
 ]
+
+# ---------------------------------------------------------------------------
+# Señales de TEXTO (2026-09-06)
+# ---------------------------------------------------------------------------
+# Motivo: el modelo de 11 señales rendía F1 pond. 0,925 en 10-K/10-Q y 0,755 /
+# 0,647 en DEF 14A / 8-K (§8.15). Al leer sus falsos positivos en esos
+# formularios, todos comparten forma, no tema:
+#
+#   - matrices de habilidades del directorio: "artificial intelligence" es UNA
+#     celda dentro de una tabla de 14.350 caracteres;
+#   - biografías de directores: "Mr. Wang is the founder and CEO of Scale AI";
+#   - resultados de votación en 8-K: "a stockholder proposal regarding a report
+#     on risks of discrimination in GenAI was not approved";
+#   - regulación de terceros: "Export Control Framework for Artificial
+#     Intelligence Diffusion... Federal Register";
+#   - viñetas de temas de comité: "emerging technologies, including artificial
+#     intelligence".
+#
+# El vector denso no puede verlos: en un párrafo de 14 mil caracteres la
+# similitud semántica se diluye, y las dummies léxicas sólo dicen "apareció el
+# término". Lo que distingue esos casos es DÓNDE y CÓMO aparece el término:
+# densidad, marcado de tabla, contexto de biografía/votación/regulación, y sobre
+# todo si el párrafo habla en primera persona (una divulgación de la propia
+# empresa dice "we"/"our"; una biografía o una norma, no).
+#
+# NINGUNA de estas señales mira el tipo de documento. Meter `form` como feature
+# sería un atajo: el modelo aprendería "los proxies mencionan más IA" en vez de
+# leer el párrafo, y como el hallazgo central del proyecto ES una comparación
+# entre formularios (docs/analytics/01_...md #8), la medición quedaría circular.
+# Todo lo de abajo se calcula del texto y valdría igual si el mismo párrafo
+# apareciera en cualquier otro documento.
+STRONG_SPELLED_OUT = (
+    "artificial intelligence", "generative ai", "gen ai", "machine learning",
+    "deep learning", "large language model", "large language models",
+    "foundation model", "foundation models", "neural network", "neural networks",
+)
+STRONG_ALTERNATION = (
+    "ai|ml|llm|llms|agi|nlp|gen[ ]ai|artificial[ ]intelligence|generative[ ]ai|genai|"
+    "machine[ ]learning|deep[ ]learning|large[ ]language[ ]models?|"
+    "foundation[ ]models?|neural[ ]networks?"
+)
+BIO_CONTEXT = "mr\\.|ms\\.|mrs\\.|dr\\.|director since|age [0-9]{2}|ph\\.d|founder of|served as"
+VOTE_CONTEXT = "stockholder proposal|shareholder proposal|votes cast|broker non-vote|abstentions"
+RULE_CONTEXT = "federal register|final rule|executive order|export control"
+
+
+def text_feature_columns(text_expr: str, scores_alias: str = "p") -> list[tuple[str, str]]:
+    """(nombre, SQL) de cada señal de texto, para el golden set y para el corpus.
+
+    `text_expr` es la expresión que devuelve el texto del párrafo en esa
+    consulta — cambia según desde dónde se lea, pero la definición de la señal
+    no puede cambiar, y por eso se genera desde acá en vez de escribirse dos
+    veces."""
+    lower = f"lower(coalesce({text_expr}, ''))"
+    length = f"greatest(length({lower}), 1)"
+    words = f"greatest(len(regexp_extract_all({lower}, '\\s+')) + 1, 1)"
+    # Partición barata en oraciones: puntuación final, salto de línea o celda de
+    # tabla. No es un segmentador lingüístico y no necesita serlo — lo que
+    # importa es aislar el fragmento donde aparece el término.
+    sentences = f"list_filter(regexp_split_to_array({lower}, '[.!?\\n|]+'), s -> length(s) > 2)"
+    anchors = ", ".join(f"{scores_alias}.{c}" for c in SIGNAL_COLUMNS[:7])
+    sorted_anchors = f"list_sort([{anchors}], 'DESC')"
+    return [
+        # Longitud: los falsos positivos de tabla son párrafos gigantes.
+        ("log_len", f"ln(1 + {length})"),
+        # Densidad del término: "IA" una vez en 14 mil caracteres no es
+        # divulgación; tres veces en 400 caracteres, casi siempre sí.
+        ("strong_per_1k", f"len(regexp_extract_all({lower}, "
+                          f"'\\b({STRONG_ALTERNATION})\\b')) * 1000.0 / {length}"),
+        # Primera persona: una empresa que divulga habla de sí misma. Una
+        # biografía, una norma o un resultado de votación, no.
+        ("first_person_per_100w", f"len(regexp_extract_all({lower}, "
+                                  f"'\\b(we|our|us|the company)\\b')) * 100.0 / {words}"),
+        # Marcado: tablas y viñetas son donde vive la enumeración sin contenido.
+        ("pipe_rate", f"(length({lower}) - length(replace({lower}, '|', ''))) * 100.0 / {length}"),
+        ("bullet_rate", f"(length({lower}) - length(replace({lower}, '•', ''))) * 100.0 / {length}"),
+        ("digit_rate", f"len(regexp_extract_all({lower}, '[0-9]')) * 100.0 / {length}"),
+        ("bio_context", f"regexp_matches({lower}, '{BIO_CONTEXT}')"),
+        ("vote_context", f"regexp_matches({lower}, '{VOTE_CONTEXT}')"),
+        ("rule_context", f"regexp_matches({lower}, '{RULE_CONTEXT}')"),
+        # Sólo siglas: "AI" suelto es mucho más ambiguo que "artificial
+        # intelligence" escrito completo (y es de donde salen los choques con
+        # nombres propios y con "AI" dentro de otro token).
+        ("acronym_only", f"len({scores_alias}.strong_matched_terms) >= 1 AND len(list_filter("
+                         f"{scores_alias}.strong_matched_terms, x -> x IN "
+                         f"({', '.join(chr(39) + s + chr(39) for s in STRONG_SPELLED_OUT)}))) = 0"),
+        # Señales de ORACIÓN. El problema de fondo con las tablas y las
+        # biografías es de UNIDAD: el término de IA vive en una oración y el
+        # resto del párrafo no tiene nada que ver, pero tanto el embedding como
+        # la densidad promedian sobre todo el párrafo. Partir por puntuación y
+        # mirar sólo las oraciones que contienen el término separa "we use AI to
+        # do X" de "Mr. Wang, founder of Scale AI, age 57, director since 2017".
+        ("ai_sent_share", f"len(list_filter({sentences}, s -> regexp_matches(s, "
+                          f"'\\b({STRONG_ALTERNATION})\\b'))) * 1.0 / greatest(len({sentences}), 1)"),
+        ("ai_sent_first_person", f"len(list_filter({sentences}, s -> regexp_matches(s, "
+                                 f"'\\b({STRONG_ALTERNATION})\\b') AND regexp_matches(s, "
+                                 f"'\\b(we|our|us|the company)\\b'))) >= 1"),
+        ("log_n_sentences", f"ln(1 + greatest(len({sentences}), 1))"),
+        # Nitidez del match semántico: qué tan por encima está el mejor anchor
+        # del segundo. Un párrafo genuino se parece a UNA categoría; el
+        # boilerplate se parece un poco a todas.
+        ("anchor_gap", f"{sorted_anchors}[1] - {sorted_anchors}[2]"),
+        ("anchor_mean", f"list_avg([{anchors}])"),
+    ]
+
+
+TEXT_FEATURE_NAMES = [name for name, _ in text_feature_columns("''")]
+
+# Señales de ORACIÓN (scripts/common/ai_prefilter_sentences.py). El embedding
+# del párrafo se diluye justo donde más falla el prefiltro: una celda de tabla
+# con "artificial intelligence" entre cientos de celdas produce un vector que no
+# se parece a ninguna divulgación. Estas columnas puntúan SÓLO las oraciones que
+# mencionan IA, con el mismo modelo y los mismos anchors, y se agregan por
+# texto. Un texto sin fila acá es uno que no pasó la compuerta léxica: se
+# rellena con 0, que es lo que corresponde ("no hay oración de IA que puntuar").
+SENTENCE_SCORES_GLOB = "data/interim/prefilter_sentence_scores/prefilter_sentence_scores__run=*.parquet"
+SENTENCE_FEATURE_NAMES = [
+    "sent_n_ai", "sent_max_margin", "sent_mean_margin", "sent_max_semantic",
+    "sent_min_negative",
+] + [f"sent_max_{c}" for c in ("ai_use", "ai_exploration", "ai_capability",
+                              "ai_outcome", "ai_risk", "ai_governance", "ai_strategy")]
+
+
+def sentence_scores_relation() -> str:
+    """La corrida de oraciones más nueva, una fila por `text_hash`."""
+    return f"""(
+        SELECT * FROM read_parquet('{SENTENCE_SCORES_GLOB}', union_by_name=True)
+        QUALIFY row_number() OVER (PARTITION BY text_hash ORDER BY run_id DESC) = 1
+    )"""
+
+
+def sentence_feature_sql(alias: str = "sent") -> str:
+    return ", ".join(f"coalesce({alias}.{name}, 0) AS {name}" for name in SENTENCE_FEATURE_NAMES)
+
+
+
 ALL_SIGNAL_COLUMNS = SIGNAL_COLUMNS + [name for name, _ in LEXICAL_STEP_COLUMNS]
 PARAGRAPH_KEY = ("country_code", "form", "accession_number", "item_key", "paragraph_index")
 
