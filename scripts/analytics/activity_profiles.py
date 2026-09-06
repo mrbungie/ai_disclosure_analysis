@@ -46,22 +46,26 @@ EXEMPLARS = {"desplegadores_de_producto": ["MSFT", "HPE", "PAYX", "ETSY", "NOW"]
              "listadores_de_riesgo": ["NKE", "TDG", "CZR", "DHI", "TJX"]}
 
 FUNCTION_FAMILIES = [
-    ("customer_service", r"customer[_ ]?(service|support|experience|engagement|care)|contact[_ ]center|call[_ ]center|chatbot|virtual[_ ]assistant|service[_ ]desk|help[_ ]desk"),
+    ("governance", r"govern|oversight|responsible[_ ]ai|ai[_ ]ethic|transparen|trust[_ ]and[_ ]safety|policy|compliance[_ ]program"),
+    ("customer_service", r"customer[_ ]?(service|support|experience|engagement|care|facing|outcome)|client[_ ](service|experience|support)|contact[_ ]center|call[_ ]center|chatbot|virtual[_ ]assistant|service[_ ]desk|help[_ ]desk|service[_ ]delivery"),
+    ("financial_services_operations", r"trading|loan|lending|underwrit|payment|transaction|payroll|banking|wealth|portfolio|insurance|claims|actuar|investment[_ ]management"),
     ("software_development", r"software|coding|code|develop|engineering|devops|programming|testing|qa\b"),
     ("marketing_and_sales", r"market|sales|advertis|personali|recommend|merchandis|pricing|promotion|campaign|lead[_ ]gen|e[_-]?commerce"),
     ("fraud_and_risk", r"fraud|risk|credit|underwrit|compliance|aml|anti[_ ]money|surveillance|claims|loss"),
-    ("operations_and_supply_chain", r"operation|supply|logistic|inventory|manufactur|maintenance|forecast|demand|planning|scheduling|route|fleet|warehouse|procurement|quality[_ ]control|process[_ ]automation|automation|efficien|productivity|workflow"),
-    ("it_and_cybersecurity", r"cyber|security|threat|it[_ ]operation|infrastructure|cloud|network|data[_ ]center|observability|monitoring"),
+    ("operations_and_supply_chain", r"operation|supply|logistic|inventory|manufactur|maintenance|forecast|demand|planning|scheduling|route|fleet|warehouse|procurement|quality[_ ]control|process|automation|efficien|productivity|workflow|cost[_ ]reduction|digital[_ ]transformation|energy[_ ]management|building[_ ]management|transportation|knowledge[_ ]management|collaboration"),
+    ("it_and_cybersecurity", r"cyber|security|threat|malware|identity|authenticat|it[_ ]operation|infrastructure|cloud|network|data[_ ]center|observability|monitoring|incident|troubleshoot"),
+    ("ai_compute_and_models", r"ai[_ ]workload|ai[_ ]comput|compute|high[_ ]performance|hpc|ai[_ ]inference|ai[_ ]training|ai[_ ]acceleration|ai[_ ]processing|scientific[_ ]computing|edge[_ ]computing|model[_ ](training|development)|generative[_ ]ai$|^ai$|llm"),
     ("research_and_product_development", r"research|r&d|discovery|drug|clinical|molec|design|innovation|product[_ ]dev|simulation|materials"),
     ("data_and_analytics", r"analytic|data|insight|intelligence|reporting|model(ing|ling)?$|decision"),
-    ("hr_and_talent", r"\bhr\b|human[_ ]resource|talent|recruit|hiring|training|employee[_ ](experience|productivity)|workforce|learning"),
+    ("hr_and_talent", r"\bhr|human[_ ]resource|talent|recruit|hir(e|ing)|training|upskill|employee|workforce|learning|performance[_ ]management"),
     ("finance_legal_and_admin", r"financ|account|legal|contract|document|invoice|audit|tax|back[_ ]office|administrat|procure"),
     ("content_and_media", r"content|media|creative|writing|translation|video|image|summar|search"),
-    ("product_feature", r"product[_ ]feature|feature|platform|application|app\b|offering|solution|device|vehicle|autonom|robot"),
+    ("product_feature", r"product|feature|platform|application|app\b|offering|solution|device|vehicle|autonom|robot|driving|automotive|driver|gaming|commerce|surgery|consulting|revenue"),
     ("healthcare_delivery", r"health|patient|clinic|diagnos|medical|care[_ ]delivery"),
 ]
 PROVIDER_FAMILIES = [
-    ("proprietary", r"^proprietary$|in[_ -]house|own\b"),
+    ("proprietary", r"^proprietary|in[_ -]house|own\b"),
+    ("third_party_unnamed", r"third[_ -]?part|vendor|external|open[_ ]source|generative ai$|^genai$|^llms?$|^ai$"),
     ("OpenAI / Microsoft", r"openai|chatgpt|gpt|copilot|microsoft|azure"),
     ("Google", r"google|gemini|vertex|bard|deepmind|palm"),
     ("Anthropic", r"anthropic|claude"),
