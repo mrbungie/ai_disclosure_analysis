@@ -46,7 +46,9 @@ primer período) y la descomposición por canal (¿se mueve la call o el
 filing?). `post` = 2024 en adelante (escrutinio de la SEC, marzo 2024).
 
 Salidas (`data/processed/clusters/`):
-  channel_gap_cells.parquet      una fila por celda: tasas por canal y brecha
+  channel_gap_cells.parquet            una fila por celda (≥3 frames por canal): tasas y brecha
+  channel_gap_cells_extensive.parquet  una fila por empresa-ejercicio con ≥1 documento por canal:
+                                       intensidad por 1.000 párrafos, con ceros
   channel_gap_firm.parquet       brecha promedio por empresa (score por canal)
   channel_gap_analysis.json      estimaciones, event study, descriptivos
 
@@ -142,6 +144,71 @@ def load_frames(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     frames["is_gov"] = frames["concepts"].apply(
         lambda c: any(str(x).startswith("gov_") for x in (list(c) if c is not None else [])))
     return frames
+
+
+def load_documents(con: duckdb.DuckDBPyConnection, frames: pd.DataFrame) -> pd.DataFrame:
+    """Todos los documentos con su cantidad de párrafos, tengan o no frames de
+    IA: una call que no menciona IA es una observación con cero, no una celda
+    perdida. Mismo año fiscal que en `load_frames`."""
+    docs = con.execute(f"""
+        WITH manifest AS (
+            SELECT country_code, accession_number, ticker, filing_date, period_end_date, form_type AS form
+            FROM filing_manifest WHERE form_type != 'Earnings call transcript'
+            UNION ALL
+            SELECT country_code, accession_number, ticker, filing_date, period_end_date, '10-Q' FROM filing_manifest_10q
+        ), paras AS (
+            SELECT country_code, accession_number, count(*) AS n_paragraphs FROM paragraphs
+            WHERE is_scorable GROUP BY 1, 2
+        )
+        SELECT 'filing' AS channel, m.form, m.ticker, m.filing_date AS fecha, TRY_CAST(m.period_end_date AS DATE) AS period_end,
+               NULL::INTEGER AS call_fy, m.accession_number, p.n_paragraphs
+        FROM manifest m JOIN paras p USING (country_code, accession_number)
+        WHERE m.country_code = 'us' AND m.ticker IS NOT NULL AND m.filing_date IS NOT NULL AND m.form IN {FILING_FORMS}
+        UNION ALL
+        SELECT 'call', 'Earnings call', m.ticker, CAST(m.filing_date AS DATE), NULL::DATE,
+               CAST(regexp_extract(m.document_id, '_([0-9]{{4}})Q', 1) AS INTEGER), m.document_id, p.n_paragraphs
+        FROM read_parquet('{CALLS_MANIFEST}') m
+        JOIN paras p ON p.accession_number = m.document_id AND p.country_code = 'us'
+        WHERE m.ticker IS NOT NULL
+    """).df()
+    fye = frames.groupby("ticker")["fye_month"].first()
+    docs["fye_month"] = docs["ticker"].map(fye).fillna(12).astype(int)
+    d = pd.to_datetime(docs["fecha"]); pe = pd.to_datetime(docs["period_end"])
+    fy_date = d.dt.year + (d.dt.month > docs["fye_month"]).astype(int)
+    fy_pe = pe.dt.year + (pe.dt.month > docs["fye_month"]).astype(int)
+    is_pe = docs["form"].isin(["10-K", "10-Q"]) & pe.notna()
+    docs["fy"] = np.where(docs["channel"] == "call", docs["call_fy"], np.where(is_pe, fy_pe, fy_date)).astype(int)
+    docs["post_doc"] = (d >= pd.Timestamp(EVENT_DATE)).astype(float)
+    # frames por documento (0 si no tiene)
+    per_doc = frames.groupby(["channel", "ticker", "fy"]).agg(
+        n_frames=("text_hash", "size"), n_promo=("rhetoric_promotional", "sum"),
+        n_quant=("specificity_quantified_metric", "sum"), n_gov=("is_gov", "sum")).reset_index()
+    cell = docs.groupby(["ticker", "fy", "channel"]).agg(
+        n_docs=("accession_number", "nunique"), n_paragraphs=("n_paragraphs", "sum"),
+        share_post_docs=("post_doc", "mean")).reset_index()
+    cell = cell.merge(per_doc, on=["channel", "ticker", "fy"], how="left").fillna({"n_frames": 0, "n_promo": 0, "n_quant": 0, "n_gov": 0})
+    for k in ("frames", "promo", "quant", "gov"):
+        cell[f"{k}_per_1k"] = 1000.0 * cell[f"n_{k}"] / cell["n_paragraphs"]
+    cell["any_ai"] = (cell["n_frames"] > 0).astype(float)
+    return cell
+
+
+EXT_OUTCOMES = ["frames_per_1k", "promo_per_1k", "quant_per_1k", "gov_per_1k", "any_ai"]
+
+
+def cells_extensive(cell: pd.DataFrame) -> pd.DataFrame:
+    """Una fila por empresa × ejercicio con AL MENOS UN documento en cada canal.
+    Sin umbral de frames: los ceros son datos."""
+    wide = cell.pivot(index=["ticker", "fy"], columns="channel", values=EXT_OUTCOMES + ["n_docs", "n_paragraphs", "n_frames", "share_post_docs"])
+    wide.columns = [f"{v}_{ch}" for v, ch in wide.columns]
+    wide = wide.dropna(subset=["n_docs_call", "n_docs_filing"]).reset_index().rename(columns={"fy": "t"})
+    for y in EXT_OUTCOMES:
+        wide[f"gap_{y}"] = wide[f"{y}_call"] - wide[f"{y}_filing"]
+    wide["post"] = (wide["t"] >= EVENT["fy"]).astype(int)
+    wide["share_post_docs"] = (wide["share_post_docs_call"] * wide["n_docs_call"] + wide["share_post_docs_filing"] * wide["n_docs_filing"]) / (wide["n_docs_call"] + wide["n_docs_filing"])
+    wide["mixed"] = (wide["share_post_docs"] > 0) & (wide["share_post_docs"] < 1)
+    wide["weight"] = np.minimum(wide["n_docs_call"], wide["n_docs_filing"]).astype(float)
+    return wide
 
 
 def cells(frames: pd.DataFrame, period: str) -> pd.DataFrame:
@@ -284,6 +351,27 @@ def main() -> None:
         for ch in ("call", "filing"):
             print(f"  {y:18s} {ch:7s} " + " ".join(f"{p}:{v['coef']:+.3f}(p={v['p']:.2f})" for p, v in levels[y][ch].items()))
 
+    ext = None
+    if PERIOD == "fy":
+        ext = cells_extensive(load_documents(con, frames))
+        print(f"\nMARGEN EXTENSIVO — celdas empresa×ejercicio con ≥1 transcripción y ≥1 filing, sin umbral de frames: "
+              f"{len(ext):,} | empresas {ext.ticker.nunique():,} | por ejercicio {ext.groupby('t').size().to_dict()} "
+              f"| calls sin ningún frame de IA: {int((ext.n_frames_call == 0).sum())} celdas")
+        print("  niveles por canal (media sobre celdas): " + " | ".join(
+            f"{y}: call {ext[f'{y}_call'].mean():.2f} filing {ext[f'{y}_filing'].mean():.2f}" for y in EXT_OUTCOMES))
+        ext_results = {}
+        for y in EXT_OUTCOMES:
+            r = estimate(ext, y); rw = estimate(ext, y, weighted=True); rm = estimate(ext, y, drop_mixed=True)
+            ext_results[y] = {"main": r, "weighted": rw, "no_mixed": rm}
+            es = " ".join(f"{e['t']}:{e['coef']:+.2f}" for e in r.get("event_study", []))
+            print(f"  gap {y:14s} b={r['did_coef']:+.3f} (se {r['did_se']:.3f}, p={r['did_p']:.3f}) pretrend p={r.get('pretrend_p', float('nan')):.2f} "
+                  f"| pond. {rw['did_coef']:+.3f} (p={rw['did_p']:.3f}) | sin mixtas {rm['did_coef']:+.3f} (p={rm['did_p']:.3f}) "
+                  f"| n={r['n_obs']}, {r['n_firms']} empresas | ES: {es}")
+        ext_levels = {y: channel_levels(ext, y) for y in ("promo_per_1k", "frames_per_1k")}
+        for y, lv in ext_levels.items():
+            for ch in ("call", "filing"):
+                print(f"  {y:13s} {ch:7s} " + " ".join(f"{p}:{v['coef']:+.2f}(p={v['p']:.2f})" for p, v in lv[ch].items()))
+
     firm = paired.groupby("ticker").agg(
         n_cells=("t", "size"), gap_promotional=("gap_promotional_rate", "mean"),
         gap_specificity=("gap_specificity_index", "mean"), gap_quantified=("gap_quantified_rate", "mean"),
@@ -323,12 +411,16 @@ def main() -> None:
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     paired.assign(t=paired["t"].astype(str)).to_parquet(args.output_dir / "channel_gap_cells.parquet", index=False)
+    if ext is not None:
+        ext.assign(t=ext["t"].astype(str)).to_parquet(args.output_dir / "channel_gap_cells_extensive.parquet", index=False)
     firm.to_parquet(args.output_dir / "channel_gap_firm.parquet", index=False)
     payload = {"period": PERIOD, "event": str(EVENT[PERIOD]), "min_frames": MIN_FRAMES,
                "calls_coverage": [str(frames.loc[frames.channel == 'call', 'quarter'].min()), str(frames.loc[frames.channel == 'call', 'quarter'].max())],
                "n_cells": int(len(paired)), "n_firms": int(paired.ticker.nunique()),
                "cells_by_t": {str(k): int(v) for k, v in paired.groupby("t").size().items()},
                "descriptive": desc, "did_on_gap": results, "robustness": robust, "channel_levels": levels,
+               "extensive": ({"n_cells": int(len(ext)), "n_firms": int(ext.ticker.nunique()), "did_on_gap": ext_results, "channel_levels": ext_levels}
+                             if ext is not None else None),
                "firm_score": {"n_firms": int(len(firm)), "median_gap_promotional": float(firm.gap_promotional.median()),
                               "top10": firm.head(10)[["ticker", "gap_promotional"]].values.tolist()},
                "notorious": notorious, "cross": cross}

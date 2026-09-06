@@ -124,6 +124,41 @@ Lo defendible: **después del escrutinio, las empresas no acercaron lo que
 dicen en la call a lo que firman en el filing. Le agregaron gobernanza al
 filing.**
 
+## Resultado 3b: margen extensivo — una call sin IA es un cero, no una celda perdida
+
+Las tasas de arriba están condicionadas a hablar de IA (≥3 frames en cada
+canal), y 5.238 de las 7.947 transcripciones no mencionan IA. Para no
+perderlas, el outcome se redefine como **intensidad por documento**: frames
+de IA, promocionales, cuantificados y de gobernanza por cada 1.000 párrafos
+del canal, con cero cuando el documento no habla de IA. Entra toda
+empresa-ejercicio con al menos una transcripción y un filing: **2.281
+celdas, 479 empresas, 449 a ambos lados de 2024**; 1.021 celdas tienen calls
+sin ningún frame de IA.
+
+| por 1.000 párrafos | call | filing | brecha post-2024 (b, p) | tendencias previas | event study de la brecha vs. 2021 (22 / 23 / 24 / 25) |
+|---|---:|---:|---:|---|---|
+| frames de IA | 39,4 | 4,0 | +31,8 (p<0,001) | **falla** (p<0,01) | +0,4 / **+27,6** / +39,6 / +42,9 |
+| promocionales | 8,6 | 0,4 | +8,2 (p<0,001) | **falla** (p<0,01) | −0,0 / **+5,9** / +9,1 / +11,3 |
+| cuantificados | 8,1 | 0,2 | +9,3 (p<0,001) | **falla** (p<0,01) | +0,1 / **+4,5** / +9,3 / +12,6 |
+| gobernanza | 0,7 | 0,4 | +0,0 (p=0,98) | falla (p=0,01) | −0,1 / +0,5 / +0,3 / −0,0 |
+| documentos con alguna IA (share) | 0,55 | 0,65 | −0,34 (p<0,001) | falla | −0,06 / −0,16 / −0,29 / −0,54 |
+
+Por canal: la intensidad promocional de IA en las calls pasa de ~3 por
+1.000 párrafos en 2021-2022 a +5,9 en FY2023, +9,3 en FY2024 y +11,7 en
+FY2025 sobre esa base; en los filings sube +0,2 y +0,4. **Es el boom de la
+IA generativa, y arranca en el ejercicio 2023, un año antes del escrutinio.**
+Por eso el test de tendencias previas falla en todo el margen extensivo: el
+antes/después de 2024 captura la mitad de una curva que ya venía subiendo.
+En este margen el diseño no identifica al regulador, y no se reporta como
+efecto. Lo que sí dice, sin ambigüedad, es dónde ocurre el AI-washing en
+volumen: **en la call, 20 veces más promoción de IA por párrafo que en el
+filing, y creciendo desde 2023 mientras el filing casi no se mueve.**
+
+El margen intensivo del Resultado 2 (tasas entre lo que se dice de IA) es el
+que puede hablar del regulador, porque normaliza por cuánto se habla y sus
+tendencias previas son planas; el margen extensivo es el que describe el
+fenómeno.
+
 ## Resultado 4: los casos notorios
 
 Brecha promocional por ejercicio (call − filing):
@@ -183,13 +218,17 @@ más cambian de registro cuando hablan con analistas.
 ## Qué queda para la tesis
 
 1. **La brecha entre canales es el hecho estilizado más limpio del proyecto**:
-   +10 p.p. de promoción y +12 de cuantificación, en 640 celdas de la misma
-   empresa y el mismo ejercicio. No depende de sectores, de composición ni
-   del boom.
+   +10 p.p. de promoción y +12 de cuantificación entre lo que se dice de IA,
+   en 640 celdas de la misma empresa y el mismo ejercicio; y en volumen, 20
+   veces más promoción de IA por párrafo en la call que en el filing, sobre
+   2.281 celdas incluyendo las calls que no hablan de IA. No depende de
+   sectores ni de composición.
 2. **El escrutinio de la SEC no la cerró** (b=+0,015, p=0,36, robusto a
    pesos y a celdas mixtas). Lo que cambió después de 2024 es que el filing
-   agregó gobernanza de IA; la pérdida de especificidad del filing es del
-   boom de 2023, no del regulador.
+   agregó gobernanza de IA. Todo lo demás que se mueve —el filing menos
+   específico, la call con mucha más IA y más promoción por párrafo— arranca
+   en el ejercicio 2023 con el boom de la IA generativa, y el diseño no
+   puede atribuírselo al regulador.
 3. La brecha es un **segundo score de washing**, ortogonal al de `09`, y es el
    que corresponde al mecanismo regulatorio.
 
