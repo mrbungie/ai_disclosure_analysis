@@ -89,6 +89,10 @@ ALL_FEATURES = list(FEATURES) + list(DERIVED)
 # sólo dicen cómo habla quien habla.
 INTENSITY = "intensidad_ia"
 MATRIX_FEATURES = ALL_FEATURES + [INTENSITY]
+# La unidad sin ningún frame de IA no tiene "cómo habla" que segmentar: es su
+# propio segmento, por regla, no por K-means. Pooled son 17 empresas; en el
+# panel empresa-año es más de un tercio de las filas de 2021.
+NO_AI = "sin_ia"
 
 
 def firm_features(frames: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
@@ -240,13 +244,16 @@ def main() -> None:
     print(f"\nk elegido: {k}" + ("" if args.k else " (el mayor que supera el piso)"))
 
     X = matrix(pooled)
-    model = KMeans(n_clusters=k, random_state=SEED, n_init=10).fit(X)
-    pooled["cluster"] = model.labels_
+    has_frames = (pooled["n_frames"] > 0).to_numpy()
+    model = KMeans(n_clusters=k, random_state=SEED, n_init=10).fit(X[has_frames])
+    pooled["cluster"] = model.predict(X)
     profile = pooled.groupby("cluster")[MATRIX_FEATURES].mean()
     labels = name_segments(profile)
     pooled["segmento"] = pooled["cluster"].map(labels)
     pooled["estabilidad_segmento"] = pooled["cluster"].map(
         dict(enumerate(stabilities.get(k, np.full(k, np.nan)))))
+    silent = pooled["n_frames"] == 0
+    pooled.loc[silent, ["cluster", "segmento", "estabilidad_segmento"]] = [-1, NO_AI, 1.0]
 
     print("\n" + "=" * 74)
     print("PERFIL DE CADA SEGMENTO (% de las afirmaciones de IA de la empresa)")
@@ -271,6 +278,10 @@ def main() -> None:
     scaler = StandardScaler().fit(shrunk_matrix(pooled, ["ticker"]).values)
     panel["cluster"] = model.predict(scaler.transform(panel_shrunk.values))
     panel["segmento"] = panel["cluster"].map(labels)
+    panel.loc[panel["n_frames"] == 0, ["cluster", "segmento"]] = [-1, NO_AI]
+    print(f"\nempresas-año sin ningún frame de IA -> '{NO_AI}': "
+          f"{int((panel['segmento'] == NO_AI).sum()):,} de {len(panel):,} | por año: "
+          f"{panel.groupby('year')['segmento'].apply(lambda s: round(float((s == NO_AI).mean()), 2)).to_dict()}")
     transitions = (panel.sort_values(["ticker", "year"])
                    .assign(anterior=lambda d: d.groupby("ticker")["segmento"].shift())
                    .dropna(subset=["anterior"]))

@@ -103,6 +103,9 @@ def label(values: pd.Series, bins: int, edges: np.ndarray | None = None):
     return pd.cut(values, bins=edges, labels=LEVELS[bins], include_lowest=True), edges
 
 
+NO_AI = "sin IA"      # ninguna afirmación de IA: no hay voz ni conducta que ubicar
+
+
 def cell_name(voice: str, behavior: str) -> str:
     return CORNERS.get((voice, behavior), f"voz {voice} / conducta {behavior}")
 
@@ -156,6 +159,7 @@ def assign(table: pd.DataFrame, keys: list[str], bins: int,
     out["nivel_conducta"], behavior_edges = label(out["comportamiento_shrunk"], bins,
                                                   behavior_edges)
     out["celda"] = [cell_name(v, b) for v, b in zip(out["nivel_voz"], out["nivel_conducta"])]
+    out.loc[out["n_frames"] == 0, "celda"] = NO_AI
     return out, (voice_edges, behavior_edges)
 
 

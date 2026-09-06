@@ -4,7 +4,8 @@ Producido por `scripts/analytics/build_voice_behavior_grid.py`. Es la forma
 directa de la pregunta de la tesis —¿habla más de lo que hace?— con los dos ejes
 explícitos en vez de escondidos dentro de un clustering. **Modo de análisis
 final: las 510 empresas con filings entran**; las 17 sin ningún frame de IA
-quedan con los dos ejes en el prior, en el centro de la grilla.
+tienen una celda propia, **sin IA**, porque no hay voz ni conducta que ubicar.
+En el panel empresa-año esa celda es el 66% de 2021 y el 8% de 2026.
 
 ## Los dos ejes
 
@@ -16,7 +17,8 @@ quedan con los dos ejes en el prior, en el centro de la grilla.
 Los dos son **porcentajes sobre los frames de la misma empresa**, así que ninguno
 premia a la que más habla. La confianza que merece cada tasa sí depende del
 volumen, y de eso se encarga el encogimiento empírico-Bayes: una empresa con 9
-frames se corre hacia el promedio del corpus, y una con 0 queda en él.
+frames se corre hacia el promedio del corpus; una con 0 no tiene tasa y va a
+"sin IA".
 
 **Correlación entre ejes: 0,286.** No son el mismo eje — que es la condición
 para que la grilla tenga contenido.
@@ -31,7 +33,7 @@ Cada eje se corta en terciles → 9 celdas.
 | **voz media** | 60 | 68 | 42 |
 | **voz baja** | **silenciosos: 79** | 53 | **sustancia callada: 38** |
 
-Las 17 empresas sin frames están en voz media / conducta media.
+Más la celda **sin IA**: 17 empresas (y 1.088 empresas-año en el panel).
 
 Las cuatro esquinas son las categorías que la tesis necesita nombrar:
 
@@ -56,14 +58,14 @@ azar con 9 celdas sería 11%.
 
 Cada empresa trae su propia **`confianza_celda`**: en qué fracción de los
 remuestreos cae en la celda que se le asignó. 149 de 510 superan 0,80. La
-confianza mediana por celda va de 0,46 (voz media / conducta baja, al borde
-de dos cortes) a 0,80 (silenciosos). **Para análisis río abajo: filtrar por
+confianza mediana por celda va de 0,40 (el centro de la grilla, al borde de
+dos cortes) a 0,80 (silenciosos). **Para análisis río abajo: filtrar por
 confianza, no usar las 510 por igual.** Con confianza ≥0,70 las esquinas
 quedan en 16 / 15 / 49 / 52 empresas (washing / callada / vocales /
-silenciosos). Las 17 sin frames tienen confianza 1 por construcción: no hay
-frames que remuestrear.
+silenciosos). "Sin IA" tiene confianza 1 por regla: no hay frames que
+remuestrear.
 
-Persistencia año a año en el panel (2.964 empresas-año): 49,0%. Es baja y no
+Persistencia año a año en el panel (2.964 empresas-año): 48,5%. Es baja y no
 hay que disimularla: con pocos frames el porcentaje salta solo. **Para series
 de tiempo conviene usar los ejes continuos, no la celda.**
 
@@ -104,8 +106,7 @@ tercera definición, ortogonal a las dos.
 
 ## Limitaciones
 
-- Las 17 empresas sin frames están en el centro por construcción, no por
-  evidencia.
+- "Sin IA" es una regla (cero frames), no una posición en los ejes.
 - La celda del centro de la grilla es la menos confiable: son empresas que
   están al borde de los dos cortes.
 - Todo descansa en etiquetas de un LLM sin validación humana
