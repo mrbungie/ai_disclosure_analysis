@@ -98,8 +98,12 @@ def main() -> None:
     manifest_path = manifest_dir / "xbrl_facts_manifest.parquet"
     window = config["corpus"]["filings"]["period_end"]
 
-    rows = (pd.read_parquet(manifest_path).set_index("document_id").to_dict("index")
-            if manifest_path.exists() else {})
+    # Append-only, same reason as the filing manifest (see manifest_store):
+    # a whole-file rewrite loses any concurrent writer's rows and leaves
+    # "re-run with a change" no option but deleting what is there. What is
+    # already done is read off the FILES, not this manifest, so the manifest
+    # is never consulted to decide work.
+    written: list[dict] = []
 
     pending = []
     for attributes, _name, identifier in iter_filings(config["source"]["country_filter"]):
@@ -120,8 +124,26 @@ def main() -> None:
         pipeline_step="it_fetch_xbrl", level="INFO",
         message=f"{len(pending)} filings without local xBRL-JSON facts", log_dir=manifest_dir)
 
+    run_id = datetime.now().strftime("%Y%m%dT%H%M%S")
+    part_num = 0
+
     def flush():
-        pd.DataFrame(list(rows.values())).to_parquet(manifest_path, index=False)
+        nonlocal written, part_num
+        if written:
+            pd.DataFrame(written).to_parquet(
+                manifest_dir / f"xbrl_facts_manifest__run={run_id}__part={part_num:04d}.parquet",
+                index=False)
+            part_num += 1
+            written = []
+        # Derived snapshot, rebuildable from the parts at any time.
+        frames = [pd.read_parquet(p) for p in
+                  sorted(manifest_dir.glob("xbrl_facts_manifest__run=*__part=*.parquet"))]
+        if manifest_path.exists() and not frames:
+            return
+        if frames:
+            snap = pd.concat(frames, ignore_index=True)
+            snap.drop_duplicates(subset="document_id", keep="last").to_parquet(
+                manifest_path, index=False)
 
     for i, (attributes, lei, period_end, local_path) in enumerate(tqdm(pending), 1):
         document_id = attributes["fxo_id"]
@@ -141,12 +163,12 @@ def main() -> None:
             pipeline_logger.log_event(
                 pipeline_step="it_fetch_xbrl", level="ERROR",
                 message=f"facts download failed: {error}", ticker=document_id, log_dir=manifest_dir)
-        rows[document_id] = row
+        written.append(row)
         if i % CHECKPOINT_EVERY == 0:
             flush()
 
     flush()
-    manifest = pd.DataFrame(list(rows.values()))
+    manifest = pd.read_parquet(manifest_path) if manifest_path.exists() else pd.DataFrame()
     ok = manifest[manifest.download_status == "completed"] if len(manifest) else manifest
     pipeline_logger.log_event(
         pipeline_step="it_fetch_xbrl", level="SUCCESS",

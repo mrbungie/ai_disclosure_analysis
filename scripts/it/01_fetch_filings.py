@@ -47,6 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
 
 import pipeline_logger
+import manifest_store
 from xbrl_filings_client import download_report, iter_filings, probe_report
 
 CHECKPOINT_EVERY = 25
@@ -90,8 +91,13 @@ def main() -> None:
     manifest_path = manifest_dir / "filing_manifest.parquet"
     window = config["corpus"]["filings"]["period_end"]
 
-    existing = (pd.read_parquet(manifest_path).set_index("document_id").to_dict("index")
-                if manifest_path.exists() else {})
+    # Everything known so far, from the append-only parts (see
+    # manifest_store). Nothing here is ever rewritten — this run only ever
+    # ADDS parts, so a concurrent reader cannot lose rows and a re-run with
+    # different settings never needs anything deleted to make room.
+    known = manifest_store.read(manifest_dir)
+    existing = (known.set_index("document_id").to_dict("index")
+                if not known.empty else {})
 
     pipeline_logger.log_event(
         pipeline_step="it_fetch_filings", level="INFO",
@@ -109,7 +115,7 @@ def main() -> None:
             continue
         targets.append((attributes, name, lei, period_end))
 
-    rows = dict(existing)
+    fetched: list[dict] = []   # only THIS run's rows; parts are append-only
     pending = []
     for attributes, name, lei, period_end in targets:
         document_id = attributes["fxo_id"]
@@ -129,8 +135,17 @@ def main() -> None:
         message=f"{len(targets)} filings in window, {len(pending)} to download",
         log_dir=manifest_dir)
 
+    run_id = datetime.now().strftime("%Y%m%dT%H%M%S")
+    part_num = 0
+
     def flush():
-        pd.DataFrame(list(rows.values())).to_parquet(manifest_path, index=False)
+        nonlocal fetched, part_num
+        if manifest_store.append(fetched, manifest_dir, run_id, part_num):
+            part_num += 1
+            fetched = []
+        # The snapshot build_duckdb.py reads by name, recomputed from the
+        # parts rather than written from memory.
+        manifest_store.write_snapshot(manifest_dir)
 
     done = 0
     for document_id, attributes, name, lei, period_end, local_path in tqdm(pending):
@@ -145,7 +160,7 @@ def main() -> None:
             local_path.parent.mkdir(parents=True, exist_ok=True)
             with gzip.open(local_path, "wb") as fh:
                 fh.write(xhtml)
-            rows[document_id] = {
+            fetched.append({
                 **base, "local_path": str(local_path), "download_status": "completed",
                 # Our own hash of what we stored. `package_sha256` is the
                 # aggregator's hash of the ZIP package, a different object;
@@ -154,7 +169,7 @@ def main() -> None:
                 "n_bytes": probe["n_bytes"], "n_words": probe["n_words"],
                 "has_narrative": probe["has_narrative"],
                 "updated_at": datetime.now(),
-            }
+            })
             if not probe["has_narrative"]:
                 pipeline_logger.log_event(
                     pipeline_step="it_fetch_filings", level="WARNING",
@@ -162,8 +177,8 @@ def main() -> None:
                             f"financial statements only?",
                     ticker=document_id, log_dir=manifest_dir)
         except Exception as error:  # noqa: BLE001 — one bad filing must not end the run
-            rows[document_id] = {**base, "download_status": f"failed: {error}",
-                                 "updated_at": datetime.now()}
+            fetched.append({**base, "download_status": f"failed: {error}",
+                            "updated_at": datetime.now()})
             pipeline_logger.log_event(
                 pipeline_step="it_fetch_filings", level="ERROR",
                 message=f"download failed: {error}", ticker=document_id, log_dir=manifest_dir)
@@ -173,7 +188,7 @@ def main() -> None:
             flush()
 
     flush()
-    manifest = pd.DataFrame(list(rows.values()))
+    manifest = manifest_store.read(manifest_dir)
     ok = manifest[manifest.download_status == "completed"]
     pipeline_logger.log_event(
         pipeline_step="it_fetch_filings", level="SUCCESS",
