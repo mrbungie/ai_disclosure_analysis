@@ -425,6 +425,86 @@ t3_4 = t3_4.loc[["Product Deployers", "Governance Adopters", "Risk Listers"]]
 t3_4.round(3)
 ```
 
-The ordering is monotonic across every variable in Table 3.4 — Product Deployers show the highest R&D intensity, gross margin, beta and valuation multiples, Risk Listers the lowest — and it is the strongest single piece of evidence for H1 in this dissertation: a segmentation built purely from *what kind* of AI language a firm uses separates firms on financial characteristics it never saw. The same ordering holds, more starkly, on risk: Product Deployers and the analogous "vocal" voice-archetype in the un-shrunk data run beta near 1.05 against roughly 0.81 for the least-disclosing groups, and carry higher pre-filing realized volatility — the single cleanest result to survive across the independent financial cross-checks behind this chapter (Ch. 4). Two readings compete for why: firms with genuinely higher AI-driven risk exposure describe it more, and more concretely (signalling, H1); or firms in industries that are already higher-beta, higher-margin and more R&D-intensive for reasons unrelated to AI happen to also be the ones with something concrete to say about AI (sector composition masquerading as an AI-disclosure effect). Chapter 4 takes up that question directly.
+The ordering is monotonic across every variable in Table 3.4 — Product Deployers show the highest R&D intensity, gross margin, beta and valuation multiples, Risk Listers the lowest — and it is the strongest single piece of evidence for H1 in this dissertation: a segmentation built purely from *what kind* of AI language a firm uses separates firms on financial characteristics it never saw. The same ordering holds, more starkly, on risk: the highest-disclosing segment runs beta near 1.05–1.09 against roughly 0.75–0.79 for the lowest, and carries higher pre-filing realized volatility — the single cleanest result in Chapter 4's financial cross-checks. Two readings compete for why: firms with genuinely higher AI-driven risk exposure describe it more, and more concretely (signalling, H1); or firms in industries that are already higher-beta, higher-margin and more R&D-intensive for reasons unrelated to AI happen to also be the ones with something concrete to say about AI (sector composition masquerading as an AI-disclosure effect). Chapter 4 takes up that question directly.
+
+# Do the words carry information?
+
+## Content versus real outcomes: a measured null after correction
+
+Eleven correlations link AI-disclosure content — promotional rate, specificity, and topical frame shares (AI investment, AI infrastructure, revenue outcomes, cost outcomes) — to real financial outcomes one year ahead (capex growth, R&D growth, revenue growth, SG&A growth) and to filing-window stock returns, on the 1,426-firm-year, 460-firm panel.
+
+```{python}
+#| label: tbl-t4-1
+#| tbl-cap: "Correlations between AI-disclosure features and one-year-ahead financial outcomes / filing-window returns, ranked by p-value, with Benjamini-Hochberg FDR at 5%."
+
+stats = load_json("crosscheck_stats")
+t4_1 = pd.DataFrame(stats["fdr"])
+t4_1 = t4_1[["x", "y", "n", "r", "p", "passes_fdr"]].rename(columns={
+    "x": "AI-disclosure feature", "y": "Outcome", "n": "N", "r": "r", "p": "p", "passes_fdr": "Survives FDR (5%)"
+})
+t4_1["r"] = t4_1["r"].round(3)
+t4_1["p"] = t4_1["p"].round(4)
+t4_1
+```
+
+None of the eleven survive Benjamini-Hochberg correction at 5%. The best-ranked pair — AI-infrastructure frame share against next-year capex growth, r = 0.086 (n = 840) — falls short of the FDR threshold; revenue-outcome frame share against next-year revenue growth, the pair closest to this chapter's central claim, ranks fourth (r = 0.049, n = 939). Filing-window returns show no relationship to promotional rate, specificity or disclosure volume (|r| ≤ 0.05 throughout). Read plainly: within-filing textual content about what a firm is doing with AI does not predict, one year out, whether it actually did more of it, at a strength this panel can distinguish from noise.
+
+## Risk and valuation: where the segmentation does carry information
+
+```{python}
+#| label: tbl-t4-2
+#| tbl-cap: "Risk and valuation by behavior cluster (median), 1,426 firm-years."
+
+profile_behavior = stats["profile_by_behavior"]
+t4_2 = pd.DataFrame(profile_behavior).T[["beta", "vol_pre_60d", "pe_ratio", "ps_ratio", "car_m1_p5"]]
+t4_2.columns = ["Beta", "Pre-filing realized vol.", "P/E", "P/S", "CAR [-1,+5] around 10-K"]
+t4_2.index.name = "Behavior cluster"
+t4_2.round(3)
+```
+
+Beta and pre-filing realized volatility separate cleanly across behavior clusters and hold up across every cross-check run on this panel: the two most AI-vocal clusters trade at beta ≈ 1.05–1.07 against ≈ 0.72–0.75 for the two least vocal, with correspondingly higher realized volatility. Raw filing-window returns show no difference across clusters; the market-adjusted cumulative abnormal return around the 10-K does — the most AI-vocal cluster is the only one with a negative mean CAR, the opposite sign from its raw return, which is why the risk-adjustment step matters here rather than being a formality. Fundamentals move in the same direction as risk: R&D intensity, gross margin and valuation multiples all rise from the least to the most AI-vocal cluster, but shrink by roughly four-fifths once sector is partialled out — most of this gradient is sector composition (software, semiconductors and hardware skew AI-vocal), not an independent disclosure effect. What survives sector-demeaning is the risk gradient, not the growth or margin gradient.
+
+## A continuous washing score
+
+Whether a firm's promotional language exceeds what its own described behaviour and document mix would predict is estimated directly, rather than inferred from a rate threshold: a frame-level logistic model,
+
+$$\text{logit}\,P(\text{promotional}) = -4.297 + 2.913 \times \text{behavior index} + 0.970 \times [\text{DEF 14A}] + 0.054 \times [\text{8-K}]$$
+
+is fit on 22,643 unique frames from 10-K, DEF 14A and 8-K filings, with the behaviour index computed only from each firm's non-promotional frames (to avoid the mechanical link between describing behaviour and using promotional language). Each firm's expected promotional count is compared to its observed count with a Poisson-binomial null corrected for intra-document dependence (ICC = 0.036–0.043), and firms are flagged at 5% two-tailed FDR across the 449 firms with at least five unique frames.
+
+```{python}
+#| label: tbl-t4-3
+#| tbl-cap: "Firms flagged for promotional excess (\"washing\") or promotional shortfall (\"quiet substance\") relative to their own described behaviour and document mix, FDR 5%."
+
+wscore = load_parquet("firm_washing_score")
+flagged = wscore[wscore["washing"] | wscore["callada"]].copy()
+flagged["Flag"] = flagged["washing"].map({True: "Washing", False: "Quiet substance"})
+t4_3 = flagged[["ticker", "n_frames", "tasa_obs", "p_esperada", "Flag"]].rename(columns={
+    "ticker": "Ticker", "n_frames": "Frames", "tasa_obs": "Observed rate", "p_esperada": "Expected rate"
+}).sort_values(["Flag", "Observed rate"], ascending=[True, False])
+t4_3[["Observed rate", "Expected rate"]] = t4_3[["Observed rate", "Expected rate"]].round(3)
+t4_3
+```
+
+Power is concentrated in high-frame firms: of the 210 firms with 25 or fewer unique frames, none are flagged in either direction. Controlling additionally for sector fixed effects shrinks the washing tail to three firms (CDNS, CRWD, PANW) — the only three that stay flagged across every specification tested (five variants spanning instance- vs. unique-frame level, with and without dispersion correction, with and without sector fixed effects; Jaccard overlap against the reference specification ranges 35–100%). Whether the sector-adjusted or unadjusted tail is the right one — "does this firm talk more than the corpus" versus "more than its own industry" — is a framing choice this dissertation states rather than resolves by default, and results are reported under both.
+
+```{python}
+#| label: tbl-t4-4
+#| tbl-cap: "Washing-score validation: placebo calibration, split-half reliability, and cross-period persistence."
+
+wval = load_json("washing_score_validation")
+t4_4 = pd.DataFrame([
+    ["Placebo (label permuted within form, 5 runs)", "0 false positives / 5 runs (observed: 8 washing, 3 quiet)", "conservative, not inflated"],
+    ["Split-half reliability", f"Spearman = {wval['split_half']['spearman']:.3f}, p = {wval['split_half']['p']:.1e}", "real but moderate signal"],
+    ["Cross-period persistence (≤2023 vs. ≥2024)", f"Spearman = {wval['persistence']['spearman']:.3f}, n={wval['persistence']['n']}", f"only {', '.join(wval['persistence']['flagged_in_both_eras'])} flagged in both eras separately"],
+], columns=["Check", "Result", "Reading"])
+t4_4
+```
+
+The score is well calibrated (zero false positives under label-permutation placebos) and orders firms consistently but not perfectly across independent halves of their own frames and across time — a moderate, real signal rather than a crisp binary label. Checked against the one available external case with independent regulatory evidence — Welltower's April 2025 SEC comment letter on AI disclosure — the score does not flag Welltower (66th percentile, z = −0.42). The SEC's objection to Welltower was not excess promotional language within a single filing; it was that language used on the earnings call and in the press release was not proportionally supported in the 10-K. That is a cross-channel gap, not a within-filing excess, and is the subject of Chapter 5's cross-venue analysis rather than this score.
+
+## Interpretation
+
+H4 does not hold at the panel level once multiple testing is accounted for: AI-disclosure content, measured as topical frame shares or promotional/specificity rates, does not predict next-year operating outcomes or filing-window returns beyond noise. It does hold, robustly, for risk pricing: the segmentation in Chapter 3 and the behavior clusters in this chapter both separate firms on beta and realized volatility, net of the CAR sign reversal that raw returns miss. The combined reading is that the market prices *what kind of firm discloses AI-related risk*, consistent with signalling and legitimacy operating through firm and sector characteristics correlated with disclosure style, rather than through the specific promotional or hypothetical content of any given claim carrying incremental information on its own. The washing score adds a second, complementary result: excess promotion, net of a firm's own described behaviour and its document mix, is real, well-calibrated and persistent for a small number of firms, but detectable only where enough text exists to estimate it — a limitation of the corpus, not of the estimator.
 
 
