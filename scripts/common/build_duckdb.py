@@ -875,6 +875,24 @@ def main(with_text_tables: bool = False):
                  AND c.session_id = f.session_id
                  AND c.classified_at = f.classified_at
             )
+            , current_population AS (
+                -- La población es la del despliegue VIGENTE del prefiltro, no
+                -- la unión histórica. `ai_classify.py` es aditivo y nunca borra
+                -- frames, así que sin este filtro la vista acumula todo texto
+                -- que alguna vez fue marcado positivo por cualquier umbral que
+                -- haya estado desplegado. Medido al cambiar el prefiltro a juez
+                -- único: 20.899 textos tenían frames y 1.332 (6,4%) ya no
+                -- pertenecían a la población marcada — números de análisis que
+                -- dependían del orden histórico de los despliegues, no del
+                -- modelo vigente.
+                SELECT text_hash FROM (
+                    SELECT text_hash, is_ai_prefiltered FROM read_parquet(
+                        'data/interim/prefilter_predictions_unique/prefilter_predictions__run=*.parquet',
+                        union_by_name=True)
+                    QUALIFY row_number() OVER (
+                        PARTITION BY text_hash ORDER BY model_version DESC) = 1
+                ) WHERE is_ai_prefiltered
+            )
             SELECT p.country_code, p.form, p.accession_number, p.item_key, p.paragraph_index,
                    f.text_hash, up.duplicate_count, f.frame_index, f.has_frame,
                    f.subject, f.ai_type, f.temporal, f.domain, f.concepts,
@@ -887,6 +905,7 @@ def main(with_text_tables: bool = False):
             FROM paragraphs p
             JOIN latest_frames f ON f.text_hash = p.text_hash
             JOIN unique_paragraphs up ON up.text_hash = f.text_hash
+            JOIN current_population cp ON cp.text_hash = f.text_hash
         """
     elif with_text_tables:
         print(f"  skipping gold_ai_frames (no files matching {frames_glob} — "

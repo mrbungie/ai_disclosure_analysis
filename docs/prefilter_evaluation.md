@@ -1260,6 +1260,133 @@ confirmación explícita antes de correr el paso GPU).
 
 ---
 
+### 8.15 Un solo juez, acuerdo medido, y el prefiltro evaluado por fin en DEF 14A y 8-K (2026-09-06)
+
+Tres defectos de medición que estaban en el registro sin cuantificar, ahora con
+número al lado. Los tres se atacaron en la misma sesión porque comparten causa:
+el golden set creció por partes y nadie volvió a preguntarse si seguía siendo
+una sola cosa.
+
+**a) El golden set eran dos poblaciones de etiquetas, no una.**
+`gemini-3.8-flash` etiquetó `stage1_tech_oversample` completo (3.950) y parte de
+`stage2_max_variation` (2.088); `qwen/qwen3.7-flash` etiquetó el resto de stage2
+(2.351) y **todo `stage3_random`** (1.495) — el estrato que ancla la
+reponderación a la prevalencia del corpus. El modelo desplegado se ajustó con la
+unión de las 9.884, y **ninguna fila tenía las dos lecturas**, así que el
+acuerdo entre jueces no era medible.
+
+Re-etiquetado completo con `qwen3.7-flash` vía `golden_set.py label
+--coverage-judge current` (flag nuevo: con `current`, una fila etiquetada por
+otro juez cuenta como pendiente). Las 6.038 filas de gemini **no se borraron**:
+quedan en disco identificadas por `judge_model`, y por eso ahora hay 6.038
+párrafos con dos lecturas independientes. Costo: US$0,25.
+
+**Acuerdo entre jueces sobre esas 6.038 filas** (`scripts/verif/judge_agreement.py`):
+
+| medida | acuerdo bruto | kappa |
+|---|---|---|
+| `is_ai_mention` (el target del prefiltro) | 94,0% | **0,866** |
+| `is_ai_disclosure` (sustantivo) | 94,7% | 0,855 |
+| `relevance` (3 categorías) | — | 0,807 |
+
+Por tier léxico: `none` 99,5% de acuerdo, `weak` 94,4%, `strong` 85,9%. El
+desacuerdo se concentra donde casi todo es positivo: en el tier fuerte gemini
+dice "menciona IA" el 99,5% de las veces y qwen el 85,7%.
+
+**Esto corrige una afirmación previa de esta misma sesión.** Antes de tener
+filas pareadas, la comparación *entre estratos* (25,9% de positivos de gemini
+contra 14,8% de qwen dentro de stage2) sugería que los jueces medían cosas
+distintas. Con datos pareados, κ=0,87: **coinciden mucho más de lo que esa
+comparación sugería**, y buena parte de la brecha era composición de qué filas
+etiquetó cada uno. El defecto estructural sigue en pie —el target era una
+mezcla de dos reglas correlacionada con la etapa de muestreo— pero su magnitud
+es chica.
+
+**b) ¿Cambió algo entrenar con un solo juez? Casi nada, y está medido.**
+`scripts/verif/prefilter_judge_comparison.py` ajusta el mismo pipeline (CV
+anidado, `sqrt(inclusion_weight)`) sobre tres conjuntos y aplica cada modelo al
+corpus completo:
+
+| entrenamiento | n | C | umbral | F1 pond. (CV) | textos marcados |
+|---|---:|---|---:|---:|---:|
+| **qwen solo** | 9.894 | 3 | 0,66 | **0,925** | 19.413 |
+| gemini solo | 6.032 | 3 | 0,05 | 0,994 | 22.063 |
+| mezcla (lo desplegado) | 15.926 | 1 | 0,76 | 0,929 | 19.185 |
+
+Solapamiento de las poblaciones marcadas: **qwen vs. mezcla = 0,978 Jaccard**
+(19.085 en común, 328 sólo qwen, 100 sólo la mezcla). El F1 de gemini-solo
+(0,994) no es comparable: su subconjunto **no incluye `stage3_random`**, así que
+sus cifras ponderadas no tienen el estrato que representa al corpus — es
+exactamente el defecto que motivó todo esto, visible como una métrica
+sospechosamente perfecta.
+
+**Conclusión honesta: el cambio a juez único movió el 2% de la población.** Lo
+que compra no es una población distinta sino provenance — un criterio de
+decisión único y declarado en el manifiesto (`judge_model` + `labels_by_judge`,
+que antes no existían) — y las 6.038 filas pareadas que hicieron medible el
+kappa. Como mejora de datos es marginal; como requisito de método, es lo que
+permite escribir en la tesis con qué se definió el target.
+
+**Desplegado** (`run=20260906T001513Z`): C=3,0, threshold=0,66, **19.717 textos
+únicos marcados** (0,46% del corpus, 22.511 instancias), de los cuales 304 sólo
+por `named_entity_match`. `ai_classify.py` clasificó los 150 textos nuevos
+(147 ok, 3 errores, 162 frames) por US$0,015.
+
+Bug latente encontrado al correrlo: `main()` referenciaba `LATEST_PREFILTER_RUN`,
+constante que dejó de existir cuando `scores_relation()` reemplazó el run fijo.
+Como todos los despliegues recientes usaron `--apply-only`, el `NameError` sobrevivió
+hasta el primer refit real. Resuelto preguntándole a los propios scores cuál es
+la corrida vigente.
+
+**c) `gold_ai_frames` acumulaba la unión histórica de despliegues.** La vista unía
+frames a párrafos por `text_hash` y nada más, y `ai_classify.py` es aditivo y
+nunca borra. Resultado medido: **20.899 textos tenían frames y 1.332 (6,4%) ya
+no pertenecían a la población que el modelo vigente marca** — restos de umbrales
+anteriores (0,51 → 0,75 → 0,66). Toda cifra de `docs/analytics/` dependía del
+orden histórico de los despliegues, no del modelo desplegado. Corregido con un
+JOIN contra la población vigente (`build_duckdb.py`), documentado en el SQL.
+
+Efecto sobre los análisis: 24.328 → 24.141 instancias de frame (−0,8%), el panel
+empresa-año pasa de 1.363 a 1.355 filas, y el score de AI-washing de 8 empresas
+en la cola a 7 (sale JCI; quedan GOOGL, PANW, INTU, CRWD, CDNS, ADP, YUM).
+
+**d) El prefiltro en DEF 14A y 8-K: peor, y ahora medido.**
+El golden set es **100% 10-K y 10-Q**. Sobre esas etiquetas se eligió el umbral
+y se midió todo, y el mismo modelo se aplicó tal cual a proxies y 8-K, que
+aportan el 24% de los frames y sostienen el hallazgo titular de
+`docs/analytics/01_...md` #8 (16,4% de frames promocionales en la DEF 14A contra
+7,2% en el 10-K).
+
+`scripts/verif/prefilter_form_validation.py` muestrea 1.500 párrafos
+estratificados por formulario × tier léxico congelado (con `inclusion_weight`,
+mismo diseño que el golden set), los etiqueta con el mismo juez y prompt en un
+directorio aparte, y evalúa el modelo desplegado:
+
+| formulario | n | positivos | prevalencia pond. | precisión | recall | **F1** |
+|---|---:|---:|---:|---:|---:|---:|
+| 10-K (referencia, in-sample) | 6.991 | — | — | 0,950 | 0,972 | 0,961 |
+| 10-Q (referencia, in-sample) | 2.909 | — | — | 0,963 | 0,965 | 0,964 |
+| CV out-of-fold (10-K + 10-Q) | 9.894 | — | — | 0,876 | 0,981 | **0,925** |
+| **DEF 14A** | 1.000 | 276 | 0,10% | **0,683** | **0,844** | **0,755** |
+| **8-K** | 500 | 105 | 0,03% | **0,538** | **0,812** | **0,647** |
+
+**El instrumento no mide igual en los cuatro formularios.** Contra la cifra
+honesta de 10-K/10-Q (F1 pond. 0,925), el proxy pierde 17 puntos y el 8-K 28.
+La precisión cae de 0,88 a 0,68 y 0,54: **una de cada tres marcas en DEF 14A y
+casi una de cada dos en 8-K es falso positivo**, y el recall baja de 0,98 a
+0,81-0,84.
+
+Consecuencia directa para `01_...md` #8: la comparación "el proxy es más
+promocional que el 10-K" mezcla una diferencia de discurso con una diferencia de
+**error de medición entre formularios**. No la invalida —el contraste es grande
+y sobrevive a deduplicar por texto único— pero deja de ser citable sin este
+caveat, y la corrección obvia es re-ajustar el prefiltro incluyendo etiquetas de
+proxy y 8-K en el golden set (las 1.500 de este chequeo son el punto de partida,
+pero son de validación: usarlas para entrenar exige muestrear otras nuevas para
+validar).
+
+---
+
 ## 9. Qué falta
 
 1. ~~**Completar el golden set.**~~ Resuelto 2026-09-04 (9.884 etiquetas

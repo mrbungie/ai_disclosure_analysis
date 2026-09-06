@@ -83,6 +83,20 @@ DEFAULT_JUDGE_MODEL = "qwen/qwen3.7-flash"
 OUT_DIR = REPO_ROOT / "data" / "interim" / "prefilter_predictions_unique"
 
 
+def current_scores_run(con) -> str:
+    """Run id de la corrida de scores vigente.
+
+    `main()` referenciaba una constante `LATEST_PREFILTER_RUN` que dejó de
+    existir cuando `scores_relation()` reemplazó el run fijo por "la config de
+    anchors más nueva" (el pin congelaba el corpus). El camino de --apply-only
+    se usó todos estos días y el de entrenamiento no, así que el NameError
+    quedó latente hasta el primer refit. Se resuelve preguntándole a los
+    propios scores cuál es la corrida vigente, que es la misma regla que usa
+    `scores_relation()` para elegir la población."""
+    return con.execute(
+        f"SELECT max(run_id) FROM {scores_relation()}").fetchone()[0]
+
+
 def scores_relation() -> str:
     """Every score part written under the CURRENT (model, anchors, dtype),
     across however many runs produced them — not one hardcoded run id.
@@ -669,6 +683,7 @@ def main(judge_model: str | None = DEFAULT_JUDGE_MODEL) -> None:
           f"({100 * is_positive.mean():.2f}%), representando {instances_positive:,} instancias del corpus"
           + (f" — de los cuales {rescued:,} textos solo por named_entity_match" if use_named_entity else ""))
 
+    anchors_run = current_scores_run(con)
     print("Calculando el funnel...")
     funnel = funnel_counts(con)
     funnel["prefilter_model_only_positive"] = int(model_positive.sum())
@@ -684,13 +699,13 @@ def main(judge_model: str | None = DEFAULT_JUDGE_MODEL) -> None:
     out["is_ai_prefiltered"] = is_positive
     out["threshold"] = threshold
     out["model_version"] = run_id
-    out["anchors_run"] = LATEST_PREFILTER_RUN
+    out["anchors_run"] = anchors_run
 
     out_path = OUT_DIR / f"prefilter_predictions__run={run_id}.parquet"
     pq.write_table(pa.Table.from_pandas(out, preserve_index=False), out_path, compression="zstd")
 
     manifest = {
-        "run_id": run_id, "anchors_run": LATEST_PREFILTER_RUN,
+        "run_id": run_id, "anchors_run": anchors_run,
         "golden_set_labels": int(len(golden)),
         # Provenance del target: sin esto el manifiesto no dice con qué criterio
         # se decidió "esto menciona IA", y el golden set tiene dos jueces.

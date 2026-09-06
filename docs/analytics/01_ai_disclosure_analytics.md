@@ -11,6 +11,14 @@ al menos un frame, **28.643 frames** semánticos extraídos vía
 `ai_classify.py` (qwen/qwen3.7-flash), sobre un corpus prefiltrado de
 4.316.284 textos únicos (19.698 candidatos, 22.481 instancias).
 
+> **Población actualizada 2026-09-06 (cifras de abajo pendientes de re-correr).**
+> El prefiltro se reajustó con un solo juez y `gold_ai_frames` dejó de acumular
+> la unión histórica de despliegues (`prefilter_evaluation.md` §8.15): la
+> población pasó a **19.717 textos marcados / 24.141 instancias de frame**
+> (antes 19.698 / 24.328). Las tablas de este documento son de la corrida
+> anterior; el cambio es de −0,8% en frames, así que sirven como aproximación
+> pero no como cifra final.
+
 **Actualizado 2026-09-05 con DEF 14A y 8-K.** La versión anterior de este
 documento cubría 10-K y 10-Q solamente (13.442 textos, 22.622 frames). El
 modelo del prefiltro NO se reentrenó: se aplicaron los coeficientes,
@@ -53,6 +61,16 @@ Composición de la población por formulario:
 > además de los cambios reales de población.
 
 ## Advertencia de comparabilidad entre formularios
+
+> **Medido 2026-09-06 (`docs/prefilter_evaluation.md` §8.15).** El prefiltro se
+> ajustó y evaluó SÓLO con 10-K y 10-Q, y se aplicó sin revalidar a DEF 14A y
+> 8-K. Sobre una muestra de 1.500 párrafos de esos dos formularios etiquetada
+> con el mismo juez: F1 ponderado **0,755 en DEF 14A** y **0,647 en 8-K**,
+> contra 0,925 out-of-fold en 10-K/10-Q. La precisión cae de 0,88 a 0,68 y
+> 0,54. Es decir: **el instrumento no mide igual en los cuatro formularios**, y
+> toda comparación entre ellos —incluida la #8, la más citada de este
+> documento— mezcla diferencia de discurso con diferencia de error de medición.
+
 
 Casi cualquier conteo agregado sobre estos cuatro formularios mezcla dos
 cosas distintas: **intensidad de divulgación** y **volumen documental**.

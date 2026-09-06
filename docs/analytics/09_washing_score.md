@@ -87,18 +87,22 @@ predictor.
 
 ## Resultados
 
-439 empresas con ≥5 frames, FDR 5%: **8 en la cola de washing, 2 en la de
-sustancia callada, 429 indistinguibles.**
+439 empresas con ≥5 frames, FDR 5%: **7 en la cola de washing, 2 en la de
+sustancia callada, 430 indistinguibles.**
+
+> Recalculado 2026-09-06 sobre la población del prefiltro de juez único, con
+> `gold_ai_frames` acotado al despliegue vigente (ver
+> `docs/prefilter_evaluation.md` §8.15). La población pasó de 24.328 a 24.141
+> instancias de frame y salió JCI de la cola; el resto no se movió.
 
 | ticker | frames | promo. obs. | esperados | tasa obs. | tasa esperada | z |
 |---|---:|---:|---:|---:|---:|---:|
-| GOOGL | 551 | 106 | 52,6 | 19,2% | 9,5% | 7,7 |
-| PANW | 230 | 68 | 35,1 | 29,6% | 15,2% | 6,0 |
-| INTU | 220 | 51 | 21,1 | 23,2% | 9,6% | 6,9 |
+| GOOGL | 548 | 106 | 52,2 | 19,3% | 9,5% | 7,8 |
+| PANW | 227 | 68 | 35,2 | 30,0% | 15,5% | 6,0 |
+| INTU | 219 | 50 | 21,1 | 22,8% | 9,7% | 6,7 |
 | CDNS | 167 | 50 | 22,2 | 29,9% | 13,3% | 6,3 |
-| CRWD | 159 | 44 | 15,3 | 27,7% | 9,6% | 7,7 |
+| CRWD | 161 | 44 | 15,9 | 27,3% | 9,9% | 7,4 |
 | ADP | 198 | 38 | 15,4 | 19,2% | 7,8% | 6,0 |
-| JCI | 44 | 13 | 4,3 | 29,5% | 9,9% | 4,4 |
 | YUM | 35 | 9 | 1,7 | 25,7% | 5,0% | 5,6 |
 
 Sustancia callada: **MSI** (5 promocionales de 169, esperados 21,8) y **STX**
@@ -141,8 +145,8 @@ test no está inflando: si acaso, es conservador.
 ### 2. Split-half — ¿es un rasgo de la empresa o ruido?
 
 Partiendo los frames de cada empresa en dos mitades al azar (243 empresas con
-≥10 frames en ambas): **Spearman(z) = 0,456** (p=7e-14), solapamiento del decil
-superior **46%**.
+≥10 frames en ambas): **Spearman(z) = 0,517** (p=7e-18), solapamiento del decil
+superior **54%**.
 
 Hay señal real y estable, pero **moderada**: la mitad del ordenamiento no se
 reproduce con otra mitad de los mismos datos. El score ordena bien los
@@ -162,11 +166,11 @@ ordenamiento, no como etiqueta binaria.
 
 | unidad | controles | dispersión | washing | callada | Jaccard vs. referencia |
 |---|---|---|---:|---:|---:|
-| único | comportamiento+forma | documento | **8** | **2** | — |
-| único | comportamiento+forma | ninguna | 16 | 3 | 50% |
-| único | comportamiento | documento | 7 | 1 | 88% |
-| único | comportamiento+forma+sector | documento | 3 | 5 | 38% |
-| instancia | comportamiento | ninguna (v1) | 22 | 10 | 36% |
+| único | comportamiento+forma | documento | **7** | **2** | — |
+| único | comportamiento+forma | ninguna | 16 | 3 | 44% |
+| único | comportamiento | documento | 6 | 1 | 86% |
+| único | comportamiento+forma+sector | documento | 3 | 4 | 43% |
+| instancia | comportamiento | ninguna (v1) | 21 | 10 | 33% |
 
 **Sólo tres empresas están en la cola bajo TODAS las especificaciones: CDNS,
 CRWD y PANW.** Ese es el resultado honesto: hay tres casos que no dependen de
@@ -184,10 +188,10 @@ SEC (`01_...md`):
 
 | ticker | percentil | z | promocionales | marcado | caso |
 |---|---:|---:|---|---|---|
-| WELL | 71,2 | −0,26 | 1/41 (esp. 1,3) | no | carta SEC sobre disclosure de IA (abril 2025) |
-| ANET | 84,9 | +0,92 | 28/218 (esp. 23,8) | no | falso positivo (segmentos) |
-| HPE | 26,5 | −1,18 | 25/284 (esp. 31,2) | no | falso positivo (segmentos) |
-| NVDA | 96,6 | +3,53 | 84/501 (esp. 58,6) | no | falso positivo (ingresos) |
+| WELL | 63,9 | −0,48 | 1/43 (esp. 1,6) | no | carta SEC sobre disclosure de IA (abril 2025) |
+| ANET | 85,6 | +1,04 | 28/216 (esp. 23,3) | no | falso positivo (segmentos) |
+| HPE | 28,3 | −1,14 | 26/290 (esp. 32,1) | no | falso positivo (segmentos) |
+| NVDA | 97,3 | +3,63 | 85/502 (esp. 58,9) | no | falso positivo (ingresos) |
 
 **Welltower —el único caso real— no lo detecta el score, y no es un bug del
 estimador sino una diferencia de constructo.** La SEC no le objetó su 10-K por
@@ -212,7 +216,14 @@ no está construido (`docs/document_expansion_plan.md`, fase 4).
   corpus, no del estimador, y la tabla de potencia la deja explícita.
 - **`rhetoric_promotional` es una etiqueta de un LLM** (`qwen3.7-flash`), sin
   validación contra anotación humana a escala. Todo el score hereda esa
-  dependencia. Es el hueco de medición más grande del proyecto.
+  dependencia. Es el hueco de medición más grande del proyecto. Lo único
+  medido hasta ahora es acuerdo ENTRE LLMs en la etapa anterior (el prefiltro:
+  κ=0,87 entre gemini y qwen, `prefilter_evaluation.md` §8.15) — la extracción
+  de frames no tiene ni eso.
+- **El prefiltro mide peor en DEF 14A que en 10-K** (F1 ponderado 0,755 vs
+  0,925; precisión 0,68 vs 0,88 — §8.15), y el score usa frames de los dos. El
+  control de formulario absorbe la diferencia de TASA promocional entre
+  formularios, no la diferencia de error de medición.
 - **Sin dimensión temporal en el score publicado**: es pooled por empresa. La
   versión empresa-año es el mismo test por año y permitiría preguntar si el
   exceso cambia tras el escrutinio de la SEC.
