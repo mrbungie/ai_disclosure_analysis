@@ -1,5 +1,12 @@
 # Voz vs. comportamiento: dos clusterings separados, cruzados
 
+> **Documento superado.** La segmentación vigente es `11_segmentacion.md` y la
+> grilla `12_grilla_voz_conducta.md`; el score de washing es `09_...md`. Las
+> secciones de cruce de clusters de abajo describen la corrida del 2026-09-05
+> (grupo de washing de 20 empresas, 39 callados B); con la re-corrida del
+> 2026-09-06 sobre el prefiltro v2 ese grupo quedó en 12 empresas — ver
+> `07_...md`. Sólo la sección final de factores se re-corrió.
+
 > **La partición de 4 grupos NO es reproducible (medido 2026-09-06).**
 > `scripts/analytics/cluster_diagnostics.py` la sometió a tres pruebas que
 > antes no existían:
@@ -245,6 +252,11 @@ corpus.
 
 ## Voz × comportamiento como factores, no como cruce de clusters (2026-09-06)
 
+> Cifras re-corridas el 2026-09-06 sobre el prefiltro v2 (`voice_behavior_factors.json`).
+> Sólo se movieron decimales: correlación canónica 0,771 → 0,770, R² 33,6% → 34,1%,
+> cuadrantes fuera de diagonal 89/90 → 85/85. La segunda columna de la tabla de
+> cuadrantes es de la corrida anterior.
+
 `scripts/analytics/voice_behavior_factors.py` reemplaza la matriz 2D de
 etiquetas por dos bloques de factores sobre tasas con encogimiento
 empírico-Bayes, cruzados con **correlación canónica** — que es la forma de
@@ -282,14 +294,14 @@ su volumen predice".
 |---|---:|---:|
 | tasas (lo anterior) | 0,908 | 82% |
 | log-conteos crudos | 0,892 | 80% |
-| **log-conteos residualizados por volumen** | **0,771** | **59%** |
+| **log-conteos residualizados por volumen** | **0,770** | **59%** |
 
 (bootstrap remuestreando frames: 0,72-0,76). Y el bloque pasa de tener un solo
 factor —donde todo cargaba junto porque todo medía volumen— a **tres
 interpretables**: producto vs. interno, construcción de capacidad, y despliegue
 vs. inversión temprana.
 
-El comportamiento explica ahora **33,6%** de la varianza del eje de voz, no
+El comportamiento explica ahora **34,1%** de la varianza del eje de voz, no
 55,7%: hay mucho más residuo con el que trabajar, que es exactamente donde vive
 la pregunta de AI-washing.
 
@@ -325,8 +337,8 @@ Cuadrantes (mediana de cada eje):
 |---|---:|---:|
 | voz y conducta altas | 139 | 56 |
 | voz y conducta bajas | 139 | 25 |
-| **voz alta, conducta baja** | 89 | 43 |
-| **conducta alta, voz baja** | 90 | 16 |
+| **voz alta, conducta baja** | 85 | 43 |
+| **conducta alta, voz baja** | 85 | 16 |
 
 **Signo del residuo** (corregido 2026-09-06 — la versión anterior de esta
 sección lo tenía invertido): el eje de voz va de riesgo/hipotético (+) a

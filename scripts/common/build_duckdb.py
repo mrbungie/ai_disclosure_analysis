@@ -164,7 +164,14 @@ def _filing_manifest_selects(countries: list[tuple[str, dict]], dirs) -> list[st
                       "filing_manifest_earnings_calls"):
             source = _manifest_source(f"{manifests_dir}/{extra}")
             if source:
-                parts.append(f"SELECT '{country}' AS country_code, * FROM {source}")
+                # scripts/us/earnings_calls/01_fetch_transcripts.py writes
+                # filing_date as a 'YYYY-MM-DD' string; the SEC manifests
+                # write DATE. UNION BY NAME resolves the mix to VARCHAR and
+                # every `extract(year from fm.filing_date)` downstream then
+                # fails to bind — so normalise here, once, at the view.
+                parts.append(
+                    f"SELECT '{country}' AS country_code, "
+                    f"* REPLACE (TRY_CAST(filing_date AS DATE) AS filing_date) FROM {source}")
         selects.append("\n            UNION ALL BY NAME\n            ".join(parts))
     return selects
 

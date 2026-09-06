@@ -1,17 +1,20 @@
 # ROIC − WACC: ¿los segmentos de "sustancia" realmente crean valor económico?
 
-> **Recalculado con builders versionados (ver `10_builders_y_recalculo.md`).**
-> El lado contable/mercado ya no viene de un script perdido: lo producen
-> `build_firm_financials.py`, `build_market_factors.py` y `build_roic_wacc.py`
-> (`make analytics`). Con mejor cobertura XBRL y el ERP corregido, varias
-> cifras de este documento se movieron — las tablas de abajo son las de la
-> corrida anterior; los deltas están listados en `10_...md`.
+> **Recalculado 2026-09-06 sobre el prefiltro v2 y con builders versionados.**
+> Las tablas de este documento salen de la corrida actual de `make analytics`
+> (`report_crosscheck_stats.py` reproduce las numéricas): panel de 1.426
+> empresas-año y 460 empresas, frames de 10-K, DEF 14A y 8-K, población
+> marcada por el prefiltro v2 (árboles, umbral 0,17 — `prefilter_evaluation.md`
+> §8.16). Lado contable/mercado producido por `build_firm_financials.py`,
+> `build_market_factors.py` y `build_roic_wacc.py` (ERP geométrico 6,48%).
+> Las corridas anteriores y sus deltas están en `10_builders_y_recalculo.md`.
 
-> **Recalculado 2026-09-05 con DEF 14A y 8-K.** Los insumos financieros
-> (ROIC, WACC) no cambiaron; las etiquetas de segmento sí. En el camino se
-> corrigió un bug de reproducibilidad en `gold_ai_frames` (ver `01_...md`).
-> **El resultado sobre washing se dio vuelta por completo** — leer esa
-> sección.
+> Con el ERP geométrico (6,48% en vez de 8,20%) el WACC mediano del panel
+> baja de 9,1% a 7,1% y el spread mediano sube de +2,8% a +4,9%; **los
+> cuatro arquetipos y los cuatro clusters crean valor**, y el "C con spread
+> negativo" de la corrida anterior era un artefacto del ERP inflado
+> (`10_...md`). Las secciones de washing y sustancia callada usan los
+> segmentos re-ajustados de `07_...md`.
 
 
 Extiende `07_segment_financial_profiles.md` de ratios contables y
@@ -44,81 +47,82 @@ Guardado en `data/processed/clusters/firm_year_roic_wacc.parquet`.
 
 ## Resultados: por cluster de comportamiento
 
-Mediana sobre empresas-año con ROIC y WACC disponibles (1.589
-observaciones, 281 empresas):
+Mediana sobre empresas-año con ROIC y WACC disponibles (1.049
+observaciones, 331 empresas):
 
 | Cluster de comportamiento | ROIC | WACC | **ROIC − WACC** | % obs con spread > 0 | n obs |
 |---|---|---|---|---|---|
-| 0 — Intermedio interno | 13,4% | **7,7%** | **+4,70%** | 68,6% | 86 |
-| 1 — Comportamiento mínimo | 10,7% | 8,7% | +1,32% | 58,0% | 697 |
-| 2 — Desplegadores de producto | **13,5%** | **10,7%** | +3,36% | 59,5% | 538 |
-| 3 — Inversores en infraestructura | 11,7% | 9,0% | +2,65% | 63,1% | 268 |
+| 0 — Intermedio interno | 11,0% | **6,0%** | +3,22% | **75,6%** | 41 |
+| 1 — Comportamiento mínimo | 10,1% | 6,1% | +3,71% | 73,9% | 356 |
+| 2 — Desplegadores de producto | **13,5%** | **8,0%** | +5,30% | 68,5% | 476 |
+| 3 — Inversores en infraestructura | 13,0% | 6,8% | **+5,62%** | 75,4% | 171 |
 
-**El cluster de despliegue real (2) tiene el ROIC más alto (13,5%) pero no
-el mayor spread**, porque también tiene el WACC más alto (10,7%). El
-cluster 0 lo supera (+4,70%) por la vía opuesta: ROIC similar con el WACC
-más bajo del conjunto. Con n=25 empresas, ese primer puesto no es
-confiable; lo que sí es sólido es que **el cluster mínimo queda último
-(+1,32%) con clara diferencia** — no describir comportamiento de IA va de
-la mano de crear menos valor económico.
-
-La brecha se achicó respecto de la versión anterior (era +3,6% contra
-+0,5/0,6%, o sea 6-7x; ahora 3,6x entre el 2 y el 1).
+**El cluster de despliegue real (2) tiene el ROIC más alto (13,5%) pero
+no el mayor spread**, porque también tiene el WACC más alto (8,0%): el
+cluster de infraestructura (3) lo supera por 0,3 p.p. (+5,62%) con ROIC
+parecido y WACC menor. **El cluster mínimo ya no queda último**: +3,71%,
+contra +3,22% del cluster 0 (14 empresas). La corrida anterior lo tenía
+en +1,32% y a 3,6x del cluster 2; hoy la brecha es de 1,4x. La lectura
+"no describir comportamiento de IA va de la mano de crear menos valor"
+se debilitó a "crea menos valor que los clusters de despliegue e
+infraestructura, pero no menos que el resto".
 
 ## Resultados: por arquetipo de VOZ
 
 | Arquetipo de voz | ROIC | WACC | **ROIC − WACC** | % obs con spread > 0 | n obs |
 |---|---|---|---|---|---|
-| A cauteloso | 11,7% | 9,1% | +1,69% | 57,6% | 373 |
-| B genérico | 11,0% | 9,1% | +1,36% | 57,4% | 619 |
-| C cuantificador | 10,4% | **11,8%** | **−0,28%** | 48,4% | 124 |
-| D vocal | **13,4%** | 9,4% | **+4,51%** | **68,1%** | 473 |
+| A cauteloso | 10,2% | 6,6% | +3,81% | 70,5% | 251 |
+| B genérico | 12,3% | 6,4% | +5,02% | **75,5%** | 371 |
+| C cuantificador | **13,2%** | 7,7% | +4,94% | 69,6% | 112 |
+| D vocal | 13,0% | **7,9%** | **+5,62%** | 68,9% | 315 |
 
-**Esto invierte el resultado de la versión anterior, y es el cambio más
-grande del documento.** Antes D quedaba por debajo de B y C porque su
-WACC alto se comía su rentabilidad. Hoy D tiene el ROIC más alto (13,4%),
-un WACC en el promedio (9,4%) y el mayor spread por lejos (+4,51%), con
-el 68,1% de sus observaciones creando valor.
 
-Y C, el arquetipo que cuantifica, es **el único con spread negativo**
-(−0,28%): ROIC más bajo del conjunto (10,4%) y WACC más alto (11,8%). Su
-composición nueva lo explica —semiconductores y datos, capital-intensivos
-y de beta alto (`04_...md`)— pero el resultado es incómodo para la
-lectura simple de que cuantificar señala sustancia: **el grupo que pone
-números crea menos valor económico que el que promociona.**
+**Los cuatro arquetipos crean valor y el orden es plano: D > B > C > A,
+con 1,8 p.p. entre el primero y el último.** La corrida anterior tenía a
+D "por lejos" arriba (+4,51%) y a C como único negativo (−0,28%); `10_...md`
+muestra que ese contraste era en buena parte el ERP aritmético inflando
+el WACC del arquetipo de mayor beta. Con el ERP geométrico, C tiene el
+ROIC más alto de los cuatro (13,2%) y WACC 7,7%, spread +4,94%; D sigue
+arriba pero B está a 0,6 p.p. (con la mayor proporción de observaciones
+en positivo, 75,5%).
 
-Con n=124 observaciones y 22 empresas, C es el grupo más chico de los
-cuatro y su cifra es la menos estable. Aun así, el contraste D vs. C está
-medido sobre 597 observaciones combinadas y no es un artefacto de muestra
-mínima.
+La lectura incómoda de la corrida anterior —"el grupo que pone números
+crea menos valor económico que el que promociona"— ya no tiene respaldo:
+C crea menos que D y B, y más que A, por márgenes que con n=112 y 65
+empresas no distinguen nada.
 
 ## Resultados: washing vs. resto de D — el resultado se dio vuelta
 
 > **La definición del grupo está superada** por `09_washing_score.md` (versión
-> validada: 8 empresas, no 20). Las comparaciones ROIC-WACC de esta sección
-> describen un grupo que ya no existe.
+> validada: 7 empresas, ninguna de las cuales está en este grupo). Las
+> comparaciones ROIC-WACC de esta sección describen un grupo de 23 empresas
+> (D en el año × cluster mínimo) que se reconstruye distinto en cada
+> re-ajuste.
 
 
 | | Washing (D + comportamiento mínimo) | Resto de D |
 |---|---|---|
-| ROIC | 13,4% | 13,5% |
-| WACC | **6,6%** | 10,2% |
-| **ROIC − WACC** | **+7,31%** | +4,17% |
-| % obs con spread > 0 | **83,3%** | 65,6% |
-| n obs (empresas) | 66 (11) | 407 (72) |
+| ROIC | 13,3% | 13,0% |
+| WACC | **5,9%** | 8,0% |
+| **ROIC − WACC** | +5,49% | +5,62% |
+| % obs con spread > 0 | **76,7%** | 68,1% |
+| n obs (empresas) | 30 (23) | 285 (120) |
 
-**El grupo de "candidatos a washing" crea MÁS valor económico que el resto
-de D**, con el 83% de sus observaciones en spread positivo. La versión
-anterior concluía exactamente lo contrario ("al menos la mitad está
-destruyendo valor económico activamente"), sobre 4 empresas con dato.
 
-**Esto NO significa que hablar vago genere valor.** El ROIC —lo que la
-empresa produce con su capital— es idéntico entre los dos grupos: 13,4%
-vs. 13,5%, una diferencia de 0,1 p.p. En desempeño operativo no hay
-ninguna diferencia. Todo el spread extra viene del otro término: el WACC,
-6,6% contra 10,2%.
+**El grupo de "candidatos a washing" crea el mismo valor económico que el
+resto de D** (+5,49% contra +5,62% de spread mediano, con más
+observaciones en positivo: 77% contra 68%). La versión original concluía
+que destruía valor ("al menos la mitad está destruyendo valor económico
+activamente"), sobre 4 empresas con dato; la corrida anterior lo dio
+vuelta (+7,31% vs. +4,17%); ésta lo deja empatado, con 30 observaciones
+de 23 empresas.
 
-Y ese WACC bajo es consecuencia del **beta: 0,46 contra 1,00**
+**Esto NO significa nada sobre hablar vago.** El ROIC —lo que la empresa
+produce con su capital— es el mismo en los dos grupos: 13,3% vs. 13,0%.
+Lo que cambia es el otro término, el WACC, 5,9% contra 8,0% — y aun así
+la mediana del spread no se separa, porque las medianas no se restan.
+
+Y ese WACC bajo es consecuencia del **beta: 0,44 contra 1,02**
 (`07_...md`). Son utilities, consumo básico, farma, seguros y bancos —
 negocios estables que se financian barato. `ROIC − WACC` premia por
 construcción al negocio de bajo riesgo: una utility regulada que gana 13%
@@ -134,7 +138,7 @@ del mismo hecho, no causa y efecto entre sí.
 
 **Un control sectorial no lo elimina, lo que refuerza esa lectura.**
 Comparando cada empresa-año contra la mediana de su propio SIC-2, el
-grupo de washing queda +2,96 p.p. y el resto de D +0,09 p.p. — o sea que
+grupo de washing queda +1,49 p.p. y el resto de D −0,31 p.p. — o sea que
 no es sólo "están en otros sectores": es que **dentro de cualquier
 sector, la empresa de beta bajo tiene el spread alto**. El mecanismo es
 el riesgo, no la industria, y por eso el control sectorial no lo toca.
@@ -152,50 +156,54 @@ retorno ajustado por riesgo como el CAR de `04_...md`.
 
 | | Callados B | Resto de B |
 |---|---|---|
-| ROIC | **13,5%** | 10,6% |
-| WACC | 10,2% | 8,9% |
-| **ROIC − WACC** | **+2,36%** | +1,21% |
-| % obs con spread > 0 | 56,0% | 57,7% |
-| n obs (empresas) | 141 (25) | 478 (86) |
+| ROIC | **14,0%** | 11,3% |
+| WACC | 7,9% | 6,0% |
+| **ROIC − WACC** | **+5,58%** | +3,84% |
+| % obs con spread > 0 | 72,9% | 77,1% |
+| n obs (empresas) | 140 (73) | 231 (132) |
 
-Los "callados B" crean casi el doble de spread que el resto de su propio
-arquetipo de voz (+2,36% vs. +1,21%), con un ROIC 2,9 p.p. mayor. La
-versión anterior reportaba 3x (+6,5% vs. +2,1%); hoy es 1,9x. **La
-dirección y el orden de magnitud sobreviven, la magnitud se reduce.**
+
+Los "callados B" crean 1,5x el spread del resto de su propio arquetipo
+de voz (+5,58% vs. +3,84%), con un ROIC 2,7 p.p. mayor. La versión
+original reportaba 3x (+6,5% vs. +2,1%), la anterior 1,9x (+2,36% vs.
++1,21%); hoy es 1,5x. **La dirección sobrevive en las tres corridas; la
+magnitud relativa se va reduciendo.**
 
 A diferencia del grupo de washing, acá la ventaja viene del numerador: el
-ROIC es genuinamente más alto, no el WACC más bajo. Es el hallazgo mejor
-sostenido de este documento — 25 empresas con datos, contraste contra un
-control de 86 empresas del mismo arquetipo de voz, y mecanismo coherente
-con el perfil de `07_...md` (más I+D, mejor margen bruto, prima de
-mercado).
+ROIC es genuinamente más alto, y el WACC es incluso 1,9 p.p. MAYOR (beta
+0,97 vs. 0,76 en `07_...md`), así que el spread los subestima si acaso.
+Es el hallazgo mejor sostenido de este documento — 73 empresas con datos,
+contraste contra un control de 132 empresas del mismo arquetipo de voz, y
+mecanismo coherente con el perfil de `07_...md` (más I+D, mejor margen
+bruto, prima de mercado).
 
-El `% con spread > 0` casi no distingue a los dos grupos (56,0% vs.
-57,7%), así que la diferencia está en la magnitud del spread de los que
-crean valor, no en cuántos lo crean.
+El `% con spread > 0` no favorece a los callados (72,9% vs. 77,1%), así
+que la diferencia está en la magnitud del spread de los que crean valor,
+no en cuántos lo crean.
 
 ## Lectura conjunta
 
 Qué queda en pie después de recalcular sobre una población distinta:
 
 - **Se sostiene**: los "callados B" —empresas que despliegan IA y lo
-  cuentan en registro llano— crean casi el doble de valor económico que
-  sus pares de voz equivalente (+2,36% vs. +1,21%), y por la vía correcta
-  (ROIC más alto, no WACC más bajo). Es el único resultado de este
-  documento con muestra decente y mecanismo coherente entre versiones.
-- **Se sostiene**: el cluster de comportamiento mínimo queda último en
-  creación de valor (+1,32%). No describir comportamiento de IA
-  correlaciona con crear menos valor.
-- **Se dio vuelta, pero la comparación no servía en ninguna dirección**:
-  "el washing destruye valor económico". Hoy ese grupo muestra más spread,
-  con ROIC idéntico (13,4% vs. 13,5%) y WACC 3,6 p.p. menor por su beta de
-  0,46. `ROIC − WACC` premia mecánicamente al negocio de bajo riesgo, así
-  que entre grupos con betas tan distintos mide riesgo, no conducta de
-  disclosure — y el control sectorial no lo arregla, porque el mecanismo
-  es el beta, no la industria.
-- **Se dio vuelta**: "D no es el que más valor crea". Hoy D tiene el mayor
-  spread de los cuatro arquetipos (+4,51%) y C el único negativo
-  (−0,28%).
+  cuentan en registro llano— crean 1,6x el valor económico de sus pares
+  de voz equivalente (+5,58% vs. +3,84%), y por la vía correcta (ROIC más
+  alto, con WACC incluso mayor). Es el único resultado de este documento
+  con muestra decente y mecanismo coherente en las tres corridas.
+- **Se debilitó**: el cluster de comportamiento mínimo ya no queda último
+  en creación de valor (+3,71%, tercero de cuatro); sigue por debajo del
+  cluster de despliegue (+5,30%), pero a 1,4x y no a 3,6x.
+- **Se dio vuelta y volvió al medio, y la comparación no servía en ninguna
+  dirección**: "el washing destruye valor económico". Hoy ese grupo
+  muestra el mismo spread que el resto de D (+5,49% vs. +5,62%), con ROIC
+  igual y WACC 2,1 p.p. menor por su beta de 0,44. `ROIC − WACC` premia
+  mecánicamente al negocio de bajo riesgo, así que entre grupos con betas
+  tan distintos mide riesgo, no conducta de disclosure — y el control
+  sectorial no lo arregla, porque el mecanismo es el beta, no la
+  industria.
+- **Se aplanó**: "D es el que más valor crea" sigue siendo cierto por 0,6
+  p.p. sobre B, y "C es el único negativo" desapareció con el ERP
+  corregido: los cuatro arquetipos están entre +3,8% y +5,6%.
 
 La lección metodológica es más valiosa que cualquiera de los hallazgos, y
 vale para todo el proyecto: **estos segmentos son particiones de K-means

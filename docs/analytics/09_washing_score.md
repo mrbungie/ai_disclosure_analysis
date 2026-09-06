@@ -13,7 +13,7 @@ como igual de confiable que una estimada con 500.
 
 | Diagnóstico | Valor |
 |---|---|
-| Tasa promocional del corpus | 9,7% |
+| Tasa promocional del corpus | 9,4% |
 | P(cero frames promocionales por azar) con 4 frames | **67%** |
 | Empresas-año con 3-5 frames y tasa promocional exactamente 0 | **84,6%** |
 | Ídem con 50+ frames | 1,1% |
@@ -45,7 +45,7 @@ de documentos en la que habla**.
 3. **Nivel empresa**: el conteo nulo es una **Poisson-binomial** (cada frame
    tiene su propia probabilidad según su formulario), corregida por
    **dependencia intra-documento**.
-4. **Benjamini-Hochberg** al 5% sobre las 439 empresas, en las dos colas.
+4. **Benjamini-Hochberg** al 5% sobre las 449 empresas, en las dos colas.
 
 Modelo ajustado:
 
@@ -87,26 +87,30 @@ predictor.
 
 ## Resultados
 
-439 empresas con ≥5 frames, FDR 5%: **7 en la cola de washing, 2 en la de
-sustancia callada, 430 indistinguibles.**
+449 empresas con ≥5 frames, FDR 5%: **8 en la cola de washing, 3 en la de
+sustancia callada, 438 indistinguibles.**
 
-> Recalculado 2026-09-06 sobre la población del prefiltro de juez único, con
-> `gold_ai_frames` acotado al despliegue vigente (ver
-> `docs/prefilter_evaluation.md` §8.15). La población pasó de 24.328 a 24.141
-> instancias de frame y salió JCI de la cola; el resto no se movió.
+> Recalculado 2026-09-06 (tarde) sobre la población del prefiltro v2 (árboles,
+> umbral 0,17 — `prefilter_evaluation.md` §8.16): 23.690 frames únicos de 449
+> empresas, frente a 24.141 de 439 en la corrida de la mañana. **La cola de
+> washing casi no se movió**: las mismas 7 empresas más CRM, que vuelve a
+> entrar (estaba en la corrida del 2026-09-05 y salió en la de la mañana); en
+> la callada entra MSCI. El modelo tampoco: coeficiente de comportamiento
+> 3,10 → 3,15, DEF 14A 0,88 → 0,88, ICC documento 0,037 → 0,036.
 
 | ticker | frames | promo. obs. | esperados | tasa obs. | tasa esperada | z |
 |---|---:|---:|---:|---:|---:|---:|
-| GOOGL | 548 | 106 | 52,2 | 19,3% | 9,5% | 7,8 |
-| PANW | 227 | 68 | 35,2 | 30,0% | 15,5% | 6,0 |
-| INTU | 219 | 50 | 21,1 | 22,8% | 9,7% | 6,7 |
-| CDNS | 167 | 50 | 22,2 | 29,9% | 13,3% | 6,3 |
-| CRWD | 161 | 44 | 15,9 | 27,3% | 9,9% | 7,4 |
-| ADP | 198 | 38 | 15,4 | 19,2% | 7,8% | 6,0 |
-| YUM | 35 | 9 | 1,7 | 25,7% | 5,0% | 5,6 |
+| GOOGL | 497 | 98 | 46,4 | 19,7% | 9,3% | 8,0 |
+| CRWD | 172 | 48 | 18,0 | 27,9% | 10,5% | 7,5 |
+| PANW | 236 | 71 | 35,4 | 30,1% | 15,0% | 6,5 |
+| CDNS | 170 | 50 | 22,2 | 29,4% | 13,1% | 6,3 |
+| INTU | 229 | 51 | 22,7 | 22,3% | 9,9% | 6,2 |
+| ADP | 200 | 37 | 15,4 | 18,5% | 7,7% | 5,7 |
+| CRM | 340 | 66 | 35,9 | 19,4% | 10,6% | 5,3 |
+| YUM | 38 | 9 | 2,0 | 23,7% | 5,2% | 5,1 |
 
-Sustancia callada: **MSI** (5 promocionales de 169, esperados 21,8) y **STX**
-(0 de 68, esperados 10,0).
+Sustancia callada: **MSI** (5 promocionales de 175, esperados 21,6), **MSCI**
+(4 de 187, esperados 20,0) y **STX** (0 de 73, esperados 10,0).
 
 **Con la especificación anterior (instancias, sin control de formulario, sin
 dispersión) eran 22 y 10.** Caen AAPL, ADBE, AMZN, IBM, EFX, GILD, IQV, LUMN,
@@ -117,11 +121,11 @@ desaparecen META, AXP, AVGO, KLAC, NET, ICE y FTNT.
 
 | frames por empresa | empresas | washing | callada |
 |---|---:|---:|---:|
-| 5-10 | 80 | 0 | 0 |
-| 11-25 | 130 | 0 | 0 |
-| 26-50 | 113 | 2 | 0 |
-| 51-100 | 67 | 0 | 1 |
-| 100+ | 49 | 6 | 1 |
+| 5-10 | 77 | 0 | 0 |
+| 11-25 | 133 | 0 | 0 |
+| 26-50 | 114 | 1 | 0 |
+| 51-100 | 70 | 0 | 1 |
+| 100+ | 55 | 7 | 2 |
 
 **No se puede concluir que las tecnológicas grandes hagan más AI-washing.** Se
 puede concluir que son las únicas empresas sobre las que este corpus permite
@@ -139,13 +143,13 @@ Permutando la etiqueta promocional **dentro de cada formulario** (preserva la
 tasa de cada forma y la mezcla documental de cada empresa, destruye sólo la
 asociación empresa-retórica), 5 corridas:
 
-**0 falsos positivos en las 5, en ambas colas**, contra 8 y 2 observados. El
+**0 falsos positivos en las 5, en ambas colas**, contra 8 y 3 observados. El
 test no está inflando: si acaso, es conservador.
 
 ### 2. Split-half — ¿es un rasgo de la empresa o ruido?
 
-Partiendo los frames de cada empresa en dos mitades al azar (243 empresas con
-≥10 frames en ambas): **Spearman(z) = 0,517** (p=7e-18), solapamiento del decil
+Partiendo los frames de cada empresa en dos mitades al azar (268 empresas con
+≥10 frames en ambas): **Spearman(z) = 0,453** (p=5e-15), solapamiento del decil
 superior **54%**.
 
 Hay señal real y estable, pero **moderada**: la mitad del ordenamiento no se
@@ -154,8 +158,8 @@ extremos y mal el medio.
 
 ### 3. Persistencia — filings ≤2023 contra ≥2024
 
-88 empresas con ≥10 frames en ambas épocas: **Spearman(z) = 0,407**
-(p=8e-05), solapamiento del decil superior 38%. **Una sola empresa (CRWD)
+98 empresas con ≥10 frames en ambas épocas: **Spearman(z) = 0,370**
+(p=2e-04), solapamiento del decil superior 33%. **Una sola empresa (CRWD)
 queda marcada en el pool y en las dos épocas por separado.**
 
 Es la misma prueba que hundió la definición de clusters, y este score la pasa
@@ -166,11 +170,11 @@ ordenamiento, no como etiqueta binaria.
 
 | unidad | controles | dispersión | washing | callada | Jaccard vs. referencia |
 |---|---|---|---:|---:|---:|
-| único | comportamiento+forma | documento | **7** | **2** | — |
-| único | comportamiento+forma | ninguna | 16 | 3 | 44% |
-| único | comportamiento | documento | 6 | 1 | 86% |
-| único | comportamiento+forma+sector | documento | 3 | 4 | 43% |
-| instancia | comportamiento | ninguna (v1) | 21 | 10 | 33% |
+| único | comportamiento+forma | documento | **8** | **3** | — |
+| único | comportamiento+forma | ninguna | 15 | 4 | 53% |
+| único | comportamiento | documento | 7 | 1 | 88% |
+| único | comportamiento+forma+sector | documento | 3 | 5 | 38% |
+| instancia | comportamiento | ninguna (v1) | 23 | 9 | 35% |
 
 **Sólo tres empresas están en la cola bajo TODAS las especificaciones: CDNS,
 CRWD y PANW.** Ese es el resultado honesto: hay tres casos que no dependen de
@@ -188,10 +192,13 @@ SEC (`01_...md`):
 
 | ticker | percentil | z | promocionales | marcado | caso |
 |---|---:|---:|---|---|---|
-| WELL | 63,9 | −0,48 | 1/43 (esp. 1,6) | no | carta SEC sobre disclosure de IA (abril 2025) |
-| ANET | 85,6 | +1,04 | 28/216 (esp. 23,3) | no | falso positivo (segmentos) |
-| HPE | 28,3 | −1,14 | 26/290 (esp. 32,1) | no | falso positivo (segmentos) |
-| NVDA | 97,3 | +3,63 | 85/502 (esp. 58,9) | no | falso positivo (ingresos) |
+| WELL | 66,5 | −0,42 | — | no | carta SEC sobre disclosure de IA (abril 2025) |
+| ANET | 84,6 | +0,96 | — | no | falso positivo (segmentos) |
+| HPE | 29,0 | −1,11 | — | no | falso positivo (segmentos) |
+| NVDA | 97,5 | +4,09 | — | no | falso positivo (ingresos) |
+
+(Conteos de promocionales por caso: corrida anterior 1/43, 28/216, 26/290 y
+85/502; la validación actual guarda percentil y z solamente.)
 
 **Welltower —el único caso real— no lo detecta el score, y no es un bug del
 estimador sino una diferencia de constructo.** La SEC no le objetó su 10-K por
@@ -203,7 +210,9 @@ filing; el mecanismo que persigue el regulador es una BRECHA entre canales.
 Es la limitación más importante del instrumento y marca el próximo paso
 concreto: medir el mismo score sobre transcripciones de earnings calls y
 comparar el exceso de cada empresa entre canales. El corpus de earnings calls
-no está construido (`docs/document_expansion_plan.md`, fase 4).
+ya está clasificado (16.267 frames de 403 empresas, 2026-09-06 —
+`scripts/analytics/earnings_calls_analysis.py`); el diseño por canal es el
+punto 2.1 de `docs/PENDIENTES.md`.
 
 ## Limitaciones
 
@@ -220,8 +229,9 @@ no está construido (`docs/document_expansion_plan.md`, fase 4).
   medido hasta ahora es acuerdo ENTRE LLMs en la etapa anterior (el prefiltro:
   κ=0,87 entre gemini y qwen, `prefilter_evaluation.md` §8.15) — la extracción
   de frames no tiene ni eso.
-- **El prefiltro mide peor en DEF 14A que en 10-K** (F1 ponderado 0,755 vs
-  0,925; precisión 0,68 vs 0,88 — §8.15), y el score usa frames de los dos. El
+- **El prefiltro mide peor en DEF 14A que en 10-K** (con v2: F1 0,821 vs
+  0,961; precisión 0,73 en el holdout de proxy/8-K — §8.16), y el score usa
+  frames de los dos. El
   control de formulario absorbe la diferencia de TASA promocional entre
   formularios, no la diferencia de error de medición.
 - **Sin dimensión temporal en el score publicado**: es pooled por empresa. La

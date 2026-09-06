@@ -1,41 +1,42 @@
 # Analytics preliminares de divulgación de IA (EE.UU.)
 
+> **2026-09-06, tarde:** el corpus se re-corrió sobre el prefiltro v2 (árboles,
+> umbral 0,17 — `prefilter_evaluation.md` §8.16) y las earnings calls quedaron
+> clasificadas por completo (16.270 frames de 403 empresas —
+> `earnings_calls_analysis.py`). **Las 10 preguntas de abajo y la tabla de
+> población están regeneradas sobre esa corrida** (mismas consultas SQL de la
+> sección final, contra `duckdb/thesis.duckdb`). Las secciones posteriores
+> —arquetipos de voz, evolución por composición, comportamientos por
+> arquetipo, panel empresa-año, cuasi-experimento SEC/DeepSeek y cartas de
+> comentario— son la exploración original y están **superadas** por
+> `11_segmentacion.md` / `12_grilla_voz_conducta.md` (segmentación),
+> `02`-`08` (panel y cruce financiero, ya re-corridos) y `13_shocks.md`
+> (shocks); se conservan como registro y no se re-corrieron.
+
 10 preguntas cortas, resueltas con SQL simple sobre `gold_ai_frames` /
 `gold_ai_entity_mentions` (`duckdb/thesis.duckdb`) — ver
 `docs/prefilter_evaluation.md` §8.8-§8.13 para cómo se construyeron esas
 tablas. Todas las consultas están en la sección final para reproducirlas.
 
-Alcance: **solo EE.UU.** (Chile todavía no tiene embeddings/scoring —
-ver §8.9). Población: **17.266 textos únicos** marcados IA-relevantes con
-al menos un frame, **28.643 frames** semánticos extraídos vía
+Alcance: **EE.UU.** (Italia y Chile tienen párrafos en el corpus pero no
+entran a estas consultas — filtro `country_code='us'`). Población:
+**18.280 textos únicos** de formularios SEC marcados IA-relevantes con al
+menos un frame y **29.945 frames** semánticos extraídos vía
 `ai_classify.py` (qwen/qwen3.7-flash), sobre un corpus prefiltrado de
-4.316.284 textos únicos (19.698 candidatos, 22.481 instancias).
+4.799.469 textos únicos (30.280 marcados por el prefiltro v2, umbral 0,17,
+`run=20260906T160624Z`). Las earnings calls (9.584 textos, 16.270 frames)
+están en `gold_ai_frames` pero se reportan aparte: son otro canal, con
+otro error de medición (`13_shocks.md`, `PENDIENTES.md` §2.1).
 
-> **Población actualizada 2026-09-06 (cifras de abajo pendientes de re-correr).**
-> El prefiltro se reajustó con un solo juez y `gold_ai_frames` dejó de acumular
-> la unión histórica de despliegues (`prefilter_evaluation.md` §8.15): la
-> población pasó a **19.717 textos marcados / 24.141 instancias de frame**
-> (antes 19.698 / 24.328). Las tablas de este documento son de la corrida
-> anterior; el cambio es de −0,8% en frames, así que sirven como aproximación
-> pero no como cifra final.
-
-**Actualizado 2026-09-05 con DEF 14A y 8-K.** La versión anterior de este
-documento cubría 10-K y 10-Q solamente (13.442 textos, 22.622 frames). El
-modelo del prefiltro NO se reentrenó: se aplicaron los coeficientes,
-intercepto y threshold (0,75) del despliegue `20260904T160927Z` tal cual,
-vía `ai_prefilter_classify.py --apply-only`, para que la regla de decisión
-sea idéntica entre formularios y las cifras viejas de 10-K/10-Q sigan
-siendo las mismas (verificado: `max |Δ predicted_proba| = 0` sobre las
-1.650.145 filas del corpus anterior).
-
-Composición de la población por formulario:
+Composición de la población por formulario (corrida 2026-09-06, tarde):
 
 | Formulario | Textos únicos con frame | Frames |
 |---|---:|---:|
-| 10-K | 10.378 | 17.533 |
-| DEF 14A | 4.621 | 6.533 |
-| 10-Q | 2.359 | 4.315 |
-| 8-K | 194 | 262 |
+| 10-K | 11.294 | 17.758 |
+| DEF 14A | 6.384 | 7.284 |
+| 10-Q | 2.933 | 4.590 |
+| 8-K | 384 | 313 |
+| *Earnings call (aparte)* | *9.584* | *16.270* |
 
 > **Bug de reproducibilidad corregido en el camino (2026-09-05).** Al
 > intentar re-correr estos análisis aparecieron números distintos en cada
@@ -83,16 +84,16 @@ como "las empresas hablan más de IA".
 
 | # | Pregunta | Hallazgo |
 |---|---|---|
-| 1 | ¿Cómo evoluciona la cantidad de párrafos con mención de IA por año de filing? | Agregado (10-K + DEF 14A + 8-K): 690 (2021) → 824 (2022) → 1.149 (2023) → 2.988 (2024) → 4.613 (2025) → 5.993 (2026, parcial). El salto 2023→2024 (+160%) se mantiene con los formularios nuevos y sigue coincidiendo con la ola de IA generativa post-ChatGPT. Desglosado, la trayectoria es la misma en 10-K (511→4.000) y DEF 14A (175→1.933); el 8-K aporta poco y tarde (4 en 2021, 70 en 2026). |
-| 2 | ¿Qué sectores (SIC 2 dígitos) tienen mayor prevalencia de empresas con divulgación de IA? | SIC 73 (software/servicios de cómputo): 66/66 empresas (100%). SIC 63 (seguros): 23/23 (100%). SIC 49 (utilities): 33/34 (97%). SIC 38 (instrumentos): 40/42 (95%, era 90%). SIC 28 (químicos/farma): 37/40 (93%, era 85%). Sumar DEF 14A subió la prevalencia en casi todos los sectores: la divulgación de IA fuera del 10-K alcanza empresas que el 10-K no capturaba. |
-| 3 | ¿Qué proporción de las afirmaciones sobre IA son sobre algo YA ocurrido vs. planeado/esperado/hipotético? | 71,3% `realized` (20.433), 12,7% `planned` (3.626), 8,5% `expected` (2.421), 7,6% `hypothetical` (2.163). La fracción "ya ocurrido" SUBE respecto de la versión 10-K/10-Q (67%): el contenido de proxy y 8-K es más factual y retrospectivo que el de los factores de riesgo del 10-K. |
-| 4 | ¿De quién se habla cuando se habla de IA — la propia empresa, sus clientes, o la competencia? | 85,3% `firm` (24.434), 9,2% `competitors_or_industry` (2.649), 4,8% `customers` (1.389), 0,6% `suppliers_or_partners` (171). La autodescripción se acentúa (era 82%): la DEF 14A habla de lo que hace la propia empresa, casi nunca del sector. |
-| 5 | ¿Qué empresas tienen más frames de IA extraídos (más "vocales" sobre IA en sus filings)? | MSFT (595), GOOGL (561), NVDA (549), INTC (490), ADBE (486), AMZN (436), CRM (348), SNOW (316), META (308), HPE (294), WDAY (291), CTSH (275), AMD (272), PANW (263), NOW (250). El orden cambia respecto de la versión 10-K/10-Q (NVDA lideraba): MSFT y GOOGL suben al incorporar sus proxies. |
-| 6 | ¿Cuáles son los riesgos de IA más mencionados? | Ciberseguridad (3.019), regulatorio/legal (2.765), competitivo/disrupción (1.713), confiabilidad/precisión (1.590), dependencia operacional (1.198), privacidad (1.154), propiedad intelectual (925), sesgo/equidad (664), fuerza laboral (409). El orden no cambia respecto de la versión anterior — los formularios nuevos agregan volumen, no un perfil de riesgo distinto. |
-| 7 | ¿La IA se usa más internamente o de cara al cliente? | 45,9% interno (13.161), 38,1% customer-facing (10.899), 16,0% sin especificar (4.583). La brecha se abre respecto del casi-empate anterior (44%/43%): DEF 14A y 8-K hablan más de uso interno (gobernanza, operaciones, compensación ligada a IA) que de producto. |
-| 8 | ¿Qué fracción de las afirmaciones sobre IA usa lenguaje promocional/superlativo? | 9,8% agregado (2.808 de 28.643) — pero el agregado esconde el hallazgo real: **DEF 14A 16,3%** (1.064/6.533) vs. **10-K 7,1%** (1.246/17.533), con 10-Q en 11,1% y 8-K en 8,0%. El proxy statement, que se dirige a accionistas y no al regulador, es más del doble de promocional sobre IA que el 10-K. Es la señal más directa de AI-washing que produjo esta actualización. |
-| 9 | ¿Cómo evoluciona generativa vs. predictiva/ML clásica en el tiempo? | 2021: 160 gen / 172 predictiva (predictiva domina). 2023: 437 / 223 (cruce). 2026: 2.726 gen / 210 predictiva. La generativa pasa de minoría a ~93% de las menciones con tipo especificado; el cruce sigue cayendo entre 2022 y 2023, igual que en la versión anterior. |
-| 10 | ¿Qué entidades de IA específicas se nombran más, y de dónde son? | Con frame de IA confirmado: OpenAI (105), Copilot (100), Gemini (56), Anthropic (35), ChatGPT (30), watsonx (28), Vertex AI (16). No estadounidenses: Cohere (5), DeepSeek (4), Stable Diffusion (3), Mistral AI (1), Stability AI (1), Qwen (1). El "AI-washing" nombrado sigue siendo casi exclusivamente sobre proveedores estadounidenses. **Ver la advertencia de falsos positivos abajo — esta pregunta cambió de consulta.** |
+| 1 | ¿Cómo evoluciona la cantidad de párrafos con mención de IA por año de filing? | Agregado (10-K + DEF 14A + 8-K): 745 (2021) → 872 (2022) → 1.217 (2023) → 3.110 (2024) → 4.853 (2025) → 6.225 (2026, parcial). El salto 2023→2024 es ×2,6 en textos y ×1,9 en filings con IA (10-K: 188 → 352), o sea que es más divulgación por documento y también más documentos. Desglose en la consulta 1b: 10-K 536 → 3.995, DEF 14A 204 → 2.153, 8-K 5 → 85. |
+| 2 | ¿Qué sectores (SIC 2 dígitos) tienen mayor prevalencia de empresas con divulgación de IA? | SIC 73 (software/servicios de cómputo): 66/66 empresas (100%). SIC 63 (seguros): 23/23 (100%). SIC 49 (utilities): 33/34 (97%). SIC 35 (maquinaria/computadores): 28/29. SIC 67 (holdings): 26/27. SIC 38 (instrumentos): 39/42. SIC 28 (químicos/farma): 37/40. SIC 36 (electrónica): 28/30. La prevalencia es casi universal en el S&P 500: el contraste está en cuánto y cómo, no en si. |
+| 3 | ¿Qué proporción de las afirmaciones sobre IA son sobre algo YA ocurrido vs. planeado/esperado/hipotético? | 72,1% `realized` (21.598), 12,5% `planned` (3.731), 8,2% `expected` (2.470), 7,2% `hypothetical` (2.146). En earnings calls: 69,4% / 17,9% / 12,0% / **0,8%** hipotético — en la call casi nada se enmarca como hipotético. |
+| 4 | ¿De quién se habla cuando se habla de IA — la propia empresa, sus clientes, o la competencia? | 85,3% `firm` (25.557), 9,1% `competitors_or_industry` (2.723), 4,9% `customers` (1.480), 0,6% `suppliers_or_partners` (185). En calls sube `customers` a 10,3%. |
+| 5 | ¿Qué empresas tienen más frames de IA extraídos (más "vocales" sobre IA en sus filings)? | MSFT (605), NVDA (553), GOOGL (504), ADBE (494), INTC (480), AMZN (430), CRM (352), SNOW (320), HPE (320), WDAY (305), META (303), AMD (273), PANW (270), CTSH (266), EFX (266). Sólo formularios; las calls cambian el ranking (`earnings_calls_analysis.py`: NVDA, MSFT, META, ADBE, GOOGL). |
+| 6 | ¿Cuáles son los riesgos de IA más mencionados? | Ciberseguridad (3.113), regulatorio/legal (2.786), competitivo/disrupción (1.725), confiabilidad/precisión (1.617), dependencia operacional (1.216), privacidad (1.167), propiedad intelectual (928), sesgo/equidad (660), fuerza laboral (415). |
+| 7 | ¿La IA se usa más internamente o de cara al cliente? | 46,6% interno (13.955), 37,7% customer-facing (11.288), 15,7% sin especificar (4.702) en formularios. En earnings calls se invierte: 55,6% customer-facing, 35,1% interno — en la call se habla del producto, en el filing del proceso. |
+| 8 | ¿Qué fracción de las afirmaciones sobre IA usa lenguaje promocional/superlativo? | 9,5% agregado en formularios (2.838 de 29.945) — pero el agregado esconde el hallazgo real: **DEF 14A 14,7%** (1.069/7.284) vs. **10-K 7,1%** (1.262/17.758), con 10-Q 10,5% y 8-K 7,3%. Y las **earnings calls 21,0%** (3.422/16.270): tres veces el 10-K. Leer con la advertencia de comparabilidad de arriba. |
+| 9 | ¿Cómo evoluciona generativa vs. predictiva/ML clásica en el tiempo? | 2021: 178 gen / 196 predictiva (predictiva domina). 2023: 469 / 230 (cruce). 2026: 2.849 gen / 213 predictiva. La generativa pasa de minoría a ~93% de las menciones con tipo declarado; la predictiva se mantiene plana en ~200-260 por año. |
+| 10 | ¿Qué entidades de IA específicas se nombran más, y de dónde son? | Con frame de IA confirmado: OpenAI (105), Copilot (100), Gemini (56), Anthropic (35), ChatGPT (30), watsonx (28), Vertex AI (16), Meta AI (9), GitHub Copilot (9). No estadounidenses: Cohere (5). `claude` queda en 6 (ver la sección de falsos positivos). |
 
 ## Falsos positivos de entidades introducidos por DEF 14A
 
@@ -269,6 +270,13 @@ GROUP BY 1,2 ORDER BY 3 DESC LIMIT 15;
 
 
 # Arquetipos de voz (EE.UU.)
+
+> **Sección superada (2026-09-06).** Los arquetipos A/B/C/D no eran
+> reproducibles (Jaccard bootstrap 0,53) y fueron reemplazados por la
+> segmentación de `11_segmentacion.md` y la grilla de `12_...md`; el panel
+> empresa-año vive en `02`-`08` y los shocks en `13_shocks.md`, todos
+> re-corridos sobre el corpus final. Lo que sigue es la exploración original
+> (corrida 2026-09-05) y se conserva como registro.
 
 Primera exploración de la pregunta central de la tesis
 (`docs/thesis_proposal.md`): ¿en qué arquetipos distintos se agrupan las

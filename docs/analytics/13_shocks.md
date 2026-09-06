@@ -8,6 +8,11 @@ Responde las preguntas extendidas de `docs/thesis_proposal.md`:
 
 Producido por `scripts/analytics/shock_analysis.py`. Determinístico, sin LLM.
 
+> Re-corrido el 2026-09-06 sobre el prefiltro v2 (`shock_analysis.json`,
+> `shock_did_simple.json`). Las conclusiones no se mueven; los números de
+> abajo son los actuales. El barrido de ventanas se re-corrió con copias del
+> script con `WINDOW` = 3…7.
+
 ## El diseño
 
 Event study empresa-trimestre:
@@ -39,18 +44,19 @@ variación de canal o de jurisdicción (`docs/pregunta_identificacion_sec.md`).
 
 ## Resultado 1: la SEC no produjo un cambio diferencial medible
 
-Ventana ±5 trimestres, 388 empresa-trimestre, 54 empresas:
+Ventana ±5 trimestres, 393 empresa-trimestre, 55 empresas:
 
 | outcome | tendencias previas | cambio post |
 |---|---|---:|
-| `promotional_rate` | **pasa** (F=1,26, p=0,298) | +0,025 (p=0,336) |
-| `hypothetical_share` | **pasa** (F=1,73, p=0,156) | −0,007 (p=0,355) |
-| `specificity_index` | límite (F=2,18, p=0,084) | +0,015 (p=0,132) |
-| `risk_share` | falla (F=3,31, p=0,017) | — |
+| `promotional_rate` | **pasa** (F=1,06, p=0,385) | +0,027 (p=0,251) |
+| `hypothetical_share` | **pasa** (F=1,63, p=0,180) | −0,007 (p=0,296) |
+| `specificity_index` | límite (F=2,18, p=0,083) | +0,015 (p=0,109) |
+| `risk_share` | falla (F=3,55, p=0,012) | — |
 
 **Donde el diseño es utilizable, el cambio es cero.** Las empresas más expuestas
 a IA no se volvieron ni más ni menos promocionales, ni más ni menos hipotéticas,
-que las menos expuestas después de marzo de 2024.
+que las menos expuestas después de marzo de 2024. `specificity_index` da
++0,015 con p=0,109: tampoco.
 
 ### Y la sensibilidad, que es la parte importante
 
@@ -59,11 +65,11 @@ Una versión anterior de este análisis reportó **+8,4 p.p. (p<0,001)** para
 
 | ventana | empresas | tendencias previas | cambio post |
 |---:|---:|---|---:|
-| ±3 | 24 | **falla** (p=0,047) | −0,020 (p=0,60) |
-| ±4 | 34 | pasa (p=0,733) | +0,013 (p=0,79) |
-| ±5 | 54 | pasa (p=0,298) | +0,025 (p=0,34) |
-| ±6 | 62 | pasa (p=0,279) | +0,049 (p=0,24) |
-| ±7 | 90 | **falla** (p=0,011) | **+0,057 (p=0,03)** |
+| ±3 | 24 | **falla** (p=0,034) | −0,020 (p=0,59) |
+| ±4 | 34 | pasa (p=0,682) | +0,014 (p=0,79) |
+| ±5 | 55 | pasa (p=0,385) | +0,027 (p=0,25) |
+| ±6 | 63 | pasa (p=0,293) | +0,052 (p=0,19) |
+| ±7 | 91 | **falla** (p=0,021) | **+0,060 (p=0,03)** |
 
 **El efecto sólo aparece con la ventana en la que el test de tendencias previas
 empieza a fallar.** Eso es la firma de contaminación por tendencia, no de un
@@ -79,18 +85,18 @@ exactamente cuando el test de identificación falla no es un resultado.**
 
 | ventana | empresas | tendencias previas |
 |---:|---:|---|
-| ±3 | 35 | falla (p=0,021) |
-| ±4 | 50 | falla (p=0,001) |
-| ±5 | 72 | falla (p<0,001) |
-| ±6 | 73 | falla (p<0,001) |
-| ±7 | 77 | falla (p<0,001) |
+| ±3 | 35 | falla (p=0,020) |
+| ±4 | 51 | falla (p<0,001) |
+| ±5 | 73 | falla (p<0,001) |
+| ±6 | 74 | falla (p<0,001) |
+| ±7 | 79 | falla (p<0,001) |
 
 Las tendencias previas fallan en **todas** las ventanas para
 `promotional_rate`, `specificity_index` e `hypothetical_share`. Los grupos ya
 venían divergiendo antes de enero de 2025 — algo esperable, porque el corte cae
 en medio de la difusión de la IA generativa, cuando las empresas expuestas se
 estaban separando del resto por su cuenta. El único outcome que pasa
-(`risk_share`, p=0,786) da +0,029 con p=0,153: cero.
+(`risk_share`, p=0,717) da +0,019 con p=0,173: cero.
 
 **No es que DeepSeek no haya tenido efecto: es que este diseño no puede
 distinguirlo de la tendencia.** Reportarlo como efecto sería exactamente el
@@ -103,9 +109,9 @@ Cambio post en `promotional_rate` por segmento de divulgación
 
 | segmento | cambio post | p | n (empresa-trimestre) |
 |---|---:|---:|---:|
-| adoptantes con gobernanza | +0,014 | 0,740 | 72 |
-| desplegadores de producto | −0,003 | 0,910 | 307 |
-| listadores de riesgo | −0,111 | 0,116 | 9 |
+| adoptantes con gobernanza | +0,010 | 0,821 | 72 |
+| desplegadores de producto | −0,004 | 0,883 | 312 |
+| listadores de riesgo | −0,112 | 0,107 | 9 |
 
 Ninguno significativo. El −11 p.p. de los listadores de riesgo tiene 9
 observaciones detrás: es una anécdota, no un hallazgo.
@@ -120,12 +126,14 @@ observaciones detrás: es una anécdota, no un hallazgo.
 2. **DeepSeek queda fuera de alcance** con este diseño, y se dice.
 3. Lo que sí sería identificable —y no está hecho— es el **contraste por canal**:
    la misma empresa, el mismo trimestre, filings (con responsabilidad legal)
-   contra earnings calls (sin ella). Los 483.214 párrafos de transcripciones ya
-   están extraídos pero sin procesar. Ver `docs/pregunta_identificacion_sec.md`.
+   contra earnings calls (sin ella). Las transcripciones ya están clasificadas
+   (16.267 frames de 403 empresas, `earnings_calls_analysis.py`, 2026-09-06);
+   falta el diseño empresa × trimestre × canal. Ver
+   `docs/pregunta_identificacion_sec.md` y `docs/PENDIENTES.md` §2.1.
 
 ## Limitaciones
 
-- 54 empresas en la ventana utilizable del evento SEC: la potencia para detectar
+- 55 empresas en la ventana utilizable del evento SEC: la potencia para detectar
   un efecto chico es baja, así que "no hay evidencia de cambio" no es "no hubo
   cambio".
 - El outcome es una etiqueta de LLM sin validación humana
@@ -147,8 +155,8 @@ Y[i,t] = a[i] + lambda[t] + beta * (AltoRiesgo[i] x Post[t]) + e[i,t]
 
 `AltoRiesgo` = la mitad de empresas cuya divulgación de IA **pre-2024** era más
 promocional que la mediana. `Post` = desde 2024Q2. Efectos fijos de empresa y de
-trimestre, errores clusterizados por empresa, ventana ±5 trimestres. **38
-empresas de alto riesgo, 26 de bajo, 452 empresa-trimestre.**
+trimestre, errores clusterizados por empresa, ventana ±5 trimestres. **40
+empresas de alto riesgo, 26 de bajo, 462 empresa-trimestre.**
 
 **La decisión que hace que el diseño funcione**: el grupo se define con una
 dimensión (retórica promocional) y los outcomes se miden en OTRAS —
@@ -160,21 +168,21 @@ artefacto debe aparecer.
 
 | outcome | DiD | SE | p | tendencias previas (p) |
 |---|---:|---:|---:|---:|
-| `promotional_rate` *(misma dimensión que el grupo)* | **−9,46 p.p.** | 2,30 | **0,000** | 0,100 |
-| `quantified_rate` | +3,32 p.p. | 4,40 | 0,450 | 0,586 |
-| `gov_share` | +1,59 p.p. | 2,14 | 0,456 | 0,059 |
-| `specificity_index` | −0,02 p.p. | 1,68 | 0,992 | 0,991 |
+| `promotional_rate` *(misma dimensión que el grupo)* | **−9,67 p.p.** | 2,33 | **0,000** | 0,120 |
+| `quantified_rate` | +3,37 p.p. | 4,32 | 0,435 | 0,580 |
+| `gov_share` | +2,74 p.p. | 2,15 | 0,202 | 0,117 |
+| `specificity_index` | −0,35 p.p. | 1,63 | 0,829 | 0,980 |
 
 ## Cómo se lee
 
-**En la dimensión que define los grupos hay convergencia grande (−9,5 p.p.) y en
+**En la dimensión que define los grupos hay convergencia grande (−9,7 p.p.) y en
 las demás no pasa nada.** Y la trayectoria por trimestre muestra por qué hay que
 desconfiar de la primera: el diferencial ya venía bajando **antes** del evento
-(+8,1\* → +8,2 → +5,0 → −3,5 en los cuatro trimestres previos), con el test
-conjunto de tendencias previas en p=0,100 — no falla al 5%, pero tampoco es
+(+8,8\* → +8,1 → +4,9 → −4,8 en los cuatro trimestres previos), con el test
+conjunto de tendencias previas en p=0,120 — no falla al 5%, pero tampoco es
 plano. Es el perfil de una reversión a la media que empezó antes del corte.
 
-En cambio `quantified_rate` (p=0,586) y `specificity_index` (p=0,991) tienen
+En cambio `quantified_rate` (p=0,580) y `specificity_index` (p=0,980) tienen
 tendencias previas planas y limpias, y ahí el efecto es **cero**.
 
 **La afirmación defendible para la tesis:**
@@ -193,7 +201,7 @@ dimensiones donde el diseño se sostiene**.
 `data/processed/clusters/shock_did_<outcome>.png`: coeficiente estimado por
 trimestre con intervalo de 95%, normalizado a t−1. Se grafica **lo que el modelo
 estima** (la diferencia entre grupos ajustada por efectos fijos), no medias
-crudas — con 64 empresas, las medias crudas son puro ruido y no muestran el
+crudas — con 66 empresas, las medias crudas son puro ruido y no muestran el
 supuesto. En la figura se lee de una si las barras previas cruzan el cero y si
 las posteriores se despegan.
 
@@ -203,4 +211,4 @@ La primera versión del event study usaba `C(ev, Treatment(reference=-1))` sobre
 un categórico de enteros y **patsy ignoraba la referencia**: estimaba todos los
 períodos, el coeficiente de t−1 salía +9,7 p.p. en vez de cero, y el test de
 tendencias previas heredaba ese salto de nivel (daba p=0,000 cuando en realidad
-es 0,100). Corregido con dummies explícitas y el período omitido a mano.
+es 0,120). Corregido con dummies explícitas y el período omitido a mano.

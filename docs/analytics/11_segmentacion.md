@@ -40,32 +40,32 @@ Tres decisiones que hacen la diferencia entre esto y la versión anterior:
 
 | k | Jaccard por segmento | ¿usable? |
 |---|---|---|
-| 2 | 0,85 / 0,77 | sí |
-| **3** | **0,72 / 0,72 / 0,65** | **sí — elegido** |
-| 4 | 0,67 / 0,59 / 0,50 / 0,69 | no |
-| 5 | 0,33 / 0,58 / 0,66 / 0,49 / 0,71 | no |
+| 2 | 0,80 / 0,87 | sí |
+| **3** | **0,63 / 0,72 / 0,70** | **sí — elegido** |
+| 4 | 0,56 / 0,62 / 0,72 / 0,71 | no |
+| 5 | 0,42 / 0,67 / 0,23 / 0,58 / 0,68 | no |
 
 Los cuatro arquetipos anteriores caían justo acá: **k=4 nunca fue reproducible**.
 
 ## Los tres segmentos
 
-420 empresas con ≥8 frames. Todos los números son % de las afirmaciones de IA de
-la empresa.
+419 empresas con ≥8 frames (re-corrida 2026-09-06 sobre el prefiltro v2; antes
+420). Todos los números son % de las afirmaciones de IA de la empresa.
 
 | | Desplegadores de producto | Adoptantes con gobernanza | Listadores de riesgo |
 |---|---:|---:|---:|
-| **empresas** | **101** | **195** | **124** |
-| frames (mediana) | 97 | 31 | 23 |
-| estabilidad (Jaccard) | 0,72 | 0,65 | 0,72 |
-| % despliegue | **43,5** | 24,6 | 13,7 |
-| % resultados | **26,9** | 12,9 | 6,0 |
-| % de cara al producto | **46,2** | 19,9 | 13,3 |
-| % capacidad propia | **11,2** | 8,5 | 4,0 |
-| % gobernanza | 8,3 | **23,6** | 12,9 |
-| % riesgo | 22,5 | 36,6 | **66,7** |
-| % hipotético | 5,3 | 7,1 | **24,2** |
-| % promocional | **11,6** | 3,9 | 1,5 |
-| % cuantificado | **6,6** | 2,5 | 0,8 |
+| **empresas** | **101** | **189** | **129** |
+| frames (mediana) | 91 | 32 | 23 |
+| estabilidad (Jaccard) | 0,70 | 0,63 | 0,72 |
+| % despliegue | **43,5** | 24,7 | 13,8 |
+| % resultados | **26,9** | 13,3 | 6,1 |
+| % de cara al producto | **46,5** | 20,4 | 13,2 |
+| % capacidad propia | **11,5** | 8,5 | 4,1 |
+| % gobernanza | 8,5 | **23,4** | 13,2 |
+| % riesgo | 22,6 | 36,4 | **66,3** |
+| % hipotético | 5,6 | 7,0 | **23,5** |
+| % promocional | **11,9** | 3,8 | 1,5 |
+| % cuantificado | **6,7** | 2,6 | 0,8 |
 
 Empresas típicas (las más cercanas al centroide):
 
@@ -76,27 +76,27 @@ Empresas típicas (las más cercanas al centroide):
 **Los nombres salen del perfil, no de un orden fijo**: cada segmento se nombra
 por la dimensión donde más se despega del promedio. (Una versión anterior
 llamaba "constructores de capacidad" a un segmento cuya capacidad —8,5%— era
-MENOR que la de los desplegadores —11,2%—: el nombre salía de cuál etiqueta
+MENOR que la de los desplegadores —11,5%—: el nombre salía de cuál etiqueta
 quedaba libre. Corregido con z-scores.)
 
 ### Qué dice cada uno
 
 - **Desplegadores de producto (101)** — describen IA funcionando y de cara al
   cliente: 43,5% de sus afirmaciones son despliegue, 26,9% resultados, casi la
-  mitad orientadas a producto. Son también los más promocionales (11,6%) *y* los
-  que más cuantifican (6,6%): hablan fuerte y con números. Software y hardware
+  mitad orientadas a producto. Son también los más promocionales (11,9%) *y* los
+  que más cuantifican (6,7%): hablan fuerte y con números. Software y hardware
   (SIC 73, 35, 36).
-- **Adoptantes con gobernanza (195)** — el segmento más grande. Adoptan (24,6%
-  despliegue) pero su marca distintiva es la **gobernanza**: 23,6%, casi tres
+- **Adoptantes con gobernanza (189)** — el segmento más grande. Adoptan (24,7%
+  despliegue) pero su marca distintiva es la **gobernanza**: 23,4%, casi tres
   veces la de los desplegadores. Bancos, aseguradoras y utilities (SIC 73, 38,
   28, 49, 63): sectores regulados que cuando hablan de IA hablan de supervisión.
-- **Listadores de riesgo (124)** — dos tercios de sus afirmaciones sobre IA son
+- **Listadores de riesgo (129)** — dos tercios de sus afirmaciones sobre IA son
   riesgo, un cuarto son hipotéticas, y prácticamente no hay lenguaje promocional
   (1,5%) ni cuantificación (0,8%). Es el boilerplate de factores de riesgo.
 
 ## Que la segmentación sirva río abajo
 
-Persistencia año a año: **71,8%** sobre 837 pares empresa-año consecutivos
+Persistencia año a año: **71,3%** sobre los pares empresa-año consecutivos
 (`firm_year_segments.parquet` asigna cada empresa-año proyectando sobre los
 centroides ya entrenados, sin re-segmentar por año).
 
@@ -104,13 +104,13 @@ Los segmentos separan cosas que NO entraron a construirlos:
 
 | | Desplegadores | Adoptantes c/gob. | Listadores de riesgo |
 |---|---:|---:|---:|
-| I+D / ingresos | **13,2%** | 6,5% | 4,1% |
-| Margen bruto | **61,6%** | 48,7% | 41,3% |
-| Beta | **1,09** | 0,81 | 0,76 |
-| P/E | **31,1** | 24,0 | 20,9 |
-| Crecimiento de ingresos t+1 | **8,7%** | 6,5% | 5,1% |
-| ROIC − WACC | **+6,4%** | +3,9% | +3,9% |
-| **Empresas marcadas por el score de washing** | **8 de 101** | 0 de 195 | 0 de 124 |
+| I+D / ingresos | **13,0%** | 6,5% | 2,8% |
+| Margen bruto | **62,0%** | 46,3% | 40,5% |
+| Beta | **1,09** | 0,79 | 0,75 |
+| P/E | **30,2** | 24,1 | 21,6 |
+| Crecimiento de ingresos t+1 | **7,6%** | 6,0% | 4,4% |
+| ROIC − WACC | **+5,1%** | +4,3% | +3,6% |
+| **Empresas marcadas por el score de washing** | **8 de 101** | 0 de 189 | 0 de 129 |
 
 Es el chequeo que importa: la segmentación se construyó sólo con texto y ordena
 monótonamente I+D, beta, valuación y crecimiento — y **las 8 empresas con exceso
@@ -118,11 +118,11 @@ promocional estadísticamente significativo caen todas en un solo segmento**.
 
 ## Limitaciones
 
-- El segmento de desplegadores tiene 97 frames medianos contra 23 de los
+- El segmento de desplegadores tiene 91 frames medianos contra 23 de los
   listadores de riesgo: parte de lo que separa a los segmentos es **cuánto habla
   cada empresa**, no sólo cómo. El encogimiento controla el ruido de las tasas,
   no esa diferencia de volumen.
-- 420 de 494 empresas entran (≥8 frames); las que quedan fuera son las que menos
+- 419 de 493 empresas entran (≥8 frames); las que quedan fuera son las que menos
   divulgan, así que el segmento "listadores de riesgo" está probablemente
   sub-representado.
 - Todo descansa en etiquetas de un LLM sin validación humana
