@@ -717,19 +717,25 @@ Markdown(tabulate(table, headers=["Entity role", "Instances", "Share"]) + f"\n\n
 
 Overall, 246 of 510 firms (48.2%) disclose at least one external vendor, commercial model, or technology partner. Table 3.1 details the external vendor ecosystem cited by S&P 500 corporations.
 
-**Table 3.1 — External AI technology ecosystem cited by S&P 500 corporations.**
+```{python}
+#| label: tbl-vendor-ecosystem
+#| tbl-cap: "External AI technology ecosystem cited by S&P 500 corporations."
+#| echo: false
+import json
+from pathlib import Path
+from tabulate import tabulate
+from IPython.display import Markdown
 
-| External technology provider / model family | % of Firms citing | Literal named entities extracted |
-|---|---:|---|
-| **Specialized Enterprise & Data Vendors** | 41.8% | AMD, Palantir (AIP), ServiceNow, Hugging Face, Snowflake, Databricks |
-| **OpenAI / Microsoft Ecosystem** | 17.3% | OpenAI, Microsoft Azure, ChatGPT, Azure OpenAI Service, GitHub Copilot |
-| **Google / Alphabet** | 9.6% | Google Cloud Platform, Gemini, Vertex AI, Google Assistant |
-| **NVIDIA** | 9.0% | NVIDIA, H100 GPUs, Blackwell architectures, DGX systems |
-| **Amazon / AWS** | 6.9% | Amazon Web Services (AWS), Amazon Bedrock, SageMaker |
-| **Meta Platforms** | 3.5% | Llama 2, Llama 3 open-weight models |
-| **Anthropic** | 2.4% | Anthropic, Claude foundation models |
-| **IBM** | 2.4% | IBM watsonx, Watson enterprise suites |
-| **Salesforce** | 1.4% | Salesforce Einstein, Agentforce |
+data_path = Path("../data/processed/clusters/activity_profiles.json")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/activity_profiles.json")
+providers = json.loads(data_path.read_text())["named_providers"]
+RENAME = {"other_named": "Specialized Enterprise & Data Vendors", "OpenAI / Microsoft": "OpenAI / Microsoft Ecosystem",
+          "Google": "Google / Alphabet", "Meta": "Meta Platforms"}
+rows = sorted(providers.items(), key=lambda kv: -kv[1]["pct_firms"])
+table = [[RENAME.get(k, k), f"{v['pct_firms']:.1f}%", v["examples"]] for k, v in rows]
+Markdown(tabulate(table, headers=["External technology provider / model family", "% of Firms citing", "Literal named entities extracted"]))
+```
 
 *Notes:* Vendor citations include entities tagged as `external_provider`, `external_model`, or `partner`. Entities appear in this table only when cited by *other* firms as an external technology source (e.g., Microsoft citing OpenAI, or Lowe's citing Palantir and NVIDIA), excluding self-promotional brand mentions.
 
@@ -794,18 +800,45 @@ plt.show()
 
 Examining the disclosed activities within each cluster shows that these three segments correspond to distinct profiles of disclosed behaviour — as the economic-profile analysis below confirms, this distinctness is strongest for Product Deployers, while the other two segments differ mainly in register.
 
-**Table 4.1 — Disclosed behavioral profile by disclosure archetype (6 headline variables; full 14-variable profile in Table A.4).**
+```{python}
+#| label: tbl-4-1-archetype-profile
+#| tbl-cap: "Disclosed behavioral profile by disclosure archetype (6 headline variables; full 14-variable profile in Table A.4)."
+#| echo: false
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
 
-| Behavioral feature | Product Deployers (n=113) | Governed Adopters (n=222) | Risk Listers (n=158) | Non-Disclosers (n=17) |
-|---|---:|---:|---:|---:|
-| **Disclosed activities per firm (Median)** | **112** | 18 | 5 | 0 |
-| Customer-facing activity share (%) | **51.0%** | 27.0% | 21.0% | — |
-| Technology source: Proprietary / Own (%) | **80.0%** | 55.0% | 46.0% | — |
-| Firms naming an own product or brand (%) | **97.3%** | 64.0% | 34.2% | 17.6% |
-| Firms reporting quantified outcome metrics (%) | **93.8%** | 64.9% | 37.3% | 17.6% |
-| Maximum operational stage: Scaled (%) | **92.9%** | 64.0% | 34.2% | 23.5% |
+data_path = Path("../data/processed/clusters/firm_activity_profiles.parquet")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/firm_activity_profiles.parquet")
+df = pd.read_parquet(data_path)
+SEGS = ["desplegadores_de_producto", "adoptantes_con_gobernanza", "listadores_de_riesgo", "sin_ia"]
+LABELS = ["Product Deployers", "Governed Adopters", "Risk Listers", "Non-Disclosers"]
+g = df.groupby("segmento")
+n = df["segmento"].value_counts()
+has_activity = df["n_activities"] > 0
 
-*Notes:* Distributions computed from 27,566 unique activities across 510 S&P 500 firms. Non-disclosers with positive activities reflect conference call statements by firms whose formal SEC filings omit AI entirely.
+def share_row(col, label):
+    vals = []
+    for seg in SEGS:
+        sub = df[(df.segmento == seg) & has_activity]
+        vals.append(f"{sub[col].mean()*100:.1f}%" if len(sub) else "-")
+    return [label] + vals
+
+rows = [
+    ["Disclosed activities per firm (Median)"] + [f"{g['n_activities'].median()[s]:.0f}" for s in SEGS],
+    share_row("share_customers", "Customer-facing activity share (%)"),
+    share_row("share_proprietary_ai", "Technology source: Proprietary / Own (%)"),
+    [f"Firms naming an own product or brand (%)"] + [f"{g['any_own_brand_named'].mean()[s]*100:.1f}%" for s in SEGS],
+    [f"Firms reporting quantified outcome metrics (%)"] + [f"{g['any_quantified_outcome'].mean()[s]*100:.1f}%" for s in SEGS],
+    [f"Maximum operational stage: Scaled (%)"] + [f"{(df[df.segmento==s]['max_stage']=='scaled').mean()*100:.1f}%" for s in SEGS],
+]
+headers = ["Behavioral feature"] + [f"{lbl} (n={n[s]})" for lbl, s in zip(LABELS, SEGS)]
+Markdown(tabulate(rows, headers=headers))
+```
+
+*Notes:* Distributions computed from disclosed activities across 510 S&P 500 firms. Non-disclosers with positive activities reflect conference call statements by firms whose formal SEC filings omit AI entirely.
 
 The empirical profiles in Table 4.1 (and the full profile in Table A.4) demonstrate that the archetypes are not semantic artifacts:
 
@@ -979,19 +1012,44 @@ plt.show()
 
 A firm-level grounding index (mean of five activity-concreteness proportions: function declared, deployed/scaled, named product/process, quantified outcome, named provider) correlates only moderately with the raw behaviour axis (Spearman +0.24, n = 471): the behaviour axis measures how much of what is claimed is behavioural in kind, while grounding measures how concretely that behaviour is specified.
 
-**Table 4.2 — Compact archetype summary.**
+```{python}
+#| label: tbl-4-2-compact-summary
+#| tbl-cap: "Compact archetype summary."
+#| echo: false
+import json
+import math
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
 
-| | Product Deployers | Governed Adopters | Risk Listers | No AI |
-|---|---:|---:|---:|---:|
-| Firms (pooled) | 113 | 222 | 158 | 17 |
-| Firm-years (panel) | 554 | 512 | 362 | 1,047 |
-| Frames/1,000 paragraphs (median) | 8.4 | 1.6 | 1.2 | 0 |
-| Deployment share | 42.2% | 24.8% | 12.0% | — |
-| Governance share | 9.1% | 24.4% | 11.7% | — |
-| Risk share | 23.8% | 35.8% | 70.4% | — |
-| Promotional share | 11.5% | 3.8% | 1.3% | — |
-| Median R&D/sales | 12.3% | 6.4% | 4.0% | 3.3% |
-| Median market cap | \$39B | \$37B | \$31B | \$26B |
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+seg = pd.read_parquet(_p("firm_segments.parquet"))
+econ = json.loads(_p("economic_profiles.json").read_text())["panel_a"]
+
+SEGS = ["desplegadores_de_producto", "adoptantes_con_gobernanza", "listadores_de_riesgo", "sin_ia"]
+LABELS = ["Product Deployers", "Governed Adopters", "Risk Listers", "No AI"]
+g = seg.groupby("segmento")
+
+def pct(col):
+    return [f"{g[col].mean()[s]:.1f}%" if s != "sin_ia" else "-" for s in SEGS]
+
+rows = [
+    ["Firms (pooled)"] + [str(g.size()[s]) for s in SEGS],
+    ["Firm-years (panel)"] + [f"{econ[s]['n']:,}" for s in SEGS],
+    ["Frames/1,000 paragraphs (median)"] + [f"{g['frames_per_1k'].median()[s]:.1f}" for s in SEGS],
+    ["Deployment share"] + pct("pct_despliegue"),
+    ["Governance share"] + pct("pct_gobernanza"),
+    ["Risk share"] + pct("pct_riesgo"),
+    ["Promotional share"] + pct("pct_promocional"),
+    ["Median R&D/sales"] + [f"{econ[s]['rd_intensity']*100:.1f}%" for s in SEGS],
+    ["Median market cap"] + [f"${math.exp(econ[s]['log_market_cap'])/1e9:.0f}B" for s in SEGS],
+]
+Markdown(tabulate(rows, headers=[""] + LABELS))
+```
 
 ## Economic profiles
 
@@ -1137,15 +1195,32 @@ plt.show()
 ```
 Table 5.1 reports the central empirical test of whether textual AI disclosure carries incremental economic information beyond disclosure volume and financial fundamentals. Across five financial outcomes, Model 1 (M1) includes firm size, sector-by-year fixed effects, disclosure volume, and standard financial controls. Model 2 (M2) adds the semantic frame dimensions and disclosed activity metrics. In every case, semantic content and concrete activities add statistically significant explanatory power ($\Delta R^2$ of 2.1 to 3.2 percentage points, bootstrap $p < 0.02$).
 
-**Table 5.1 — Central incremental-information results.**
+```{python}
+#| label: tbl-5-1-incremental
+#| tbl-cap: "Central incremental-information results."
+#| echo: false
+import json
+from pathlib import Path
+from tabulate import tabulate
+from IPython.display import Markdown
 
-| Outcome | n | R² M1 | R² M2 | ΔR² content | 95% bootstrap CI | Partial R² | Wald p | Permutation p |
-|---|---:|---:|---:|---:|---|---:|---:|---:|
-| Beta | 1,037 | 0.078 | 0.110 | +0.032 | [+0.019, +0.085] | 3.5% | 0.004 | 0.005 |
-| Idiosyncratic volatility | 1,037 | 0.198 | 0.223 | +0.025 | [+0.015, +0.059] | 3.1% | 0.001 | 0.005 |
-| Price-to-sales | 1,039 | 0.234 | 0.261 | +0.027 | [+0.015, +0.079] | 3.5% | 0.005 | 0.005 |
-| R&D/sales | 649 | 0.497 | 0.519 | +0.021 | [+0.011, +0.070] | 4.2% | 0.019 | 0.005 |
-| Revenue growth (t+1) | 1,003 | 0.043 | 0.066 | +0.023 | [+0.007, +0.088] | 2.4% | 0.072 | 0.015 |
+data_path = Path("../data/processed/clusters/incremental_signal.json")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/incremental_signal.json")
+d = json.loads(data_path.read_text())
+OUTCOMES = [("beta", "Beta"), ("volatilidad_idiosincratica", "Idiosyncratic volatility"),
+            ("price_to_sales", "Price-to-sales"), ("rd_sobre_ventas", "R&D/sales"),
+            ("crecimiento_ingresos_t1", "Revenue growth (t+1)")]
+table = []
+for key, label in OUTCOMES:
+    o = d["outcomes"][key]
+    ci = o["delta_r2_ci95"]
+    table.append([label, f"{o['n']:,}", f"{o['r2_M1']:.3f}", f"{o['r2_M2']:.3f}",
+                  f"{o['delta_r2_semantica']:+.3f}", f"[{ci[0]:+.3f}, {ci[1]:+.3f}]",
+                  f"{o['partial_r2_semantica']*100:.1f}%", f"{o['wald_semantica']['p']:.3f}",
+                  f"{o['permutacion_semantica']['p']:.3f}"])
+Markdown(tabulate(table, headers=["Outcome", "n", "R2 M1", "R2 M2", "DeltaR2 content", "95% bootstrap CI", "Partial R2", "Wald p", "Permutation p"]))
+```
 
 # Same Firm Across Venues and Over Time
 
@@ -1656,51 +1731,93 @@ Future research should extend the cross-venue design to a synthetic-control or m
 
 **Table A.3 — Full ranking of action $\times$ object disclosed corporate activities in the S&P 500.** The top 10 are shown as a chart in Chapter 3 ("What firms disclose doing"); this table gives the complete ranking with textual examples.
 
-| Action $\times$ Object family | % Firms (Pooled) | % Firms (Filings only) | Literal textual examples |
-|---|---:|---:|---|
-| `deploy` $\cdot$ AI product or service | 55.9% | 43.1% | AI engine, interconnect products, advertising optimization tools |
-| `deploy` $\cdot$ ML / predictive model | 45.7% | 34.7% | machine learning models, credit scoring algorithms, predictive maintenance |
-| `deploy` $\cdot$ Data / analytics platform | 45.1% | 33.3% | AI enterprise platform, expert analytics platform, AI-powered data cloud |
-| `deploy` $\cdot$ Named proprietary product | 34.1% | 24.5% | AIOps, Palantir AIP, Mist AI, Cerebrus, Flyways AI |
-| `deploy` $\cdot$ Process automation | 33.7% | 23.5% | intelligent automation, claims workflow automation, robotic process tools |
-| `hire_or_train` $\cdot$ Talent / workforce | 28.6% | 25.1% | AI engineering talent, workforce reskilling, data science recruitment |
-| `invest_infrastructure` $\cdot$ Compute / hardware | 25.9% | 20.2% | AI infrastructure, GPU compute clusters, data center expansion |
-| `scale` $\cdot$ Core product / service | 23.3% | 16.7% | data ecosystem, EFX.AI capabilities, Firefly generative services |
-| `measure_outcome` $\cdot$ Financial / efficiency metric | 19.6% | 11.8% | AI-attributed revenue, productivity gains, call-handling time reduction |
-| `deploy` $\cdot$ Specialized hardware / accelerators | 19.4% | 14.3% | AI PC, AI accelerators, tensor processing units, GPU clusters |
-| `deploy` $\cdot$ Copilot or digital assistant | 18.8% | 11.8% | Microsoft 365 Copilot, GitHub Copilot, internal coding assistant |
-| `deploy` $\cdot$ Computer vision / robotics / autonomy | 17.3% | 12.7% | autonomous driving systems (FSD), Optimus robot, smart optical sorting |
-| `deploy` $\cdot$ Foundation model / LLM | 14.9% | 9.8% | large language models, foundational generative models, domain-specific LLMs |
-| `develop` $\cdot$ Proprietary product or service | 14.7% | 9.4% | ad targeting engines, developer toolkits, proprietary AI experiences |
-| `deploy` $\cdot$ Search or recommendation engine | 14.3% | 9.2% | recommendation algorithms, discovery engines, personalized search |
-| `deploy` $\cdot$ Autonomous AI agents | 13.3% | 8.2% | agentic AI workflows, autonomous customer service agents |
-| `deploy` $\cdot$ Cybersecurity / fraud tool | 12.9% | 10.4% | ML-powered next-gen firewall, AI-driven security operations center (SOC) |
-| `integrate` $\cdot$ Product or platform capability | 12.4% | 8.8% | embedding AI capabilities into core ERP, CRM, and logistics suites |
-| `partner` $\cdot$ Strategic ecosystem alliance | 11.8% | 6.5% | cloud hyperscaler partnerships, AI hardware co-design alliances |
-| `develop` $\cdot$ In-house ML / predictive model | 11.2% | 8.4% | proprietary loss-forecasting models, underwriting algorithms, Gemini models |
+```{python}
+#| label: tbl-a3-action-object-full
+#| tbl-cap: "Full action x object ranking, pooled vs. filings-only share of firms, with literal textual examples."
+#| echo: false
+import json
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+df = pd.read_parquet(_p("firm_activities.parquet"))
+n_firms = df["ticker"].nunique()
+pooled = df.groupby(["action", "object_family"])["ticker"].nunique()
+filings = df[df.channel == "filing"].groupby(["action", "object_family"])["ticker"].nunique()
+examples = json.loads(_p("activity_profiles.json").read_text())["top_concrete_activities"]
+
+rows = []
+for (action, obj), n_pooled in pooled.sort_values(ascending=False).items():
+    key = f"{action} · {obj}"
+    ex = examples.get(key, {}).get("examples", "")
+    n_filing = filings.get((action, obj), 0)
+    rows.append([f"`{action}` · {obj}", f"{n_pooled / n_firms * 100:.1f}%",
+                 f"{n_filing / n_firms * 100:.1f}%", ex])
+rows = rows[:20]
+Markdown(tabulate(rows, headers=["Action x Object family", "% Firms (Pooled)", "% Firms (Filings only)", "Literal textual examples"]))
+```
 
 *Notes:* Pooled sample covers 510 S&P 500 firms with filings and call transcripts. "Filings only" restricts the denominator to statutory SEC filings (10-K, 10-Q, DEF 14A, 8-K), illustrating the significant contribution of earnings calls to corporate disclosure of commercial tools, partnerships, and quantified metrics.
 
 **Table A.4 — Full disclosed behavioral profile by disclosure archetype (14 variables).** The 6 headline variables are shown as Table 4.1 in Chapter 4.
 
-| Behavioral feature | Product Deployers (n=113) | Governed Adopters (n=222) | Risk Listers (n=158) | Non-Disclosers (n=17) |
-|---|---:|---:|---:|---:|
-| Disclosed activities per firm (Median) | **112** | 18 | 5 | 0 |
-| Disclosed activities per firm (Mean) | 184.2 | 26.4 | 8.7 | 0.4 |
-| Customer-facing activity share (%) | **51.0%** | 27.0% | 21.0% | — |
-| Internal process activity share (%) | 33.0% | **60.0%** | **66.0%** | — |
-| Technology source: Proprietary / Own (%) | **80.0%** | 55.0% | 46.0% | — |
-| Technology source: Third-party commercial (%) | 6.0% | 12.0% | **17.0%** | — |
-| Technology source: Unspecified provenance (%) | 10.0% | 30.0% | **34.0%** | — |
-| Firms naming an own product or brand (%) | **97.3%** | 64.0% | 34.2% | 17.6% |
-| Firms naming an external provider or partner (%) | **89.4%** | 45.9% | 27.2% | 11.8% |
-| Firms reporting compute / data center capex (%) | **90.3%** | 55.0% | 25.3% | 0.0% |
-| Firms reporting quantified outcome metrics (%) | **93.8%** | 64.9% | 37.3% | 17.6% |
-| Firms naming corporate clients (%) | **47.8%** | 9.9% | 5.1% | 0.0% |
-| Maximum operational stage: Scaled (%) | **92.9%** | 64.0% | 34.2% | 23.5% |
-| Maximum operational stage: Deployed (%) | 7.1% | 27.0% | 44.3% | 0.0% |
-| Maximum operational stage: Pilot / Exploration (%) | 0.0% | 3.2% | 7.0% | 0.0% |
-| Maximum operational stage: No activity reported (%) | 0.0% | 4.1% | 11.4% | 76.5% |
+```{python}
+#| label: tbl-a4-full-archetype-profile
+#| tbl-cap: "Full disclosed behavioral profile by disclosure archetype (14 variables)."
+#| echo: false
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+data_path = Path("../data/processed/clusters/firm_activity_profiles.parquet")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/firm_activity_profiles.parquet")
+df = pd.read_parquet(data_path)
+SEGS = ["desplegadores_de_producto", "adoptantes_con_gobernanza", "listadores_de_riesgo", "sin_ia"]
+LABELS = ["Product Deployers", "Governed Adopters", "Risk Listers", "Non-Disclosers"]
+g = df.groupby("segmento")
+n = df["segmento"].value_counts()
+has_activity = df["n_activities"] > 0
+
+def pct_share(col):
+    return [f"{df[(df.segmento==s)&has_activity][col].mean()*100:.1f}%" if (df.segmento==s).sum() else "-" for s in SEGS]
+
+def pct_any(col):
+    return [f"{g[col].mean()[s]*100:.1f}%" for s in SEGS]
+
+def stage_share(stage):
+    return [f"{(df[df.segmento==s]['max_stage']==stage).mean()*100:.1f}%" for s in SEGS]
+
+no_activity = [f"{(df[df.segmento==s]['n_activities']==0).mean()*100:.1f}%" for s in SEGS]
+unspecified_source = [f"{100 - df[(df.segmento==s)&has_activity]['share_proprietary_ai'].mean()*100 - df[(df.segmento==s)&has_activity]['share_third_party_ai'].mean()*100:.1f}%" for s in SEGS]
+
+rows = [
+    ["Disclosed activities per firm (Median)"] + [f"{g['n_activities'].median()[s]:.0f}" for s in SEGS],
+    ["Disclosed activities per firm (Mean)"] + [f"{g['n_activities'].mean()[s]:.1f}" for s in SEGS],
+    ["Customer-facing activity share (%)"] + pct_share("share_customers"),
+    ["Internal process activity share (%)"] + pct_share("share_internal"),
+    ["Technology source: Proprietary / Own (%)"] + pct_share("share_proprietary_ai"),
+    ["Technology source: Third-party commercial (%)"] + pct_share("share_third_party_ai"),
+    ["Technology source: Unspecified provenance (%)"] + unspecified_source,
+    ["Firms naming an own product or brand (%)"] + pct_any("any_own_brand_named"),
+    ["Firms naming an external provider or partner (%)"] + pct_any("any_third_party_named_provider"),
+    ["Firms reporting compute / data center capex (%)"] + pct_any("any_infrastructure_investment"),
+    ["Firms reporting quantified outcome metrics (%)"] + pct_any("any_quantified_outcome"),
+    ["Firms naming corporate clients (%)"] + pct_any("any_named_customer"),
+    ["Maximum operational stage: Scaled (%)"] + stage_share("scaled"),
+    ["Maximum operational stage: Deployed (%)"] + stage_share("deployed"),
+    ["Maximum operational stage: Pilot / Exploration (%)"] + [f"{(df[df.segmento==s]['max_stage'].isin(['piloting','exploring'])).mean()*100:.1f}%" for s in SEGS],
+    ["Maximum operational stage: No activity reported (%)"] + no_activity,
+]
+headers = ["Behavioral feature"] + [f"{lbl} (n={n[s]})" for lbl, s in zip(LABELS, SEGS)]
+Markdown(tabulate(rows, headers=headers))
+```
 
 The full prefilter specification (39 signals across lexical, semantic-anchor, structural, and sentence-level families), the hand-written lexical term lists (18 strong and 12 weak AI terms, roughly 60 named entities), the semantic anchor set (17 positive and 10 negative embedding anchors), feature-importance rankings for the deployed gradient-boosted model, the exact extraction prompts used for semantic-frame classification (prompt v1) and disclosed-activity extraction (prompt v2), throughput and cost figures for the LLM extraction stages, and the deduplication procedure by content hash (8.35 million scorable instances collapsing to 4.87 million unique texts) are documented in the pipeline reference (`docs/analytics/10_pipeline.md`) and reproduced here for the final frozen configuration (prefilter v2, threshold 0.17, run `20260906T160624Z`).
 
@@ -1738,41 +1855,43 @@ The full prefilter specification (39 signals across lexical, semantic-anchor, st
 
 **Table A.2 — Full distribution of disclosed activities across all six dimensions (27,566 activities).** Underlies the activity-evolution chart in Chapter 3 ("Aggregate behavioral landscape").
 
-| Action | % | Maturity stage | % | Target audience | % |
-|---|---:|---|---:|---|---:|
-| deploy | 62.7% | deployed | 58.2% | customers | 48.5% |
-| invest_infrastructure | 7.9% | scaled | 14.0% | internal_process | 25.5% |
-| scale | 7.4% | piloting | 10.3% | unspecified | 13.7% |
-| pilot_or_explore | 4.0% | exploring | 9.2% | employees | 8.6% |
-| integrate | 3.5% | unspecified | 8.2% | partners_or_suppliers | 2.5% |
-| develop | 3.5% | | | developers | 1.3% |
-| measure_outcome | 3.4% | | | | |
-| partner | 3.0% | | | | |
-| hire_or_train | 2.1% | | | | |
-| buy_or_license | 1.3% | | | | |
-| govern_or_control | 1.2% | | | | |
-| restrict | 0.0% | | | | |
+```{python}
+#| label: tbl-a2-six-dimensions
+#| tbl-cap: "Full distribution of disclosed activities across all six dimensions."
+#| echo: false
+import json
+from pathlib import Path
+from tabulate import tabulate
+from IPython.display import Markdown
 
-| AI source | % | Evidence strength | % | Business function | % |
-|---|---:|---|---:|---|---:|
-| own | 73.0% | generic | 53.4% | unspecified | 31.9% |
-| unspecified | 15.6% | named_product_or_process | 29.3% | operations_and_supply_chain | 16.5% |
-| third_party | 7.9% | metric | 12.9% | product_feature | 7.6% |
-| acquired | 1.5% | vendor | 4.4% | it_and_cybersecurity | 7.0% |
-| mixed | 1.0% | | | other | 6.9% |
-| co_developed | 0.9% | | | customer_service | 4.6% |
-| open_source | 0.1% | | | software_development | 4.6% |
-| | | | | marketing_and_sales | 4.1% |
-| | | | | content_and_media | 2.8% |
-| | | | | fraud_and_risk | 2.6% |
-| | | | | data_and_analytics | 2.4% |
-| | | | | research_and_product_development | 2.2% |
-| | | | | financial_services_operations | 1.8% |
-| | | | | hr_and_talent | 1.8% |
-| | | | | healthcare_delivery | 1.1% |
-| | | | | ai_compute_and_models | 1.0% |
-| | | | | finance_legal_and_admin | 0.8% |
-| | | | | governance | 0.5% |
+data_path = Path("../data/processed/clusters/activity_profiles.json")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/activity_profiles.json")
+d = json.loads(data_path.read_text())
+dist = d["distributions"]
+func = d["function_families"]
+
+def col(items):
+    return [[k, f"{v:.1f}%"] for k, v in sorted(items.items(), key=lambda kv: -kv[1])]
+
+def side_by_side(pairs):
+    cols = [col(items) for _, items in pairs]
+    n = max(len(c) for c in cols)
+    rows = []
+    for i in range(n):
+        row = []
+        for c in cols:
+            row.extend(c[i] if i < len(c) else ["", ""])
+        rows.append(row)
+    headers = []
+    for label, _ in pairs:
+        headers += [label, "%"]
+    return tabulate(rows, headers=headers)
+
+t1 = side_by_side([("Action", dist["action"]), ("Maturity stage", dist["stage"]), ("Target audience", dist["target"])])
+t2 = side_by_side([("AI source", dist["ai_source"]), ("Evidence strength", dist["evidence_strength"]), ("Business function", func)])
+Markdown(t1 + "\n\n" + t2)
+```
 
 *Notes:* Source: `data/processed/clusters/activity_profiles.json`. "Business function" has no single dominant category comparable to `customer_service` for customer-success work specifically — customer success (retention/expansion) is not coded as a separate family from customer support in the current taxonomy.
 
