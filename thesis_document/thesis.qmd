@@ -99,10 +99,15 @@ The corpus covers S&P 500 constituents across five disclosure venues: Form 10-K 
 | Unique frames | 16,245 | 3,409 | 7,168 | 295 | 16,249 | 43,366 |
 | Frames as instances (in documents) | 17,758 | 4,590 | 7,284 | 313 | 16,270 | 46,215 |
 | Documents with ≥1 frame | 1,681 | 1,431 | 1,090 | 206 | 2,709 | 7,117 |
+| Unique texts with a firm-subject behavioural frame | 5,927 | 1,829 | 2,923 | 134 | 6,803 | 17,420 |
+| Disclosed activities extracted (unique) | 8,556 | 2,408 | 2,670 | 163 | 14,020 | 27,566 |
+| Activities as instances (in documents) | 9,224 | 3,238 | 2,708 | 165 | 14,033 | 29,368 |
+| Documents with ≥1 activity | 1,298 | 961 | 586 | 88 | 2,444 | 5,377 |
+| Firms with ≥1 activity | 409 | 159 | 269 | 55 | 383 | 471 |
 
-: Corpus funnel, S&P 500 constituents, U.S. filings and earnings calls. Prefilter v2 at threshold 0.17; LLM judge qwen3.7-flash. {#tbl-funnel}
+: Corpus funnel, S&P 500 constituents, U.S. filings and earnings calls. Prefilter v2 at threshold 0.17; LLM judge qwen3.7-flash for frames and for the second pass that turns behavioural frames into disclosed activities (Chapter 4). {#tbl-funnel}
 
-Three features of the funnel matter downstream. Deduplication: 8.35 million scorable paragraph instances are 4.87 million unique texts, and embedding, prefiltering and frame extraction happen once per unique text; the frames of each unique text are then joined back to every document in which it appears (43,366 unique frames become 46,215 in documents, a factor of 1.07, so repeated boilerplate weighs little). The judge discards 13% of what the prefilter flags: 26,469 of 30,579 flagged texts receive at least one frame; the rest are prefilter false positives that the extraction filters by returning zero frames. And the 8-K layer is almost pure noise: 34,416 documents, 206 with a frame. Earnings calls are the dense channel: a transcript has a tenth of the paragraphs of a 10-K, yet the 7,947 transcripts yield as many frames as the 2,873 annual reports.
+Three features of the funnel matter downstream. Deduplication: 8.35 million scorable paragraph instances are 4.87 million unique texts, and embedding, prefiltering and frame extraction happen once per unique text; the frames of each unique text are then joined back to every document in which it appears (43,366 unique frames become 46,215 in documents, a factor of 1.07, so repeated boilerplate weighs little). The judge discards 13% of what the prefilter flags: 26,469 of 30,579 flagged texts receive at least one frame; the rest are prefilter false positives that the extraction filters by returning zero frames. And the 8-K layer is almost pure noise: 34,416 documents, 206 with a frame. Earnings calls are the dense channel: a transcript has a tenth of the paragraphs of a 10-K, yet the 7,947 transcripts yield as many frames as the 2,873 annual reports, and half of all disclosed activities. The last five rows are the second extraction pass: of the 26,469 texts with a frame, 17,420 carry a behavioural frame about the firm itself and yield 27,566 distinct activities, 1.6 per text.
 
 ## From text to frames
 

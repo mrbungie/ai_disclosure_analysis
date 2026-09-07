@@ -1,7 +1,7 @@
 # Funnel del corpus: de documentos a frames
 
 EE.UU., prefiltro vigente (v2, árboles, umbral 0,17, `run=20260906T160624Z`),
-clasificación completa. Todo sale de `duckdb/thesis.duckdb` (`paragraphs`,
+clasificación completa, y segunda pasada de actividades (`09`) completa. Todo sale de `duckdb/thesis.duckdb` (`paragraphs`,
 `unique_paragraphs`, `gold_ai_frames`) y del parquet de predicciones del
 prefiltro; la consulta está al final.
 
@@ -18,6 +18,11 @@ prefiltro; la consulta está al final.
 | frames únicos | 16.245 | 3.409 | 7.168 | 295 | 16.249 | 43.366 |
 | frames como instancias (en documentos) | 17.758 | 4.590 | 7.284 | 313 | 16.270 | 46.215 |
 | documentos con ≥1 frame | 1.681 | 1.431 | 1.090 | 206 | 2.709 | 7.117 |
+| textos únicos con frames conductuales de la empresa | 5.927 | 1.829 | 2.923 | 134 | 6.803 | 17.420 |
+| actividades únicas extraídas | 8.556 | 2.408 | 2.670 | 163 | 14.020 | 27.566 |
+| actividades como instancias (en documentos) | 9.224 | 3.238 | 2.708 | 165 | 14.033 | 29.368 |
+| documentos con ≥1 actividad | 1.298 | 961 | 586 | 88 | 2.444 | 5.377 |
+| empresas con ≥1 actividad | 409 | 159 | 269 | 55 | 383 | 471 |
 
 El corpus completo (con Italia y Chile) tiene 10.216.373 párrafos y 5.616.337
 textos únicos puntuables; sólo EE.UU. tiene embeddings, scoring y frames.
@@ -47,6 +52,15 @@ textos únicos puntuables; sólo EE.UU. tiene embeddings, scoring y frames.
 - La suma de textos únicos positivos por formulario (30.577) es mayor que el
   total del prefiltro (30.280) porque un texto puede aparecer en dos
   formularios y se cuenta en cada uno.
+- **Actividades.** De los 26.469 textos con frame, 17.420 tienen al menos un
+  frame conductual de la propia empresa (despliegue, piloto, capacidad,
+  infraestructura, talento, inversión o resultado) y son los que pasan a la
+  segunda extracción (`ai_activities_from_frames.py`). Salen 27.566
+  actividades únicas (1,6 por texto) que son 29.368 en documentos. Las calls
+  aportan la mitad de las actividades (14.020) con el 39% de los textos
+  conductuales: son el canal denso también en conducta. Los textos
+  conductuales por formulario suman más que 17.420 porque un texto puede
+  aparecer en dos formularios.
 - **8-K**: 34.416 documentos, 206 con algún frame. Ruido casi puro.
 - **Calls**: 7.947 documentos con la décima parte de los párrafos de un 10-K
   y 16.270 frames, casi tantos como el 10-K. Es el canal denso
