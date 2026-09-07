@@ -727,7 +727,7 @@ Qualitative inspection of individual corporate inventories illustrates the concr
 
 ## Voice vs. disclosed behaviour
 
-Two continuous axes are defined directly over the same shrunk frame rates: **voice**, the share of a firm's AI statements in promotional or strategic register (corpus mean 14.4%), and **disclosed behaviour**, the share describing concrete conduct — stage of use, outcome, or capability (corpus mean 44.9%). The two are only weakly correlated (r = 0.286), confirming they measure distinguishable things, consistent with the distinction between rhetorical impression management and substantive disclosure in corporate narratives [@merkldavies2007; @huang2014]. Cutting each axis into terciles produces a 3×3 grid whose four corners are the categories the thesis needs: **absolute voice-behaviour decoupling** (voice high, behaviour low — 36 firms, 33.1% voice, 22.8% behaviour, non-tech, low-R&D examples including UNH, CI, AAPL, PYPL, ELV), **quiet substance** (voice low, behaviour high — 38 firms, 4.3% voice, 70.5% behaviour, including FTNT, OKTA, DDOG, STX), **vocal substantives** (voice and behaviour both high — 90 firms, including MSFT, NVDA, GOOGL, ADBE), and **silent** (both low — 79 firms, including BAC, MCHP, ISRG). A resampling exercise (25 replicates, resampling each firm's own frames) shows the grid is stable at the level a categorical instrument needs to be: 61.2% of firms land in the identical cell on resampling and 98.8% land in the same or an adjacent cell — when a firm moves, it moves one step, never across the grid. Every firm carries its own cell-confidence score (the fraction of resamples landing in its assigned cell); filtering to confidence ≥0.70 narrows the four corners to 16/15/49/52 firms respectively, and downstream analysis should use that filter rather than treat all 510 firms equally. Year-over-year cell persistence in the panel is only 48.5%, so the continuous axes, not the categorical cell, are the right object for time-series work.
+Two continuous axes are defined directly over the same shrunk frame rates: **voice**, the share of a firm's AI statements in promotional or strategic register (corpus mean 14.9%), and **disclosed behaviour**, the share describing concrete conduct — stage of use, outcome, or capability (corpus mean 47.3%). The two are only weakly correlated (r = 0.293), confirming they measure distinguishable things, consistent with the distinction between rhetorical impression management and substantive disclosure in corporate narratives [@merkldavies2007; @huang2014]. Cutting each axis into terciles produces a 3×3 grid whose four corners are the categories the thesis needs: **absolute voice-behaviour decoupling** (voice high, behaviour low — 36 firms, non-tech, low-R&D examples including UNH, CI, AAPL, PYPL, ELV), **quiet substance** (voice low, behaviour high — 38 firms, including FTNT, OKTA, DDOG, STX), **vocal substantives** (voice and behaviour both high — 90 firms, including MSFT, NVDA, GOOGL, ADBE), and **silent** (both low — 79 firms, including BAC, MCHP, ISRG). Exact voice/behaviour levels and financial medians for each corner are reported in the figure below. A resampling exercise (25 replicates, resampling each firm's own frames) shows the grid is stable at the level a categorical instrument needs to be: 61.2% of firms land in the identical cell on resampling and 98.8% land in the same or an adjacent cell — when a firm moves, it moves one step, never across the grid. Every firm carries its own cell-confidence score (the fraction of resamples landing in its assigned cell); filtering to confidence ≥0.70 narrows the four corners to 16/15/49/52 firms respectively, and downstream analysis should use that filter rather than treat all 510 firms equally. Year-over-year cell persistence in the panel is only 48.5%, so the continuous axes, not the categorical cell, are the right object for time-series work.
 
 ```{python}
 #| label: fig-voice-behaviour-grid
@@ -745,10 +745,16 @@ if not data_path.exists():
     data_path = Path("data/processed/clusters/firm_voice_behavior_grid.parquet")
 df = pd.read_parquet(data_path)
 
+fin_path = Path("../data/processed/clusters/firm_year_master_v2.parquet")
+if not fin_path.exists():
+    fin_path = Path("data/processed/clusters/firm_year_master_v2.parquet")
+fin = pd.read_parquet(fin_path).groupby("ticker")[["rd_intensity", "beta", "gross_margin", "pe_ratio"]].median()
+df = df.merge(fin, on="ticker", how="left")
+
 fig, ax = plt.subplots(figsize=(9.5, 7.2), dpi=300)
 
-x_t1, x_t2 = 39.21, 55.68
-y_t1, y_t2 = 9.60, 17.14
+x_t1, x_t2 = np.percentile(df["comportamiento_shrunk"] * 100, [33.33, 66.67])
+y_t1, y_t2 = np.percentile(df["voz_shrunk"] * 100, [33.33, 66.67])
 
 # Quadrant background spans for key corner archetypes
 ax.axvspan(0, x_t1, ymin=y_t2/60, ymax=1.0, color='#FEE2E2', alpha=0.35, zorder=1)
@@ -778,14 +784,24 @@ for celda, grp in df.groupby('celda'):
                color=c, s=s, alpha=alpha, edgecolors='white' if celda in color_map else 'none',
                linewidth=0.5, zorder=z)
 
-# Corner labels with empirical counts & summaries
-ax.text(3, 56, 'ABSOLUTE DECOUPLING\n(n = 36 firms)\nVoice: 33.1% · Conduct: 22.8%\nR&D: 1.5% · Beta: 0.76',
+# Corner labels: n and financial medians computed live from the merged data above
+def _corner_stats(celda):
+    g = df[df["celda"] == celda]
+    return dict(n=len(g), voice=(g["voz_shrunk"] * 100).mean(), conduct=(g["comportamiento_shrunk"] * 100).mean(),
+                rd=(g["rd_intensity"] * 100).median(), beta=g["beta"].median())
+
+dec = _corner_stats("washing (voz alta, conducta baja)")
+voc = _corner_stats("vocales sustantivos")
+sil = _corner_stats("silenciosos")
+qui = _corner_stats("sustancia callada (voz baja, conducta alta)")
+
+ax.text(3, 56, f"ABSOLUTE DECOUPLING\n(n = {dec['n']} firms)\nVoice: {dec['voice']:.1f}% · Conduct: {dec['conduct']:.1f}%\nR&D: {dec['rd']:.1f}% · Beta: {dec['beta']:.2f}",
         fontsize=8.0, fontweight='bold', color='#991B1B', va='top', zorder=5)
-ax.text(97, 56, 'VOCAL SUBSTANTIVES\n(n = 90 firms)\nVoice: High · Conduct: High\nR&D: 11.7% · Beta: 1.05',
+ax.text(97, 56, f"VOCAL SUBSTANTIVES\n(n = {voc['n']} firms)\nVoice: {voc['voice']:.1f}% · Conduct: {voc['conduct']:.1f}%\nR&D: {voc['rd']:.1f}% · Beta: {voc['beta']:.2f}",
         fontsize=8.0, fontweight='bold', color='#065F46', ha='right', va='top', zorder=5)
-ax.text(3, 1.8, 'SILENT / DEFENSIVE\n(n = 79 firms)\nVoice: Low · Conduct: Low\nRisk factors focus',
+ax.text(3, 1.8, f"SILENT / DEFENSIVE\n(n = {sil['n']} firms)\nVoice: {sil['voice']:.1f}% · Conduct: {sil['conduct']:.1f}%\nRisk factors focus",
         fontsize=8.0, fontweight='bold', color='#334155', va='bottom', zorder=5)
-ax.text(97, 1.8, 'QUIET SUBSTANCE\n(n = 38 firms)\nVoice: 4.3% · Conduct: 70.5%\nHigh technical depth',
+ax.text(97, 1.8, f"QUIET SUBSTANCE\n(n = {qui['n']} firms)\nVoice: {qui['voice']:.1f}% · Conduct: {qui['conduct']:.1f}%\nHigh technical depth",
         fontsize=8.0, fontweight='bold', color='#1E40AF', ha='right', va='bottom', zorder=5)
 
 # Label key exemplar firms cited in text
@@ -808,8 +824,8 @@ for _, row in sub_ex.iterrows():
 
 ax.set_xlim(0, 100)
 ax.set_ylim(0, 58)
-ax.set_xlabel('Disclosed Behaviour Index (%) [Terciles: Low < 39.2% | Mid 39.2–55.7% | High > 55.7%]', fontsize=9.2, fontweight='bold', color='#1E293B')
-ax.set_ylabel('Promotional Voice (%) [Terciles: Low < 9.6% | Mid 9.6–17.1% | High > 17.1%]', fontsize=9.2, fontweight='bold', color='#1E293B')
+ax.set_xlabel(f'Disclosed Behaviour Index (%) [Terciles: Low < {x_t1:.1f}% | Mid {x_t1:.1f}–{x_t2:.1f}% | High > {x_t2:.1f}%]', fontsize=9.2, fontweight='bold', color='#1E293B')
+ax.set_ylabel(f'Promotional Voice (%) [Terciles: Low < {y_t1:.1f}% | Mid {y_t1:.1f}–{y_t2:.1f}% | High > {y_t2:.1f}%]', fontsize=9.2, fontweight='bold', color='#1E293B')
 ax.set_title('Cross-Sectional Distribution of 510 S&P 500 Firms on Voice × Behaviour Axes', fontsize=11.2, fontweight='bold', color='#0F172A', pad=10)
 ax.grid(True, linestyle=':', alpha=0.45, color='#CBD5E1')
 ax.spines['top'].set_visible(False)
@@ -1322,6 +1338,7 @@ There is no single empirical definition of "talking more than doing" [@delmas201
 #| echo: false
 #| fig-width: 10
 #| fig-height: 4.8
+import json
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -1379,22 +1396,32 @@ ax1.spines['right'].set_visible(False)
 
 # Panel B: Distribution of Excess Promotional Frames
 bins = np.linspace(-20, 55, 32)
-ax2.hist(norm['exceso'], bins=bins, color='#CBD5E1', edgecolor='white', alpha=0.7, label='Null Model (n = 438)')
-ax2.hist(call['exceso'], bins=bins, color='#3B82F6', edgecolor='white', alpha=0.9, label='Quiet Substance (n = 3)')
-ax2.hist(wash['exceso'], bins=bins, color='#EF4444', edgecolor='white', alpha=0.9, label='Washing Excess (n = 8)')
+ax2.hist(norm['exceso'], bins=bins, color='#CBD5E1', edgecolor='white', alpha=0.7, label=f'Null Model (n = {len(norm)})')
+ax2.hist(call['exceso'], bins=bins, color='#3B82F6', edgecolor='white', alpha=0.9, label=f'Quiet Substance (n = {len(call)})')
+ax2.hist(wash['exceso'], bins=bins, color='#EF4444', edgecolor='white', alpha=0.9, label=f'Washing Excess (n = {len(wash)})')
 
+wash_threshold = wash['exceso'].min()
 ax2.axvline(0, color='#0F172A', linestyle='-', linewidth=1.2, alpha=0.7)
-ax2.axvline(wash['exceso'].min(), color='#DC2626', linestyle=':', linewidth=1.2, label='FDR 5% Threshold (+7.0 frames)')
+ax2.axvline(wash_threshold, color='#DC2626', linestyle=':', linewidth=1.2, label=f'FDR 5% Threshold ({wash_threshold:+.1f} frames)')
 
-ax2.text(0.96, 0.65, 
-         'Cross-Venue Divergence (Form 3):\n'
-         '• Calls Promo Rate: 17.9% vs. Filings: 7.9%\n'
-         '• Median Gap: +8.2% (t = 13.9, p < 0.001)\n'
-         '• Quantified Gap: +9.6% (Calls 16.9% vs. 4.7%)\n'
-         '• Independence: Spearman r = -0.07 vs. Form 2',
-         transform=ax2.transAxes, fontsize=7.0, color='#1E293B',
-         ha='right', va='top',
-         bbox=dict(boxstyle='round,pad=0.4', facecolor='#F8FAFC', edgecolor='#94A3B8', alpha=0.9))
+gap_path = Path("../data/processed/clusters/channel_gap_analysis.json")
+if not gap_path.exists():
+    gap_path = Path("data/processed/clusters/channel_gap_analysis.json")
+gap = json.loads(gap_path.read_text()) if gap_path.exists() else None
+if gap is not None:
+    promo, quant = gap["descriptive"]["promotional_rate"], gap["descriptive"]["quantified_rate"]
+    spearman = gap.get("cross", {}).get("spearman_gap_vs_score09")
+    box_text = (
+        'Cross-Venue Divergence (Form 3):\n'
+        f'• Calls Promo Rate: {promo["mean_call"]*100:.1f}% vs. Filings: {promo["mean_filing"]*100:.1f}%\n'
+        f'• Median Gap: {promo["median_gap"]*100:+.1f}% (t = {promo["t_vs_zero"]:.1f}, p < 0.001)\n'
+        f'• Quantified Gap: {quant["median_gap"]*100:+.1f}% (Calls {quant["mean_call"]*100:.1f}% vs. {quant["mean_filing"]*100:.1f}%)\n'
+        f'• Independence: Spearman r = {spearman:.2f} vs. Form 2'
+    )
+    ax2.text(0.96, 0.65, box_text,
+             transform=ax2.transAxes, fontsize=7.0, color='#1E293B',
+             ha='right', va='top',
+             bbox=dict(boxstyle='round,pad=0.4', facecolor='#F8FAFC', edgecolor='#94A3B8', alpha=0.9))
 
 ax2.set_xlabel('Promotional Excess (Frames: $k_{obs} - k_{exp}$)', fontsize=8.8, fontweight='bold', color='#1E293B')
 ax2.set_ylabel('Number of S&P 500 Firms', fontsize=8.8, fontweight='bold', color='#1E293B')
