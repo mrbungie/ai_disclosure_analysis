@@ -344,7 +344,17 @@ plt.tight_layout()
 plt.show()
 ```
 
-The composition of that growth matters more than its scale. Decomposed by frame type, risk disclosure grows 22-fold from 2021 to 2025, governance 13-fold, realized-outcome framing 6.6-fold, promotional framing 4.6-fold, and deployment framing 4.4-fold — risk grows roughly five times faster than promotion, and governance three times faster. As a share of a firm's own AI frames, promotional content falls from 11% in 2021 to 5% in 2025 while risk rises from 12% to 47%. What firms added to their filings between 2023 and 2025 was, above all, an AI risk factor and a governance line; the product pitch is being made somewhere else, a pattern the venue-gap analysis in Chapter 6 confirms directly.
+The composition of that growth matters more than its scale — risk grows roughly five times faster than promotion, and governance three times faster:
+
+| Frame type | Growth, 2021–2025 | Share of firm's AI frames, 2021 | Share, 2025 |
+|---|---:|---:|---:|
+| Risk | 22.0x | 12% | 47% |
+| Governance | 13.0x | — | — |
+| Realized-outcome | 6.6x | — | — |
+| Promotional | 4.6x | 11% | 5% |
+| Deployment | 4.4x | — | — |
+
+What firms added to their filings between 2023 and 2025 was, above all, an AI risk factor and a governance line; the product pitch is being made somewhere else, a pattern the venue-gap analysis in Chapter 6 confirms directly.
 
 ```{python}
 #| label: fig-evolucion-composicion
@@ -611,12 +621,16 @@ A central empirical question in corporate AI is whether public firms are genuine
 
 The distribution of entity roles reveals an intense proprietary branding bias:
 
-- **13,333 instances (77.5%)** designate proprietary corporate brands, models, or internal software platforms (`own_product_or_brand`).
-- **1,185 instances (6.9%)** designate external technology vendors (`external_provider`).
-- **780 instances (4.5%)** designate strategic commercial partners (`partner`).
-- **728 instances (4.2%)** designate enterprise customers (`customer`).
-- **551 instances (3.2%)** designate acquired technology startups (`acquired_company`).
-- **474 instances (2.8%)** designate external foundation models (`external_model`).
+**Named-entity roles across the corpus (17,193 instances).**
+
+| Entity role | Instances | Share |
+|---|---:|---:|
+| Own product or brand | 13,333 | 77.5% |
+| External technology vendor | 1,185 | 6.9% |
+| Strategic commercial partner | 780 | 4.5% |
+| Enterprise customer | 728 | 4.2% |
+| Acquired technology startup | 551 | 3.2% |
+| External foundation model | 474 | 2.8% |
 
 Overall, 246 of 510 firms (48.2%) disclose at least one external vendor, commercial model, or technology partner. Table 3.1 details the external vendor ecosystem cited by S&P 500 corporations.
 
@@ -1685,16 +1699,102 @@ The human coding protocol for the pending validation round (300 frame-labeled pa
 
 ## Appendix C — Statistical robustness
 
-Full regression tables for M0–M3 across all five outcomes of Chapter 5, including adjusted R² by model (beta: −0.098/−0.054/−0.026/−0.047; idiosyncratic volatility: 0.065/0.083/0.105/0.088; price-to-sales: 0.125/0.124/0.149/0.123; R&D/sales: 0.409/0.455/0.472/0.458; growth: −0.122/−0.099/−0.081/−0.089 for M0/M1/M2/M3 respectively — beta and growth start negative because sector-by-year fixed effects consume many degrees of freedom relative to the number of firms per cell, which the adjustment penalizes even though the corresponding raw R² in Table 5.1 stays positive throughout); the semantic-share (composition) robustness variant; the 10-K-only and technology-excluding subsamples; the firm-fixed-effects variant; alternative k for the segmentation (k = 2 through 5, with per-segment Jaccard stability); and the full washing-score sensitivity table (five specifications varying unit of analysis, control set, and dispersion model, with CDNS/CRWD/PANW the only firms robust to all five) are collected here. **Robustness to disclosure intensity.** Re-estimating the three-segment solution without disclosure intensity in the clustering features yields an Adjusted Rand Index of 0.78 against the original segmentation; 98.2% of Product Deployers remain in the corresponding cluster, which still shows a 4x-higher median disclosure intensity (5.6 vs. 1.3–1.5 frames per 1,000 paragraphs) purely as a byproduct of its behavioural profile — high deployment, high customer-facing product share. The segment does not depend on including disclosure volume as a clustering feature.
+**Table C.1 — Full M0–M3 model fit, all five outcomes.**
+
+| Outcome | R² M0 | R² M1 | R² M2 | R² M3 | Adj. R² M0 | Adj. R² M1 | Adj. R² M2 | Adj. R² M3 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Beta | 0.039 | 0.078 | 0.110 | 0.088 | −0.098 | −0.054 | −0.026 | −0.047 |
+| Idiosyncratic volatility | 0.182 | 0.198 | 0.223 | 0.205 | 0.065 | 0.083 | 0.105 | 0.088 |
+| Price-to-sales | 0.233 | 0.234 | 0.261 | 0.235 | 0.125 | 0.124 | 0.149 | 0.123 |
+| R&D/sales | 0.453 | 0.497 | 0.519 | 0.502 | 0.409 | 0.455 | 0.472 | 0.458 |
+| Revenue growth (t+1) | 0.021 | 0.043 | 0.066 | 0.054 | −0.122 | −0.099 | −0.081 | −0.089 |
+
+*Notes:* Beta and growth start with negative adjusted R² at M0 because sector-by-year fixed effects consume many degrees of freedom relative to firms per cell, a penalty the adjustment applies even though raw R² stays positive throughout.
+
+**Table C.2 — Standardized coefficients, M2 content block (bold = p < 0.05).**
+
+| Content dimension | Beta | Idiosyncratic volatility | Price-to-sales | R&D/sales | Revenue growth (t+1) |
+|---|---:|---:|---:|---:|---:|
+| Volume | +0.12 (p=0.42) | +0.11 (p=0.57) | +0.01 (p=0.96) | +0.25 (p=0.09) | −0.11 (p=0.49) |
+| Realized | +0.08 (p=0.63) | −0.19 (p=0.29) | −0.12 (p=0.31) | +0.16 (p=0.32) | −0.02 (p=0.91) |
+| Deployment | −0.28 (p=0.07) | −0.01 (p=0.95) | −0.13 (p=0.19) | **−0.24 (p=0.03)** | −0.03 (p=0.74) |
+| Capability | −0.01 (p=0.83) | +0.02 (p=0.69) | −0.08 (p=0.23) | −0.01 (p=0.83) | −0.07 (p=0.07) |
+| Risk | −0.05 (p=0.53) | −0.05 (p=0.46) | +0.03 (p=0.59) | **−0.16 (p=0.01)** | +0.06 (p=0.42) |
+| Governance | **−0.12 (p=0.04)** | −0.05 (p=0.27) | **−0.11 (p=0.03)** | −0.06 (p=0.16) | +0.03 (p=0.58) |
+| Promotional | +0.09 (p=0.28) | +0.01 (p=0.94) | −0.10 (p=0.07) | +0.10 (p=0.08) | −0.04 (p=0.53) |
+| Specificity | **+0.37 (p<0.01)** | **+0.32 (p<0.01)** | **+0.45 (p<0.01)** | +0.14 (p=0.12) | **+0.37 (p=0.01)** |
+
+**Table C.3 — Segmentation stability by k.**
+
+| k | Per-segment Jaccard stability | Minimum | Usable (≥0.60)? |
+|---:|---|---:|---|
+| 2 | 0.80, 0.89 | 0.80 | Yes |
+| 3 | 0.71, 0.75, 0.73 | 0.71 | Yes |
+| 4 | 0.58, 0.72, 0.59, 0.77 | 0.58 | No |
+| 5 | 0.50, 0.77, 0.69, 0.31, 0.56 | 0.31 | No |
+
+**Robustness to disclosure intensity.** Re-estimating the three-segment solution without disclosure intensity in the clustering features yields an Adjusted Rand Index of 0.78 against the original segmentation; 98.2% of Product Deployers remain in the corresponding cluster, which still shows a 4x-higher median disclosure intensity (5.6 vs. 1.3–1.5 frames per 1,000 paragraphs) purely as a byproduct of its behavioural profile — high deployment, high customer-facing product share. The segment does not depend on including disclosure volume as a clustering feature.
 
 **Conditional promotional excess, full specification.** The fitted model is a frame-level logistic regression: `logit(P(promotional)) = −4.297 + 2.913 × behaviour_index + 0.970 × [DEF 14A] + 0.054 × [8-K]`, where `behaviour_index` is computed only from each firm's non-promotional frames to avoid a mechanical link between the predictor and the outcome. The uncorrected specification (no form fixed effects) tags 41% of "washing-tail" frames as proxy-statement frames versus 23% for the rest of the corpus, confirming that form composition alone would bias the test toward proxy-heavy disclosers. The null distribution is modeled as a Poisson-binomial (each frame carries its own predicted probability, by form), corrected for intra-document dependence (ICC = 0.043, estimated by one-way ANOVA on model residuals, giving a design effect of 1.18 at a median of 5.3 frames per filing) via an equivalent beta-binomial test, with Benjamini-Hochberg [@benjamini1995] correction at 5% across the 449 firms with at least five frames, both tails. Estimating dispersion at the firm level instead of the document level — treating between-firm heterogeneity as noise — makes the test mark nobody in either tail; that heterogeneity is the phenomenon being measured, not noise to be absorbed.
+
+**Table C.4 — Washing-score sensitivity across five specifications.**
+
+| Specification | Washing tail (n) | Quiet tail (n) | Jaccard vs. reference |
+|---|---:|---:|---:|
+| Reference (unique frames, behaviour+form, document dispersion) | 8 | 3 | 1.00 |
+| No dispersion correction | 15 | 4 | 0.53 |
+| No form fixed effects | 7 | 1 | 0.88 |
+| Add sector fixed effects | 3 | 5 | 0.38 |
+| Document instances (not deduplicated), no form FE | 23 | 9 | 0.35 |
+
+*Notes:* CDNS, CRWD, and PANW are the only firms flagged in the washing tail under all five specifications.
+
+**Table C.5 — All 11 firms flagged by the conditional-excess test (reference specification), with activity grounding and grid position.**
+
+| Ticker | Observed promotional frames | Expected (model) | Excess | Activity grounding | Voice-behaviour grid cell |
+|---|---:|---:|---:|---:|---|
+| GOOGL | 98 | 46.4 | +51.6 | 0.40 | Vocal substantives |
+| PANW | 71 | 35.4 | +35.6 | 0.49 | Vocal substantives |
+| CRM | 66 | 35.9 | +30.1 | 0.40 | Vocal substantives |
+| CRWD | 48 | 18.0 | +30.0 | 0.49 | Vocal substantives |
+| INTU | 51 | 22.7 | +28.3 | 0.35 | Vocal substantives |
+| CDNS | 50 | 22.2 | +27.8 | 0.44 | Vocal substantives |
+| ADP | 37 | 15.4 | +21.6 | 0.41 | Vocal substantives |
+| YUM | 9 | 2.0 | +7.0 | 0.40 | High voice / mid conduct |
+| STX | 0 | 10.0 | −10.0 | 0.36 | Quiet substance |
+| MSCI | 4 | 20.0 | −16.0 | 0.39 | Mid voice / high conduct |
+| MSI | 5 | 21.6 | −16.6 | 0.44 | Mid voice / high conduct |
+
+*Notes:* The first 8 rows are the washing tail (promotes more than expected); the last 3 are the quiet tail (promotes less than expected). 7 of the 8 washing-tail firms sit in the "vocal substantives" grid corner, not the "absolute decoupling" corner — a firm has to already be disclosing a lot, and disclosing concretely, to register as promoting *in excess* of that baseline.
 
 **Alternative firm-year aggregation.** Results are unchanged when firm-year intensity is constructed as an aggregate-numerator-over-aggregate-denominator ratio rather than the median document rate: the two rollups are numerically identical across all seven content dimensions and 2,475 firm-years (max absolute difference below 1e-9), because a firm-year's AI content comes from a single dominant filing often enough that the rollup rule carries no weight in practice.
 
 ## Appendix D — Variable construction
 
-XBRL concept-to-field mapping and fallback chains (capex 87% coverage, SG&A 80%, net margin 98%, revenue 98%), fiscal-period alignment rules (period-end date matched to the nearest prior filing date; the [340, 380]-day validity window for year-over-year growth), the market-model beta and idiosyncratic-volatility construction (252 trading days pre-filing, one-factor market model), and the ROIC-minus-WACC construction (geometric equity risk premium of 6.48%, not arithmetic) are documented here.
+**Table D.1 — XBRL concept coverage.**
+
+| Financial concept | Coverage of the firm-year panel |
+|---|---:|
+| Revenue | 98% |
+| Net margin | 98% |
+| Capex | 87% |
+| SG&A | 80% |
+| R&D expense | 45% (excluded from fundamentals; used only as an outcome) |
+
+Fiscal-period alignment rules (period-end date matched to the nearest prior filing date; the [340, 380]-day validity window for year-over-year growth), the market-model beta and idiosyncratic-volatility construction (252 trading days pre-filing, one-factor market model), and the ROIC-minus-WACC construction (geometric equity risk premium of 6.48%, not arithmetic) are documented here.
 
 ## Appendix E — SEC / DeepSeek secondary specifications
 
-Secondary SEC event-study specifications (alternative window widths, weighted variants, cells excluding mixed pre/post filings), the full DeepSeek event study (2025Q1 cutoff, matching the January 2025 shock date used in Chapter 6; 5,287 firm-quarters, 484 firms) including its failed pre-trend tests across specificity, risk, hypothetical framing, and total AI frames (all p < 0.001, promotional at the margin, p = 0.079), and alternative event-window specifications for both shocks are reported here in full, consistent with the one-sentence summary in Chapter 6: no discontinuity separable from prior trends was identified for DeepSeek, and the analysis is not extended to outcome variables (competitive response, generative-AI capex) that a valid identification would be needed to interpret.
+Secondary SEC event-study specifications (alternative window widths, weighted variants, cells excluding mixed pre/post filings) and alternative event-window specifications for both shocks are reported here in full, consistent with the one-sentence summary in Chapter 6: no discontinuity separable from prior trends was identified for DeepSeek, and the analysis is not extended to outcome variables (competitive response, generative-AI capex) that a valid identification would be needed to interpret.
+
+**Table E.1 — DeepSeek event study (2025Q1 cutoff, 5,287 firm-quarters, 484 firms): pre-trend test by outcome.**
+
+| Outcome | Pre-trend test p-value | Fails at 5%? |
+|---|---:|---|
+| Promotional | 0.008 | Yes |
+| Specificity | <0.001 | Yes |
+| Risk | <0.001 | Yes |
+| Hypothetical framing | 0.035 | Yes |
+| Total AI frames | <0.001 | Yes |
+
+*Notes:* All five outcomes fail the pre-trend test, so no discontinuity around the January 2025 shock can be separated from a pre-existing trend for any of them.
