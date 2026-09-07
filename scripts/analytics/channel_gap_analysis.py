@@ -47,7 +47,7 @@ filing?). `post` = 2024 en adelante (escrutinio de la SEC, marzo 2024).
 
 Salidas (`data/processed/clusters/`):
   channel_gap_cells.parquet      una fila por empresa-ejercicio con ≥1 documento por canal:
-                                 intensidad por 1.000 párrafos, con ceros (MODO FINAL)
+                                 intensidad por 1.000 palabras, con ceros (MODO FINAL)
   channel_gap_firm.parquet       brecha promedio por empresa (score por canal)
   channel_gap_analysis.json      estimaciones, event study, descriptivos
 
@@ -149,23 +149,25 @@ def load_documents(con: duckdb.DuckDBPyConnection, frames: pd.DataFrame) -> pd.D
     """Todos los documentos con su cantidad de párrafos, tengan o no frames de
     IA: una call que no menciona IA es una observación con cero, no una celda
     perdida. Mismo año fiscal que en `load_frames`."""
-    docs = con.execute(f"""
+    docs = con.execute(rf"""
         WITH manifest AS (
             SELECT country_code, accession_number, ticker, filing_date, period_end_date, form_type AS form
             FROM filing_manifest WHERE form_type != 'Earnings call transcript'
             UNION ALL
             SELECT country_code, accession_number, ticker, filing_date, period_end_date, '10-Q' FROM filing_manifest_10q
         ), paras AS (
-            SELECT country_code, accession_number, count(*) AS n_paragraphs FROM paragraphs
+            SELECT country_code, accession_number, count(*) AS n_paragraphs,
+                   sum(list_count(regexp_split_to_array(trim(paragraph_text), '\s+'))) AS n_words
+            FROM paragraphs
             WHERE is_scorable GROUP BY 1, 2
         )
         SELECT 'filing' AS channel, m.form, m.ticker, m.filing_date AS fecha, TRY_CAST(m.period_end_date AS DATE) AS period_end,
-               NULL::INTEGER AS call_fy, m.accession_number, p.n_paragraphs
+               NULL::INTEGER AS call_fy, m.accession_number, p.n_paragraphs, p.n_words
         FROM manifest m JOIN paras p USING (country_code, accession_number)
         WHERE m.country_code = 'us' AND m.ticker IS NOT NULL AND m.filing_date IS NOT NULL AND m.form IN {FILING_FORMS}
         UNION ALL
         SELECT 'call', 'Earnings call', m.ticker, CAST(m.filing_date AS DATE), NULL::DATE,
-               CAST(regexp_extract(m.document_id, '_([0-9]{{4}})Q', 1) AS INTEGER), m.document_id, p.n_paragraphs
+               CAST(regexp_extract(m.document_id, '_([0-9]{{4}})Q', 1) AS INTEGER), m.document_id, p.n_paragraphs, p.n_words
         FROM read_parquet('{CALLS_MANIFEST}') m
         JOIN paras p ON p.accession_number = m.document_id AND p.country_code = 'us'
         WHERE m.ticker IS NOT NULL
@@ -184,10 +186,11 @@ def load_documents(con: duckdb.DuckDBPyConnection, frames: pd.DataFrame) -> pd.D
         n_quant=("specificity_quantified_metric", "sum"), n_gov=("is_gov", "sum")).reset_index()
     cell = docs.groupby(["ticker", "fy", "channel"]).agg(
         n_docs=("accession_number", "nunique"), n_paragraphs=("n_paragraphs", "sum"),
+        n_words=("n_words", "sum"),
         share_post_docs=("post_doc", "mean")).reset_index()
     cell = cell.merge(per_doc, on=["channel", "ticker", "fy"], how="left").fillna({"n_frames": 0, "n_promo": 0, "n_quant": 0, "n_gov": 0})
     for k in ("frames", "promo", "quant", "gov"):
-        cell[f"{k}_per_1k"] = 1000.0 * cell[f"n_{k}"] / cell["n_paragraphs"]
+        cell[f"{k}_per_1k"] = 1000.0 * cell[f"n_{k}"] / cell["n_words"]
     cell["any_ai"] = (cell["n_frames"] > 0).astype(float)
     return cell
 

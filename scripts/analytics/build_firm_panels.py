@@ -125,7 +125,7 @@ def main() -> None:
 
     # --- MODO FINAL: el panel son TODAS las empresas-año con filings, con ceros ---
     # Cada empresa-año con al menos un filing puntuable entra, con intensidad de
-    # IA por 1.000 párrafos (cero si no habla) desde ai_intensity.py. Las tasas
+    # IA por 1.000 palabras (cero si no habla) desde ai_intensity.py. Las tasas
     # de texto (promotional_rate, behavior_share_*) y las etiquetas de
     # arquetipo vienen del panel condicionado y quedan NaN donde la empresa no
     # habló de IA: son propiedades de CÓMO se habla, no existen para el cero.

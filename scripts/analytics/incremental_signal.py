@@ -7,8 +7,8 @@ modelos anidados sobre el panel de TODAS las empresas-año con filings
 empresa no habla de IA), ejercicios 2021-2025:
 
     M0  Y = a[sector×año] + b·fundamentals + e
-    M1  M0 + θ·log(1 + frames de IA por 1.000 párrafos)           (volumen)
-    M2  M1 + bloque semántico: log(1 + x por 1.000 párrafos) para
+    M1  M0 + θ·log(1 + frames de IA por 1.000 palabras)           (volumen)
+    M2  M1 + bloque semántico: log(1 + x por 1.000 palabras) para
         realizado, despliegue, capacidad (inversión + infraestructura),
         riesgo, gobernanza, promocional, especificidad              (contenido)
     M3  M1 + dummies de segmento (`firm_year_segments`)            (arquetipos)
@@ -29,7 +29,7 @@ permutación del ΔR² permutando las siete features entre empresas DENTRO de
 cada celda sector×año. Descomposición: el mismo ΔR² con un bloque de seis familias de actividad
 divulgada (`activity_profiles.py`: despliegue a clientes, despliegue interno,
 IA propia, proveedor nombrado, infraestructura, resultado cuantificado, por
-1.000 párrafos), solo y junto al semántico, para saber si la señal viene del
+1.000 palabras), solo y junto al semántico, para saber si la señal viene del
 estilo con que se documenta o de la actividad identificable.
 Robustez de composición: el bloque semántico como
 shares del total de frames (frames_k / frames de IA), encogidos hacia la media
@@ -72,7 +72,7 @@ FUNDAMENTALS = ["log_market_cap", "gross_margin", "operating_margin", "asset_tur
 SEMANTIC = {"realizado": "realized_per_1k", "despliegue": "deployed_per_1k", "capacidad": "capability_per_1k",
             "riesgo": "risk_per_1k", "gobernanza": "gov_per_1k", "promocional": "promo_per_1k", "especificidad": "spec_per_1k"}
 # bloque de actividades divulgadas (`activity_profiles.py`): seis familias de
-# acción concreta, por 1.000 párrafos de los filings del año, con ceros
+# acción concreta, por 1.000 palabras de los filings del año, con ceros
 ACTIVITY = {"despliegue_a_clientes": "customer_facing_deployment_per_1k", "despliegue_interno": "internal_deployment_per_1k",
             "ia_propia": "proprietary_ai_per_1k", "proveedor_nombrado": "third_party_named_provider_per_1k",
             "infraestructura": "infrastructure_investment_per_1k", "resultado_cuantificado": "quantified_outcome_per_1k"}

@@ -46,9 +46,9 @@ CALLS_MANIFEST = REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
 SEGMENT_LABELS = {"desplegadores_de_producto": "Product Deployers", "adoptantes_con_gobernanza": "Governance Adopters",
                   "listadores_de_riesgo": "Risk Listers", "sin_ia": "No AI"}
-EXEMPLARS = {"desplegadores_de_producto": ["MSFT", "HPE", "PAYX", "ETSY", "NOW"],
-             "adoptantes_con_gobernanza": ["JPM", "STT", "LOW", "DHR", "CINF"],
-             "listadores_de_riesgo": ["NKE", "BAC", "CMA", "HWM", "TDG"]}
+EXEMPLARS = {"desplegadores_de_producto": ["MSFT", "HPE", "TEAM", "HPQ", "ETSY"],
+             "adoptantes_con_gobernanza": ["JPM", "CINF", "STT", "BRK.B", "RF"],
+             "listadores_de_riesgo": ["BAC", "TDG", "HWM", "NKE", "DHI"]}
 
 FUNCTION_FAMILIES = [
     ("governance", r"govern|oversight|responsible[_ ]ai|ai[_ ]ethic|transparen|trust[_ ]and[_ ]safety|policy|compliance[_ ]program"),
@@ -103,6 +103,8 @@ OBJECT_FAMILIES = [
     ("AI, unspecified object", r"^ai$|^artificial intelligence|^generative ai$|^gen ?ai$|^ai technolog|^ai and|^ai/ml|^machine learning$|^ai initiative|^ai strateg|^ai use|^ai program|^ai investment|^technolog|^new technolog|^ai$"),
 ]
 STAGE_RANK = {"unspecified": 0, "exploring": 1, "piloting": 2, "deployed": 3, "scaled": 4}
+EXTERNAL_ROLES = {"external_provider", "external_model", "partner"}
+SOURCES = ["own", "third_party", "co_developed", "acquired", "open_source", "mixed", "unspecified"]
 
 
 GENERIC_TOKENS = {"ai", "artificial", "intelligence", "generative", "gen", "genai", "ml", "machine", "learning", "and", "or", "&",
@@ -167,7 +169,7 @@ def load() -> pd.DataFrame:
             JOIN acts USING (text_hash) JOIN docs d USING (accession_number)
             WHERE d.ticker IS NOT NULL
         """).df()
-        docs = document_table(con)[["accession_number", "fecha", "fy", "n_paragraphs", "channel"]]
+        docs = document_table(con)[["accession_number", "fecha", "fy", "n_words", "channel"]]
     finally:
         con.close()
     inst_docs["text_hash"] = inst_docs["text_hash"].astype("uint64")
@@ -177,7 +179,22 @@ def load() -> pd.DataFrame:
     a["channel_rank"] = (a["channel"] == "call").astype(int)
     a = a.sort_values("channel_rank").drop_duplicates(["ticker", "text_hash", "activity_index"]).drop(columns="channel_rank")
     a["function_family"] = a["function"].map(lambda v: family(v, FUNCTION_FAMILIES, "unspecified"))
-    a["provider_family"] = a["provider_or_model"].map(lambda v: family(v, PROVIDER_FAMILIES, "unspecified"))
+    # proveedores: lista por actividad. `provider_families` es la lista de familias;
+    # `provider_family` resume la actividad: la primera familia externa nombrada, si no
+    # 'proprietary' si lo declara, si no 'unspecified'. Los conteos por proveedor usan la lista.
+    # entidades nombradas con rol (v2): proveedores externos = external_provider, external_model, partner;
+    # marcas propias = own_product_or_brand. `ai_source` dice de dónde sale la IA.
+    a["named_entities"] = a["named_entities"].map(lambda v: [dict(e) for e in (list(v) if v is not None else [])])
+    a["ai_source"] = a["ai_source"].fillna("unspecified")
+    a["providers_or_models"] = a["named_entities"].map(lambda es: [e["name"] for e in es if e["role"] in EXTERNAL_ROLES])
+    a["own_brands"] = a["named_entities"].map(lambda es: [e["name"] for e in es if e["role"] == "own_product_or_brand"])
+    a["is_own_ai"] = a["ai_source"].isin(["own", "mixed"])
+    a["provider_or_model"] = a["providers_or_models"].map(lambda v: ", ".join(v) if v else "unspecified")
+    a["provider_families"] = a.apply(lambda r: sorted({family(x, PROVIDER_FAMILIES, "unspecified") for x in r["providers_or_models"]} | ({"proprietary"} if r["is_own_ai"] else set())), axis=1)
+    def _summary(fams):
+        ext = [f for f in fams if f not in ("proprietary", "unspecified", "third_party_unnamed")]
+        return ext[0] if ext else ("third_party_unnamed" if "third_party_unnamed" in fams else ("proprietary" if "proprietary" in fams else "unspecified"))
+    a["provider_family"] = a["provider_families"].map(_summary)
     a["stage_rank"] = a["stage"].map(STAGE_RANK).fillna(0).astype(int)
     a["object_family"] = a["object"].map(lambda v: "AI, unspecified object" if is_generic_object(v) else family(v, OBJECT_FAMILIES, "AI, unspecified object"))
     # lo que no cae en ninguna familia pero trae producto o proceso con nombre es un objeto concreto con marca
@@ -190,7 +207,7 @@ def load() -> pd.DataFrame:
     inst_docs = inst_docs.merge(docs.drop(columns="channel"), on="accession_number", how="inner")
     inst_docs["year"] = inst_docs["fecha"].dt.year
     a.attrs["instances"] = a[["text_hash", "activity_index", "action", "target", "stage", "provider_or_model", "provider_family",
-                              "evidence_strength", "function"]].drop_duplicates(["text_hash", "activity_index"]) \
+                              "provider_families", "own_brands", "is_own_ai", "ai_source", "named_entities", "evidence_strength", "function"]].drop_duplicates(["text_hash", "activity_index"]) \
         .merge(inst_docs, on="text_hash", how="inner")
     return a
 
@@ -202,8 +219,12 @@ def flags(a: pd.DataFrame) -> pd.DataFrame:
     f["customer_facing_deployment"] = used & (a["target"] == "customers")
     f["internal_deployment"] = used & a["target"].isin(["employees", "internal_process"])
     f["developer_tools"] = used & (a["target"] == "developers")
-    f["proprietary_ai"] = (a["action"] == "develop") | (a["provider_family"] == "proprietary")
-    f["third_party_named_provider"] = ~a["provider_family"].isin(["proprietary", "unspecified"])
+    f["proprietary_ai"] = (a["action"] == "develop") | (a["ai_source"] == "own")
+    f["own_brand_named"] = a["own_brands"].map(lambda v: len(v) > 0)
+    f["third_party_ai"] = a["ai_source"].isin(["third_party", "mixed", "open_source"])
+    f["co_developed_or_acquired"] = a["ai_source"].isin(["co_developed", "acquired"])
+    f["named_customer"] = a["named_entities"].map(lambda es: any(e["role"] == "customer" for e in es))
+    f["third_party_named_provider"] = a["provider_families"].map(lambda v: any(x not in ("proprietary", "unspecified", "third_party_unnamed") for x in v))
     f["infrastructure_investment"] = a["action"] == "invest_infrastructure"
     f["acquisition_or_licensing"] = a["action"] == "buy_or_license"
     f["partnership"] = a["action"] == "partner"
@@ -233,7 +254,7 @@ def concreteness(prof: pd.DataFrame) -> pd.Series:
 
 def yearly_and_channel_panels(inst: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """(1) empresa-año de presentación, sólo filings: actividades de cada familia
-    por 1.000 párrafos, para el bloque de actividades de `05`.
+    por 1.000 palabras, para el bloque de actividades de `05`.
     (2) empresa × ejercicio fiscal × canal: conteos por familia, para la brecha
     de actividades de `06`."""
     inst = inst.copy()
@@ -244,10 +265,10 @@ def yearly_and_channel_panels(inst: pd.DataFrame) -> tuple[pd.DataFrame, pd.Data
     cols = ACTIVITY_FAMILIES + ["named_product_or_process", "named_function", "deployed_or_scaled", "n_activities"]
     # (1) por año de presentación, filings; el denominador es el de firm_year_master_v2
     fil = inst[inst["channel"] == "filing"].groupby(["ticker", "year"])[cols].sum().reset_index()
-    master = pd.read_parquet(OUT_DIR / "firm_year_master_v2.parquet")[["ticker", "year", "n_paragraphs"]]
+    master = pd.read_parquet(OUT_DIR / "firm_year_master_v2.parquet")[["ticker", "year", "n_words"]]
     fy_panel = master.merge(fil, on=["ticker", "year"], how="left").fillna({c: 0.0 for c in cols})
     for c in cols:
-        fy_panel[f"{c}_per_1k"] = 1000.0 * fy_panel[c] / fy_panel["n_paragraphs"]
+        fy_panel[f"{c}_per_1k"] = 1000.0 * fy_panel[c] / fy_panel["n_words"]
     # (2) por ejercicio fiscal y canal
     ch = inst.groupby(["ticker", "fy", "channel"])[cols].sum().reset_index()
     return fy_panel, ch
@@ -295,11 +316,14 @@ def main() -> None:
           f"{(a.channel == 'call').mean():.0%} provienen sólo de calls")
 
     print("\nACCIONES (% de actividades) y ETAPA, DESTINATARIO, EVIDENCIA")
-    dist = {k: (a[k].value_counts(normalize=True) * 100).round(1).to_dict() for k in ("action", "stage", "target", "evidence_strength")}
+    dist = {k: (a[k].value_counts(normalize=True) * 100).round(1).to_dict() for k in ("action", "stage", "target", "evidence_strength", "ai_source")}
     for k, v in dist.items():
         print(f"  {k:18s} " + " | ".join(f"{kk} {vv}" for kk, vv in v.items()))
     fam = (a["function_family"].value_counts(normalize=True) * 100).round(1)
     prov = (a["provider_family"].value_counts(normalize=True) * 100).round(1)
+    multi = float(a["provider_families"].map(lambda v: len(set(v) - {"proprietary", "unspecified", "third_party_unnamed"}) >= 2).mean())
+    roles = pd.Series([e["role"] for es in a["named_entities"] for e in es]).value_counts()
+    print(f"  actividades con ≥2 proveedores externos nombrados: {100 * multi:.1f}% | con marca propia nombrada: {100 * (a['own_brands'].map(len) > 0).mean():.1f}% | entidades nombradas por rol: " + ", ".join(f"{k} {v}" for k, v in roles.items()))
     print("  function family    " + " | ".join(f"{k} {v}" for k, v in fam.items()))
     print("  provider family    " + " | ".join(f"{k} {v}" for k, v in prov.items()))
 
@@ -332,9 +356,11 @@ def main() -> None:
     top_obj = firm_share(a, "object_family", n_firms, 20)
     print(top_obj[["pct_firms", "firms", "examples"]].to_string())
     print("\nPROVEEDORES NOMBRADOS — % de empresas que nombran cada familia, y los nombres literales más frecuentes")
-    named = a[~a["provider_family"].isin(["proprietary", "unspecified", "third_party_unnamed"])]
+    expl = a[["ticker", "object", "providers_or_models"]].explode("providers_or_models").dropna(subset=["providers_or_models"])
+    expl["provider_family"] = expl["providers_or_models"].map(lambda v: family(v, PROVIDER_FAMILIES, "unspecified"))
+    named = expl[~expl["provider_family"].isin(["proprietary", "unspecified", "third_party_unnamed"])]
     prov_firms = firm_share(named, "provider_family", n_firms, 12)
-    prov_firms["examples"] = named.groupby("provider_family")["provider_or_model"].apply(lambda s: ", ".join(s.value_counts().index[:5]))
+    prov_firms["examples"] = named.groupby("provider_family")["providers_or_models"].apply(lambda s: ", ".join(s.value_counts().index[:5]))
     print(prov_firms[["pct_firms", "firms", "examples"]].to_string())
     print("  empresas que nombran algún proveedor externo:", named["ticker"].nunique(), "de", n_firms)
 
@@ -383,12 +409,14 @@ def main() -> None:
                                 "functions": g["function_family"].apply(lambda x: ", ".join(v for v in x.value_counts().index[:2] if v not in ("unspecified", "other"))),
                                 "targets": g["target"].apply(lambda x: ", ".join(v for v in x.value_counts().index[:2] if v != "unspecified")),
                                 "objects": g["object"].apply(lambda x: ", ".join(x.value_counts().index[:3])),
-                                "providers": g["provider_or_model"].apply(lambda x: ", ".join(v for v in x.value_counts().index[:3] if v.lower() not in ("unspecified", "proprietary"))),
+                                "providers": g["providers_or_models"].apply(lambda x: ", ".join(v for v in pd.Series([p for lst in x for p in lst], dtype=object).value_counts().index[:3] if v.lower() not in ("unspecified", "proprietary"))),
+                                "own": g["own_brands"].apply(lambda x: ", ".join(pd.Series([p for lst in x for p in lst], dtype=object).value_counts().index[:3])),
+                                "source": g["ai_source"].apply(lambda x: x.value_counts().index[0]),
                                 "stage": g["stage_rank"].max().map({v: k for k, v in STAGE_RANK.items()}),
                                 "named_or_metric": g["evidence_strength"].apply(lambda x: float(x.isin(["named_product_or_process", "metric", "vendor"]).mean()))
                                 }).sort_values("n", ascending=False).head(8).reset_index()
             lines = [f"{r.action} · {r.object_family} ({r.n}): {r.objects}" + (f" | for {r.functions}" if r.functions else "")
-                     + (f" | {r.targets}" if r.targets else "") + f" | {r.stage}" + (f" | {r.providers}" if r.providers else "")
+                     + (f" | {r.targets}" if r.targets else "") + f" | {r.stage}" + f" | {r.source}" + (f" | providers: {r.providers}" if r.providers else "") + (f" | own: {r.own}" if r.own else "")
                      + f" | concrete {r.named_or_metric:.0%}" for r in inv.itertuples()]
             cards[t_] = {"segment": SEGMENT_LABELS[s], "n_activities": int(len(sub)), "lines": lines}
             print(f"    {t_} ({len(sub)} activities)")
