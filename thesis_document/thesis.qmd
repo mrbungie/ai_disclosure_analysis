@@ -594,39 +594,6 @@ Overall, 246 of 510 firms (48.2%) disclose at least one external vendor, commerc
 
 *Notes:* Vendor citations include entities tagged as `external_provider`, `external_model`, or `partner`. Entities appear in this table only when cited by *other* firms as an external technology source (e.g., Microsoft citing OpenAI, or Lowe's citing Palantir and NVIDIA), excluding self-promotional brand mentions.
 
-```{python}
-#| label: fig-vendor-ecosystem
-#| fig-cap: "The external AI vendor ecosystem cited by S&P 500 firms — a small, concentrated set of names doing most of the citing."
-#| echo: false
-#| fig-width: 6.8
-#| fig-height: 3.6
-import json
-from pathlib import Path
-import matplotlib.pyplot as plt
-
-data_path = Path("../data/processed/clusters/activity_profiles.json")
-if not data_path.exists():
-    data_path = Path("data/processed/clusters/activity_profiles.json")
-providers = json.loads(data_path.read_text())["named_providers"]
-RENAME = {"other_named": "Specialized enterprise & data vendors", "OpenAI / Microsoft": "OpenAI / Microsoft ecosystem",
-          "Google": "Google / Alphabet", "Meta": "Meta Platforms"}
-items = sorted(((RENAME.get(k, k), v["pct_firms"]) for k, v in providers.items()), key=lambda kv: kv[1])
-labels = [l for l, _ in items]
-values = [v for _, v in items]
-
-fig, ax = plt.subplots(figsize=(6.8, 3.6), dpi=300)
-ax.barh(labels, values, color="#7C3AED", height=0.6)
-for i, v in enumerate(values):
-    ax.text(v + 0.5, i, f"{v:.1f}%", va="center", fontsize=8.5, fontweight="bold")
-ax.set_xlabel("% of S&P 500 firms citing", fontsize=9.5, fontweight="bold")
-ax.set_title("Who firms say their AI comes from, when they say at all", fontsize=10.5, fontweight="bold")
-ax.tick_params(labelsize=8.5)
-ax.grid(True, axis="x", linestyle="--", alpha=0.3)
-ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
-plt.tight_layout()
-plt.show()
-```
-
 **Only 5% of all activity statements name an external vendor.** Most firms would rather let you believe the AI is theirs.
 
 While OpenAI and Microsoft represent the dominant external foundation model stack (cited by 17.3% of S&P 500 firms), external vendors are mentioned in only 5.0% of total activity statements. Fully 35.0% of all activity statements explicitly name a proprietary corporate brand. Public companies vigorously publicize *what* they achieve with artificial intelligence while minimizing disclosure of the third-party infrastructure and foundational models powering those achievements.
