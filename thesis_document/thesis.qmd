@@ -87,27 +87,35 @@ The gap is specific. Prior work collapses AI disclosure to a binary substantive/
 
 The corpus covers S&P 500 constituents across five disclosure venues: Form 10-K (annual, mandated), Form 10-Q (quarterly, mandated), DEF 14A proxy statements (annual, governance-focused), Form 8-K (event-driven) and earnings-call transcripts (quarterly, voluntary). Filings run from November 2020 to September 2026; transcripts cover fiscal years 2021–2025, with the last transcript in mid-2025. @tbl-funnel reports the full funnel from documents to frames.
 
-| Stage | 10-K | 10-Q | DEF 14A | 8-K | Calls | Total |
-|---|---:|---:|---:|---:|---:|---:|
-| Documents | 2,873 | 8,099 | 2,646 | 34,416 | 7,947 | 55,981 |
-| Paragraphs (instances) | 1,544,496 | 1,736,542 | 3,679,553 | 1,623,906 | 554,281 | 9,138,778 |
-| Scorable paragraphs | 1,422,746 | 1,593,351 | 3,254,803 | 1,529,705 | 553,942 | 8,354,547 |
-| Unique scorable texts | 855,682 | 849,415 | 2,273,716 | 406,756 | 483,235 | 4,868,804 |
-| Unique texts flagged by the prefilter | 11,293 | 2,933 | 6,383 | 384 | 9,584 | 30,577 |
-| Unique texts classified by the LLM judge | 11,294 | 2,933 | 6,384 | 384 | 9,584 | 30,579 |
-| Unique texts with ≥1 frame | 10,532 | 2,587 | 5,216 | 232 | 7,902 | 26,469 |
-| Unique frames | 16,245 | 3,409 | 7,168 | 295 | 16,249 | 43,366 |
-| Frames as instances (in documents) | 17,758 | 4,590 | 7,284 | 313 | 16,270 | 46,215 |
-| Documents with ≥1 frame | 1,681 | 1,431 | 1,090 | 206 | 2,709 | 7,117 |
-| Unique texts with a firm-subject behavioural frame | 5,927 | 1,829 | 2,923 | 134 | 6,803 | 17,420 |
-| Disclosed activities extracted (unique) | 8,556 | 2,408 | 2,670 | 163 | 14,020 | 27,566 |
-| Activities as instances (in documents) | 9,224 | 3,238 | 2,708 | 165 | 14,033 | 29,368 |
-| Documents with ≥1 activity | 1,298 | 961 | 586 | 88 | 2,444 | 5,377 |
-| Firms with ≥1 activity | 409 | 159 | 269 | 55 | 383 | 471 |
+| Stage | Unit | 10-K | 10-Q | DEF 14A | 8-K | Calls | Total |
+|---|---|---:|---:|---:|---:|---:|---:|
+| **A. Corpus** | | | | | | | |
+| Documents | documents | 2,873 | 8,099 | 2,646 | 34,416 | 7,947 | 55,981 |
+| Scorable paragraphs | instances | 1,422,746 | 1,593,351 | 3,254,803 | 1,529,705 | 553,942 | 8,354,547 |
+| Unique scorable texts | unique texts | 855,682 | 849,415 | 2,273,716 | 406,756 | 483,235 | 4,868,804 |
+| **B. Prefilter: does it mention AI?** | | | | | | | |
+| Unique texts flagged | unique texts | 11,293 | 2,933 | 6,383 | 384 | 9,584 | 30,577 |
+| as % of unique scorable texts | | 1.3% | 0.3% | 0.3% | 0.1% | 2.0% | 0.6% |
+| **C. Frames: what does it claim about AI?** | | | | | | | |
+| Unique texts classified by the LLM judge | unique texts | 11,294 | 2,933 | 6,384 | 384 | 9,584 | 30,579 |
+| Unique texts with ≥1 frame | unique texts | 10,532 | 2,587 | 5,216 | 232 | 7,902 | 26,469 |
+| as % of classified (the rest are prefilter false positives) | | 93% | 88% | 82% | 60% | 82% | 87% |
+| Unique frames | frames | 16,245 | 3,409 | 7,168 | 295 | 16,249 | 43,366 |
+| Frames as instances (in documents) | instances | 17,758 | 4,590 | 7,284 | 313 | 16,270 | 46,215 |
+| Documents with ≥1 frame | documents | 1,681 | 1,431 | 1,090 | 206 | 2,709 | 7,117 |
+| as % of the form's documents | | 59% | 18% | 41% | 0.6% | 34% | 13% |
+| **D. Activities: what does the firm say it does?** | | | | | | | |
+| Unique texts with a firm-subject behavioural frame | unique texts | 5,927 | 1,829 | 2,923 | 134 | 6,803 | 17,420 |
+| as % of texts with a frame | | 56% | 71% | 56% | 58% | 86% | 66% |
+| Disclosed activities (unique) | activities | 8,556 | 2,408 | 2,670 | 163 | 14,020 | 27,566 |
+| activities per behavioural text | | 1.4 | 1.3 | 0.9 | 1.2 | 2.1 | 1.6 |
+| Activities as instances (in documents) | instances | 9,224 | 3,238 | 2,708 | 165 | 14,033 | 29,368 |
+| Documents with ≥1 activity | documents | 1,298 | 961 | 586 | 88 | 2,444 | 5,377 |
+| Firms with ≥1 activity | firms | 409 | 159 | 269 | 55 | 383 | 471 of 510 |
 
 : Corpus funnel, S&P 500 constituents, U.S. filings and earnings calls. Prefilter v2 at threshold 0.17; LLM judge qwen3.7-flash for frames and for the second pass that turns behavioural frames into disclosed activities (Chapter 4). {#tbl-funnel}
 
-Three features of the funnel matter downstream. Deduplication: 8.35 million scorable paragraph instances are 4.87 million unique texts, and embedding, prefiltering and frame extraction happen once per unique text; the frames of each unique text are then joined back to every document in which it appears (43,366 unique frames become 46,215 in documents, a factor of 1.07, so repeated boilerplate weighs little). The judge discards 13% of what the prefilter flags: 26,469 of 30,579 flagged texts receive at least one frame; the rest are prefilter false positives that the extraction filters by returning zero frames. And the 8-K layer is almost pure noise: 34,416 documents, 206 with a frame. Earnings calls are the dense channel: a transcript has a tenth of the paragraphs of a 10-K, yet the 7,947 transcripts yield as many frames as the 2,873 annual reports, and half of all disclosed activities. The last five rows are the second extraction pass: of the 26,469 texts with a frame, 17,420 carry a behavioural frame about the firm itself and yield 27,566 distinct activities, 1.6 per text.
+The unit changes between blocks and is stated on every row: documents, paragraph instances, unique texts (a paragraph repeated across documents counts once), firms. Three features of the funnel matter downstream. Deduplication: 8.35 million scorable paragraph instances are 4.87 million unique texts, and embedding, prefiltering and frame extraction happen once per unique text; the frames of each unique text are then joined back to every document in which it appears (43,366 unique frames become 46,215 in documents, a factor of 1.07, so repeated boilerplate weighs little). The judge discards 13% of what the prefilter flags: 26,469 of 30,579 flagged texts receive at least one frame; the rest are prefilter false positives that the extraction filters by returning zero frames. And the 8-K layer is almost pure noise: 34,416 documents, 206 with a frame. Earnings calls are the dense channel: a transcript has a tenth of the paragraphs of a 10-K, yet the 7,947 transcripts yield as many frames as the 2,873 annual reports, and half of all disclosed activities. Block D is the second extraction pass: of the 26,469 texts with a frame, 17,420 carry a behavioural frame about the firm itself and yield 27,566 distinct activities, 1.6 per text, 2.1 on calls. Per-form counts of unique texts add to more than the total because a text can appear in two forms.
 
 ## From text to frames
 
