@@ -348,6 +348,95 @@ plt.show()
 
 Before any clustering, the raw distribution of frame concepts already separates quantity from composition: realized framing dominates temporal claims (72.1%) over planned (12.5%), expected (8.2%), and hypothetical (7.2%) claims; the firm itself is the subject of 85.3% of statements, versus 9.1% for competitors and industry, 4.9% for customers, and 0.6% for suppliers and partners; internal use narrowly exceeds customer-facing use in filings (46.6% vs. 37.7%), while the ratio inverts in earnings calls (35.1% internal vs. 55.6% customer-facing) — the filing describes process, the call describes product. Cybersecurity, regulatory/legal exposure, and competitive disruption dominate the risk vocabulary; generative AI overtakes predictive/ML mentions between 2022 and 2023 and reaches roughly 93% of type-declared mentions by 2026. These raw distributions motivate, but do not by themselves establish, the archetype structure developed next.
 
+```{python}
+#| label: fig-semantic-landscape
+#| fig-cap: "The raw semantic landscape before any clustering: temporal framing, who is speaking, internal vs. customer-facing use by venue, and the generative/predictive shift over time."
+#| echo: false
+#| fig-width: 9
+#| fig-height: 6.2
+import os
+from pathlib import Path
+import duckdb
+import pandas as pd
+import matplotlib.pyplot as plt
+
+db_path = Path("../duckdb/thesis.duckdb")
+if not db_path.exists():
+    db_path = Path("duckdb/thesis.duckdb")
+repo_root = db_path.resolve().parent.parent
+con = duckdb.connect(str(db_path), read_only=True)
+_cwd = os.getcwd()
+os.chdir(repo_root)   # gold_ai_frames is a view over relative-path parquet globs
+try:
+    frames = con.execute("""
+        SELECT form, subject, temporal, domain, ai_type, accession_number
+        FROM gold_ai_frames WHERE country_code = 'us' AND has_frame
+    """).df()
+finally:
+    os.chdir(_cwd)
+manifest = con.execute("""
+    WITH m AS (
+        SELECT country_code, accession_number, filing_date FROM filing_manifest WHERE form_type != 'Earnings call transcript'
+        UNION ALL
+        SELECT country_code, accession_number, filing_date FROM filing_manifest_10q
+    )
+    SELECT accession_number, extract(year from filing_date)::INT AS year FROM m WHERE country_code = 'us'
+""").df()
+con.close()
+frames = frames.merge(manifest, on="accession_number", how="left")
+frames.loc[frames["form"] == "Earnings call", "year"] = frames.loc[frames["form"] == "Earnings call", "accession_number"].str.extract(r"_(\d{4})Q")[0].astype(float)
+
+fig, axes = plt.subplots(2, 2, figsize=(9, 6.2), dpi=300)
+
+# Panel 1: temporal framing
+temporal_order = ["realized", "planned", "expected", "hypothetical"]
+t = frames["temporal"].value_counts(normalize=True).reindex(temporal_order) * 100
+axes[0, 0].bar(temporal_order, t.values, color="#2563EB")
+axes[0, 0].set_title("What tense is the claim in?", fontsize=10, fontweight="bold")
+axes[0, 0].set_ylabel("% of statements", fontsize=8.5)
+for i, v in enumerate(t.values):
+    axes[0, 0].text(i, v + 1, f"{v:.0f}%", ha="center", fontsize=8, fontweight="bold")
+
+# Panel 2: subject
+subj_order = ["firm", "competitors_or_industry", "customers", "suppliers_or_partners"]
+subj_labels = ["The firm\nitself", "Competitors /\nindustry", "Customers", "Suppliers /\npartners"]
+s = frames["subject"].value_counts(normalize=True).reindex(subj_order).fillna(0) * 100
+axes[0, 1].bar(subj_labels, s.values, color="#059669")
+axes[0, 1].set_title("Who is the statement about?", fontsize=10, fontweight="bold")
+for i, v in enumerate(s.values):
+    axes[0, 1].text(i, v + 1, f"{v:.0f}%", ha="center", fontsize=8, fontweight="bold")
+
+# Panel 3: internal vs customer-facing, filings vs calls
+frames["venue"] = frames["form"].apply(lambda f: "Earnings calls" if f == "Earnings call" else "SEC filings")
+dom = (frames[frames.domain.isin(["internal", "customer_facing"])]
+       .groupby(["venue", "domain"]).size().unstack(fill_value=0))
+dom = dom.div(dom.sum(axis=1), axis=0) * 100
+x = range(len(dom.index)); w = 0.35
+axes[1, 0].bar([i - w/2 for i in x], dom["internal"], width=w, label="Internal use", color="#7C3AED")
+axes[1, 0].bar([i + w/2 for i in x], dom["customer_facing"], width=w, label="Customer-facing", color="#D97706")
+axes[1, 0].set_xticks(x); axes[1, 0].set_xticklabels(dom.index, fontsize=8.5)
+axes[1, 0].set_title("The filing describes process; the call describes product", fontsize=9.8, fontweight="bold")
+axes[1, 0].legend(fontsize=7.5)
+
+# Panel 4: generative vs predictive over time
+yt = frames[frames.ai_type != "unspecified"].dropna(subset=["year"])
+yt = yt[yt.year.between(2021, 2025)]
+share = yt.groupby(["year", "ai_type"]).size().unstack(fill_value=0)
+share = share.div(share.sum(axis=1), axis=0) * 100
+axes[1, 1].plot(share.index, share["generative"], "o-", color="#DC2626", lw=2, label="Generative")
+axes[1, 1].plot(share.index, share["predictive_ml"], "o-", color="#2563EB", lw=2, label="Predictive / ML")
+axes[1, 1].set_title("Generative AI overtakes predictive ML", fontsize=10, fontweight="bold")
+axes[1, 1].legend(fontsize=8)
+axes[1, 1].set_ylabel("% of type-declared frames", fontsize=8.5)
+
+for ax in axes.flat:
+    ax.grid(True, axis="y", linestyle="--", alpha=0.3)
+    ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+fig.suptitle("What firms say about AI, before any segmentation", fontsize=12, fontweight="bold")
+plt.tight_layout(rect=[0, 0, 1, 0.95])
+plt.show()
+```
+
 ## Descriptive inventory of disclosed corporate AI activities
 
 To see what public corporations literally disclose doing with artificial intelligence, rather than reducing that to a single number, the second-stage extraction pipeline recovers 27,583 unique disclosed activities across 471 S&P 500 firms (92.4% of firms with filings). Every activity represents an extracted (`action`, `object`, `function`) triple grounded in a verified sentence of textual evidence, annotated with its operational maturity stage, target audience, technology origin, and named entities.
@@ -429,38 +518,42 @@ plt.tight_layout(rect=[0.01, 0, 1, 0.95])
 plt.show()
 ```
 
-Table A.2 in the Appendix reports the pooled 2021–2026 total for each category (the single number a reader wants for "what share of activities are X, overall"); Figure 3.3 above is the one that tells the story of how that pool got there.
+Table A.2 in the Appendix reports the pooled 2021–2026 total for each category (the single number a reader wants for "what share of activities are X, overall"); the figure above is the one that tells the story of how that pool got there.
 
 ### What firms disclose doing: action $\times$ object typology
 
-When free-text objects are standardized into technology families, an empirical typology of corporate deployment emerges. Table 3.1 reports the proportion of S&P 500 firms disclosing at least one activity across each action-object pairing, alongside literal examples extracted from corporate text.
+When free-text objects are standardized into technology families, an empirical typology of corporate deployment emerges: what most S&P 500 firms disclose is deploying an AI product, a predictive model, or a data platform — not building AI from scratch. The top 10 combinations by share of firms are shown below; the full ranking of 19 combinations, with literal textual examples, is in Table A.3 (Appendix A).
 
-**Table 3.1 — Top action $\times$ object disclosed corporate activities in the S&P 500.**
+```{python}
+#| label: fig-action-object-top10
+#| fig-cap: "Top 10 action × object combinations by share of S&P 500 firms disclosing at least one such activity."
+#| echo: false
+#| fig-width: 7.5
+#| fig-height: 4.2
+import json
+from pathlib import Path
+import matplotlib.pyplot as plt
 
-| Action $\times$ Object family | % Firms (Pooled) | % Firms (Filings only) | Literal textual examples |
-|---|---:|---:|---|
-| `deploy` $\cdot$ AI product or service | 55.9% | 43.1% | AI engine, interconnect products, advertising optimization tools |
-| `deploy` $\cdot$ ML / predictive model | 45.7% | 34.7% | machine learning models, credit scoring algorithms, predictive maintenance |
-| `deploy` $\cdot$ Data / analytics platform | 45.1% | 33.3% | AI enterprise platform, expert analytics platform, AI-powered data cloud |
-| `deploy` $\cdot$ Named proprietary product | 34.1% | 24.5% | AIOps, Palantir AIP, Mist AI, Cerebrus, Flyways AI |
-| `deploy` $\cdot$ Process automation | 33.7% | 23.5% | intelligent automation, claims workflow automation, robotic process tools |
-| `hire_or_train` $\cdot$ Talent / workforce | 28.6% | 25.1% | AI engineering talent, workforce reskilling, data science recruitment |
-| `invest_infrastructure` $\cdot$ Compute / hardware | 25.9% | 20.2% | AI infrastructure, GPU compute clusters, data center expansion |
-| `scale` $\cdot$ Core product / service | 23.3% | 16.7% | data ecosystem, EFX.AI capabilities, Firefly generative services |
-| `measure_outcome` $\cdot$ Financial / efficiency metric | 19.6% | 11.8% | AI-attributed revenue, productivity gains, call-handling time reduction |
-| `deploy` $\cdot$ Specialized hardware / accelerators | 19.4% | 14.3% | AI PC, AI accelerators, tensor processing units, GPU clusters |
-| `deploy` $\cdot$ Copilot or digital assistant | 18.8% | 11.8% | Microsoft 365 Copilot, GitHub Copilot, internal coding assistant |
-| `deploy` $\cdot$ Computer vision / robotics / autonomy | 17.3% | 12.7% | autonomous driving systems (FSD), Optimus robot, smart optical sorting |
-| `deploy` $\cdot$ Foundation model / LLM | 14.9% | 9.8% | large language models, foundational generative models, domain-specific LLMs |
-| `develop` $\cdot$ Proprietary product or service | 14.7% | 9.4% | ad targeting engines, developer toolkits, proprietary AI experiences |
-| `deploy` $\cdot$ Search or recommendation engine | 14.3% | 9.2% | recommendation algorithms, discovery engines, personalized search |
-| `deploy` $\cdot$ Autonomous AI agents | 13.3% | 8.2% | agentic AI workflows, autonomous customer service agents |
-| `deploy` $\cdot$ Cybersecurity / fraud tool | 12.9% | 10.4% | ML-powered next-gen firewall, AI-driven security operations center (SOC) |
-| `integrate` $\cdot$ Product or platform capability | 12.4% | 8.8% | embedding AI capabilities into core ERP, CRM, and logistics suites |
-| `partner` $\cdot$ Strategic ecosystem alliance | 11.8% | 6.5% | cloud hyperscaler partnerships, AI hardware co-design alliances |
-| `develop` $\cdot$ In-house ML / predictive model | 11.2% | 8.4% | proprietary loss-forecasting models, underwriting algorithms, Gemini models |
+data_path = Path("../data/processed/clusters/activity_profiles.json")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/activity_profiles.json")
+concrete = json.loads(data_path.read_text())["top_concrete_activities"]
+top10 = sorted(concrete.items(), key=lambda kv: -kv[1]["pct_firms"])[:10]
+labels = [k for k, _ in reversed(top10)]
+values = [v["pct_firms"] for _, v in reversed(top10)]
 
-*Notes:* Pooled sample covers 510 S&P 500 firms with filings and call transcripts. "Filings only" restricts the denominator to statutory SEC filings (10-K, 10-Q, DEF 14A, 8-K), illustrating the significant contribution of earnings calls to corporate disclosure of commercial tools, partnerships, and quantified metrics.
+fig, ax = plt.subplots(figsize=(7.5, 4.2), dpi=300)
+bars = ax.barh(labels, values, color="#2563EB", height=0.6)
+for b, v in zip(bars, values):
+    ax.text(v + 1, b.get_y() + b.get_height() / 2, f"{v:.0f}%", va="center", fontsize=8.5, fontweight="bold")
+ax.set_xlabel("% of S&P 500 firms (pooled)", fontsize=9.5, fontweight="bold")
+ax.set_title("What most firms disclose doing with AI", fontsize=11, fontweight="bold")
+ax.tick_params(labelsize=8.5)
+ax.grid(True, axis="x", linestyle="--", alpha=0.3)
+ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
 
 Intersecting actions, objects, and business functions reveals that the single most prevalent corporate application across the U.S. economy is deploying AI tools to optimize internal operations (30.0% of firms), automating workflows (27.0%), deploying predictive models in supply chains (19.0%), and establishing centralized operational data platforms (18.0%). Customer-facing conversational tools (17.5%) and embedding AI into core sellable products (17.0%) form a secondary cluster, while coding assistants (9.6%), marketing recommendation engines (7.6%), and fraud risk management (8.8%) occupy specialized vertical domains.
 
@@ -494,6 +587,41 @@ Overall, 246 of 510 firms (48.2%) disclose at least one external vendor, commerc
 | **Salesforce** | 1.4% | Salesforce Einstein, Agentforce |
 
 *Notes:* Vendor citations include entities tagged as `external_provider`, `external_model`, or `partner`. Entities appear in this table only when cited by *other* firms as an external technology source (e.g., Microsoft citing OpenAI, or Lowe's citing Palantir and NVIDIA), excluding self-promotional brand mentions.
+
+```{python}
+#| label: fig-vendor-ecosystem
+#| fig-cap: "The external AI vendor ecosystem cited by S&P 500 firms — a small, concentrated set of names doing most of the citing."
+#| echo: false
+#| fig-width: 6.8
+#| fig-height: 3.6
+import json
+from pathlib import Path
+import matplotlib.pyplot as plt
+
+data_path = Path("../data/processed/clusters/activity_profiles.json")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/activity_profiles.json")
+providers = json.loads(data_path.read_text())["named_providers"]
+RENAME = {"other_named": "Specialized enterprise & data vendors", "OpenAI / Microsoft": "OpenAI / Microsoft ecosystem",
+          "Google": "Google / Alphabet", "Meta": "Meta Platforms"}
+items = sorted(((RENAME.get(k, k), v["pct_firms"]) for k, v in providers.items()), key=lambda kv: kv[1])
+labels = [l for l, _ in items]
+values = [v for _, v in items]
+
+fig, ax = plt.subplots(figsize=(6.8, 3.6), dpi=300)
+ax.barh(labels, values, color="#7C3AED", height=0.6)
+for i, v in enumerate(values):
+    ax.text(v + 0.5, i, f"{v:.1f}%", va="center", fontsize=8.5, fontweight="bold")
+ax.set_xlabel("% of S&P 500 firms citing", fontsize=9.5, fontweight="bold")
+ax.set_title("Who firms say their AI comes from, when they say at all", fontsize=10.5, fontweight="bold")
+ax.tick_params(labelsize=8.5)
+ax.grid(True, axis="x", linestyle="--", alpha=0.3)
+ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+**Only 5% of all activity statements name an external vendor.** Most firms would rather let you believe the AI is theirs.
 
 While OpenAI and Microsoft represent the dominant external foundation model stack (cited by 17.3% of S&P 500 firms), external vendors are mentioned in only 5.0% of total activity statements. Fully 35.0% of all activity statements explicitly name a proprietary corporate brand. Public companies vigorously publicize *what* they achieve with artificial intelligence while minimizing disclosure of the third-party infrastructure and foundational models powering those achievements.
 
@@ -554,30 +682,20 @@ plt.show()
 
 Examining the disclosed activities within each cluster shows that these three segments correspond to distinct profiles of disclosed behaviour — as the economic-profile analysis below confirms, this distinctness is strongest for Product Deployers, while the other two segments differ mainly in register.
 
-**Table 4.1 — Disclosed behavioral profile by disclosure archetype.**
+**Table 4.1 — Disclosed behavioral profile by disclosure archetype (6 headline variables; full 14-variable profile in Table A.4).**
 
 | Behavioral feature | Product Deployers (n=113) | Governed Adopters (n=222) | Risk Listers (n=158) | Non-Disclosers (n=17) |
 |---|---:|---:|---:|---:|
 | **Disclosed activities per firm (Median)** | **112** | 18 | 5 | 0 |
-| Disclosed activities per firm (Mean) | 184.2 | 26.4 | 8.7 | 0.4 |
 | Customer-facing activity share (%) | **51.0%** | 27.0% | 21.0% | — |
-| Internal process activity share (%) | 33.0% | **60.0%** | **66.0%** | — |
 | Technology source: Proprietary / Own (%) | **80.0%** | 55.0% | 46.0% | — |
-| Technology source: Third-party commercial (%) | 6.0% | 12.0% | **17.0%** | — |
-| Technology source: Unspecified provenance (%) | 10.0% | 30.0% | **34.0%** | — |
 | Firms naming an own product or brand (%) | **97.3%** | 64.0% | 34.2% | 17.6% |
-| Firms naming an external provider or partner (%) | **89.4%** | 45.9% | 27.2% | 11.8% |
-| Firms reporting compute / data center capex (%) | **90.3%** | 55.0% | 25.3% | 0.0% |
 | Firms reporting quantified outcome metrics (%) | **93.8%** | 64.9% | 37.3% | 17.6% |
-| Firms naming corporate clients (%) | **47.8%** | 9.9% | 5.1% | 0.0% |
 | Maximum operational stage: Scaled (%) | **92.9%** | 64.0% | 34.2% | 23.5% |
-| Maximum operational stage: Deployed (%) | 7.1% | 27.0% | 44.3% | 0.0% |
-| Maximum operational stage: Pilot / Exploration (%) | 0.0% | 3.2% | 7.0% | 0.0% |
-| Maximum operational stage: No activity reported (%) | 0.0% | 4.1% | 11.4% | 76.5% |
 
 *Notes:* Distributions computed from 27,583 unique activities across 510 S&P 500 firms. Non-disclosers with positive activities reflect conference call statements by firms whose formal SEC filings omit AI entirely.
 
-The empirical profiles in Table 4.1 demonstrate that the archetypes are not semantic artifacts:
+The empirical profiles in Table 4.1 (and the full profile in Table A.4) demonstrate that the archetypes are not semantic artifacts:
 
 - **Product Deployers** are commercial AI producers: they generate a median of 112 concrete activities, 80.0% of which claim proprietary IP. Over 97% name specific commercial brands, 90.3% disclose massive compute infrastructure investments (data centers, GPU accelerators), and 47.8% name external corporate customers. Their disclosure is predominantly external and customer-facing (51.0%).
 - **Governed Adopters** represent internal enterprise automators: they generate a median of 18 activities concentrated in internal back-office workflows (60.0%) and predictive modeling (risk underwriting, predictive maintenance, claims processing). They rarely market branded AI products (only 29.0% name a product), and nearly a third of their activities leave technology provenance unstated, reflecting silent integration of commercial vendor tools.
@@ -690,7 +808,48 @@ The corners separate financial profiles that were not used to construct them: th
 
 ## Activity grounding
 
-Layering disclosed activities onto the grid separates two populations within the high-voice group that the voice-behaviour axes alone cannot distinguish. Of the 170 high-voice firms, 126 describe at least one deployed activity with a named product (median 58 activities, R&D 10.6% of sales, beta 0.99 — NVDA, MSFT, ADBE, GOOGL, IBM, CRM, PANW, INTC among them) while 44 describe none (median 5 activities, R&D 1.8%, beta 0.77 — MPWR, CL, EA, JPM, EXPD, SWKS, DPZ, AWK). The second group is the population that matches the intuitive notion of AI washing most closely: strategic claims with no identifiable activity behind them. Within the absolute-decoupling corner itself, 14 of 36 firms (AAPL, UNH, ELV, PYPL, CI, AMT, HUM, LHX among them) have at least one named deployed activity and 22 do not (CSX, TXT, SO, OKE, HLT, GIS, KMB among them) — activity grounding is what splits an otherwise homogeneous-looking corner in two. A firm-level grounding index (mean of five activity-concreteness proportions: function declared, deployed/scaled, named product/process, quantified outcome, named provider) correlates only moderately with the raw behaviour axis (Spearman +0.24, n = 471): the behaviour axis measures how much of what is claimed is behavioural in kind, while grounding measures how concretely that behaviour is specified.
+Layering disclosed activities onto the grid separates two populations within the high-voice group that the voice-behaviour axes alone cannot distinguish. Of the 170 high-voice firms, 126 describe at least one deployed activity with a named product (median 58 activities, R&D 10.6% of sales, beta 0.99 — NVDA, MSFT, ADBE, GOOGL, IBM, CRM, PANW, INTC among them) while 44 describe none (median 5 activities, R&D 1.8%, beta 0.77 — MPWR, CL, EA, JPM, EXPD, SWKS, DPZ, AWK). The second group is the population that matches the intuitive notion of AI washing most closely: strategic claims with no identifiable activity behind them. Within the absolute-decoupling corner itself, 14 of 36 firms (AAPL, UNH, ELV, PYPL, CI, AMT, HUM, LHX among them) have at least one named deployed activity and 22 do not (CSX, TXT, SO, OKE, HLT, GIS, KMB among them) — activity grounding is what splits an otherwise homogeneous-looking corner in two.
+
+```{python}
+#| label: fig-grounding-matrix
+#| fig-cap: "Grounding splits high-voice firms in two: with a named, deployed activity behind the talk, or without one."
+#| echo: false
+#| fig-width: 6
+#| fig-height: 3
+from pathlib import Path
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+act = pd.read_parquet(_p("firm_activities.parquet"))
+grid = pd.read_parquet(_p("firm_voice_behavior_grid.parquet"))
+grounded_tickers = set(act.loc[act.stage.isin(["deployed", "scaled"]) & (act.evidence_strength == "named_product_or_process"), "ticker"])
+high_voice = set(grid.loc[grid.nivel_voz == "alta", "ticker"])
+decoupling = set(grid.loc[grid.celda == "washing (voz alta, conducta baja)", "ticker"])
+
+rows = [f"High voice\n({len(high_voice)} firms)", f"Absolute decoupling\n({len(decoupling)} firms)"]
+grounded = [len(high_voice & grounded_tickers), len(decoupling & grounded_tickers)]
+ungrounded = [len(high_voice - grounded_tickers), len(decoupling - grounded_tickers)]
+
+fig, ax = plt.subplots(figsize=(6, 3), dpi=300)
+mat = np.array([grounded, ungrounded])
+im = ax.imshow(mat, cmap="RdYlGn_r", aspect="auto", vmin=0, vmax=float(mat.max()))
+ax.set_xticks([0, 1]); ax.set_xticklabels(rows, fontsize=9)
+ax.set_yticks([0, 1]); ax.set_yticklabels(["Grounded\n(named activity)", "Ungrounded\n(no activity)"], fontsize=9)
+for i in range(2):
+    for j in range(2):
+        ax.text(j, i, str(mat[i, j]), ha="center", va="center", fontsize=13, fontweight="bold",
+                 color="white" if mat[i, j] > mat.max() * 0.5 else "black")
+ax.set_title("Talking a lot about AI splits into two very different groups", fontsize=10.5, fontweight="bold")
+plt.tight_layout()
+plt.show()
+```
+
+A firm-level grounding index (mean of five activity-concreteness proportions: function declared, deployed/scaled, named product/process, quantified outcome, named provider) correlates only moderately with the raw behaviour axis (Spearman +0.24, n = 471): the behaviour axis measures how much of what is claimed is behavioural in kind, while grounding measures how concretely that behaviour is specified.
 
 **Figures:** Evolution of intensity and frame composition (2021–2025) are displayed in Figure 3.1 and Figure 3.2 above. Additional cluster diagnostics (raw semantic distributions, cluster stability versus k, archetype semantic heatmaps, and voice × behaviour positioning) are tabulated in the Appendix and referenced throughout this section.
 
@@ -868,11 +1027,100 @@ Table 5.1 reports the central empirical test of whether textual AI disclosure ca
 
 The most tightly identified result in the thesis compares the same firm, in the same fiscal year, across the two venues that differ most in liability exposure: the earnings call, an informal and voluntary disclosure venue [@frankel1999; @matsumoto2011], and the SEC filing, a monitored venue carrying legal liability for material misstatement. The design uses firm × fiscal-year fixed effects with exactly two channel observations per cell, so the estimator reduces to a within-cell difference — call intensity minus filing intensity — that cancels everything common to the firm in that period, including the industry-wide AI boom itself. It does not, and cannot, cancel what differs jointly with the channel itself — audience, format, legal exposure, length, and topic selection all move together with venue — so the result below is reported as a within-firm, within-year venue-associated difference, not as the isolated causal effect of legal liability. The extensive-margin sample comprises 2,281 firm × fiscal-year cells across 479 firms (449 present on both sides of the 2024 cutoff), aligned by the fiscal period each document actually covers rather than its filing date, with 1,021 cells containing calls that mention no AI at all (5,238 of 7,947 transcripts).
 
-Measured per 1,000 words — the denominator this thesis reports, since a scorable call paragraph runs to 129 words on average against 67 for a filing paragraph, so a raw per-paragraph count would overstate the gap by roughly half — the same firm, in the same fiscal year, places 9.9 times more AI-promotional statements in its earnings call than in its filing and 17.1 times more quantified claims, even though the filing has a higher share of documents mentioning AI at all (65% vs. 55%) — AI in the filing is a risk factor and a governance line; in the call it is the product. Section 6.2 provides an independent, denominator-free check by comparing the same firm's *disclosed activities* rather than word or paragraph counts across venues, and finds the activity mix itself essentially unchanged while what is attached to it (names, figures, providers) differs sharply — the most robust reading of this gap. This is a promotional gap between venues, not evidence that any individual claim is false, but it is precisely the type of cross-venue mismatch the SEC flagged in the Welltower matter [@strauss2025; @bozanic2017], measured here across the entire corpus.
+Measured per 1,000 words — the denominator this thesis reports, since a scorable call paragraph runs to 129 words on average against 67 for a filing paragraph, so a raw per-paragraph count would overstate the gap by roughly half — the same firm, in the same fiscal year, places 9.9 times more AI-promotional statements in its earnings call than in its filing and 17.1 times more quantified claims, even though the filing has a higher share of documents mentioning AI at all (65% vs. 55%) — AI in the filing is a risk factor and a governance line; in the call it is the product.
+
+```{python}
+#| label: fig-calls-vs-filings
+#| fig-cap: "Filings mention AI more often; calls describe it far more promotionally and with more figures attached, per 1,000 words."
+#| echo: false
+#| fig-width: 6.5
+#| fig-height: 2.8
+import json
+from pathlib import Path
+import matplotlib.pyplot as plt
+
+data_path = Path("../data/processed/clusters/channel_gap_words_robustness.json")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/channel_gap_words_robustness.json")
+d = json.loads(data_path.read_text())
+
+rows = [("Promotional / 1,000 words", d["promo_per_1k_words"]["filing_mean"], d["promo_per_1k_words"]["call_mean"]),
+        ("Quantified claims / 1,000 words", d["quant_per_1k_words"]["filing_mean"], d["quant_per_1k_words"]["call_mean"])]
+
+fig, ax = plt.subplots(figsize=(6.5, 2.8), dpi=300)
+for i, (label, filing, call) in enumerate(rows):
+    ax.plot([filing, call], [i, i], color="#94A3B8", lw=2, zorder=1)
+    ax.scatter([filing], [i], color="#334155", s=90, zorder=2, label="Filing" if i == 0 else None)
+    ax.scatter([call], [i], color="#DC2626", s=90, zorder=2, label="Call" if i == 0 else None)
+ax.set_yticks(range(len(rows))); ax.set_yticklabels([r[0] for r in rows], fontsize=9.5)
+ax.set_xlabel("Rate per 1,000 words", fontsize=9.5, fontweight="bold")
+ax.set_title("Same firm, same year, two very different stories", fontsize=10.5, fontweight="bold")
+ax.legend(fontsize=8.5, loc="lower right")
+ax.grid(True, axis="x", linestyle="--", alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+Section 6.2 provides an independent, denominator-free check by comparing the same firm's *disclosed activities* rather than word or paragraph counts across venues, and finds the activity mix itself essentially unchanged while what is attached to it (names, figures, providers) differs sharply — the most robust reading of this gap. This is a promotional gap between venues, not evidence that any individual claim is false, but it is precisely the type of cross-venue mismatch the SEC flagged in the Welltower matter [@strauss2025; @bozanic2017], measured here across the entire corpus.
 
 ## Activities across venues
 
 Comparing disclosed-activity composition across 459 firm × fiscal-year cells (183 firms with at least three activities in each channel), the *mix* of what firms say they do is essentially identical across venues — customer-facing deployment, internal deployment, and own-AI shares differ by only 0.6 to 2.2 percentage points, none distinguishable from zero at 5%. What differs is the evidence attached to the same claim: the call adds a declared business function (+11.7 points), a quantified outcome (+11.0 points — the filing almost never states the figure), a named external provider or partner (+5.3 points, nearly triple), and a named product (+3.8 points), while the filing retains relatively more infrastructure investment, talent, and governance language. The gap is not "different activities depending on the audience" but "the same activity, with figures and names for the analyst and without them in what is signed" — a pattern stable across fiscal years, with the quantified-outcome gap ranging from +9.0 to +11.8 points between 2021 and 2025.
+
+```{python}
+#| label: fig-venue-gap-coefficients
+#| fig-cap: "Same activity, different evidence: call-minus-filing gap in how often each activity carries a given piece of evidence, ordered from largest to smallest (percentage points)."
+#| echo: false
+#| fig-width: 7.2
+#| fig-height: 4.2
+from pathlib import Path
+import pandas as pd
+import matplotlib.pyplot as plt
+
+GAP_FAMILIES = [
+    "customer_facing_deployment", "internal_deployment", "quantified_outcome", "infrastructure_investment",
+    "third_party_named_provider", "proprietary_ai", "talent_or_training", "piloting_or_exploring",
+    "governance_or_restriction", "named_product_or_process", "named_function"
+]
+GAP_LABELS = {
+    "customer_facing_deployment": "Customer-facing deployment",
+    "internal_deployment": "Internal deployment",
+    "quantified_outcome": "Quantified outcome",
+    "infrastructure_investment": "Infrastructure investment",
+    "third_party_named_provider": "Named third-party provider",
+    "proprietary_ai": "Proprietary AI",
+    "talent_or_training": "Talent or training",
+    "piloting_or_exploring": "Piloting or exploring",
+    "governance_or_restriction": "Governance or restriction",
+    "named_product_or_process": "Named product or process",
+    "named_function": "Named business function",
+}
+data_path = Path("../data/processed/clusters/channel_activity_cells.parquet")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/channel_activity_cells.parquet")
+
+ch = pd.read_parquet(data_path)
+ch = ch[ch["fy"].between(2021, 2025)]
+wide = ch.pivot_table(index=["ticker", "fy"], columns="channel", values=GAP_FAMILIES + ["n_activities"]).dropna()
+wide = wide[(wide[("n_activities", "call")] >= 3) & (wide[("n_activities", "filing")] >= 3)]
+gaps = pd.DataFrame(index=wide.index)
+for f in GAP_FAMILIES:
+    gaps[f] = wide[(f, "call")] / wide[("n_activities", "call")] - wide[(f, "filing")] / wide[("n_activities", "filing")]
+overall = (gaps[GAP_FAMILIES].mean() * 100).sort_values()
+
+fig, ax = plt.subplots(figsize=(7.2, 4.2), dpi=300)
+colors = ["#DC2626" if v < 0 else "#059669" for v in overall.values]
+ax.barh([GAP_LABELS[f] for f in overall.index], overall.values, color=colors, height=0.6)
+ax.axvline(0, color="#334155", lw=1.2)
+for i, v in enumerate(overall.values):
+    ax.text(v + (0.4 if v >= 0 else -0.4), i, f"{v:+.1f}", va="center",
+            ha="left" if v >= 0 else "right", fontsize=8.5, fontweight="bold")
+ax.set_xlabel("Call minus filing (percentage points)", fontsize=9.5, fontweight="bold")
+ax.set_title("The call adds evidence; the filing keeps the boring parts", fontsize=11, fontweight="bold")
+ax.grid(True, axis="x", linestyle="--", alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
 
 ```{python}
 #| label: fig-brecha-actividades
@@ -1149,11 +1397,75 @@ plt.show()
 
 **Absolute voice-behaviour mismatch** (Chapter 4) asks whether a firm talks in promotional register while describing little concrete conduct, in absolute terms; it identifies 36 firms sitting in the high-voice/low-behaviour corner of the grid — non-tech, low-R&D, low-AI-intensity firms such as UNH, CI, AAPL, and PYPL.
 
-**Conditional promotional excess** (this section) asks whether a firm promotes more than its own disclosed conduct and its own document mix predict. Rather than estimating a per-firm rate against a fixed frontier, the counts themselves are modeled: a frame-level logistic regression of promotional rhetoric on the firm's own behaviour index — computed only from the firm's non-promotional frames, to break the mechanical link between the two (behavioural content appears in 92.6% of promotional frames versus 54.7% of non-promotional ones) — plus form fixed effects (`logit(P(promotional)) = −4.297 + 2.913 × behaviour_index + 0.970 × [DEF 14A] + 0.054 × [8-K]`). Controlling for form matters: the DEF 14A carries a 14.7% promotional rate against 7.1% for the 10-K, so a firm whose disclosure leans on proxy statements looks promotional by document composition alone; the uncorrected specification tags 41% of "washing-tail" frames as proxy-statement frames versus 23% for the rest of the corpus. The firm-level null distribution is modeled as a Poisson-binomial (each frame carries its own predicted probability by form), corrected for intra-document dependence (ICC = 0.043, estimated by one-way ANOVA on model residuals, giving a design effect of 1.18 at a median of 5.3 frames per filing) via an equivalent beta-binomial test, with Benjamini-Hochberg [@benjamini1995] correction at 5% across 449 firms with at least five frames, both tails. **The result: 8 firms in the washing tail (GOOGL, CRWD, PANW, CDNS, INTU, ADP, CRM, YUM — all of them firms that describe substantial disclosed activity), 3 in the quiet-substance tail (MSI, MSCI, STX), and 438 indistinguishable from expectation.** Estimating dispersion at the firm level instead of the document level — treating between-firm heterogeneity as noise — makes the test mark nobody in either tail; that heterogeneity is the phenomenon being measured, not noise to be absorbed. Statistical power is concentrated almost entirely in high-volume disclosers: of 210 firms with 25 or fewer frames, the test rejects for none, so the finding is properly read as "these are the only firms about which this corpus permits a statistical claim," not as evidence that large technology firms disproportionately engage in AI washing.
+**Conditional promotional excess** (this section) asks a sharper question than the absolute-mismatch test above: does a firm promote more than its *own* disclosed conduct and its *own* mix of document types would predict? The benchmark is fitted, not assumed: a model predicts how promotional each frame should be, given how behavioural the rest of that firm's disclosure is and which form it appears in. Form matters a lot — a proxy statement (DEF 14A) runs 14.7% promotional against 7.1% for the 10-K, so a firm that discloses mostly through proxies looks promotional for a reason that has nothing to do with washing, unless the model accounts for it. Once it does, each firm gets an expected promotional rate, and a statistical test (adjusted for the fact that frames from the same filing aren't independent observations, and corrected for testing 449 firms at once) flags whoever promotes well above or below that expectation. **The result: 8 firms promote more than expected (GOOGL, CRWD, PANW, CDNS, INTU, ADP, CRM, YUM — all firms that also disclose substantial concrete activity), 3 promote less than expected (MSI, MSCI, STX), and 438 are unremarkable.** The test only has power to say anything about firms with enough disclosure volume: of 210 firms with 25 or fewer AI-related statements, none is flagged in either direction — so this is a statement about which 8 firms promote more than their own baseline predicts, not evidence that large tech firms wash more than small ones.
 
 **Cross-venue promotional gap** (Chapter 6, Section 6.1) asks whether a firm tells the analyst on the call more than it signs in the filing — the 9.9x promotional gap affecting nearly every firm that talks about AI in both venues, widening since fiscal 2023 and not closing after 2024.
 
-The three definitions correlate weakly with each other (Spearman −0.07 between the cross-venue gap and the conditional-excess score; 7 of the 8 conditional-excess firms sit in the "vocal substantives" grid corner, not the absolute-decoupling corner). Layering disclosed activities onto the first two readings gives them behavioural content: **promotion without support** (high voice with zero identifiable deployed activity — the 44 firms of Chapter 4, median R&D 1.8%, beta 0.77) and **promotional excess** (substantial concrete activity and still a promotional rate far above what that activity predicts — the 8 firms of the binomial test, whose activity grounding, 0.35–0.49, sits in the upper half of the corpus, and whose excess does not correlate with grounding, Spearman −0.01). Promoting and describing concrete activity go together in this corpus; the excess the binomial test detects is promotion on top of substantial conduct, not promotion in its absence. **Sensitivity to specification.** Only three firms — CDNS, CRWD, and PANW — remain in the washing tail under every specification tested (five variants spanning unit of analysis, control set, and dispersion model); adding sector fixed effects narrows the tail to three because the tail is almost entirely software, so controlling for industry absorbs most of the relevant variation. Which comparison is the right one — "talks more than the corpus" versus "talks more than its own industry" — is a substantive choice, not a technical one, and this thesis reports both. **What the score does not establish.** The one case with independent, external evidence of a washing concern — Welltower's 2025 SEC comment letter — is not flagged by the conditional-excess score (66.5th percentile, z = −0.42): the SEC did not object to Welltower's 10-K as excessively promotional, it objected to earnings-call language unsupported by proportional 10-K disclosure, a cross-venue phenomenon the conditional-excess score by construction cannot see. This is the clearest evidence in the thesis that the three washing measures are not three noisy estimates of one true quantity, but three genuinely different constructs; full specification-sensitivity results (placebo calibration, split-half reliability, temporal persistence, external-criterion validation) are reported in Appendix C.
+```{python}
+#| label: fig-washing-upset
+#| fig-cap: "The three AI-washing measures flag different firms: set sizes and overlaps (UpSet-style plot). Absolute mismatch = 36 firms in the high-voice/low-behaviour grid corner; conditional excess = 8 firms flagged by the binomial test; high cross-venue gap = 24 firms one SD or more above the mean call-minus-filing promotional gap."
+#| echo: false
+#| fig-width: 7.5
+#| fig-height: 4.2
+from pathlib import Path
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+grid = pd.read_parquet(_p("firm_voice_behavior_grid.parquet"))
+wash = pd.read_parquet(_p("firm_washing_score.parquet"))
+gap = pd.read_parquet(_p("channel_gap_firm.parquet"))
+
+A = set(grid.loc[grid.celda == "washing (voz alta, conducta baja)", "ticker"])
+B = set(wash.loc[wash.washing, "ticker"])
+C = set(gap.loc[gap.z_gap_promotional > 1, "ticker"])
+sets = {"Absolute\nmismatch": A, "Conditional\nexcess": B, "High cross-venue\ngap": C}
+names = list(sets)
+
+combos = [(1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (1, 0, 1), (0, 1, 1), (1, 1, 1)]
+sizes = []
+for combo in combos:
+    inc = [n for n, c in zip(names, combo) if c]
+    exc = [n for n, c in zip(names, combo) if not c]
+    members = set.intersection(*(sets[n] for n in inc)) if inc else set()
+    for n in exc:
+        members = members - sets[n]
+    sizes.append(len(members))
+order = sorted(range(len(combos)), key=lambda i: -sizes[i])
+combos = [combos[i] for i in order]; sizes = [sizes[i] for i in order]
+
+fig = plt.figure(figsize=(7.5, 4.2), dpi=300)
+gs = gridspec.GridSpec(2, 1, height_ratios=[2.2, 1], hspace=0.05)
+ax_bar = fig.add_subplot(gs[0]); ax_dot = fig.add_subplot(gs[1], sharex=ax_bar)
+
+x = range(len(combos))
+bars = ax_bar.bar(x, sizes, color="#334155", width=0.55)
+for xi, s in zip(x, sizes):
+    ax_bar.text(xi, s + 0.6, str(s), ha="center", fontsize=9, fontweight="bold")
+ax_bar.set_ylabel("Firms", fontsize=9.5, fontweight="bold")
+ax_bar.set_title("The three AI-washing measures identify non-overlapping firms", fontsize=10.8, fontweight="bold")
+ax_bar.spines["top"].set_visible(False); ax_bar.spines["right"].set_visible(False)
+ax_bar.tick_params(axis="x", bottom=False, labelbottom=False)
+
+for xi, combo in zip(x, combos):
+    for yi, on in enumerate(combo):
+        ax_dot.plot(xi, yi, "o", color="#0F172A" if on else "#E2E8F0", ms=11, mec="none")
+    on_ys = [yi for yi, on in enumerate(combo) if on]
+    if len(on_ys) > 1:
+        ax_dot.plot([xi, xi], [min(on_ys), max(on_ys)], color="#0F172A", lw=2, zorder=0)
+ax_dot.set_yticks(range(len(names))); ax_dot.set_yticklabels(names, fontsize=8.5)
+ax_dot.set_ylim(-0.6, len(names) - 0.4)
+ax_dot.set_xlim(-0.6, len(combos) - 0.4)
+ax_dot.set_xticks([]); ax_dot.spines[["top", "right", "bottom"]].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+The three definitions correlate weakly with each other (Spearman −0.07 between the cross-venue gap and the conditional-excess score; 7 of the 8 conditional-excess firms sit in the "vocal substantives" grid corner, not the absolute-decoupling corner). In fact, the three firm sets don't overlap at all: zero firms are flagged by more than one measure. Layering disclosed activities onto the first two readings gives them behavioural content: **promotion without support** (high voice with zero identifiable deployed activity — the 44 firms of Chapter 4, median R&D 1.8%, beta 0.77) and **promotional excess** (substantial concrete activity and still a promotional rate far above what that activity predicts — the 8 firms of the binomial test, whose activity grounding, 0.35–0.49, sits in the upper half of the corpus, and whose excess does not correlate with grounding, Spearman −0.01). Promoting and describing concrete activity go together in this corpus; the excess the binomial test detects is promotion on top of substantial conduct, not promotion in its absence. **Sensitivity to specification.** Only three firms — CDNS, CRWD, and PANW — remain in the washing tail under every specification tested (five variants spanning unit of analysis, control set, and dispersion model); adding sector fixed effects narrows the tail to three because the tail is almost entirely software, so controlling for industry absorbs most of the relevant variation. Which comparison is the right one — "talks more than the corpus" versus "talks more than its own industry" — is a substantive choice, not a technical one, and this thesis reports both. **What the score does not establish.** The one case with independent, external evidence of a washing concern — Welltower's 2025 SEC comment letter — is not flagged by the conditional-excess score (66.5th percentile, z = −0.42): the SEC did not object to Welltower's 10-K as excessively promotional, it objected to earnings-call language unsupported by proportional 10-K disclosure, a cross-venue phenomenon the conditional-excess score by construction cannot see. This is the clearest evidence in the thesis that the three washing measures are not three noisy estimates of one true quantity, but three genuinely different constructs; full specification-sensitivity results (placebo calibration, split-half reliability, temporal persistence, external-criterion validation) are reported in Appendix C.
 
 ## Behavioural grounding
 
@@ -1207,6 +1519,54 @@ Future research should extend the cross-venue design to a synthetic-control or m
 
 ## Appendix A — Pipeline
 
+**Table A.3 — Full ranking of action $\times$ object disclosed corporate activities in the S&P 500.** The top 10 are shown as a chart in Chapter 3 ("What firms disclose doing"); this table gives the complete ranking with textual examples.
+
+| Action $\times$ Object family | % Firms (Pooled) | % Firms (Filings only) | Literal textual examples |
+|---|---:|---:|---|
+| `deploy` $\cdot$ AI product or service | 55.9% | 43.1% | AI engine, interconnect products, advertising optimization tools |
+| `deploy` $\cdot$ ML / predictive model | 45.7% | 34.7% | machine learning models, credit scoring algorithms, predictive maintenance |
+| `deploy` $\cdot$ Data / analytics platform | 45.1% | 33.3% | AI enterprise platform, expert analytics platform, AI-powered data cloud |
+| `deploy` $\cdot$ Named proprietary product | 34.1% | 24.5% | AIOps, Palantir AIP, Mist AI, Cerebrus, Flyways AI |
+| `deploy` $\cdot$ Process automation | 33.7% | 23.5% | intelligent automation, claims workflow automation, robotic process tools |
+| `hire_or_train` $\cdot$ Talent / workforce | 28.6% | 25.1% | AI engineering talent, workforce reskilling, data science recruitment |
+| `invest_infrastructure` $\cdot$ Compute / hardware | 25.9% | 20.2% | AI infrastructure, GPU compute clusters, data center expansion |
+| `scale` $\cdot$ Core product / service | 23.3% | 16.7% | data ecosystem, EFX.AI capabilities, Firefly generative services |
+| `measure_outcome` $\cdot$ Financial / efficiency metric | 19.6% | 11.8% | AI-attributed revenue, productivity gains, call-handling time reduction |
+| `deploy` $\cdot$ Specialized hardware / accelerators | 19.4% | 14.3% | AI PC, AI accelerators, tensor processing units, GPU clusters |
+| `deploy` $\cdot$ Copilot or digital assistant | 18.8% | 11.8% | Microsoft 365 Copilot, GitHub Copilot, internal coding assistant |
+| `deploy` $\cdot$ Computer vision / robotics / autonomy | 17.3% | 12.7% | autonomous driving systems (FSD), Optimus robot, smart optical sorting |
+| `deploy` $\cdot$ Foundation model / LLM | 14.9% | 9.8% | large language models, foundational generative models, domain-specific LLMs |
+| `develop` $\cdot$ Proprietary product or service | 14.7% | 9.4% | ad targeting engines, developer toolkits, proprietary AI experiences |
+| `deploy` $\cdot$ Search or recommendation engine | 14.3% | 9.2% | recommendation algorithms, discovery engines, personalized search |
+| `deploy` $\cdot$ Autonomous AI agents | 13.3% | 8.2% | agentic AI workflows, autonomous customer service agents |
+| `deploy` $\cdot$ Cybersecurity / fraud tool | 12.9% | 10.4% | ML-powered next-gen firewall, AI-driven security operations center (SOC) |
+| `integrate` $\cdot$ Product or platform capability | 12.4% | 8.8% | embedding AI capabilities into core ERP, CRM, and logistics suites |
+| `partner` $\cdot$ Strategic ecosystem alliance | 11.8% | 6.5% | cloud hyperscaler partnerships, AI hardware co-design alliances |
+| `develop` $\cdot$ In-house ML / predictive model | 11.2% | 8.4% | proprietary loss-forecasting models, underwriting algorithms, Gemini models |
+
+*Notes:* Pooled sample covers 510 S&P 500 firms with filings and call transcripts. "Filings only" restricts the denominator to statutory SEC filings (10-K, 10-Q, DEF 14A, 8-K), illustrating the significant contribution of earnings calls to corporate disclosure of commercial tools, partnerships, and quantified metrics.
+
+**Table A.4 — Full disclosed behavioral profile by disclosure archetype (14 variables).** The 6 headline variables are shown as Table 4.1 in Chapter 4.
+
+| Behavioral feature | Product Deployers (n=113) | Governed Adopters (n=222) | Risk Listers (n=158) | Non-Disclosers (n=17) |
+|---|---:|---:|---:|---:|
+| Disclosed activities per firm (Median) | **112** | 18 | 5 | 0 |
+| Disclosed activities per firm (Mean) | 184.2 | 26.4 | 8.7 | 0.4 |
+| Customer-facing activity share (%) | **51.0%** | 27.0% | 21.0% | — |
+| Internal process activity share (%) | 33.0% | **60.0%** | **66.0%** | — |
+| Technology source: Proprietary / Own (%) | **80.0%** | 55.0% | 46.0% | — |
+| Technology source: Third-party commercial (%) | 6.0% | 12.0% | **17.0%** | — |
+| Technology source: Unspecified provenance (%) | 10.0% | 30.0% | **34.0%** | — |
+| Firms naming an own product or brand (%) | **97.3%** | 64.0% | 34.2% | 17.6% |
+| Firms naming an external provider or partner (%) | **89.4%** | 45.9% | 27.2% | 11.8% |
+| Firms reporting compute / data center capex (%) | **90.3%** | 55.0% | 25.3% | 0.0% |
+| Firms reporting quantified outcome metrics (%) | **93.8%** | 64.9% | 37.3% | 17.6% |
+| Firms naming corporate clients (%) | **47.8%** | 9.9% | 5.1% | 0.0% |
+| Maximum operational stage: Scaled (%) | **92.9%** | 64.0% | 34.2% | 23.5% |
+| Maximum operational stage: Deployed (%) | 7.1% | 27.0% | 44.3% | 0.0% |
+| Maximum operational stage: Pilot / Exploration (%) | 0.0% | 3.2% | 7.0% | 0.0% |
+| Maximum operational stage: No activity reported (%) | 0.0% | 4.1% | 11.4% | 76.5% |
+
 The full prefilter specification (39 signals across lexical, semantic-anchor, structural, and sentence-level families), the hand-written lexical term lists (18 strong and 12 weak AI terms, roughly 60 named entities), the semantic anchor set (17 positive and 10 negative embedding anchors), feature-importance rankings for the deployed gradient-boosted model, the exact extraction prompts used for semantic-frame classification (prompt v1) and disclosed-activity extraction (prompt v2), throughput and cost figures for the LLM extraction stages, and the deduplication procedure by content hash (8.35 million scorable instances collapsing to 4.87 million unique texts) are documented in the pipeline reference (`docs/analytics/10_pipeline.md`) and reproduced here for the final frozen configuration (prefilter v2, threshold 0.17, run `20260906T160624Z`).
 
 **Table A.1 — Complete granular inference funnel by document form.**
@@ -1241,7 +1601,7 @@ The full prefilter specification (39 signals across lexical, semantic-anchor, st
 
 *Notes:* Complete granular funnel executed on `duckdb/thesis.duckdb`. Unique texts across columns do not sum to total because identical text paragraphs appear across multiple document forms.
 
-**Table A.2 — Full distribution of disclosed activities across all six dimensions (27,583 activities).** Underlies Figure 3.3 in Chapter 3.
+**Table A.2 — Full distribution of disclosed activities across all six dimensions (27,583 activities).** Underlies the activity-evolution chart in Chapter 3 ("Aggregate behavioral landscape").
 
 | Action | % | Maturity stage | % | Target audience | % |
 |---|---:|---|---:|---|---:|
@@ -1288,6 +1648,8 @@ The human coding protocol for the pending validation round (300 frame-labeled pa
 ## Appendix C — Statistical robustness
 
 Full regression tables for M0–M3 across all five outcomes of Chapter 5, including adjusted R² by model (beta: −0.098/−0.054/−0.026/−0.047; idiosyncratic volatility: 0.065/0.083/0.105/0.088; price-to-sales: 0.125/0.124/0.149/0.123; R&D/sales: 0.409/0.455/0.472/0.458; growth: −0.122/−0.099/−0.081/−0.089 for M0/M1/M2/M3 respectively); the semantic-share (composition) robustness variant; the 10-K-only and technology-excluding subsamples; the firm-fixed-effects variant; alternative k for the segmentation (k = 2 through 5, with per-segment Jaccard stability); and the full washing-score sensitivity table (five specifications varying unit of analysis, control set, and dispersion model, with CDNS/CRWD/PANW the only firms robust to all five) are collected here. **Robustness to disclosure intensity.** Re-estimating the three-segment solution without disclosure intensity in the clustering features yields an Adjusted Rand Index of 0.78 against the original segmentation; 98.2% of Product Deployers remain in the corresponding cluster, which still shows a 4x-higher median disclosure intensity (5.6 vs. 1.3–1.5 frames per 1,000 paragraphs) purely as a byproduct of its behavioural profile — high deployment, high customer-facing product share. The segment does not depend on including disclosure volume as a clustering feature.
+
+**Conditional promotional excess, full specification.** The fitted model is a frame-level logistic regression: `logit(P(promotional)) = −4.297 + 2.913 × behaviour_index + 0.970 × [DEF 14A] + 0.054 × [8-K]`, where `behaviour_index` is computed only from each firm's non-promotional frames to avoid a mechanical link between the predictor and the outcome. The uncorrected specification (no form fixed effects) tags 41% of "washing-tail" frames as proxy-statement frames versus 23% for the rest of the corpus, confirming that form composition alone would bias the test toward proxy-heavy disclosers. The null distribution is modeled as a Poisson-binomial (each frame carries its own predicted probability, by form), corrected for intra-document dependence (ICC = 0.043, estimated by one-way ANOVA on model residuals, giving a design effect of 1.18 at a median of 5.3 frames per filing) via an equivalent beta-binomial test, with Benjamini-Hochberg [@benjamini1995] correction at 5% across the 449 firms with at least five frames, both tails. Estimating dispersion at the firm level instead of the document level — treating between-firm heterogeneity as noise — makes the test mark nobody in either tail; that heterogeneity is the phenomenon being measured, not noise to be absorbed.
 
 **Alternative firm-year aggregation.** Results are unchanged when firm-year intensity is constructed as an aggregate-numerator-over-aggregate-denominator ratio rather than the median document rate: the two rollups are numerically identical across all seven content dimensions and 2,475 firm-years (max absolute difference below 1e-9), because a firm-year's AI content comes from a single dominant filing often enough that the rollup rule carries no weight in practice.
 
