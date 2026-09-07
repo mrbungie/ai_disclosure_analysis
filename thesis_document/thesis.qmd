@@ -216,15 +216,56 @@ plt.tight_layout()
 plt.show()
 ```
 
-**Table 2.1 — Compact summary of the inference funnel.**
+```{python}
+#| label: tbl-funnel-summary
+#| tbl-cap: "Compact summary of the inference funnel."
+#| echo: false
+import os
+from pathlib import Path
+import duckdb
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
 
-| Stage | Unit of Observation | Operational Filter | Retained Volume | Pipeline Share |
-|---|---|---|---:|---:|
-| **1. Raw Corpus** | Paragraph instances | Universe coverage (S&P 500, 2021–2026) | 9,138,778 | 100.0% |
-| **2. Deduplication** | Unique scorable texts | BLAKE2b hash ($>3$ char, alphanumeric) | 4,799,488 | 52.5% |
-| **3. Machine Learning Gate** | Candidate paragraphs | Supervised GBDT classifier ($\tau = 0.17$) | 30,281 | 0.63% |
-| **4. Semantic Frames** | Texts with $\ge 1$ frame | Zero-shot LLM judge (`qwen3.7-flash`) | 26,469 | 0.54% |
-| **5. Disclosed Activities** | Behavioral action triples | Firm-conditioned LLM extraction (pass 2) | 27,566 | 0.57% |
+db_path = Path("../duckdb/thesis.duckdb")
+if not db_path.exists():
+    db_path = Path("duckdb/thesis.duckdb")
+repo_root = db_path.resolve().parent.parent
+act_path = Path("../data/processed/clusters/firm_activities.parquet")
+if not act_path.exists():
+    act_path = Path("data/processed/clusters/firm_activities.parquet")
+
+con = duckdb.connect(str(db_path), read_only=True)
+con.execute("SET enable_progress_bar = false")
+_cwd = os.getcwd()
+os.chdir(repo_root)
+try:
+    n_scorable = con.execute("SELECT count(*) FROM paragraphs WHERE country_code='us' AND is_scorable").fetchone()[0]
+    n_unique = con.execute("SELECT count(*) FROM unique_paragraphs WHERE country_code='us' AND is_scorable").fetchone()[0]
+    n_prefiltered = con.execute("""
+        SELECT count(*) FROM (
+            SELECT text_hash, is_ai_prefiltered
+            FROM read_parquet('data/interim/prefilter_predictions_unique/prefilter_predictions__run=*.parquet', union_by_name=true)
+            WHERE country_code = 'us'
+            QUALIFY row_number() OVER (PARTITION BY text_hash ORDER BY model_version DESC) = 1
+        ) WHERE is_ai_prefiltered
+    """).fetchone()[0]
+    n_framed = con.execute("SELECT count(DISTINCT text_hash) FROM gold_ai_frames WHERE country_code='us' AND has_frame").fetchone()[0]
+finally:
+    os.chdir(_cwd)
+con.close()
+n_activities = len(pd.read_parquet(act_path).drop_duplicates(subset=["country_code", "accession_number", "text_hash", "activity_index"]))
+
+rows = [
+    ("1. Raw Corpus", "Paragraph instances", "Universe coverage (S&P 500, 2021-2026)", n_scorable, 100.0),
+    ("2. Deduplication", "Unique scorable texts", "BLAKE2b hash (>3 char, alphanumeric)", n_unique, n_unique / n_scorable * 100),
+    ("3. Machine Learning Gate", "Candidate paragraphs", "Supervised GBDT classifier (tau=0.17)", n_prefiltered, n_prefiltered / n_unique * 100),
+    ("4. Semantic Frames", "Texts with >=1 frame", "Zero-shot LLM judge (qwen3.7-flash)", n_framed, n_framed / n_unique * 100),
+    ("5. Disclosed Activities", "Behavioral action triples", "Firm-conditioned LLM extraction (pass 2)", n_activities, n_activities / n_unique * 100),
+]
+table = [[stage, unit, filt, f"{count:,}", f"{share:.2f}%"] for stage, unit, filt, count, share in rows]
+Markdown(tabulate(table, headers=["Stage", "Unit of Observation", "Operational Filter", "Retained Volume", "Pipeline Share"]))
+```
 
 *Notes: High-level overview of the five-stage inference pipeline. Granular form-by-form decompositions (10-K, 10-Q, DEF 14A, 8-K, and Earnings Calls) and intermediate model acceptance diagnostics are reported in Appendix Table A.1.*
 
@@ -346,13 +387,35 @@ plt.show()
 
 The composition of that growth matters more than its scale — risk grows roughly five times faster than promotion, and governance three times faster:
 
-| Frame type | Growth, 2021–2025 | Share of firm's AI frames, 2021 | Share, 2025 |
-|---|---:|---:|---:|
-| Risk | 22.0x | 12% | 47% |
-| Governance | 13.0x | — | — |
-| Realized-outcome | 6.6x | — | — |
-| Promotional | 4.6x | 11% | 5% |
-| Deployment | 4.4x | — | — |
+```{python}
+#| label: tbl-frame-type-growth
+#| tbl-cap: "Frame-type growth and composition, 2021-2025."
+#| echo: false
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+data_path = Path("../data/processed/clusters/firm_year_master_v2.parquet")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/firm_year_master_v2.parquet")
+m = pd.read_parquet(data_path)
+y = m.groupby("year").agg(
+    risk=("risk_per_1k", "mean"), gov=("gov_per_1k", "mean"), realized=("realized_per_1k", "mean"),
+    promo=("promo_per_1k", "mean"), deployed=("deployed_per_1k", "mean"), frames=("frames_per_1k", "mean"),
+)
+FRAME_TYPES = [("risk", "Risk"), ("gov", "Governance"), ("realized", "Realized-outcome"),
+               ("promo", "Promotional"), ("deployed", "Deployment")]
+table = []
+for col, label in FRAME_TYPES:
+    growth = y.loc[2025, col] / y.loc[2021, col]
+    share_2021 = y.loc[2021, col] / y.loc[2021, "frames"] * 100
+    share_2025 = y.loc[2025, col] / y.loc[2025, "frames"] * 100
+    table.append([label, f"{growth:.1f}x", f"{share_2021:.1f}%", f"{share_2025:.1f}%"])
+Markdown(tabulate(table, headers=["Frame type", "Growth, 2021-2025", "Share of firm's AI frames, 2021", "Share, 2025"]))
+```
+
+*Notes:* Shares are of a firm's own AI frames and need not sum to 100%, since a single frame can carry more than one concept (e.g., a realized, risk-related statement).
 
 What firms added to their filings between 2023 and 2025 was, above all, an AI risk factor and a governance line; the product pitch is being made somewhere else, a pattern the venue-gap analysis in Chapter 6 confirms directly.
 
@@ -621,16 +684,36 @@ A central empirical question in corporate AI is whether public firms are genuine
 
 The distribution of entity roles reveals an intense proprietary branding bias:
 
-**Named-entity roles across the corpus (17,193 instances).**
+```{python}
+#| label: tbl-entity-roles
+#| tbl-cap: "Named-entity roles across the corpus."
+#| echo: false
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
 
-| Entity role | Instances | Share |
-|---|---:|---:|
-| Own product or brand | 13,333 | 77.5% |
-| External technology vendor | 1,185 | 6.9% |
-| Strategic commercial partner | 780 | 4.5% |
-| Enterprise customer | 728 | 4.2% |
-| Acquired technology startup | 551 | 3.2% |
-| External foundation model | 474 | 2.8% |
+data_path = Path("../data/processed/clusters/firm_activities.parquet")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/firm_activities.parquet")
+df = pd.read_parquet(data_path)
+roles = df["named_entities"].explode().dropna().apply(lambda x: x["role"])
+counts = roles.value_counts()
+total = len(roles)
+
+LABELS = {
+    "own_product_or_brand": "Own product or brand",
+    "external_provider": "External technology vendor",
+    "partner": "Strategic commercial partner",
+    "customer": "Enterprise customer",
+    "acquired_company": "Acquired technology startup",
+    "external_model": "External foundation model",
+    "distribution_channel": "Distribution channel",
+    "competitor_or_reference": "Competitor or reference",
+}
+table = [[LABELS.get(role, role), f"{n:,}", f"{n / total * 100:.1f}%"] for role, n in counts.items()]
+Markdown(tabulate(table, headers=["Entity role", "Instances", "Share"]) + f"\n\n*{total:,} named entities total.*")
+```
 
 Overall, 246 of 510 firms (48.2%) disclose at least one external vendor, commercial model, or technology partner. Table 3.1 details the external vendor ecosystem cited by S&P 500 corporations.
 
@@ -1699,73 +1782,151 @@ The human coding protocol for the pending validation round (300 frame-labeled pa
 
 ## Appendix C — Statistical robustness
 
-**Table C.1 — Full M0–M3 model fit, all five outcomes.**
+```{python}
+#| label: tbl-c1-m0m3
+#| tbl-cap: "Full M0-M3 model fit, all five outcomes."
+#| echo: false
+import json
+from pathlib import Path
+from tabulate import tabulate
+from IPython.display import Markdown
 
-| Outcome | R² M0 | R² M1 | R² M2 | R² M3 | Adj. R² M0 | Adj. R² M1 | Adj. R² M2 | Adj. R² M3 |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Beta | 0.039 | 0.078 | 0.110 | 0.088 | −0.098 | −0.054 | −0.026 | −0.047 |
-| Idiosyncratic volatility | 0.182 | 0.198 | 0.223 | 0.205 | 0.065 | 0.083 | 0.105 | 0.088 |
-| Price-to-sales | 0.233 | 0.234 | 0.261 | 0.235 | 0.125 | 0.124 | 0.149 | 0.123 |
-| R&D/sales | 0.453 | 0.497 | 0.519 | 0.502 | 0.409 | 0.455 | 0.472 | 0.458 |
-| Revenue growth (t+1) | 0.021 | 0.043 | 0.066 | 0.054 | −0.122 | −0.099 | −0.081 | −0.089 |
+data_path = Path("../data/processed/clusters/incremental_signal.json")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/incremental_signal.json")
+d = json.loads(data_path.read_text())
+OUTCOMES = [("beta", "Beta"), ("volatilidad_idiosincratica", "Idiosyncratic volatility"),
+            ("price_to_sales", "Price-to-sales"), ("rd_sobre_ventas", "R&D/sales"),
+            ("crecimiento_ingresos_t1", "Revenue growth (t+1)")]
+table = []
+for key, label in OUTCOMES:
+    o = d["outcomes"][key]
+    table.append([label, f"{o['r2_M0']:.3f}", f"{o['r2_M1']:.3f}", f"{o['r2_M2']:.3f}", f"{o['r2_M3']:.3f}",
+                  f"{o['adj_r2_M0']:.3f}", f"{o['adj_r2_M1']:.3f}", f"{o['adj_r2_M2']:.3f}", f"{o['adj_r2_M3']:.3f}"])
+Markdown(tabulate(table, headers=["Outcome", "R2 M0", "R2 M1", "R2 M2", "R2 M3", "Adj.R2 M0", "Adj.R2 M1", "Adj.R2 M2", "Adj.R2 M3"]))
+```
 
 *Notes:* Beta and growth start with negative adjusted R² at M0 because sector-by-year fixed effects consume many degrees of freedom relative to firms per cell, a penalty the adjustment applies even though raw R² stays positive throughout.
 
-**Table C.2 — Standardized coefficients, M2 content block (bold = p < 0.05).**
+```{python}
+#| label: tbl-c2-coefficients
+#| tbl-cap: "Standardized coefficients, M2 content block (bold = p < 0.05)."
+#| echo: false
+import json
+from pathlib import Path
+from tabulate import tabulate
+from IPython.display import Markdown
 
-| Content dimension | Beta | Idiosyncratic volatility | Price-to-sales | R&D/sales | Revenue growth (t+1) |
-|---|---:|---:|---:|---:|---:|
-| Volume | +0.12 (p=0.42) | +0.11 (p=0.57) | +0.01 (p=0.96) | +0.25 (p=0.09) | −0.11 (p=0.49) |
-| Realized | +0.08 (p=0.63) | −0.19 (p=0.29) | −0.12 (p=0.31) | +0.16 (p=0.32) | −0.02 (p=0.91) |
-| Deployment | −0.28 (p=0.07) | −0.01 (p=0.95) | −0.13 (p=0.19) | **−0.24 (p=0.03)** | −0.03 (p=0.74) |
-| Capability | −0.01 (p=0.83) | +0.02 (p=0.69) | −0.08 (p=0.23) | −0.01 (p=0.83) | −0.07 (p=0.07) |
-| Risk | −0.05 (p=0.53) | −0.05 (p=0.46) | +0.03 (p=0.59) | **−0.16 (p=0.01)** | +0.06 (p=0.42) |
-| Governance | **−0.12 (p=0.04)** | −0.05 (p=0.27) | **−0.11 (p=0.03)** | −0.06 (p=0.16) | +0.03 (p=0.58) |
-| Promotional | +0.09 (p=0.28) | +0.01 (p=0.94) | −0.10 (p=0.07) | +0.10 (p=0.08) | −0.04 (p=0.53) |
-| Specificity | **+0.37 (p<0.01)** | **+0.32 (p<0.01)** | **+0.45 (p<0.01)** | +0.14 (p=0.12) | **+0.37 (p=0.01)** |
+data_path = Path("../data/processed/clusters/incremental_signal.json")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/incremental_signal.json")
+d = json.loads(data_path.read_text())
+OUTCOMES = [("beta", "Beta"), ("volatilidad_idiosincratica", "Idiosyncratic volatility"),
+            ("price_to_sales", "Price-to-sales"), ("rd_sobre_ventas", "R&D/sales"),
+            ("crecimiento_ingresos_t1", "Revenue growth (t+1)")]
+DIMS = [("volumen", "Volume"), ("realizado", "Realized"), ("despliegue", "Deployment"),
+        ("capacidad", "Capability"), ("riesgo", "Risk"), ("gobernanza", "Governance"),
+        ("promocional", "Promotional"), ("especificidad", "Specificity")]
 
-**Table C.3 — Segmentation stability by k.**
+def fmt(c):
+    p_str = "p<0.01" if c["p"] < 0.01 else f"p={c['p']:.2f}"
+    cell = f"{c['beta_std']:+.2f} ({p_str})"
+    return f"**{cell}**" if c["p"] < 0.05 else cell
 
-| k | Per-segment Jaccard stability | Minimum | Usable (≥0.60)? |
-|---:|---|---:|---|
-| 2 | 0.80, 0.89 | 0.80 | Yes |
-| 3 | 0.71, 0.75, 0.73 | 0.71 | Yes |
-| 4 | 0.58, 0.72, 0.59, 0.77 | 0.58 | No |
-| 5 | 0.50, 0.77, 0.69, 0.31, 0.56 | 0.31 | No |
+table = []
+for dim_key, dim_label in DIMS:
+    row = [dim_label]
+    for out_key, _ in OUTCOMES:
+        row.append(fmt(d["outcomes"][out_key]["coeficientes_M2"][dim_key]))
+    table.append(row)
+Markdown(tabulate(table, headers=["Content dimension"] + [lbl for _, lbl in OUTCOMES]))
+```
+
+```{python}
+#| label: tbl-c3-kstability
+#| tbl-cap: "Segmentation stability by k."
+#| echo: false
+import json
+from pathlib import Path
+from tabulate import tabulate
+from IPython.display import Markdown
+
+data_path = Path("../data/processed/clusters/firm_segments_manifest.json")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/firm_segments_manifest.json")
+d = json.loads(data_path.read_text())
+table = []
+for k, vals in d["stability_by_k"].items():
+    table.append([k, ", ".join(f"{v:.2f}" for v in vals), f"{min(vals):.2f}", "Yes" if min(vals) >= 0.6 else "No"])
+Markdown(tabulate(table, headers=["k", "Per-segment Jaccard stability", "Minimum", "Usable (>=0.60)?"]))
+```
 
 **Robustness to disclosure intensity.** Re-estimating the three-segment solution without disclosure intensity in the clustering features yields an Adjusted Rand Index of 0.78 against the original segmentation; 98.2% of Product Deployers remain in the corresponding cluster, which still shows a 4x-higher median disclosure intensity (5.6 vs. 1.3–1.5 frames per 1,000 paragraphs) purely as a byproduct of its behavioural profile — high deployment, high customer-facing product share. The segment does not depend on including disclosure volume as a clustering feature.
 
 **Conditional promotional excess, full specification.** The fitted model is a frame-level logistic regression: `logit(P(promotional)) = −4.297 + 2.913 × behaviour_index + 0.970 × [DEF 14A] + 0.054 × [8-K]`, where `behaviour_index` is computed only from each firm's non-promotional frames to avoid a mechanical link between the predictor and the outcome. The uncorrected specification (no form fixed effects) tags 41% of "washing-tail" frames as proxy-statement frames versus 23% for the rest of the corpus, confirming that form composition alone would bias the test toward proxy-heavy disclosers. The null distribution is modeled as a Poisson-binomial (each frame carries its own predicted probability, by form), corrected for intra-document dependence (ICC = 0.043, estimated by one-way ANOVA on model residuals, giving a design effect of 1.18 at a median of 5.3 frames per filing) via an equivalent beta-binomial test, with Benjamini-Hochberg [@benjamini1995] correction at 5% across the 449 firms with at least five frames, both tails. Estimating dispersion at the firm level instead of the document level — treating between-firm heterogeneity as noise — makes the test mark nobody in either tail; that heterogeneity is the phenomenon being measured, not noise to be absorbed.
 
-**Table C.4 — Washing-score sensitivity across five specifications.**
+```{python}
+#| label: tbl-c4-washing-sensitivity
+#| tbl-cap: "Washing-score sensitivity across five specifications."
+#| echo: false
+import json
+from pathlib import Path
+from tabulate import tabulate
+from IPython.display import Markdown
 
-| Specification | Washing tail (n) | Quiet tail (n) | Jaccard vs. reference |
-|---|---:|---:|---:|
-| Reference (unique frames, behaviour+form, document dispersion) | 8 | 3 | 1.00 |
-| No dispersion correction | 15 | 4 | 0.53 |
-| No form fixed effects | 7 | 1 | 0.88 |
-| Add sector fixed effects | 3 | 5 | 0.38 |
-| Document instances (not deduplicated), no form FE | 23 | 9 | 0.35 |
+data_path = Path("../data/processed/clusters/washing_score_validation.json")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/washing_score_validation.json")
+d = json.loads(data_path.read_text())
+specs = d["specifications"]
+NAMES = {
+    "unique|behavior+form|document": "Reference (unique frames, behaviour+form, document dispersion)",
+    "unique|behavior+form|none": "No dispersion correction",
+    "unique|behavior|document": "No form fixed effects",
+    "unique|behavior+form+sector|document": "Add sector fixed effects",
+    "instance|behavior|none": "Document instances (not deduplicated), no form FE",
+}
+table = [[label, len(specs[key]["washing"]), len(specs[key]["callada"]), f"{specs[key]['jaccard_vs_ref']:.2f}"]
+         for key, label in NAMES.items()]
+Markdown(tabulate(table, headers=["Specification", "Washing tail (n)", "Quiet tail (n)", "Jaccard vs. reference"]))
+```
 
 *Notes:* CDNS, CRWD, and PANW are the only firms flagged in the washing tail under all five specifications.
 
-**Table C.5 — All 11 firms flagged by the conditional-excess test (reference specification), with activity grounding and grid position.**
+```{python}
+#| label: tbl-c5-flagged-firms
+#| tbl-cap: "All firms flagged by the conditional-excess test (reference specification), with activity grounding and grid position."
+#| echo: false
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
 
-| Ticker | Observed promotional frames | Expected (model) | Excess | Activity grounding | Voice-behaviour grid cell |
-|---|---:|---:|---:|---:|---|
-| GOOGL | 98 | 46.4 | +51.6 | 0.40 | Vocal substantives |
-| PANW | 71 | 35.4 | +35.6 | 0.49 | Vocal substantives |
-| CRM | 66 | 35.9 | +30.1 | 0.40 | Vocal substantives |
-| CRWD | 48 | 18.0 | +30.0 | 0.49 | Vocal substantives |
-| INTU | 51 | 22.7 | +28.3 | 0.35 | Vocal substantives |
-| CDNS | 50 | 22.2 | +27.8 | 0.44 | Vocal substantives |
-| ADP | 37 | 15.4 | +21.6 | 0.41 | Vocal substantives |
-| YUM | 9 | 2.0 | +7.0 | 0.40 | High voice / mid conduct |
-| STX | 0 | 10.0 | −10.0 | 0.36 | Quiet substance |
-| MSCI | 4 | 20.0 | −16.0 | 0.39 | Mid voice / high conduct |
-| MSI | 5 | 21.6 | −16.6 | 0.44 | Mid voice / high conduct |
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
-*Notes:* The first 8 rows are the washing tail (promotes more than expected); the last 3 are the quiet tail (promotes less than expected). 7 of the 8 washing-tail firms sit in the "vocal substantives" grid corner, not the "absolute decoupling" corner — a firm has to already be disclosing a lot, and disclosing concretely, to register as promoting *in excess* of that baseline.
+w = pd.read_parquet(_p("firm_washing_score.parquet"))
+grid = pd.read_parquet(_p("firm_voice_behavior_grid.parquet"))[["ticker", "celda"]]
+prof = pd.read_parquet(_p("firm_activity_profiles.parquet"))[["ticker", "concrecion_conductual"]]
+merged = w.merge(grid, on="ticker", how="left").merge(prof, on="ticker", how="left")
+flagged = merged[merged.washing | merged.callada].sort_values("exceso", ascending=False)
+
+CELDA_LABELS = {
+    "vocales sustantivos": "Vocal substantives",
+    "sustancia callada (voz baja, conducta alta)": "Quiet substance",
+    "voz alta / conducta media": "High voice / mid conduct",
+    "voz media / conducta alta": "Mid voice / high conduct",
+}
+table = []
+for _, r in flagged.iterrows():
+    table.append([r["ticker"], f"{r['k_promo']:.0f}", f"{r['k_esperado']:.1f}", f"{r['exceso']:+.1f}",
+                  f"{r['concrecion_conductual']:.2f}", CELDA_LABELS.get(r["celda"], r["celda"])])
+Markdown(tabulate(table, headers=["Ticker", "Observed promotional frames", "Expected (model)", "Excess",
+                                   "Activity grounding", "Voice-behaviour grid cell"]))
+```
+
+*Notes:* Rows with positive excess are the washing tail (promotes more than expected); negative-excess rows are the quiet tail (promotes less than expected). 7 of the 8 washing-tail firms sit in the "vocal substantives" grid corner, not the "absolute decoupling" corner — a firm has to already be disclosing a lot, and disclosing concretely, to register as promoting *in excess* of that baseline.
 
 **Alternative firm-year aggregation.** Results are unchanged when firm-year intensity is constructed as an aggregate-numerator-over-aggregate-denominator ratio rather than the median document rate: the two rollups are numerically identical across all seven content dimensions and 2,475 firm-years (max absolute difference below 1e-9), because a firm-year's AI content comes from a single dominant filing often enough that the rollup rule carries no weight in practice.
 
@@ -1787,14 +1948,27 @@ Fiscal-period alignment rules (period-end date matched to the nearest prior fili
 
 Secondary SEC event-study specifications (alternative window widths, weighted variants, cells excluding mixed pre/post filings) and alternative event-window specifications for both shocks are reported here in full, consistent with the one-sentence summary in Chapter 6: no discontinuity separable from prior trends was identified for DeepSeek, and the analysis is not extended to outcome variables (competitive response, generative-AI capex) that a valid identification would be needed to interpret.
 
-**Table E.1 — DeepSeek event study (2025Q1 cutoff, 5,287 firm-quarters, 484 firms): pre-trend test by outcome.**
+```{python}
+#| label: tbl-e1-deepseek
+#| tbl-cap: "DeepSeek event study (2025Q1 cutoff, 5,287 firm-quarters, 484 firms): pre-trend test by outcome."
+#| echo: false
+import json
+from pathlib import Path
+from tabulate import tabulate
+from IPython.display import Markdown
 
-| Outcome | Pre-trend test p-value | Fails at 5%? |
-|---|---:|---|
-| Promotional | 0.008 | Yes |
-| Specificity | <0.001 | Yes |
-| Risk | <0.001 | Yes |
-| Hypothetical framing | 0.035 | Yes |
-| Total AI frames | <0.001 | Yes |
+data_path = Path("../data/processed/clusters/shock_analysis.json")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/shock_analysis.json")
+d = json.loads(data_path.read_text())
+LABELS = {"promo_per_1k": "Promotional", "spec_per_1k": "Specificity", "risk_per_1k": "Risk",
+          "hyp_per_1k": "Hypothetical framing", "frames_per_1k": "Total AI frames"}
+table = []
+for key, label in LABELS.items():
+    p = d["deepseek"]["outcomes"][key]["pretrend_p"]
+    p_str = "<0.001" if p < 0.001 else f"{p:.3f}"
+    table.append([label, p_str, "Yes" if p < 0.05 else "No"])
+Markdown(tabulate(table, headers=["Outcome", "Pre-trend test p-value", "Fails at 5%?"]))
+```
 
 *Notes:* All five outcomes fail the pre-trend test, so no discontinuity around the January 2025 shock can be separated from a pre-existing trend for any of them.
