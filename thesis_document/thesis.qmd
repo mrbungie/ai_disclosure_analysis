@@ -129,6 +129,49 @@ Chapter 2 documents the corpus, the measurement pipeline, and its human validati
 
 The U.S. corpus covers 10-K, 10-Q, DEF 14A, and 8-K filings for the S&P 500 universe plus earnings-call transcripts, from 2021 through a partial 2026. It comprises 55,981 documents — 2,873 10-Ks, 8,099 10-Qs, 2,646 DEF 14As, 34,416 8-Ks, and 7,947 call transcripts — segmented into 9,138,778 paragraph instances. After a length-and-content scorability filter, 8,354,547 scorable instances collapse to 4,799,488 unique texts once repeated boilerplate is deduplicated by content hash. The full corpus, including the Italian and Chilean comparative panels, holds 10,216,373 paragraphs and 5,616,337 unique scorable texts; only the U.S. instrument carries embeddings, prefilter scores, and semantic frames, and is the basis for every result in this thesis.
 
+```{python}
+#| label: tbl-documents-by-form-year
+#| tbl-cap: "Documents by form and filing year."
+#| echo: false
+from pathlib import Path
+import duckdb
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+db_path = Path("../duckdb/thesis.duckdb")
+if not db_path.exists():
+    db_path = Path("duckdb/thesis.duckdb")
+calls_path = Path("../data/interim/manifests/filing_manifest_earnings_calls.parquet")
+if not calls_path.exists():
+    calls_path = Path("data/interim/manifests/filing_manifest_earnings_calls.parquet")
+
+con = duckdb.connect(str(db_path), read_only=True)
+con.execute("SET enable_progress_bar = false")
+filings = con.execute("""
+    SELECT form_type AS form, extract(year from filing_date)::INT AS year, count(*) n
+    FROM filing_manifest WHERE country_code='us' AND form_type != 'Earnings call transcript'
+    GROUP BY 1, 2
+    UNION ALL
+    SELECT '10-Q', extract(year from filing_date)::INT, count(*) FROM filing_manifest_10q WHERE country_code='us' GROUP BY 2
+""").df()
+con.close()
+
+calls = pd.read_parquet(calls_path)
+calls["year"] = calls["document_id"].str.extract(r"_(\d{4})Q")[0].astype(float)
+calls_by_year = calls.groupby("year").size().reset_index(name="n")
+calls_by_year["form"] = "Earnings call"
+calls_by_year["year"] = calls_by_year["year"].astype(int)
+
+all_docs = pd.concat([filings, calls_by_year[["form", "year", "n"]]], ignore_index=True)
+all_docs = all_docs[all_docs.year.between(2021, 2026)]
+pivot = all_docs.pivot_table(index="form", columns="year", values="n", aggfunc="sum", fill_value=0)
+pivot["Total"] = pivot.sum(axis=1)
+pivot = pivot.reindex(["10-K", "10-Q", "DEF 14A", "8-K", "Earnings call"])
+table = [[form] + [f"{int(v):,}" for v in row] for form, row in pivot.iterrows()]
+Markdown(tabulate(table, headers=["Form"] + [str(c) for c in pivot.columns]))
+```
+
 ## How AI disclosure is measured
 
 The measurement pipeline moves through four stages: the raw corpus, a machine-learning prefilter, semantic-frame extraction, and disclosed-activity extraction. The unit of analysis changes at each stage — document, deduplicated text, individual claim, concrete activity — because each stage needs a different unit to do its job.
@@ -291,9 +334,91 @@ It does not do equally well everywhere. On a held-out sample never used in train
 
 Every text the prefilter flags is then read once by an LLM (prior computational social science work shows LLMs match or beat human annotators on tasks like this [@gilardi2023; @ziems2024]), which pulls out zero, one, or several separate claims about AI — a "frame." Each frame records eight things about the claim: who it's about (the firm itself, a customer, a competitor, a supplier), what kind of AI (generative vs. predictive/ML — generative went from roughly half of mentions in 2021 to 93% by 2026), its tense (already happening, planned, expected, or hypothetical — 72% describe something already happening), its business domain, which concept from a fixed list it matches (adoption, capability, risk, or governance), how specific it is, whether it reads as promotional, and what evidence backs it. This step also acts as a second, more careful filter: 13% of what the cheap prefilter flagged turns out, on a closer read, to have zero real AI claims and gets dropped. In total, 30,281 texts are read this way, yielding 43,366 distinct claims.
 
+```{python}
+#| label: tbl-frame-schema
+#| tbl-cap: "Semantic frame schema: the eight fields recorded per claim, with observed value distributions."
+#| echo: false
+import os
+from pathlib import Path
+import duckdb
+from tabulate import tabulate
+from IPython.display import Markdown
+
+db_path = Path("../duckdb/thesis.duckdb")
+if not db_path.exists():
+    db_path = Path("duckdb/thesis.duckdb")
+repo_root = db_path.resolve().parent.parent
+con = duckdb.connect(str(db_path), read_only=True)
+con.execute("SET enable_progress_bar = false")
+
+FIELDS = {
+    "subject": "Who the claim is about",
+    "ai_type": "Generative vs. predictive/ML",
+    "temporal": "Tense: realized, planned, expected, hypothetical",
+    "domain": "Internal, customer-facing, or unspecified",
+}
+_cwd = os.getcwd()
+os.chdir(repo_root)
+try:
+    table = []
+    for field, desc in FIELDS.items():
+        counts = con.execute(f"""
+            SELECT {field}, count(*) n FROM gold_ai_frames WHERE country_code='us' AND has_frame
+            GROUP BY 1 ORDER BY 2 DESC
+        """).df()
+        total = counts["n"].sum()
+        values = "; ".join(f"{r[field]} ({r.n/total*100:.0f}%)" for _, r in counts.iterrows())
+        table.append([field, desc, values])
+finally:
+    os.chdir(_cwd)
+con.close()
+table += [
+    ["concepts", "Fixed vocabulary of adoption/capability/risk/governance concepts (multi-label)", "see Chapter 3 frame-type table"],
+    ["specificity", "5 sub-flags: process, product, vendor, metric, date/timeline named", "see specificity_index, Chapter 4"],
+    ["rhetoric", "Promotional or strategic-importance framing (boolean)", "14.9% promotional (corpus mean)"],
+    ["evidence", "Sentence indices supporting the claim", "always non-empty by construction"],
+]
+Markdown(tabulate(table, headers=["Field", "Description", "Observed values"]))
+```
+
 ## Disclosed activity extraction
 
 Whenever a claim describes the firm itself doing something concrete — deploying, investing, hiring, measuring a result — it goes through a second pass. This time the model is told which company it's reading, so it can tell "our own product" apart from "a tool we bought." For each such claim it records: the action (deploy, develop, partner, invest in infrastructure, hire, pilot, scale, measure a result, govern, restrict, and a few others), what the action targets (in free text, later grouped into families) and who benefits from it (employees, customers, internal process, partners), how mature it is (exploring, piloting, deployed, scaled), whose technology it is (the firm's own, a third party's, co-developed, acquired, open-source), who else gets named (a partner, a vendor, a competitor, a customer), and how solid the evidence is (a named product, a number, a named vendor, or just generic language). Every one of these records is tied to an actual sentence — nothing is inferred without a supporting quote. This pass produces 27,566 distinct activities across 471 of the 510 firms.
+
+```{python}
+#| label: tbl-activity-schema
+#| tbl-cap: "Disclosed activity schema: the fields recorded per activity, with observed value distributions."
+#| echo: false
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+data_path = Path("../data/processed/clusters/firm_activities.parquet")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/firm_activities.parquet")
+df = pd.read_parquet(data_path)
+
+FIELDS = {
+    "action": "What the firm did",
+    "stage": "Operational maturity",
+    "ai_source": "Whose technology it is",
+    "target": "Who benefits",
+    "evidence_strength": "How solid the evidence is",
+}
+table = []
+for field, desc in FIELDS.items():
+    counts = df[field].value_counts()
+    total = counts.sum()
+    top = counts.head(4)
+    values = "; ".join(f"{k} ({v/total*100:.0f}%)" for k, v in top.items())
+    if len(counts) > 4:
+        values += "; ..."
+    table.append([field, desc, values])
+table.append(["object", "Free text, later grouped into 21 object families", "see Chapter 3 action x object table"])
+table.append(["named_entities", "Own brand, external provider/model, partner, acquired company, customer, distribution channel, competitor", f"{df['named_entities'].explode().dropna().shape[0]:,} entity mentions total"])
+Markdown(tabulate(table, headers=["Field", "Description", "Observed values"]))
+```
 
 ## Aggregation
 
