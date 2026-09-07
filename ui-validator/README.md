@@ -19,7 +19,13 @@ cd ui-validator && python -m http.server 8765        # abrir http://localhost:87
   está bien**, **2 · Casi, algo está mal** (aparecen chips para tocar qué
   campo: acción, objeto, función, destinatario, etapa, proveedor, evidencia),
   **3 · No, el texto no dice eso**; las teclas 1/2/3 responden la primera
-  tarjeta pendiente. Al final, **¿le falta alguna actividad al párrafo?**
+  tarjeta pendiente. Los campos que más pesan en los análisis son **origen de
+  la IA** (propia / de terceros / co-desarrollada / adquirida / no dice) y
+  **entidades con rol** (producto propio, proveedor externo, socio, cliente,
+  empresa adquirida): regla de codificación, "propia" sólo si el texto lo
+  dice, "de terceros" sólo si nombra o menciona a un externo, y un producto
+  propio no implica IA propia. Después: acción, etapa y evidencia; función y
+  destinatario son secundarios. Al final, **¿le falta alguna actividad al párrafo?**
   (4 sí / 5 no), que mide el recall de la extracción. Sostiene `docs/analytics/09_actividades_ia.md` y lo que `02`,
   `03`, `05`, `06` y `08` toman de ahí. Muestra estratificada por formulario y
   por fuerza de evidencia.

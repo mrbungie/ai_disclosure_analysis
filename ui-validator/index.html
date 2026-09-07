@@ -170,7 +170,7 @@ function renderActivity(it) {
   const a = get(it.id); const ev = new Set(it.activities.flatMap(x => x.evidence));
   let h = `<div class="meta">${firm(it)}${esc(it.form)} · ${esc(it.accession_number)} · ${it.activities.length} actividad(es) extraída(s)</div>`;
   h += `<div class="para">` + it.sentences.map(s => `<div class="sent ${ev.has(s.idx) ? 'ev' : ''}"><span class="n">[${s.idx}]</span>${esc(s.text)}</div>`).join('') + `</div>`;
-  h += `<div class="hint" style="margin:0 0 8px">Según el modelo, este párrafo de <b>${esc(it.company || it.ticker || 'la empresa')}</b> dice que la empresa hace esto (una tarjeta por actividad). Para cada una: ¿lo dice el texto? Mirá la frase, no los detalles. "IA" dice de dónde sale (propia, de terceros, adquirida…); "entidades" son las empresas o productos nombrados con su rol: los productos de la propia empresa deben decir "producto propio".</div>`;
+  h += `<div class="hint" style="margin:0 0 8px">Según el modelo, este párrafo de <b>${esc(it.company || it.ticker || 'la empresa')}</b> dice que la empresa hace esto (una tarjeta por actividad). Para cada una: ¿lo dice el texto? Mirá la frase, no los detalles. Mirá con especial cuidado <b>origen de la IA</b> y <b>entidades</b>: "propia" sólo si el texto dice que la IA es de la empresa (la construye, es su modelo, es su producto); "de terceros" sólo si nombra o menciona un proveedor o herramienta externa; si no dice, "no dice". Que una entidad sea "producto propio" no implica que la IA sea propia (un producto propio puede usar un modelo externo). Los productos de la propia empresa nunca son "proveedor externo".</div>`;
   const pend = pendingActivity(it);
   for (const x of it.activities) {
     const p = 'a' + x.activity_index + '.'; const ver = a[p + 'veredicto']; const mal = a[p + 'mal'] || {};
@@ -180,7 +180,7 @@ function renderActivity(it) {
     const focus = pend && pend.activity_index === x.activity_index ? ' style="box-shadow:0 0 0 2px #6a1b9a33"' : '';
     h += `<div class="act"${focus}><div class="hint">actividad ${x.activity_index} · evidencia [${x.evidence.join(', ')}]</div>
       <div class="sentence">${esc(it.ticker || 'la empresa')} <b>${esc(ACTION_ES[x.action] || x.action)}</b> <i>${esc(x.object)}</i>${fn}</div>
-      <div class="tags"><span class="tag">destinatario: ${esc(TARGET_ES[x.target] || x.target)}</span><span class="tag">etapa: ${esc(STAGE_ES[x.stage] || x.stage)}</span><span class="tag">IA: ${src}</span><span class="tag">entidades: ${ents}</span><span class="tag spec">evidencia: ${esc(EVID_ES[x.evidence_strength] || x.evidence_strength)}</span></div>
+      <div class="tags"><span class="tag">destinatario: ${esc(TARGET_ES[x.target] || x.target)}</span><span class="tag">etapa: ${esc(STAGE_ES[x.stage] || x.stage)}</span><span class="tag" style="background:#ede7f6;font-weight:600">origen de la IA: ${src}</span><span class="tag" style="background:#ede7f6">entidades: ${ents}</span><span class="tag spec">evidencia: ${esc(EVID_ES[x.evidence_strength] || x.evidence_strength)}</span></div>
       <div class="big">
         <button class="ok ${ver === 'ok' ? 'on' : ''}" data-verdict='${JSON.stringify([x.activity_index, 'ok'])}'>1 · Sí, está bien</button>
         <button class="bad ${ver === 'mal' ? 'on' : ''}" data-verdict='${JSON.stringify([x.activity_index, 'mal'])}'>2 · Casi, algo está mal</button>

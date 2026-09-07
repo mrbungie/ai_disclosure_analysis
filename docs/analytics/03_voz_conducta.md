@@ -1,7 +1,8 @@
 # Grilla voz × comportamiento: dos ejes, nueve celdas
 
 Producido por `scripts/analytics/build_voice_behavior_grid.py`. Es la forma
-directa de la pregunta de la tesis —¿habla más de lo que hace?— con los dos ejes
+directa de la pregunta de la tesis —¿la voz promocional excede la sustancia
+conductual divulgada?— con los dos ejes
 explícitos en vez de escondidos dentro de un clustering. **Modo de análisis
 final: las 510 empresas con filings entran**; las 17 sin ningún frame de IA
 tienen una celda propia, **sin IA**, porque no hay voz ni conducta que ubicar.

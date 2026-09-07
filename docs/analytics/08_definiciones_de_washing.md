@@ -14,7 +14,14 @@ Las correlaciones entre ellas son bajas: Spearman −0,07 entre la brecha por
 canal y el exceso condicional; 7 de las 8 del exceso caen en la esquina
 "vocales sustantivos" de la grilla, no en la de washing. **Son tres fenómenos:
 hablar sin hacer, hablar más de lo que lo hecho justifica, y contar cosas
-distintas según a quién.** El tercero es el que coincide con el mecanismo
+distintas según a quién.** Con las actividades divulgadas (`09`), los dos
+primeros se leen como dos tipos de divulgación consistente con washing:
+**promoción sin respaldo** (voz alta sin ninguna actividad desplegada
+identificable: las 44 empresas de `03`, con I+D 1,8% y beta 0,77) y **exceso
+promocional** (mucha actividad concreta y aun así una promoción muy por
+encima de lo que esa actividad predice: las 8 de este documento). La brecha
+entre canales es una tercera dimensión, de consistencia entre venues, y no
+de nivel. El tercero es el que coincide con el mecanismo
 que la SEC señaló en la correspondencia con Welltower; la literatura de
 greenwashing suele medir el primero; el segundo es el que un score por
 empresa puede testear. Lo que sigue es el segundo: el estimador, sus
