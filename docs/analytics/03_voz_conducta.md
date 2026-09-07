@@ -106,29 +106,29 @@ producto o proceso nombrado (`activity_grounding.py`).
 
 | esquina | empresas | actividades (mediana) | concreción (media) | % respaldadas | % sin ninguna actividad |
 |---|---:|---:|---:|---:|---:|
-| Desacople absoluto (voz alta, conducta baja) | 36 | 6 | 0,31 | **53** | 8 |
-| Sustancia callada | 38 | 34,5 | 0,41 | 92 | 0 |
-| Vocales sustantivos | 90 | 77,5 | 0,39 | **94** | 0 |
-| Silenciosos | 79 | 4 | 0,33 | 48 | 18 |
-| resto de la grilla | 250 | 18,5 | 0,34 | 77 | 4 |
+| Desacople absoluto (voz alta, conducta baja) | 36 | 5,5 | 0,31 | **39** | 8 |
+| Sustancia callada | 38 | 33 | 0,39 | 82 | 0 |
+| Vocales sustantivos | 90 | 88,5 | 0,36 | **91** | 0 |
+| Silenciosos | 79 | 4 | 0,31 | 28 | 17 |
+| resto de la grilla | 250 | 18 | 0,32 | 62 | 4 |
 
-Spearman entre el eje de conducta y la concreción: +0,33 (n=471). Miden
+Spearman entre el eje de conducta y la concreción: +0,24 (n=471). Miden
 cosas relacionadas pero distintas: el eje dice cuánto de lo que se afirma
 es conducta; la concreción dice cuánto de esa conducta tiene nombre, etapa,
 cifra o proveedor.
 
-**Entre las 170 empresas de voz alta hay dos poblaciones.** 142 describen al
-menos una actividad desplegada con producto nombrado (mediana 52
-actividades; I+D 10% de ventas, beta 0,93, 2,4 frames por 1.000 párrafos:
-NVDA, MSFT, ADBE, GOOGL, IBM, INTC, CRM, PANW). 28 no describen ninguna
-(mediana 3 actividades; I+D 1,7%, beta 0,77, 0,28 frames por 1.000: CL,
-AWK, BMY, AAL, PVH, FANG, MHK). Esta segunda es la que corresponde a la
+**Entre las 170 empresas de voz alta hay dos poblaciones.** 126 describen al
+menos una actividad desplegada con producto nombrado (mediana 58
+actividades; I+D 10,6% de ventas, beta 0,99, 3,3 frames por 1.000 párrafos:
+NVDA, MSFT, ADBE, GOOGL, IBM, CRM, PANW, INTC). 44 no describen ninguna
+(mediana 5 actividades; I+D 1,8%, beta 0,77, 0,36 frames por 1.000: MPWR, CL,
+EA, JPM, EXPD, SWKS, DPZ, AWK). Esta segunda es la que corresponde a la
 noción intuitiva de washing: afirmaciones estratégicas sin una actividad
-identificable detrás. En la esquina de desacople absoluto, 19 de las 36
-tienen alguna actividad desplegada con nombre (AAPL, UNH, ELV, PYPL, MPWR,
-CI, AMT, HUM, DFS, USB…) y 17 no la tienen (TXT, ROL, OKE, CSX, GIS, HLT,
-COP, FE, KMB, MDLZ, KEY, AAL, FANG, MHK…). La esquina no es homogénea, y
-la concreción es la que la parte en dos.
+identificable detrás. En la esquina de desacople absoluto, 14 de las 36
+tienen alguna actividad desplegada con nombre (AAPL, UNH, ELV, PYPL, CI, AMT,
+HUM, LHX, DFS, USB…) y 22 no la tienen (CSX, TXT, SO, OKE, HLT, GIS, KMB,
+FANG, ROL, FE, COP, MDLZ, KEY, MHK, SYF, DPZ, MPWR…). La esquina no es
+homogénea, y la concreción es la que la parte en dos.
 
 ## Cómo se relaciona con el score de `08_definiciones_de_washing.md`
 

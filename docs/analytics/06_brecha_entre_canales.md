@@ -140,42 +140,42 @@ en la call. Son dos formas de desajuste distintas; la segunda es la que
 coincide con el mecanismo que la SEC señaló en la correspondencia con
 Welltower.
 
-## Resultado 4: la call cuenta las mismas actividades, con más nombres y cifras
+## Resultado 4: la call cuenta las mismas actividades, con más cifras y nombres
 
 ¿La call sólo cambia el tono, o cambia también lo que la empresa dice estar
 haciendo? Con las actividades divulgadas (`09_actividades_ia.md`), misma
-empresa y mismo ejercicio, sobre las 464 celdas de 182 empresas con al
+empresa y mismo ejercicio, sobre las 459 celdas de 183 empresas con al
 menos tres actividades en cada canal: proporción de las actividades del
 canal en cada familia, call menos filing (`activity_grounding.py`,
 `fig_brecha_actividades.png`).
 
 | familia de actividad | % en la call | % en el filing | brecha (p.p.) | t |
 |---|---:|---:|---:|---:|
-| despliegue de cara al cliente | 37,8 | 37,3 | +0,5 | 0,4 |
-| despliegue interno | 26,5 | 25,1 | +1,4 | 1,2 |
-| inversión en infraestructura | 6,8 | 8,0 | −1,2 | −1,6 |
-| **resultado cuantificado** | **11,5** | **4,4** | **+7,0** | 10,1 |
-| **con función de negocio declarada** | **76,6** | **65,9** | **+10,7** | 8,6 |
-| IA propia | 52,2 | 44,1 | +8,2 | 5,9 |
-| con producto o proceso nombrado | 41,6 | 36,8 | +4,8 | 3,8 |
-| proveedor de terceros nombrado | 12,7 | 8,6 | +4,1 | 4,8 |
-| piloto o exploración | 4,4 | 2,3 | +2,1 | 4,6 |
-| talento o capacitación | 1,2 | 2,8 | −1,6 | −4,8 |
-| gobernanza o restricción | 0,3 | 1,8 | −1,5 | −5,8 |
+| despliegue de cara al cliente | 43,5 | 41,3 | +2,2 | 1,8 |
+| despliegue interno | 24,4 | 23,8 | +0,6 | 0,5 |
+| IA propia | 71,8 | 70,4 | +1,5 | 1,0 |
+| inversión en infraestructura | 5,9 | 7,9 | −2,0 | −3,0 |
+| **resultado cuantificado** | **17,1** | **6,2** | **+11,0** | 13,3 |
+| **con función de negocio declarada** | **76,5** | **64,8** | **+11,7** | 8,6 |
+| proveedor, modelo o socio externo nombrado | 8,1 | 2,8 | +5,3 | 8,0 |
+| con producto o proceso nombrado | 30,3 | 26,5 | +3,8 | 3,0 |
+| piloto o exploración | 5,3 | 3,2 | +2,1 | 3,9 |
+| talento o capacitación | 1,1 | 2,7 | −1,7 | −4,9 |
+| gobernanza o restricción | 0,3 | 2,2 | −1,9 | −6,1 |
 
 **La mezcla de actividades es la misma en los dos canales**: la proporción
-de despliegue a clientes, despliegue interno e infraestructura no difiere
-(brechas de −1 a +1,4 p.p., ninguna distinguible de cero). Lo que cambia es
-la evidencia y el detalle: en la call la misma actividad viene con función
-declarada (+10,7 p.p.), con resultado cuantificado (+7,0: el filing casi
-nunca pone la cifra), con producto nombrado (+4,8) y con proveedor nombrado
-(+4,1), y la empresa reclama la IA como propia (+8,2). El filing se queda
-con el talento y la gobernanza. La brecha entre canales, leída en
-actividades, no es "cuenta cosas distintas según a quién" sino "cuenta lo
-mismo, con cifras y nombres para el analista y sin ellas en lo que firma".
-Es estable por ejercicio: la brecha de resultados cuantificados va de +4,5 a
-+8,4 p.p. entre 2021 y 2025 y la de producto nombrado crece de −1,4 a
-+10,4.
+de despliegue a clientes, despliegue interno e IA propia no difiere (brechas
+de +0,6 a +2,2 p.p., ninguna distinguible de cero al 5%). Lo que cambia es la
+evidencia y el detalle: en la call la misma actividad viene con función
+declarada (+11,7 p.p.), con resultado cuantificado (+11,0: el filing casi
+nunca pone la cifra), con proveedor o socio nombrado (+5,3, casi el triple)
+y con producto nombrado (+3,8). El filing se queda con la infraestructura, el
+talento y la gobernanza. La brecha entre canales, leída en actividades, no es
+"cuenta cosas distintas según a quién" sino "cuenta lo mismo, con cifras y
+nombres para el analista y sin ellas en lo que firma". Es estable por
+ejercicio: la brecha de resultados cuantificados va de +9,0 a +11,8 p.p.
+entre 2021 y 2025, la de función declarada crece de +5,0 a +16,7 y la de
+producto nombrado de −1,4 a +8,8.
 
 ## Chequeo secundario: tasas condicionadas a hablar de IA
 
@@ -210,7 +210,8 @@ que la conclusión no depende de cómo se normaliza.
 3. La brecha es un **segundo score de washing**, ortogonal al de `08`, y es el
    que corresponde al mecanismo regulatorio.
 4. En actividades, la call y el filing describen la misma mezcla de
-   despliegues; la call agrega cifras, nombres de producto y de proveedor.
+   despliegues; la call agrega cifras, funciones, proveedores y nombres de
+   producto; el filing se queda con infraestructura, talento y gobernanza.
 
 ## Limitaciones
 

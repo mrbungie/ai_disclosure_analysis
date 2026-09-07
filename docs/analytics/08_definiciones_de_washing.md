@@ -125,19 +125,20 @@ afirmar algo. De 210 empresas con ≤25 frames, el test no rechaza en ninguna.
 
 Las actividades divulgadas (`09_actividades_ia.md`) permiten separar
 intensidad promocional de respaldo conductual. Las ocho de la cola de
-washing tienen entre 110 y 727 actividades, y entre 38 y 302 desplegadas
-con producto o proceso nombrado (GOOGL 302, PANW 271, CDNS 184, CRM 182,
-CRWD 166); su concreción conductual (0,37-0,52) está en la mitad superior
+washing tienen entre 112 y 720 actividades, y entre 21 y 275 desplegadas
+con producto o proceso nombrado (PANW 275, GOOGL 238, CRM 148, CRWD 121,
+CDNS 109); su concreción conductual (0,35-0,49) está en la mitad superior
 del corpus. El exceso promocional no se correlaciona con la concreción
-(Spearman −0,05, n=437) ni con el número de actividades desplegadas con
-nombre (−0,04). En el quintil superior de tasa promocional, 84 de 90
-empresas tienen alguna actividad desplegada con producto nombrado; las seis
-que no (PVH, PCAR, CCL, COP, LYB…) tienen tres actividades en la mediana.
-**Promocionar y describir actividad concreta van juntos**; el exceso que el
-test detecta es promoción por encima de mucha conducta, no promoción sin
-conducta. La promoción sin actividad identificable existe, pero es otra
-población: la de voz alta sin respaldo de `03` (28 empresas: CL, AWK, BMY,
-AAL, PVH, FANG, MHK), que este test no marca porque tiene pocos frames.
+(Spearman −0,01, n=438) ni con el número de actividades desplegadas con
+nombre (−0,03). En el quintil superior de tasa promocional, 78 de 90
+empresas tienen alguna actividad desplegada con producto nombrado (mediana
+103 actividades); las doce que no (JPM, GILD, CMI, IVZ, GL, PVH, PCAR…)
+tienen cinco actividades en la mediana. **Promocionar y describir actividad
+concreta van juntos**; el exceso que el test detecta es promoción por encima
+de mucha conducta, no promoción sin conducta. La promoción sin actividad
+identificable existe, pero es otra población: la de voz alta sin respaldo de
+`03` (44 empresas: MPWR, CL, EA, JPM, EXPD, SWKS, DPZ, AWK), que este test no
+marca porque tiene pocos frames.
 
 ## Todas las empresas, en intensidad
 
