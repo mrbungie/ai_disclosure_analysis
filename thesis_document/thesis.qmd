@@ -139,18 +139,21 @@ The measurement pipeline moves through four stages: the raw corpus, a machine-le
 #| echo: false
 #| fig-width: 6.8
 #| fig-height: 2.6
+import json
+from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-stages = [
-    '1. Raw Scorable Paragraphs',
-    '2. Deduplicated Unique Texts',
-    '3. AI Candidate Filter (GBDT)',
-    '4. Semantic Frames (LLM Judge)',
-    '5. Grounded Activities (LLM Pass 2)'
-]
-counts = [8354547, 4868804, 30577, 26469, 17420]
-labels = ['8.35M', '4.87M (58%)', '30,577 (0.6%)', '26,469 (87%)', '17,420 (66%)']
+data_path = Path("../data/processed/clusters/pipeline_funnel.json")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/pipeline_funnel.json")
+funnel = json.loads(data_path.read_text())["stages"]
+stages = [s["stage"] for s in funnel]
+counts = [s["count"] for s in funnel]
+last_index = len(funnel) - 1
+labels = [f"{c:,}" + (f" ({c / counts[i - 1] * 100:.1f}% of prev.)" if 0 < i < last_index else "")
+          for i, c in enumerate(counts)]
+labels[-1] = f"{counts[-1]:,} activities (1.6 per behavioural text)"
 
 fig, ax = plt.subplots(figsize=(6.8, 2.6), dpi=300)
 
