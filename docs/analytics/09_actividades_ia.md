@@ -49,8 +49,8 @@ se crea; un objeto que no es IA explícita tampoco.
 Resultado: 17.420 textos procesados, 0 errores, **27.583 actividades únicas
 por empresa** (una por texto único × índice, así el boilerplate repetido no
 infla), 471 de 510 empresas con al menos una. 51% de las actividades vienen
-sólo de earnings calls (misma advertencia de precisión que `06`: 0,60 en
-calls contra 0,98 en 10-K). Todo lo que sigue muestra también el valor "sólo
+sólo de earnings calls, canal en el que el prefiltro no se validó (`00`,
+tabla de conjuntos etiquetados; en 10-K la precisión es 0,98). Todo lo que sigue muestra también el valor "sólo
 filings" cuando la afirmación es sobre empresas.
 
 ## Cómo se reparten las actividades
@@ -329,7 +329,7 @@ automatización de procesos.
   las actividades no declara función y 7% cae en "otras".
 - `ai_source=unspecified` en 16% de las actividades: el texto no dice de
   dónde sale la IA, y el modelo tiene instrucción de no inferirlo.
-- 51% de las actividades vienen sólo de calls, con precisión 0,60 del
+- 51% de las actividades vienen sólo de calls, canal sin validación del
   prefiltro; los % de empresas se muestran también sólo con filings.
 - Segunda pasada de LLM sobre etiquetas de la primera: hereda el error de
   frames y agrega el suyo. La validación humana (`ui-validator/`, pestaña

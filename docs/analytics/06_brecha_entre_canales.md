@@ -216,9 +216,11 @@ que la conclusión no depende de cómo se normaliza.
 ## Limitaciones
 
 - Ambos canales pasan por el mismo prefiltro y el mismo juez, con error de
-  medición distinto: precisión 0,98 en 10-K/10-Q, 0,73 en proxy/8-K, 0,60 en
-  calls (`prefilter_evaluation.md` §8.16). Parte del nivel de la brecha puede
-  ser error diferencial; el event study dentro de empresa no lo sufre.
+  medición distinto: precisión 0,98 en 10-K/10-Q y 0,73 en proxy/8-K
+  (`prefilter_evaluation.md` §8.16); **en calls el prefiltro no se validó**
+  (`00_funnel_del_corpus.md`, tabla de conjuntos etiquetados), y es el canal
+  con más frames por párrafo. Parte del nivel de la brecha puede ser error
+  diferencial; el event study dentro de empresa no lo sufre.
 - `rhetoric_promotional` es una etiqueta de LLM sin validación humana
   (`docs/problemas_academicos.md` #1). `ui-validator/` existe para cerrar esto.
 - Las transcripciones cubren ~3,2 de 4 calls por empresa-ejercicio y terminan
