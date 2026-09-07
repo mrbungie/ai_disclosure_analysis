@@ -22,12 +22,14 @@ ENTRE canales es otra cosa y va aparte — ver
 `docs/pregunta_identificacion_sec.md`.
 
 Advertencia de medición que hay que leer antes de las cifras: el prefiltro se
-entrenó con 10-K/10-Q y se ajustó en DEF 14A / 8-K; **en calls no tiene
-ninguna validación** (`docs/analytics/00_funnel_del_corpus.md`, tabla de
-conjuntos etiquetados) y el registro hablado es distinto. Las tasas de abajo se
-calculan sobre frames que el juez LLM confirmó (`has_frame`), que filtra falsos
-positivos del prefiltro, pero la comparación entre canales arrastra error de
-medición distinto por canal hasta que la muestra humana lo mida.
+entrenó con 10-K/10-Q y se ajustó en DEF 14A / 8-K; el registro hablado es
+distinto. Medido sobre 800 párrafos de calls etiquetados por el juez
+(`scripts/verif/prefilter_form_validation.py`, `golden_set_forms/calls/`), el
+modelo desplegado (v2, umbral 0,17) queda en **precisión 0,59 y recall 0,98**
+ponderados al corpus: recall casi perfecto, pero cuatro de cada diez textos
+marcados no son divulgación de IA. Las tasas de abajo se calculan sobre frames
+que el juez LLM confirmó (`has_frame`), que filtra buena parte de eso, pero la
+comparación entre canales sigue arrastrando error de medición distinto por canal.
 
 Uso:
     uv run python scripts/analytics/earnings_calls_analysis.py
@@ -188,7 +190,7 @@ def main() -> None:
     others["cuantificado"] = (others["cuantificado"] * 100).round(1)
     print(others.to_string(index=False))
     print("\nOJO: los formularios difieren en error de medición del prefiltro")
-    print("(precisión ponderada 0,98 en 10-K/10-Q, 0,73 en proxy/8-K; sin validación en calls),")
+    print("(precisión ponderada 0,98 en 10-K/10-Q, 0,73 en proxy/8-K, 0,59 en calls),")
     print("así que esta tabla ordena magnitudes, no sostiene una comparación formal.")
 
     args.output_dir.mkdir(parents=True, exist_ok=True)

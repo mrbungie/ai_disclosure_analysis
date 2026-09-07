@@ -80,15 +80,18 @@ validación humana.
 | acuerdo entre jueces | 10-K/10-Q | 6.038 pareados | — | gemini vs qwen | medir si el juez es reproducible | κ 0,87 (menciona IA), 0,86 (divulgación), 0,81 (relevancia en 3 niveles) |
 | ajuste DEF 14A / 8-K | DEF 14A 1.999 · 8-K 394 | 2.393 | 408 | qwen | **entrenar** v2 fuera del dominio 10-K; disjunto de la validación | — |
 | validación DEF 14A / 8-K | DEF 14A 1.000 · 8-K 500 | 1.500 | 381 | qwen | **holdout**: nunca entra al ajuste ni al umbral; estratos término fuerte / débil / ninguno | F1 0,82 (DEF 14A), 0,65 (8-K); precisión 0,73, recall 0,92 ponderados |
-| earnings calls | calls | **0** | — | — | **el prefiltro no se validó en calls**: se entrenó en 10-K/10-Q y se ajustó en proxy/8-K; la única medición pendiente es la muestra humana | sin cifra |
+| validación earnings calls | calls | 800 | 376 (menciona IA) | qwen | **holdout**: el prefiltro no se entrenó ni ajustó con calls; estratos término fuerte 400 / débil 200 / ninguno 200 (`prefilter_form_validation.py`, etiquetas en `golden_set_forms/calls/`) | precisión 0,59, recall 0,98, F1 0,73 ponderados al corpus; por estrato: fuerte 0,85 / débil 0,58 |
 | anchors y léxico | — | 17 anchors positivos, 10 negativos; 18 términos fuertes, 12 débiles, ~60 entidades | — | escritos a mano (`configs/ai_prefilter.yaml`) | señales del prefiltro (similitud coseno, compuerta léxica) | — |
 | esquema de actividades (desarrollo) | mixto | 30 párrafos al azar × 3 versiones del prompt | — | juez, revisados a mano en sesión | diseñar `ai_source` y los roles de entidad; no entran a ningún número | — |
 | **validación humana** (pendiente) | todos | 300 párrafos con frames (434 frames) · 300 párrafos del prefiltro por estrato · 120 párrafos con actividades (267 actividades) | — | **humano** (`ui-validator/`) | κ humano–juez en promocional y temporal; precisión/recall del prefiltro reponderados, incluidas calls; existencia y precisión por campo de las actividades | pendiente |
 
 Lo que esta tabla deja claro: **todas las etiquetas que sostienen los
-análisis son de un LLM**, el único acuerdo medido es entre dos LLM, y el canal
-con más frames por párrafo (calls) es el único sin ninguna medición de error
-del prefiltro. Por eso la muestra humana estratifica por formulario.
+análisis son de un LLM**, el único acuerdo medido es entre dos LLM, y el
+prefiltro mide distinto por canal: precisión 0,98 en 10-K/10-Q, 0,73 en
+proxy/8-K y 0,59 en calls, con recall alto en todos. El juez de frames filtra
+después esos falsos positivos (devuelve cero frames), pero la comparación
+entre canales arrastra error distinto. Por eso la muestra humana estratifica
+por formulario.
 
 El corpus completo (con Italia y Chile) tiene 10.216.373 párrafos y 5.616.337
 textos únicos puntuables; sólo EE.UU. tiene embeddings, scoring y frames.
