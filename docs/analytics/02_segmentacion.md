@@ -112,31 +112,34 @@ por la dimensión donde más se despega del promedio, medido en z-scores.
 ## Qué hace cada segmento, en actividades
 
 Las tasas dicen de qué habla cada segmento; las actividades divulgadas
-(`09_actividades_ia.md`: la empresa hace ACCIÓN sobre OBJETO para FUNCIÓN)
-dicen qué dice que hace. % de empresas del segmento con al menos una
-actividad de cada tipo, salvo donde se indica:
+(`09_actividades_ia.md`: la empresa hace ACCIÓN sobre OBJETO para FUNCIÓN,
+con origen de la IA y entidades nombradas) dicen qué dice que hace. % de
+empresas del segmento con al menos una actividad de cada tipo, salvo donde se
+indica:
 
 | | Desplegadores de producto | Adoptantes con gobernanza | Listadores de riesgo |
 |---|---|---|---|
-| actividades por empresa (mediana) | **108** | 19,5 | 6 |
-| acciones principales | deploy, develop, invest_infrastructure, integrate, partner | deploy, hire_or_train, develop | deploy, hire_or_train |
-| objetos más frecuentes | producto con nombre propio (90%: AIP, AIOps, DSO.ai, Firefly), plataforma de analítica (82%), aceleradores y AI PC (60%), copilots (43%), agentes | modelos predictivos (46%), plataforma de analítica (45%), automatización (39%), visión y robótica industrial (19%), copilots (18%) | modelos predictivos (27%), automatización (21%), plataforma (20%), producto con nombre (17%) |
-| funciones (% de las actividades) | operaciones 13, IT y ciberseguridad 7,5, producto 7,6, desarrollo de software 5 | operaciones 22, atención al cliente 6, fraude y riesgo 5, marketing 5 | operaciones 19, marketing 6, atención al cliente 5, fraude 4 |
-| para clientes / interno (% de las actividades, media) | 45 / 35 | 25 / 58 | 18 / 62 |
-| IA propia / proveedor de terceros nombrado | 99 / **90** | 86 / 53 | 59 / 32 |
-| inversión en infraestructura | **92** | 57 | 33 |
-| resultado cuantificado | **90** | 62 | 27 |
-| etapa máxima: escalado / desplegado / piloto o exploración / ninguna | 93 / 7 / 0 / 0 | 61 / 31 / 3 / 4,5 | 32 / 49 / 6 / 10 |
+| actividades por empresa (mediana) | **112** | 18 | 5 |
+| acciones principales | deploy, scale, invest_infrastructure, partner, hire_or_train | deploy, hire_or_train, invest_infrastructure | deploy, hire_or_train |
+| objetos más frecuentes | plataforma de analítica (88%), producto con nombre propio (84%: AIOps, AIP, Mist AI), modelos predictivos (80%), data centers (62%), aceleradores y AI PC (56%) | modelos predictivos (46%), plataforma de analítica (42%), automatización (33%), producto con nombre (29%), visión y robótica industrial (16%), copilots (15%) | modelos predictivos (25%), plataforma (22%), automatización (16%), producto con nombre (8%) |
+| funciones (% de las actividades) | operaciones 66 (deploy producto), producto 46, atención al cliente 40, IT 35 | automatización de operaciones 28, producto en operaciones 27, atención al cliente 15, marketing 10 | operaciones 11, automatización 10, modelos en operaciones 10, marketing 6 |
+| para clientes / interno (% de las actividades, media) | 51 / 33 | 27 / 60 | 21 / 66 |
+| origen de la IA: propia / de terceros / no dice (% de las actividades) | 80 / 6 / 10 | 55 / 12 / 30 | 46 / 17 / 34 |
+| marca propia nombrada / proveedor o socio externo nombrado / cliente nombrado | **97 / 89 / 48** | 64 / 46 / 10 | 34 / 27 / 5 |
+| inversión en infraestructura / co-desarrollo o adquisición | **90 / 66** | 55 / 19 | 25 / 7 |
+| resultado cuantificado | **94** | 65 | 37 |
+| etapa máxima: escalado / desplegado / piloto o exploración / ninguna | 93 / 7 / 0 / 0 | 64 / 27 / 3 / 4 | 34 / 44 / 7 / 11 |
 
-Los desplegadores de producto venden IA: producto con nombre, plataforma,
-aceleradores, copilots, con proveedor y con cifra, y son los únicos que
-compran (50% adquiere o licencia) y se alían (68%). Los adoptantes con
-gobernanza automatizan operaciones y corren modelos predictivos hacia
-adentro, en fraude, riesgo y forecasting, con IA propia y sin proveedor
-nombrado. Los listadores de riesgo describen seis actividades en la
-mediana, casi siempre automatización o un modelo interno sin producto,
-métrica ni proveedor, y uno de cada diez no describe ninguna. Fichas por
-empresa (Microsoft, ServiceNow, JPMorgan, Nike, Howmet…) en `09`.
+Los desplegadores de producto venden IA propia con marca: casi todos nombran
+un producto propio y un proveedor o socio externo, la mitad nombra clientes,
+dos tercios co-desarrollan o adquieren, y 80% de sus actividades declaran la
+IA como propia. Los adoptantes con gobernanza automatizan operaciones y
+corren modelos predictivos hacia adentro, con IA propia sin marca y en un
+tercio de los casos sin decir de dónde sale. Los listadores de riesgo
+describen cinco actividades en la mediana, uno de cada diez ninguna, y lo
+poco que describen es automatización o un modelo interno, con la mayor
+proporción de IA de terceros (17%) y de origen no declarado (34%). Fichas
+por empresa (Microsoft, ServiceNow, JPMorgan, Nike, Howmet…) en `09`.
 
 ## Que la segmentación sirva río abajo
 

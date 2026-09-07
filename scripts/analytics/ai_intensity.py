@@ -6,7 +6,7 @@ empresa-año entra al panel si tiene ≥3 frames, una empresa al score si tiene
 hablar de IA sale del panel en vez de contar como cero. Este módulo arma la
 tabla de DOCUMENTOS —10-K, 10-Q, DEF 14A, 8-K y earnings calls de EE.UU.— con
 su cantidad de párrafos y sus conteos de frames (cero si no tiene), para que
-cualquier análisis pueda correrse sobre intensidades por 1.000 párrafos con
+cualquier análisis pueda correrse sobre intensidades por 1.000 palabras con
 los ceros adentro.
 
     from ai_intensity import document_table, aggregate
@@ -62,7 +62,7 @@ def _frame_counts(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
 def document_table(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     """Una fila por documento de EE.UU. con párrafos puntuables y conteos de
     frames (cero si el documento no habla de IA)."""
-    docs = con.execute(f"""
+    docs = con.execute(rf"""
         WITH manifest AS (
             SELECT country_code, accession_number, ticker, cik, filing_date, period_end_date, form_type AS form
             FROM filing_manifest WHERE form_type != 'Earnings call transcript'
@@ -70,17 +70,18 @@ def document_table(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
             SELECT country_code, accession_number, ticker, cik, filing_date, period_end_date, '10-Q'
             FROM filing_manifest_10q
         ), paras AS (
-            SELECT country_code, accession_number, count(*) AS n_paragraphs
+            SELECT country_code, accession_number, count(*) AS n_paragraphs,
+                   sum(list_count(regexp_split_to_array(trim(paragraph_text), '\s+'))) AS n_words
             FROM paragraphs WHERE is_scorable GROUP BY 1, 2
         )
         SELECT 'filing' AS channel, m.form, m.ticker, m.cik, m.filing_date AS fecha,
                TRY_CAST(m.period_end_date AS DATE) AS period_end, NULL::INTEGER AS call_fy,
-               m.accession_number, p.n_paragraphs
+               m.accession_number, p.n_paragraphs, p.n_words
         FROM manifest m JOIN paras p USING (country_code, accession_number)
         WHERE m.country_code = 'us' AND m.ticker IS NOT NULL AND m.filing_date IS NOT NULL AND m.form IN {FILING_FORMS}
         UNION ALL
         SELECT 'call', 'Earnings call', m.ticker, NULL, CAST(m.filing_date AS DATE), NULL::DATE,
-               CAST(regexp_extract(m.document_id, '_([0-9]{{4}})Q', 1) AS INTEGER), m.document_id, p.n_paragraphs
+               CAST(regexp_extract(m.document_id, '_([0-9]{{4}})Q', 1) AS INTEGER), m.document_id, p.n_paragraphs, p.n_words
         FROM read_parquet('{CALLS_MANIFEST}') m
         JOIN paras p ON p.accession_number = m.document_id AND p.country_code = 'us'
         WHERE m.ticker IS NOT NULL
@@ -104,14 +105,23 @@ def document_table(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
 
 def aggregate(docs: pd.DataFrame, keys: list[str], forms: tuple[str, ...] | None = None,
               min_paragraphs: int = 1) -> pd.DataFrame:
-    """Suma documentos por `keys` y devuelve intensidades por 1.000 párrafos
-    (`*_per_1k`) más los conteos y `any_ai`. `forms` restringe los formularios."""
+    """Suma documentos por `keys` y devuelve intensidades por 1.000 PALABRAS
+    (`*_per_1k`) más los conteos y `any_ai`. `forms` restringe los formularios.
+
+    La unidad de intensidad es palabras, no párrafos: un párrafo de call
+    (turno de conversación, ~129 palabras en promedio) y uno de filing
+    (~67 palabras) no son la misma unidad, y contarlos como si lo fueran
+    infla artificialmente cualquier comparación entre venues (ver Cap. 6).
+    Esta es la única definición de `*_per_1k` en todo el proyecto: todo lo
+    que consume esta función —segmentación, regresiones, event studies—
+    hereda automáticamente la unidad de palabras."""
     d = docs if forms is None else docs[docs["form"].isin(forms)]
     g = d.groupby(keys).agg(n_docs=("accession_number", "nunique"), n_paragraphs=("n_paragraphs", "sum"),
+                            n_words=("n_words", "sum"),
                             **{c: (c, "sum") for c in COUNT_COLUMNS}).reset_index()
     g = g[g["n_paragraphs"] >= min_paragraphs]
     for c in COUNT_COLUMNS:
-        g[c.replace("n_", "", 1) + "_per_1k"] = 1000.0 * g[c] / g["n_paragraphs"]
+        g[c.replace("n_", "", 1) + "_per_1k"] = 1000.0 * g[c] / g["n_words"]
     g["any_ai"] = (g["n_frames"] > 0).astype(float)
     # tasas condicionales, NaN cuando no hay frames (para comparar con el margen intensivo)
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -138,4 +148,4 @@ def firm_intensity(con: duckdb.DuckDBPyConnection, keys: list[str] = ("ticker",)
     cero, no se excluye."""
     docs = document_table(con)
     docs = docs[docs["form"].isin(FILING_FORMS)].assign(year=lambda d: d["fecha"].dt.year)
-    return aggregate(docs, list(keys))[list(keys) + ["n_docs", "n_paragraphs", "n_frames", "frames_per_1k", "any_ai"]]
+    return aggregate(docs, list(keys))[list(keys) + ["n_docs", "n_paragraphs", "n_words", "n_frames", "frames_per_1k", "any_ai"]]

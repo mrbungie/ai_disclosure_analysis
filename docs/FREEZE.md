@@ -13,7 +13,7 @@ humana (`ui-validator/`) revele un problema grave. Todo análisis de
 | juez | `qwen/qwen3.7-flash` vía OpenRouter, `prompt_version = v1`, pydantic-ai con `retries=2` |
 | extracción | 30.579 textos únicos clasificados, 26.469 con ≥1 frame, 43.366 frames únicos → 46.215 en documentos; partes en `data/interim/ai_classify/` (78 sesiones, todas en B2) |
 | `gold_ai_frames` | vista de `build_duckdb.py --with-text-tables`: frames del texto único unidos a TODAS sus instancias, población del último despliegue del prefiltro |
-| actividades de IA | `ai_activities_from_frames.py`, `qwen/qwen3.7-flash`, prompt `v1`, sobre los 17.420 textos únicos con frames conductuales de la empresa; 27.468 actividades; partes en `data/interim/ai_activities/` (en B2) |
+| actividades de IA | `ai_activities_from_frames.py`, `qwen/qwen3.7-flash`, prompt `v2` (la empresa que presenta el documento va en el prompt; `ai_source` y `named_entities` con rol), sobre los 17.420 textos únicos con frames conductuales de la empresa; 27.583 actividades; partes en `data/interim/ai_activities/` (en B2; las corridas previas en `data/archive/`) |
 | segmentación | `build_segments.py`, k=3 por estabilidad + "sin IA" por regla, semilla 42; no se reclusteriza |
 | grilla | `build_voice_behavior_grid.py`, terciles sobre tasas encogidas, semilla 42 |
 | financieros | XBRL (`data/raw/xbrl_facts/us/`), precios y factores FF3; ERP geométrico 6,48% |

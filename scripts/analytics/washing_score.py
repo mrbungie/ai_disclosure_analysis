@@ -444,18 +444,18 @@ def main() -> None:
     out = args.output_dir / "firm_washing_score.parquet"
     per_firm.drop(columns=["bucket"]).to_parquet(out, index=False)
 
-    # --- Todas las empresas, en intensidad: exceso promocional por 1.000 párrafos
+    # --- Todas las empresas, en intensidad: exceso promocional por 1.000 PALABRAS
     # dado la conducta y el volumen de IA, con las que no hablan de IA en cero.
     # El test binomial de arriba sólo existe para quien tiene frames; esto pone
     # a las 510 en la misma escala (residuo estandarizado de un log-log).
     import statsmodels.api as sm
     panel_all = pd.read_parquet(args.output_dir / "firm_year_master_v2.parquet")
     beh = ["n_deployed", "n_revenue_outcome", "n_cost_outcome", "n_ai_investment", "n_ai_infrastructure"]
-    allf = panel_all.groupby("ticker").agg(n_paragraphs=("n_paragraphs", "sum"), n_frames=("n_frames", "sum"),
+    allf = panel_all.groupby("ticker").agg(n_words=("n_words", "sum"), n_frames=("n_frames", "sum"),
                                            n_promo=("n_promo", "sum"), **{c: (c, "sum") for c in beh}).reset_index()
-    allf["promo_per_1k"] = 1000 * allf["n_promo"] / allf["n_paragraphs"]
-    allf["behavior_per_1k"] = 1000 * allf[beh].sum(axis=1) / allf["n_paragraphs"]
-    allf["frames_per_1k"] = 1000 * allf["n_frames"] / allf["n_paragraphs"]
+    allf["promo_per_1k"] = 1000 * allf["n_promo"] / allf["n_words"]
+    allf["behavior_per_1k"] = 1000 * allf[beh].sum(axis=1) / allf["n_words"]
+    allf["frames_per_1k"] = 1000 * allf["n_frames"] / allf["n_words"]
     X = sm.add_constant(np.column_stack([np.log1p(allf["behavior_per_1k"]), np.log1p(allf["frames_per_1k"])]))
     fit = sm.OLS(np.log1p(allf["promo_per_1k"]).to_numpy(), X).fit()
     allf["z_intensidad"] = (fit.resid - fit.resid.mean()) / fit.resid.std(ddof=1)
@@ -463,7 +463,7 @@ def main() -> None:
                       on="ticker", how="left").sort_values("z_intensidad", ascending=False)
     allf.to_parquet(args.output_dir / "firm_washing_score_all.parquet", index=False)
     rho = allf.dropna(subset=["exceso"]).pipe(lambda d: d["z_intensidad"].corr(d["exceso"] / d["n_frames_test"], method="spearman"))
-    print(f"\nTODAS LAS EMPRESAS ({len(allf)}), intensidad: exceso promocional por 1.000 párrafos dado conducta y volumen | "
+    print(f"\nTODAS LAS EMPRESAS ({len(allf)}), intensidad: exceso promocional por 1.000 palabras dado conducta y volumen | "
           f"R² {fit.rsquared:.3f} | Spearman con el exceso del test: {rho:+.3f}")
     print(allf.head(12)[["ticker", "frames_per_1k", "promo_per_1k", "behavior_per_1k", "z_intensidad", "washing"]].round(2).to_string(index=False))
     print("cola del test en la escala de intensidad (z):", {r.ticker: round(float(r.z_intensidad), 2) for r in allf[allf.washing == True].itertuples()})

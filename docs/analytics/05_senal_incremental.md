@@ -128,20 +128,24 @@ actividades). ΔR² sobre M1; p del Wald conjunto con SE cluster por empresa:
 
 | outcome | semántica | actividades | ambos | actividades dado semántica | semántica dado actividades | p act. | p act. dado sem. | p sem. dado act. |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| beta | +0,032 | +0,035 | **+0,052** | +0,021 | +0,017 | 0,014 | 0,131 | 0,029 |
-| volatilidad idiosincrática | +0,025 | +0,039 | **+0,044** | +0,019 | +0,004 | <0,001 | 0,022 | 0,821 |
-| P/S | +0,027 | +0,024 | **+0,043** | +0,016 | +0,019 | 0,031 | 0,124 | 0,019 |
-| R&D / ventas | +0,021 | +0,026 | **+0,041** | +0,020 | +0,015 | 0,002 | 0,003 | 0,056 |
-| crecimiento ingresos t+1 | +0,023 | +0,027 | **+0,040** | +0,017 | +0,013 | 0,069 | 0,082 | 0,163 |
+| beta | +0,032 | +0,028 | **+0,051** | +0,019 | +0,023 | 0,012 | 0,055 | 0,021 |
+| volatilidad idiosincrática | +0,025 | +0,030 | **+0,039** | +0,014 | +0,009 | <0,001 | 0,131 | 0,504 |
+| P/S | +0,027 | +0,023 | **+0,044** | +0,017 | +0,022 | 0,034 | 0,029 | 0,008 |
+| R&D / ventas | +0,021 | +0,020 | **+0,037** | +0,015 | +0,017 | 0,002 | 0,008 | 0,025 |
+| crecimiento ingresos t+1 | +0,023 | +0,052 | **+0,063** | +0,040 | +0,011 | 0,042 | 0,035 | 0,235 |
 
 Los dos bloques aportan, y aportan cosas distintas: juntos suben el ΔR² a
-4-5 puntos, y cada uno conserva la mitad o más de su incremento cuando el
-otro ya está. La excepción es la volatilidad idiosincrática, donde la
-actividad identificable absorbe casi todo el estilo (sem. dado act. +0,004,
-p=0,82): el riesgo idiosincrático responde a qué hace la empresa, no a cómo
-lo cuenta. En beta y P/S es el estilo el que se sostiene mejor dado la
-actividad. La lectura para H1: la especificidad importa además de la
-actividad, no en lugar de ella.
+4-6 puntos, y cada uno conserva la mitad o más de su incremento cuando el
+otro ya está, con dos excepciones simétricas. En volatilidad idiosincrática
+la actividad identificable absorbe la mayor parte del estilo (semántica dado
+actividades +0,009, p=0,50): el riesgo idiosincrático responde a qué hace la
+empresa, no a cómo lo cuenta. En crecimiento de ingresos las actividades
+aportan el doble que el estilo (+0,052 contra +0,023) y el estilo casi
+desaparece dado la actividad (p=0,24): lo que anticipa el crecimiento es la
+actividad concreta que la empresa describe. En beta y P/S los dos se
+sostienen. La lectura para H1: la especificidad importa además de la
+actividad, no en lugar de ella; y donde el outcome es "hacer" (riesgo
+propio, crecimiento), manda la actividad.
 
 ## Lectura para la tesis
 
@@ -153,7 +157,7 @@ actividad, no en lugar de ella.
 > a una permutación dentro de sector × año. Es una señal de tipo de empresa
 > más que de cambio dentro de la empresa. Descompuesta, la señal viene
 > tanto de la actividad identificable como del estilo con que se documenta;
-> en riesgo idiosincrático, de la actividad.
+> en riesgo idiosincrático y crecimiento, de la actividad.
 
 El resultado sostiene la tesis con cualquier signo: si ΔR² fuera cero, la
 conclusión sería "taxonomía sí, señal económica no". Salió positivo y chico,

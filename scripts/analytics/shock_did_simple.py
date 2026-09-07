@@ -55,26 +55,27 @@ MIN_QUARTERS_EACH_SIDE = 2
 # interno, no como resultado.
 OUTCOMES = ("promo_per_1k", "quant_per_1k", "gov_per_1k", "spec_per_1k")
 GROUP_OUTCOME = "promo_per_1k"     # la dimensión que define el grupo: control interno
-CONTROLS = "mix_proxy + np.log(n_paragraphs)"
+CONTROLS = "mix_proxy + np.log(n_words)"
 
 
 def build(con) -> pd.DataFrame:
     """Todos los filings por empresa-trimestre con intensidades por 1.000
-    párrafos y ceros. Grupo = mitad más promocional ANTES del evento medida en
-    promocionales por 1.000 párrafos, sobre todas las empresas con filings pre."""
+    PALABRAS y ceros (ver ai_intensity.py). Grupo = mitad más promocional
+    ANTES del evento medida en promocionales por 1.000 palabras, sobre todas
+    las empresas con filings pre."""
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from ai_intensity import document_table, aggregate, FILING_FORMS
     docs = document_table(con)
     docs = docs[docs["form"].isin(FILING_FORMS)]
     panel = aggregate(docs, ["ticker", "quarter"])
-    mix = (docs.assign(is_proxy=(docs.form == "DEF 14A") * docs.n_paragraphs)
-           .groupby(["ticker", "quarter"]).agg(p=("is_proxy", "sum"), n=("n_paragraphs", "sum")))
+    mix = (docs.assign(is_proxy=(docs.form == "DEF 14A") * docs.n_words)
+           .groupby(["ticker", "quarter"]).agg(p=("is_proxy", "sum"), n=("n_words", "sum")))
     panel = panel.merge((mix.p / mix.n).rename("mix_proxy").reset_index(), on=["ticker", "quarter"])
     pre = docs[docs["fecha"] < pd.Timestamp(GROUP_END)].groupby("ticker").agg(
-        promo=("n_promo", "sum"), paragraphs=("n_paragraphs", "sum"))
-    pre = pre[pre["paragraphs"] > 0]
-    rate = 1000.0 * pre["promo"] / pre["paragraphs"]
+        promo=("n_promo", "sum"), words=("n_words", "sum"))
+    pre = pre[pre["words"] > 0]
+    rate = 1000.0 * pre["promo"] / pre["words"]
     high_risk = (rate > rate.median()).astype(float).rename("alto_riesgo")
     panel = panel.merge(high_risk.reset_index(), on="ticker", how="inner")
     panel["event_time"] = (panel["quarter"].astype("period[Q]") - EVENT).apply(lambda x: x.n)

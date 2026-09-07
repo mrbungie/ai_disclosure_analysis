@@ -31,7 +31,7 @@ Composición de la población por formulario:
 
 > El prefiltro mide distinto en cada formulario (`docs/prefilter_evaluation.md`
 > §8.16): recall 0,96 en el holdout de DEF 14A / 8-K con precisión 0,73, contra
-> 0,98 / 0,98 en 10-K/10-Q; en earnings calls la precisión es 0,60. Es decir:
+> 0,98 / 0,98 en 10-K/10-Q; en earnings calls precisión 0,59 con recall 0,98. Es decir:
 > **el instrumento no mide igual en los canales**, y toda comparación entre
 > ellos —incluida la #8, la más citada de este documento— mezcla diferencia de
 > discurso con diferencia de error de medición.
