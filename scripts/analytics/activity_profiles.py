@@ -44,13 +44,11 @@ DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
 ACTIVITIES = REPO_ROOT / "data" / "interim" / "ai_activities"
 CALLS_MANIFEST = REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls.parquet"
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
-SEGMENT_LABELS = {"promocionales": "Promotional Disclosers", "adoptantes_con_gobernanza": "Governance Adopters",
-                  "integradores_de_terceros": "Third-Party Integrators",
+SEGMENT_LABELS = {"desplegadores_de_producto": "Product Deployers", "adoptantes_con_gobernanza": "Governance Adopters",
                   "listadores_de_riesgo": "Risk Listers", "sin_ia": "No AI"}
-EXEMPLARS = {"promocionales": ["HPE", "NTAP", "NOW", "CRM", "MU"],
-             "adoptantes_con_gobernanza": ["BRK.B", "ABT", "HRL", "WY", "NVR"],
-             "integradores_de_terceros": ["MCO", "AIZ", "STT", "BLK", "V"],
-             "listadores_de_riesgo": ["TDG", "LVS", "CZR", "DTE", "CMA"]}
+EXEMPLARS = {"desplegadores_de_producto": ["MSFT", "HPE", "TEAM", "HPQ", "ETSY"],
+             "adoptantes_con_gobernanza": ["JPM", "CINF", "STT", "BRK.B", "RF"],
+             "listadores_de_riesgo": ["BAC", "TDG", "HWM", "NKE", "DHI"]}
 
 FUNCTION_FAMILIES = [
     ("governance", r"govern|oversight|responsible[_ ]ai|ai[_ ]ethic|transparen|trust[_ ]and[_ ]safety|policy|compliance[_ ]program"),
@@ -372,16 +370,16 @@ def main() -> None:
     by_seg["median_activities"] = prof.groupby("segmento")["n_activities"].median()
     by_seg["share_customers"] = (prof.groupby("segmento")["share_customers"].mean() * 100).round(1)
     by_seg["share_internal"] = (prof.groupby("segmento")["share_internal"].mean() * 100).round(1)
-    order = ["promocionales", "integradores_de_terceros", "adoptantes_con_gobernanza", "listadores_de_riesgo", "sin_ia"]
+    order = ["desplegadores_de_producto", "adoptantes_con_gobernanza", "listadores_de_riesgo", "sin_ia"]
     by_seg = by_seg.reindex(order)
     print(by_seg.T.to_string())
     seg_stage = pd.crosstab(prof["segmento"], prof["max_stage"], normalize="index").reindex(order) * 100
     aseg = a.merge(seg, on="ticker")
-    seg_func = pd.crosstab(aseg["segmento"], aseg["function_family"], normalize="index").reindex(order[:4]) * 100
+    seg_func = pd.crosstab(aseg["segmento"], aseg["function_family"], normalize="index").reindex(order[:3]) * 100
 
     print("\nACTIVIDADES CONCRETAS POR SEGMENTO — top 12 acción · objeto, % de empresas del segmento")
     seg_top = {}
-    for s in order[:4]:
+    for s in order[:3]:
         sub = aseg[(aseg["segmento"] == s) & (aseg["object_family"] != "AI, unspecified object")]
         tbl = firm_share(sub, "activity", int(by_seg.loc[s, "n_firms"]), 12)
         seg_top[s] = json.loads(tbl.to_json(orient="index"))
@@ -390,7 +388,7 @@ def main() -> None:
             print(f"    {r.pct_firms:5.1f}%  {k:45s} e.g. {r.examples}")
     seg_actf = {}
     print("\nACCIÓN · OBJETO · FUNCIÓN POR SEGMENTO — top 10 con función declarada, % de empresas del segmento")
-    for s in order[:4]:
+    for s in order[:3]:
         sub = aseg[(aseg["segmento"] == s) & (aseg["object_family"] != "AI, unspecified object") & ~aseg["function_family"].isin(["unspecified", "other"])]
         tbl = firm_share(sub, "activity_function", int(by_seg.loc[s, "n_firms"]), 10)
         seg_actf[s] = json.loads(tbl.to_json(orient="index"))

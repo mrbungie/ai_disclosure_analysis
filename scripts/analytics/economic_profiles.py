@@ -2,8 +2,8 @@
 
 Sobre TODAS las empresas-año con filings (`firm_year_master_v2`, ejercicios
 2021-2025) y la asignación de segmento por empresa-año
-(`firm_year_segments`: promocionales, integradores de terceros, adoptantes
-con gobernanza, listadores de riesgo, sin IA). Dos paneles:
+(`firm_year_segments`: desplegadores de producto, adoptantes con gobernanza,
+listadores de riesgo, sin IA). Dos paneles:
 
   A  mediana cruda por segmento: caracterización.
   B  residualizado por sector × año:  X[i,t] = a[sector×t] + γ_k·Segmento[i,k] + e,
@@ -30,7 +30,7 @@ YEARS = (2021, 2022, 2023, 2024, 2025)
 VARS = {"log_market_cap": "log market cap", "rd_intensity": "R&D / ventas", "gross_margin": "margen bruto",
         "operating_margin": "margen operativo", "next_revenue_yoy": "crecimiento ingresos t+1", "beta": "beta",
         "vol_pre_60d": "volatilidad pre-filing", "ps_ratio": "P/S", "roic_minus_wacc": "ROIC − WACC"}
-ORDER = ["sin_ia", "listadores_de_riesgo", "adoptantes_con_gobernanza", "integradores_de_terceros", "promocionales"]
+ORDER = ["sin_ia", "listadores_de_riesgo", "adoptantes_con_gobernanza", "desplegadores_de_producto"]
 REF = "sin_ia"
 
 

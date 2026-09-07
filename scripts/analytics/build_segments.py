@@ -117,11 +117,19 @@ def firm_features(frames: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
 def with_universe(features: pd.DataFrame, universe: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
     """Reindexa las tasas a TODAS las unidades con filings. Sin frames: tasas 0
     con n_frames 0 (el encogimiento las lleva exactamente al prior) e
-    intensidad = log(1 + frames por 1.000 palabras)."""
+    intensidad = rango percentil de frames por 1.000 palabras.
+
+    Percentil en vez de log(1+tasa): la tasa cruda depende del conteo de
+    palabras del denominador, que tiene su propio ruido de muestra chico
+    (un filing un poco más largo o más corto mueve la tasa sin que cambie
+    nada sustantivo). El rango percentil comprime ese ruido — una empresa
+    sólo se mueve si efectivamente cruza a otras empresas en intensidad,
+    no porque su denominador tembló un poco — a costa de no distinguir
+    MAGNITUDES de intensidad, sólo su orden."""
     out = universe[keys + ["frames_per_1k"]].merge(features, on=keys, how="left")
     out["n_frames"] = out["n_frames"].fillna(0).astype(int)
     out[ALL_FEATURES] = out[ALL_FEATURES].fillna(0.0)
-    out[INTENSITY] = np.log1p(out["frames_per_1k"])
+    out[INTENSITY] = out["frames_per_1k"].rank(pct=True, method="average")
     return out
 
 

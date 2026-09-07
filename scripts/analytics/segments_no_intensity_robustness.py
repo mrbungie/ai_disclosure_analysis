@@ -92,7 +92,7 @@ def main() -> None:
     # Does the firm set closest to the economically distinct segment survive?
     # (economic_profiles.py identifies which segment separates from "no AI" on
     # firm fundamentals; that is the segment this check targets, not a fixed name)
-    TARGET_SEGMENT = "promocionales"
+    TARGET_SEGMENT = "desplegadores_de_producto"
     pd_orig = set(with_frames.loc[with_frames["segmento"] == TARGET_SEGMENT, "ticker"])
     best_overlap_seg, best_overlap = None, -1.0
     for seg in with_frames["segmento_no_intensity"].unique():
