@@ -1,8 +1,8 @@
 """Robustez de la segmentación de Cap. 3 excluyendo la dimensión de intensidad.
 
 El comité de tesis planteó la pregunta obvia: si `intensidad_ia` es una de las
-features del K-means, ¿no es "Product Deployer" simplemente "empresa que habla
-mucho de IA"? Este script re-corre exactamente el mismo pipeline de
+features del K-means, ¿no es el segmento económicamente distinto simplemente
+"empresa que habla mucho de IA"? Este script re-corre exactamente el mismo pipeline de
 `build_segments.py` (mismas features de comportamiento, mismo encogimiento
 empírico-Bayes, mismo k) pero SIN la columna de intensidad en la matriz de
 clustering, y compara la partición resultante contra `firm_segments.parquet`
@@ -89,17 +89,18 @@ def main() -> None:
     prof[["pct_despliegue", "pct_producto", "pct_riesgo", "pct_gobernanza"]] *= 100
     print(prof.round(2).to_string())
 
-    # Does the firm set closest to "Product Deployers" survive?
-    pd_orig = set(with_frames.loc[with_frames["segmento"] == "desplegadores_de_producto", "ticker"])
-    if not pd_orig:
-        pd_orig = set(with_frames.loc[with_frames["segmento"] == "desplegadores", "ticker"])
+    # Does the firm set closest to the economically distinct segment survive?
+    # (economic_profiles.py identifies which segment separates from "no AI" on
+    # firm fundamentals; that is the segment this check targets, not a fixed name)
+    TARGET_SEGMENT = "promocionales"
+    pd_orig = set(with_frames.loc[with_frames["segmento"] == TARGET_SEGMENT, "ticker"])
     best_overlap_seg, best_overlap = None, -1.0
     for seg in with_frames["segmento_no_intensity"].unique():
         cand = set(with_frames.loc[with_frames["segmento_no_intensity"] == seg, "ticker"])
         jac = len(pd_orig & cand) / len(pd_orig | cand) if (pd_orig | cand) else 0.0
         if jac > best_overlap:
             best_overlap, best_overlap_seg = jac, seg
-    print(f"\nProduct-Deployer-like original segment (n={len(pd_orig)}) vs. best-matching "
+    print(f"\n'{TARGET_SEGMENT}' original segment (n={len(pd_orig)}) vs. best-matching "
           f"no-intensity segment '{best_overlap_seg}': Jaccard overlap = {best_overlap:.3f}")
 
     result = {
@@ -109,9 +110,9 @@ def main() -> None:
         "n_firms_with_frames": int(len(with_frames)),
         "contingency_table_row_pct": ct.round(1).to_dict(),
         "no_intensity_segment_profile": prof.round(2).to_dict(),
-        "product_deployer_jaccard_vs_best_no_intensity_segment": {
-            "best_match_segment": best_overlap_seg, "jaccard": float(best_overlap),
-            "n_original": len(pd_orig),
+        "target_segment_jaccard_vs_best_no_intensity_segment": {
+            "target_segment": TARGET_SEGMENT, "best_match_segment": best_overlap_seg,
+            "jaccard": float(best_overlap), "n_original": len(pd_orig),
         },
     }
     out_path = OUT_DIR / "segments_no_intensity_robustness.json"

@@ -5,7 +5,7 @@ y `04_perfiles_economicos.md`.
 
 MODO DE ANÁLISIS FINAL: margen extensivo. El panel es `firm_year_master_v2`
 con TODAS las empresas-año que tienen filings (`build_firm_panels.py`), y las
-variables de texto son intensidades por 1.000 párrafos con cero cuando la
+variables de texto son intensidades por 1.000 palabras con cero cuando la
 empresa no habla de IA (`ai_intensity.py`). Nada condiciona a hablar de IA.
 
 Existe porque esos cuatro documentos reportaban cifras calculadas en consultas
@@ -154,7 +154,7 @@ def sector_demeaned(frame: pd.DataFrame, column: str) -> pd.Series:
     return frame[column] - frame.groupby("sic2")[column].transform("median")
 
 
-INTENSITY = {  # la misma pregunta, medida en intensidad por 1.000 párrafos con ceros
+INTENSITY = {  # la misma pregunta, medida en intensidad por 1.000 palabras con ceros
     "behavior_share_ai_infrastructure": "ai_infrastructure_per_1k",
     "behavior_share_revenue_outcome": "revenue_outcome_per_1k",
     "behavior_share_ai_investment": "ai_investment_per_1k",
@@ -171,7 +171,7 @@ PROFILE_COLUMNS = ["gross_margin", "operating_margin", "net_margin", "roa", "roe
 
 def intensity_level(frame: pd.DataFrame) -> pd.Series:
     """cero = ningún frame de IA en el año; bajo/medio/alto = terciles de
-    frames por 1.000 párrafos entre las empresas-año que sí hablan."""
+    frames por 1.000 palabras entre las empresas-año que sí hablan."""
     level = pd.Series("cero", index=frame.index, dtype=object)
     talk = frame["frames_per_1k"] > 0
     level[talk] = pd.qcut(frame.loc[talk, "frames_per_1k"].rank(method="first"), 3,
@@ -197,7 +197,7 @@ def main() -> None:
     print(f"panel: {len(master):,} empresas-año con filings, {master['ticker'].nunique():,} empresas, "
           f"{master['any_ai'].mean()*100:.0f}% con algún frame de IA\n")
 
-    print("=" * 78); print("§1  TALK VS. WALK — revenue_outcome por 1.000 párrafos (con ceros) contra revenue real en t+1"); print("=" * 78)
+    print("=" * 78); print("§1  TALK VS. WALK — revenue_outcome por 1.000 palabras (con ceros) contra revenue real en t+1"); print("=" * 78)
     x, y = "revenue_outcome_per_1k", "next_revenue_yoy"
     r_raw, p_raw, n_raw = correlation(master, x, y)
     r_sector, n_sector = within_group_correlation(master, x, y, ["sic2", "year"])
@@ -242,7 +242,7 @@ def main() -> None:
             print(f"  {x:14s} ~ {y:20s} r={r:+.3f} p={p:.4f} n={n}")
     report["any_ai"] = extra
 
-    print("\n" + "=" * 78); print("§3  PERFIL FINANCIERO POR NIVEL DE INTENSIDAD DE IA (cero / terciles de frames por 1.000 párrafos)"); print("=" * 78)
+    print("\n" + "=" * 78); print("§3  PERFIL FINANCIERO POR NIVEL DE INTENSIDAD DE IA (cero / terciles de frames por 1.000 palabras)"); print("=" * 78)
     available = [c for c in PROFILE_COLUMNS if c in master.columns]
     by_level = master.groupby("nivel_ia")[available].median().reindex(LEVELS)
     by_level["n"] = master.groupby("nivel_ia").size().reindex(LEVELS)

@@ -81,33 +81,33 @@ REFERENCE_OFFSET = -1
 WINDOW = 5
 MIN_QUARTERS_EACH_SIDE = 2
 GROUP_WINDOW_END = "2023-01-01"
-# Intensidades por 1.000 párrafos sobre TODOS los filings, con cero cuando el
+# Intensidades por 1.000 palabras sobre TODOS los filings, con cero cuando el
 # documento no habla de IA (ai_intensity.py). No condiciona a hablar de IA: la
 # empresa que deja de hablar cuenta como cero, no sale del panel.
 OUTCOMES = ("promo_per_1k", "spec_per_1k", "risk_per_1k", "hyp_per_1k", "frames_per_1k")
 MAIN_OUTCOME = "promo_per_1k"
-CONTROLS = "mix_proxy + mix_10k + np.log(n_paragraphs)"
+CONTROLS = "mix_proxy + mix_10k + np.log(n_words)"
 
 
 def build_panel(con) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Todos los filings (10-K, 10-Q, DEF 14A, 8-K) por empresa-trimestre, con
-    intensidades por 1.000 párrafos y ceros. Exposición = frames de IA por
-    1.000 párrafos antes de 2023, sobre todas las empresas."""
+    intensidades por 1.000 PALABRAS y ceros (ver ai_intensity.py). Exposición =
+    frames de IA por 1.000 palabras antes de 2023, sobre todas las empresas."""
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from ai_intensity import document_table, aggregate, FILING_FORMS
     docs = document_table(con)
     docs = docs[docs["form"].isin(FILING_FORMS)]
     panel = aggregate(docs, ["ticker", "quarter"])
-    mix = (docs.assign(is_proxy=(docs.form == "DEF 14A") * docs.n_paragraphs,
-                       is_10k=(docs.form == "10-K") * docs.n_paragraphs)
-           .groupby(["ticker", "quarter"]).agg(p=("is_proxy", "sum"), k=("is_10k", "sum"), n=("n_paragraphs", "sum")))
+    mix = (docs.assign(is_proxy=(docs.form == "DEF 14A") * docs.n_words,
+                       is_10k=(docs.form == "10-K") * docs.n_words)
+           .groupby(["ticker", "quarter"]).agg(p=("is_proxy", "sum"), k=("is_10k", "sum"), n=("n_words", "sum")))
     panel = panel.merge((mix.p / mix.n).rename("mix_proxy").reset_index(), on=["ticker", "quarter"])
     panel = panel.merge((mix.k / mix.n).rename("mix_10k").reset_index(), on=["ticker", "quarter"])
     pre = docs[docs["fecha"] < pd.Timestamp(GROUP_WINDOW_END)].groupby("ticker").agg(
-        frames=("n_frames", "sum"), paragraphs=("n_paragraphs", "sum"))
-    pre = pre[pre["paragraphs"] > 0]
-    treatment = pd.DataFrame({"exposure": np.log1p(1000.0 * pre["frames"] / pre["paragraphs"])})
+        frames=("n_frames", "sum"), words=("n_words", "sum"))
+    pre = pre[pre["words"] > 0]
+    treatment = pd.DataFrame({"exposure": np.log1p(1000.0 * pre["frames"] / pre["words"])})
     segments_path = OUT_DIR / "firm_segments.parquet"
     if segments_path.exists():
         segments = pd.read_parquet(segments_path)[["ticker", "segmento"]]

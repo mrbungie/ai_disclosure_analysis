@@ -84,7 +84,7 @@ FEATURES = {
 DERIVED = ("pct_riesgo", "pct_gobernanza", "pct_promocional", "pct_cuantificado",
            "pct_hipotetico", "pct_producto")
 ALL_FEATURES = list(FEATURES) + list(DERIVED)
-# Cuánto del filing se dedica a IA (frames por 1.000 párrafos, en log). Es la
+# Cuánto del filing se dedica a IA (frames por 1.000 palabras, en log). Es la
 # dimensión que separa a quien no habla de quien habla; las tasas de arriba
 # sólo dicen cómo habla quien habla.
 INTENSITY = "intensidad_ia"
@@ -117,7 +117,7 @@ def firm_features(frames: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
 def with_universe(features: pd.DataFrame, universe: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
     """Reindexa las tasas a TODAS las unidades con filings. Sin frames: tasas 0
     con n_frames 0 (el encogimiento las lleva exactamente al prior) e
-    intensidad = log(1 + frames por 1.000 párrafos)."""
+    intensidad = log(1 + frames por 1.000 palabras)."""
     out = universe[keys + ["frames_per_1k"]].merge(features, on=keys, how="left")
     out["n_frames"] = out["n_frames"].fillna(0).astype(int)
     out[ALL_FEATURES] = out[ALL_FEATURES].fillna(0.0)

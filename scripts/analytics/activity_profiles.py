@@ -44,11 +44,13 @@ DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
 ACTIVITIES = REPO_ROOT / "data" / "interim" / "ai_activities"
 CALLS_MANIFEST = REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls.parquet"
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
-SEGMENT_LABELS = {"desplegadores_de_producto": "Product Deployers", "adoptantes_con_gobernanza": "Governance Adopters",
+SEGMENT_LABELS = {"promocionales": "Promotional Disclosers", "adoptantes_con_gobernanza": "Governance Adopters",
+                  "integradores_de_terceros": "Third-Party Integrators",
                   "listadores_de_riesgo": "Risk Listers", "sin_ia": "No AI"}
-EXEMPLARS = {"desplegadores_de_producto": ["MSFT", "HPE", "PAYX", "ETSY", "NOW"],
-             "adoptantes_con_gobernanza": ["JPM", "STT", "LOW", "DHR", "CINF"],
-             "listadores_de_riesgo": ["NKE", "BAC", "CMA", "HWM", "TDG"]}
+EXEMPLARS = {"promocionales": ["HPE", "NTAP", "NOW", "CRM", "MU"],
+             "adoptantes_con_gobernanza": ["BRK.B", "ABT", "HRL", "WY", "NVR"],
+             "integradores_de_terceros": ["MCO", "AIZ", "STT", "BLK", "V"],
+             "listadores_de_riesgo": ["TDG", "LVS", "CZR", "DTE", "CMA"]}
 
 FUNCTION_FAMILIES = [
     ("governance", r"govern|oversight|responsible[_ ]ai|ai[_ ]ethic|transparen|trust[_ ]and[_ ]safety|policy|compliance[_ ]program"),
@@ -169,7 +171,7 @@ def load() -> pd.DataFrame:
             JOIN acts USING (text_hash) JOIN docs d USING (accession_number)
             WHERE d.ticker IS NOT NULL
         """).df()
-        docs = document_table(con)[["accession_number", "fecha", "fy", "n_paragraphs", "channel"]]
+        docs = document_table(con)[["accession_number", "fecha", "fy", "n_words", "channel"]]
     finally:
         con.close()
     inst_docs["text_hash"] = inst_docs["text_hash"].astype("uint64")
@@ -254,7 +256,7 @@ def concreteness(prof: pd.DataFrame) -> pd.Series:
 
 def yearly_and_channel_panels(inst: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """(1) empresa-año de presentación, sólo filings: actividades de cada familia
-    por 1.000 párrafos, para el bloque de actividades de `05`.
+    por 1.000 palabras, para el bloque de actividades de `05`.
     (2) empresa × ejercicio fiscal × canal: conteos por familia, para la brecha
     de actividades de `06`."""
     inst = inst.copy()
@@ -265,10 +267,10 @@ def yearly_and_channel_panels(inst: pd.DataFrame) -> tuple[pd.DataFrame, pd.Data
     cols = ACTIVITY_FAMILIES + ["named_product_or_process", "named_function", "deployed_or_scaled", "n_activities"]
     # (1) por año de presentación, filings; el denominador es el de firm_year_master_v2
     fil = inst[inst["channel"] == "filing"].groupby(["ticker", "year"])[cols].sum().reset_index()
-    master = pd.read_parquet(OUT_DIR / "firm_year_master_v2.parquet")[["ticker", "year", "n_paragraphs"]]
+    master = pd.read_parquet(OUT_DIR / "firm_year_master_v2.parquet")[["ticker", "year", "n_words"]]
     fy_panel = master.merge(fil, on=["ticker", "year"], how="left").fillna({c: 0.0 for c in cols})
     for c in cols:
-        fy_panel[f"{c}_per_1k"] = 1000.0 * fy_panel[c] / fy_panel["n_paragraphs"]
+        fy_panel[f"{c}_per_1k"] = 1000.0 * fy_panel[c] / fy_panel["n_words"]
     # (2) por ejercicio fiscal y canal
     ch = inst.groupby(["ticker", "fy", "channel"])[cols].sum().reset_index()
     return fy_panel, ch
@@ -370,16 +372,16 @@ def main() -> None:
     by_seg["median_activities"] = prof.groupby("segmento")["n_activities"].median()
     by_seg["share_customers"] = (prof.groupby("segmento")["share_customers"].mean() * 100).round(1)
     by_seg["share_internal"] = (prof.groupby("segmento")["share_internal"].mean() * 100).round(1)
-    order = ["desplegadores_de_producto", "adoptantes_con_gobernanza", "listadores_de_riesgo", "sin_ia"]
+    order = ["promocionales", "integradores_de_terceros", "adoptantes_con_gobernanza", "listadores_de_riesgo", "sin_ia"]
     by_seg = by_seg.reindex(order)
     print(by_seg.T.to_string())
     seg_stage = pd.crosstab(prof["segmento"], prof["max_stage"], normalize="index").reindex(order) * 100
     aseg = a.merge(seg, on="ticker")
-    seg_func = pd.crosstab(aseg["segmento"], aseg["function_family"], normalize="index").reindex(order[:3]) * 100
+    seg_func = pd.crosstab(aseg["segmento"], aseg["function_family"], normalize="index").reindex(order[:4]) * 100
 
     print("\nACTIVIDADES CONCRETAS POR SEGMENTO — top 12 acción · objeto, % de empresas del segmento")
     seg_top = {}
-    for s in order[:3]:
+    for s in order[:4]:
         sub = aseg[(aseg["segmento"] == s) & (aseg["object_family"] != "AI, unspecified object")]
         tbl = firm_share(sub, "activity", int(by_seg.loc[s, "n_firms"]), 12)
         seg_top[s] = json.loads(tbl.to_json(orient="index"))
@@ -388,7 +390,7 @@ def main() -> None:
             print(f"    {r.pct_firms:5.1f}%  {k:45s} e.g. {r.examples}")
     seg_actf = {}
     print("\nACCIÓN · OBJETO · FUNCIÓN POR SEGMENTO — top 10 con función declarada, % de empresas del segmento")
-    for s in order[:3]:
+    for s in order[:4]:
         sub = aseg[(aseg["segmento"] == s) & (aseg["object_family"] != "AI, unspecified object") & ~aseg["function_family"].isin(["unspecified", "other"])]
         tbl = firm_share(sub, "activity_function", int(by_seg.loc[s, "n_firms"]), 10)
         seg_actf[s] = json.loads(tbl.to_json(orient="index"))

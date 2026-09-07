@@ -15,7 +15,7 @@ execute:
 
 ## Business problem
 
-The release of ChatGPT in November 2022 turned artificial intelligence from a specialist topic in technology-sector filings into a disclosure obligation for essentially the entire S&P 500. Between 2021 and 2025 the share of S&P 500 firms making at least one AI-related statement in their SEC filings rose from 36% to 92%, and the narrative footprint of AI disclosure — scorable paragraphs containing AI frames — grew 7.0-fold (from 0.74 to 5.14 per 1,000 paragraphs, reaching 7.7 cumulative frames per 1,000). The single largest jump occurs in the 2024 filing season, when fiscal-year-2023 10-Ks become the first annual reports written with a full year of generative AI behind them: the share of 10-Ks containing any AI statement jumps from 39% to 72% in one season [@eisfeldt2023; @babina2024].
+The release of ChatGPT in November 2022 turned artificial intelligence from a specialist topic in technology-sector filings into a disclosure obligation for essentially the entire S&P 500. Between 2021 and 2025 the share of S&P 500 firms making at least one AI-related statement in their SEC filings rose from 36% to 92%, and the narrative density of AI disclosure — AI statements per 1,000 words of corporate narrative text — grew nearly seven-fold (from 0.016 to 0.111 per 1,000 words). The single largest jump occurs in the 2024 filing season, when fiscal-year-2023 10-Ks become the first annual reports written with a full year of generative AI behind them: the share of 10-Ks containing any AI statement jumps from 39% to 72% in one season [@eisfeldt2023; @babina2024].
 
 This is, at the same time, an investor problem, an issuer problem, and a regulatory problem. Investors need to know whether a firm's AI narrative reflects real capability, real deployment, and real economic exposure, or whether it is costless positioning attached to a hot topic [@basnet2025; @song2026]. Issuers need to know how much disclosure is enough, and in which venue, without inviting enforcement risk. Regulators — the SEC prominently among them — have already acted: Chair Gensler's December 2023 warning about "AI washing" [@gensler2023] and the March 2024 enforcement actions against Delphia and Global Predictions [@sec2024pressrelease] made explicit that overstating AI capability in disclosure and marketing material is a securities-law violation, not merely a reputational risk. The correspondence between the SEC and Welltower over its 2024 10-K is the clearest illustration of the underlying concern [@strauss2025]: the regulator did not object to promotional language in the filing itself, but to earnings-call and press-release language ("industry-leading," "competitive advantage") that was not backed by proportional disclosure in the 10-K. The mechanism the SEC is policing is a **gap between venues**, not a gap between words and an unobservable truth.
 
@@ -98,7 +98,7 @@ The thesis makes three core contributions; everything else in the chapters that 
 
 **1. Measurement.** A scalable, largely reproducible five-layer pipeline — prefilter, semantic frame, disclosed activity, firm-year aggregation, human validation — separates AI disclosure *volume* from its *semantic content* and its *disclosed activity*, recovering structured, falsifiable claims from 55,981 SEC documents and earnings-call transcripts at a cost and throughput a purely human-coded design could not reach. The pipeline is deterministic downstream of the two LLM extraction stages and documents its own measurement error by venue rather than assuming uniform accuracy.
 
-**2. Empirical finding: specificity and disclosed activity carry information; promotional tone largely does not.** Beyond disclosure volume and financial fundamentals, the semantic content of what a firm says about AI adds 2.4–4.2 points of partial R² to beta, idiosyncratic volatility, price-to-sales, R&D-to-sales, and next-year revenue growth — rising to 3.7–6.3 points when disclosed activity is added alongside it. That signal is concentrated in specificity (named products, quantified outcomes) and in concrete disclosed activity, not in promotional register, consistent with specificity functioning as a costlier, more verifiable disclosure than generic promotional language.
+**2. Empirical finding: specificity and disclosed activity carry information; promotional tone largely does not.** Beyond disclosure volume and financial fundamentals, the semantic content of what a firm says about AI adds 1.8–6.0 points of partial R² to beta, idiosyncratic volatility, price-to-sales, R&D-to-sales, and next-year revenue growth — rising to 2.7–8.5 points when disclosed activity is added alongside it. That signal is concentrated in specificity (named products, quantified outcomes) and in concrete disclosed activity, not in promotional register, consistent with specificity functioning as a costlier, more verifiable disclosure than generic promotional language.
 
 **3. Institutional finding: the same firm describes similar AI activity across venues, but attaches far more concrete evidence and promotion to it in earnings calls than in statutory filings.** Comparing the same firm in the same fiscal year, the *mix* of disclosed activities is nearly identical between calls and filings — the difference is what evidence and register accompany the same claim. Calls add named products, quantified outcomes, and named providers/partners that the filing typically omits, alongside 10 times more promotional statements and 17 times more quantified claims per 1,000 words; the gap has widened since fiscal 2023 and shows no sign of closing after the SEC's 2024 AI-washing enforcement action.
 
@@ -424,10 +424,10 @@ Markdown(tabulate(table, headers=["Field", "Description", "Observed values"]))
 
 The measurement pipeline distinguishes between two complementary concepts of disclosure volume:
 
-1. **Paragraph penetration rate:** the share of a filing's paragraphs that contain at least one AI statement. Bounded between 0 and 1, and unaffected by how many separate claims a single paragraph makes.
-2. **Cumulative frame density:** the total number of AI statements per 1,000 paragraphs — how much AI content there is, not just whether it's present.
+1. **Diffusion:** the share of filings (or of firms) with at least one AI statement. Bounded between 0 and 1, and unaffected by how many separate claims a document makes.
+2. **Cumulative frame density:** the total number of AI statements per 1,000 words of scorable narrative text — how much AI content there is, not just whether it's present. Every "per 1,000" intensity figure in this thesis, including in the clustering, regression, and event-study analyses, uses words as the denominator rather than paragraphs, so a single unit of measurement holds throughout.
 
-The two move together almost perfectly (correlation 0.99 across firm-years), so it makes no real difference which one a ranking or a regression uses. On average, a paragraph that discusses AI makes 1.44 separate statements, rising from 1.38 in 2021 to 1.49 in 2025 as filings got denser.
+The two move together closely (a firm with more AI content is almost always also a firm that discloses at all), so it makes little difference which one a ranking or a regression uses. On average, a paragraph that discusses AI makes 1.44 separate statements, rising from 1.43 in 2021 to 1.49 in 2025 as filings got denser.
 
 To go from a single document to a firm-year, each document's rate is combined with the others using the median, not an average weighted by length. The reason is practical: a firm-year can include one 10-K and several 10-Qs and 8-Ks of very different sizes, and the median stops one unusually long or short document from dominating the number. In practice this choice barely matters, because the 10-Q almost never contains an AI statement — so a firm-year's AI content usually comes from a single filing (its 10-K) anyway, and the median gives the same answer as a length-weighted average to the ninth decimal place across all 2,475 firm-years used in Chapter 5 (checked directly, not assumed).
 
@@ -459,11 +459,11 @@ Firm-year financial and market variables are drawn from XBRL and price data, ali
 
 ## Evolution 2021–2025
 
-The expansion of AI disclosure can be tracked across two complementary margins: the **paragraph penetration rate** (scorable paragraphs with AI frames per 1,000 paragraphs, measuring narrative footprint) and the **cumulative frame density** (frames per 1,000 paragraphs, measuring proposition volume). Paragraph penetration rises from 0.74 per 1,000 paragraphs (0.074% of corporate narrative text) in 2021 to 5.14 per 1,000 (0.514%) in 2025—a 7.0-fold expansion. Concurrently, cumulative frame density rises from 1.01 to 7.66 frames per 1,000 paragraphs (a 7.6-fold increase), while the share of S&P 500 firms with at least one AI statement jumps from 36% to 92%. The ratio of frames per AI paragraph expands from 1.38 in 2021 to 1.49 in 2025, showing that as AI disclosure diffused, disclosing paragraphs also became semantically denser, frequently addressing risk, governance, and operational rollout in the same passage. The single largest discontinuity occurs in the 2024 filing season, when fiscal-2023 10-Ks—the first written with a full year of generative AI exposure—push the share of 10-Ks with any AI content from 39% to 72%. A balanced cohort of the 475 firms present in both 2021 and 2026 reproduces the identical trajectory (36%→93%, 1.0→11.5), confirming that market-wide diffusion rather than sample attrition drives the trend.
+The expansion of AI disclosure can be tracked on two complementary margins: **diffusion** (the share of S&P 500 firms making at least one AI statement in their SEC filings) and **cumulative frame density** (AI statements per 1,000 words of scorable narrative text). Diffusion rises from 35.7% in 2021 to 92.1% in 2025. Concurrently, cumulative frame density rises from 0.016 to 0.111 frames per 1,000 words (a 6.9-fold increase). The ratio of frames per AI-mentioning paragraph expands from 1.43 in 2021 to 1.49 in 2025, showing that as AI disclosure diffused, disclosing paragraphs also became semantically denser, frequently addressing risk, governance, and operational rollout in the same passage. The single largest discontinuity occurs in the 2024 filing season, when fiscal-2023 10-Ks—the first written with a full year of generative AI exposure—push the share of 10-Ks with any AI content from 39% to 72%. A balanced cohort of the 475 firms present in both 2021 and 2026 reproduces the identical trajectory of rising diffusion, confirming that market-wide diffusion rather than sample attrition drives the trend.
 
 ```{python}
 #| label: fig-evolucion-intensidad
-#| fig-cap: "Evolution of AI disclosure penetration (paragraphs with AI frames per 1,000 paragraphs) versus cumulative frame density, alongside the share of disclosing S&P 500 firms, 2021–2025."
+#| fig-cap: "Evolution of AI disclosure density (AI statements per 1,000 words of scorable narrative text) alongside the share of disclosing S&P 500 firms, 2021–2025."
 #| echo: false
 #| fig-width: 7.5
 #| fig-height: 4.0
@@ -478,19 +478,15 @@ if not data_path.exists():
 m = pd.read_parquet(data_path)
 y = m.groupby("year").agg(
     any_ai=("any_ai", "mean"),
-    ai_paras=("ai_paras_per_1k", "mean") if "ai_paras_per_1k" in m.columns else ("frames_per_1k", lambda s: s.mean() * 0.72),
     frames=("frames_per_1k", "mean")
 )
 main, ytd = y.loc[y.index <= 2025], y.loc[y.index >= 2025]
 
 fig, ax = plt.subplots(figsize=(7.5, 4.0), dpi=300)
-ax.plot(main.index, main.ai_paras, "o-", color="#1E40AF", lw=2.2, label="AI Paragraphs / 1k (Penetration)")
-ax.plot(ytd.index, ytd.ai_paras, "o:", color="#1E40AF", lw=2.2)
+ax.plot(main.index, main.frames, "o-", color="#0284C7", lw=2.2, label="AI frames per 1,000 words")
+ax.plot(ytd.index, ytd.frames, "o:", color="#0284C7", lw=2.2)
 
-ax.plot(main.index, main.frames, "s--", color="#0284C7", lw=1.8, alpha=0.85, label="Total Frames / 1k (Density)")
-ax.plot(ytd.index, ytd.frames, "s:", color="#0284C7", lw=1.8, alpha=0.85)
-
-ax.set_ylabel("Rate per 1,000 scorable paragraphs", color="#0F172A", fontsize=9.2, fontweight="bold")
+ax.set_ylabel("Frames per 1,000 words", color="#0F172A", fontsize=9.2, fontweight="bold")
 ax.set_xlabel("Filing Year", fontsize=9.2, fontweight="bold")
 ax.tick_params(axis="y", labelcolor="#0F172A")
 ax.grid(True, linestyle="--", alpha=0.35)
@@ -505,7 +501,7 @@ ax2.set_ylim(0, 100)
 h1, l1 = ax.get_legend_handles_labels()
 h2, l2 = ax2.get_legend_handles_labels()
 ax.legend(h1 + h2, l1 + l2, loc="upper left", fontsize=8.0, framealpha=0.9)
-ax.set_title("AI Disclosure Penetration: Paragraph Share vs. Frame Density (2021–2025)", fontsize=10.5, fontweight="bold")
+ax.set_title("AI Disclosure Density and Diffusion (2021–2025)", fontsize=10.5, fontweight="bold")
 plt.tight_layout()
 plt.show()
 ```
@@ -579,7 +575,7 @@ series_info = [
 for col, label, color in series_info:
     ax.plot(main.index, main[col], "o-", color=color, lw=1.8, label=label)
     ax.plot(ytd.index, ytd[col], "o:", color=color, lw=1.8)
-ax.set_ylabel("Frames per 1,000 paragraphs", fontsize=9.5)
+ax.set_ylabel("Frames per 1,000 words", fontsize=9.5)
 ax.set_xlabel("Filing year", fontsize=9.5)
 ax.legend(fontsize=8.5, loc="upper left", framealpha=0.9)
 ax.grid(True, linestyle="--", alpha=0.35)
@@ -872,17 +868,17 @@ While OpenAI and Microsoft represent the dominant external foundation model stac
 
 ## Disclosure archetypes
 
-**How firms are grouped.** Each firm is scored on six things: how much of its AI talk is about adoption (deploying, scaling, piloting, reporting a result), how much is about capability (building it in-house vs. using someone else's), how much is risk-focused, how much is governance-focused, how much is promotional or quantified language, and how much it talks about AI at all (its disclosure intensity). That last one — intensity — is included on purpose, not filtered out: a firm with three AI statements and a firm with three hundred, saying exactly the same kinds of things at the same rate, are still not the same firm. As a check, re-running the grouping without intensity at all still recovers essentially the same Product Deployers group (98.2% overlap, detailed in Appendix C), so the segment isn't just "firms that talk more."
+**How firms are grouped.** Each firm is scored on six things: how much of its AI talk is about adoption (deploying, scaling, piloting, reporting a result), how much is about capability (building it in-house vs. using someone else's), how much is risk-focused, how much is governance-focused, how much is promotional or quantified language, and how much it talks about AI at all (its disclosure intensity, measured per 1,000 words to keep a single unit of measurement throughout the thesis). That last one — intensity — is included on purpose, not filtered out: a firm with three AI statements and a firm with three hundred, saying exactly the same kinds of things at the same rate, are still not the same firm. As a check, re-running the grouping without intensity at all still recovers a recognizable version of the most promotional group, though with more churn than when intensity is included (69.4% overlap, detailed in Appendix C) — intensity is doing real, non-trivial work in separating that group, not just relabeling firms that already stood apart on their behavioural mix.
 
-**How many groups, and why.** Firms that never mention AI aren't grouped at all — there's no "how it talks" to measure for a firm that says nothing, so they get their own "no AI" label by rule. For everyone else, the number of groups (three) isn't chosen because it looks good on a chart; it's chosen by testing whether the same firm ends up in the same group even after resampling its own statements. Three groups pass that test comfortably; four groups do not.
+**How many groups, and why.** Firms that never mention AI aren't grouped at all — there's no "how it talks" to measure for a firm that says nothing, so they get their own "no AI" label by rule. For everyone else, the number of groups (four) isn't chosen because it looks good on a chart; it's chosen by testing whether the same firm ends up in the same group even after resampling its own statements. Four groups pass that test comfortably (minimum per-cluster stability 0.61 against a 0.60 floor); five groups do not (minimum stability drops to 0.27).
 
-**The three segments plus "no AI."** Across the full pooled cross-section of 510 firms: **Product Deployers** (113 firms, median 8.4 AI frames per 1,000 paragraphs — five to seven times the other segments), **Governed Adopters** (222 firms, the largest segment, median 1.6 frames per 1,000 paragraphs, distinguished by a governance share of 24.4%, roughly 2.5 times the Deployers' 9.1%), **Risk Listers** (158 firms, median 1.2 frames per 1,000 paragraphs, 70.4% risk share and 25.6% hypothetical share, almost no promotional or quantified language), and **No AI** (17 pooled firms with zero AI statements in their SEC filings across the sample period — some of these firms still discuss AI on earnings calls, which is why Table 4.1 shows non-zero activity shares for this segment — accounting for 1,088 of 2,964 firm-years in this segmentation panel — two-thirds of 2021 observations, under one in ten by 2025; this panel covers every firm-year with a filing across the full sample period, a broader scope than the 2,475-firm-year, 2021–2025-only panel used for the economic-profile regressions in the next section, which is why the "No AI" counts differ between the two). Year-over-year segment persistence in the panel is 65.0%, with most transitions representing exit from "No AI" as the segment empties between 2023 and 2024 (56% to 21% of firm-years).
+**The four segments plus "no AI."** Across the full pooled cross-section of 510 firms: **Promotional Disclosers** (70 firms, median 126.5 AI frames and a median disclosure intensity of 0.20 frames per 1,000 words — four to ten times the other segments — with the highest promotional (14.0%), quantified (7.4%), and customer-facing-product (50.3%) shares of any segment), **Third-Party Integrators** (144 firms, the largest talking segment, median 37 frames, distinguished mainly by sourcing AI from outside vendors more than any other segment (4.1% third-party share) while covering a broad, moderate mix of deployment (34.0%) and reported outcomes (19.7%)), **Governance Adopters** (121 firms, median 22 frames, a governance share of 37.6% — three to four times every other segment — and low promotional content (2.9%)), **Risk Listers** (158 firms, median 18 frames, 70.3% risk share and 25.2% hypothetical share, almost no promotional or quantified language), and **No AI** (17 pooled firms with zero AI statements in their SEC filings across the sample period — some of these firms still discuss AI on earnings calls, which is why Table 4.1 shows non-zero activity shares for this segment — accounting for 1,088 of 2,964 firm-years in this segmentation panel — two-thirds of 2021 observations, under one in ten by 2025; this panel covers every firm-year with a filing across the full sample period, a broader scope than the 2,475-firm-year, 2021–2025-only panel used for the economic-profile regressions in the next section, which is why the "No AI" counts differ between the two). Year-over-year segment persistence in the panel is 59.4%, with most transitions representing exit from "No AI" as the segment empties between 2023 and 2024 (56% to 21% of firm-years).
 
 ```{python}
 #| label: fig-archetype-heatmap
-#| fig-cap: "Disclosure archetypes at a glance: standardized (z-score) feature profile of the three K-means segments across the six clustering dimensions."
+#| fig-cap: "Disclosure archetypes at a glance: standardized (z-score) feature profile of the four K-means segments across the six clustering dimensions."
 #| echo: false
-#| fig-width: 7.5
+#| fig-width: 8.5
 #| fig-height: 3.6
 from pathlib import Path
 import pandas as pd
@@ -896,8 +892,8 @@ df = pd.read_parquet(data_path)
 
 FEATURES = ["pct_despliegue", "pct_capacidad_propia", "pct_riesgo", "pct_gobernanza", "pct_promocional", "intensidad_ia"]
 LABELS = ["Deployment", "Own capability", "Risk", "Governance", "Promotional", "Intensity (log)"]
-SEGMENTS = ["desplegadores_de_producto", "adoptantes_con_gobernanza", "listadores_de_riesgo"]
-SEG_LABELS = ["Product\nDeployers", "Governed\nAdopters", "Risk\nListers"]
+SEGMENTS = ["promocionales", "integradores_de_terceros", "adoptantes_con_gobernanza", "listadores_de_riesgo"]
+SEG_LABELS = ["Promotional\nDisclosers", "Third-Party\nIntegrators", "Governance\nAdopters", "Risk\nListers"]
 
 fit_pop = df[df["segmento"] != "sin_ia"]
 z = (fit_pop[FEATURES] - fit_pop[FEATURES].mean()) / fit_pop[FEATURES].std(ddof=0)
@@ -923,7 +919,7 @@ plt.show()
 
 ### Archetype behavioral profiles
 
-Examining the disclosed activities within each cluster shows that these three segments correspond to distinct profiles of disclosed behaviour — as the economic-profile analysis below confirms, this distinctness is strongest for Product Deployers, while the other two segments differ mainly in register.
+Examining the disclosed activities within each cluster shows that these four segments correspond to distinct profiles of disclosed behaviour — as the economic-profile analysis below confirms, this distinctness is strongest for Promotional Disclosers, while Risk Listers and Governance Adopters differ from the rest mainly in register rather than in the underlying economics of the firm.
 
 ```{python}
 #| label: tbl-4-1-archetype-profile
@@ -938,8 +934,8 @@ data_path = Path("../data/processed/clusters/firm_activity_profiles.parquet")
 if not data_path.exists():
     data_path = Path("data/processed/clusters/firm_activity_profiles.parquet")
 df = pd.read_parquet(data_path)
-SEGS = ["desplegadores_de_producto", "adoptantes_con_gobernanza", "listadores_de_riesgo", "sin_ia"]
-LABELS = ["Product Deployers", "Governed Adopters", "Risk Listers", "Non-Disclosers"]
+SEGS = ["promocionales", "integradores_de_terceros", "adoptantes_con_gobernanza", "listadores_de_riesgo", "sin_ia"]
+LABELS = ["Promotional Disclosers", "Third-Party Integrators", "Governance Adopters", "Risk Listers", "Non-Disclosers"]
 g = df.groupby("segmento")
 n = df["segmento"].value_counts()
 has_activity = df["n_activities"] > 0
@@ -967,18 +963,19 @@ Markdown(tabulate(rows, headers=headers))
 
 The empirical profiles in Table 4.1 (and the full profile in Table A.4) demonstrate that the archetypes are not semantic artifacts:
 
-- **Product Deployers** are commercial AI producers: they generate a median of 112 concrete activities, 80.0% of which claim proprietary IP. Over 97% name specific commercial brands, 90.3% disclose massive compute infrastructure investments (data centers, GPU accelerators), and 47.8% name external corporate customers. Their disclosure is predominantly external and customer-facing (51.0%).
-- **Governed Adopters** represent internal enterprise automators: they generate a median of 18 activities concentrated in internal back-office workflows (60.0%) and predictive modeling (risk underwriting, predictive maintenance, claims processing). They rarely market branded AI products (only 29.0% name a product), and nearly a third of their activities leave technology provenance unstated, reflecting silent integration of commercial vendor tools.
-- **Risk Listers** exhibit minimal operational grounding: their median activity count is 5, with one in ten disclosing zero operational conduct. When they do describe AI, 17.0% represents third-party software and 34.0% omits provenance altogether. For this segment, AI disclosure is primarily defensive risk-factor boilerplate.
+- **Promotional Disclosers** are commercial AI producers: they generate a median of 170.5 concrete activities, 76.7% of which claim proprietary IP. Over 97% name specific commercial brands, 91.4% disclose compute infrastructure investments (data centers, GPU accelerators), and 54.3% name external corporate customers. Their disclosure is predominantly external and customer-facing (53.0%).
+- **Third-Party Integrators** sit between the deployers and the more internal segments: a median of 32 activities, drawing more heavily on outside vendors than any other segment (highest third-party sourcing share) while still naming an own brand in 79.2% of firms and reporting a quantified outcome in 77.8%. Their disclosure mixes customer-facing and internal use roughly evenly (35.3% customer-facing).
+- **Governance Adopters** represent internal enterprise automators: they generate a median of 12 activities concentrated in internal back-office workflows (63.7% internal share) and predictive modeling (risk underwriting, predictive maintenance, claims processing). They market branded AI products less often (55.4% name a product, against 97.1% and 79.2% for the two segments above), and over a third of firms report no quantified outcome at all.
+- **Risk Listers** exhibit minimal operational grounding: their median activity count is 5, and nearly a quarter of firms in the segment disclose no operational conduct at all. When they do describe AI, disclosure is overwhelmingly internal (65.9% internal share) and only 38.6% report a quantified outcome. For this segment, AI disclosure is primarily defensive risk-factor boilerplate.
 
 ### Firm exemplar case studies
 
 Qualitative inspection of individual corporate inventories illustrates the concrete grounding captured by the extraction architecture:
 
-- **Microsoft Corporation (Product Deployer, 966 activities):** Highly concentrated in generative assistants (`deploy` $\cdot$ copilot, 168 activities: Microsoft 365 Copilot, GitHub Copilot, Security Copilot) across enterprise operations and software engineering; massive compute infrastructure expansion (`invest_infrastructure` $\cdot$ compute, 142 activities: data center buildouts, custom silicon, Azure capacity) naming OpenAI, NVIDIA, and AMD as technology partners. Over 86% of claims cite named products or quantitative metrics.
-- **JPMorgan Chase & Co. (Governed Adopter, 31 activities):** Discloses machine learning models applied to fraud detection, credit risk assessment, and lead optimization in Asset & Wealth Management. Crucially, **0.0% of these claims cite a named software product, vendor, or numerical performance metric**, and technology provenance is uniformly left unstated. JPMorgan exemplifies internal operational AI whose underlying technical stack is simply never named in public disclosure — this thesis cannot say whether that reflects a choice to withhold it or a judgment that it isn't material to disclose.
-- **Bank of America Corporation (Risk Lister, 59 activities):** Represents the atypical high-volume Risk Lister: while its statutory filings are dominated by regulatory model governance and cybersecurity risk disclaimers (allocating it to the Risk Lister segment), its conference calls extensively detail Erica (virtual banking assistant, 11 activities) and CashPro AI corporate cash management workflows — an early illustration of the cross-venue gap developed in Chapter 6.
-- **TransDigm Group / Howmet Aerospace (Risk Listers, 1–3 activities):** Disclose generic claims of "evaluating AI for manufacturing process automation" with 0.0% concrete anchors, no named tools, and no stated capital expenditure.
+- **Hewlett Packard Enterprise (Promotional Discloser, 443 activities):** Highly concentrated in compute infrastructure and AI-server deployment (`deploy` $\cdot$ compute and infrastructure, 60 activities: AI servers, HPE Cray EX, GPU accelerators) and platform products (`deploy` $\cdot$ analytics or data platform, 25 activities: HPE GreenLake, hybrid-cloud AI), naming NVIDIA and AMD as technology partners. Most activity clusters carry a high share of concrete, quantified anchors (36%–100% depending on the activity type).
+- **Moody's Corporation (Third-Party Integrator, 205 activities):** Discloses a broad mix of proprietary and externally sourced AI (Microsoft, GitHub Copilot as named providers) across research assistants, copilots, and KYC/sanctions-screening tools, with 71% of its copilot-type activities carrying a concrete, quantified anchor — illustrating the segment's blend of in-house branding (Moody's Research Assistant, CreditView) and named third-party technology.
+- **JPMorgan Chase & Co. (Governance Adopter):** Discloses machine learning models applied to fraud detection, credit risk assessment, and lead optimization in Asset & Wealth Management, with technology provenance largely left unstated — an example of internal operational AI whose underlying technical stack is simply never named in public disclosure. This thesis cannot say whether that reflects a choice to withhold it or a judgment that it isn't material to disclose.
+- **TransDigm Group / Cardinal Health (Risk Listers, 1–2 activities):** Disclose generic claims such as "automation of processes" or "intelligent automation" with no named tools, no quantified anchor, and no stated capital expenditure.
 
 ## Voice vs. disclosed behaviour
 
@@ -1090,7 +1087,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-The corners separate financial profiles that were not used to construct them: the absolute-decoupling corner has the lowest median R&D-to-sales (1.5%) and beta (0.76) of the four corners and the lowest AI intensity (1.3 frames per 1,000 paragraphs), consistent with low-tech firms making occasional strategic AI statements unsupported by described conduct; vocal substantives lead on every financial dimension (R&D 11.7%, gross margin 56.2%, beta 1.05, P/E 26.8).
+The corners separate financial profiles that were not used to construct them: the absolute-decoupling corner has the lowest median R&D-to-sales (1.5%) and beta (0.76) of the four corners and the lowest AI intensity (0.017 frames per 1,000 words), consistent with low-tech firms making occasional strategic AI statements unsupported by described conduct; vocal substantives lead on every financial dimension (R&D 11.7%, gross margin 56.2%, beta 1.05, P/E 26.8) and on AI intensity (0.109 frames per 1,000 words, six times the decoupling corner).
 
 ## Activity grounding
 
@@ -1155,8 +1152,8 @@ def _p(name):
 seg = pd.read_parquet(_p("firm_segments.parquet"))
 econ = json.loads(_p("economic_profiles.json").read_text())["panel_a"]
 
-SEGS = ["desplegadores_de_producto", "adoptantes_con_gobernanza", "listadores_de_riesgo", "sin_ia"]
-LABELS = ["Product Deployers", "Governed Adopters", "Risk Listers", "No AI"]
+SEGS = ["promocionales", "integradores_de_terceros", "adoptantes_con_gobernanza", "listadores_de_riesgo", "sin_ia"]
+LABELS = ["Promotional Disclosers", "Third-Party Integrators", "Governance Adopters", "Risk Listers", "No AI"]
 g = seg.groupby("segmento")
 
 def pct(col):
@@ -1165,7 +1162,7 @@ def pct(col):
 rows = [
     ["Firms (pooled)"] + [str(g.size()[s]) for s in SEGS],
     ["Firm-years (panel)"] + [f"{econ[s]['n']:,}" for s in SEGS],
-    ["Frames/1,000 paragraphs (median)"] + [f"{g['frames_per_1k'].median()[s]:.1f}" for s in SEGS],
+    ["Frames/1,000 words (median)"] + [f"{g['frames_per_1k'].median()[s]:.2f}" for s in SEGS],
     ["Deployment share"] + pct("pct_despliegue"),
     ["Governance share"] + pct("pct_gobernanza"),
     ["Risk share"] + pct("pct_riesgo"),
@@ -1178,11 +1175,11 @@ Markdown(tabulate(rows, headers=[""] + LABELS))
 
 ## Economic profiles
 
-The economic-profile analysis pools all firm-years with filings from 2021 to 2025 (2,475 firm-years, 508 firms; segment counts: 1,047 No AI, 554 Product Deployers, 512 Governed Adopters, 362 Risk Listers) and tests whether the segments correspond to economically distinct firms, both crudely and after sector-by-year adjustment (`X = α[sector×year] + γ·Segment + ε`, referenced against No AI, firm-clustered standard errors). Crude medians already separate Product Deployers from the other three on every dimension — market cap \$39B, R&D/sales 12.3%, gross margin 59.5%, beta 1.06, price-to-sales 4.0 — but the residualized panel is the test that matters: within the same sector and year, Product Deployers still show +0.38 log points of market cap (p < 0.001), +5.7 percentage points of R&D-to-sales (p < 0.001), +9.5 points of gross margin (p < 0.001), +0.09 of beta (p = 0.006), and +0.90 of price-to-sales (p = 0.04). Governed Adopters and Risk Listers, by contrast, are statistically indistinguishable from No AI firms in their own sector and year on nearly every dimension except a modest R&D premium (+2.5 and +4.6 percentage points respectively) — the difference between these two segments is a difference in disclosure register, not in underlying firm type. No segment shows higher revenue growth or a higher ROIC-minus-WACC spread than its sector-year peers; growth and value creation do not separate the segments.
+The economic-profile analysis pools all firm-years with filings from 2021 to 2025 (2,475 firm-years, 508 firms; segment counts: 1,047 No AI, 501 Third-Party Integrators, 368 Promotional Disclosers, 338 Risk Listers, 221 Governance Adopters) and tests whether the segments correspond to economically distinct firms, both crudely and after sector-by-year adjustment (`X = α[sector×year] + γ·Segment + ε`, referenced against No AI, firm-clustered standard errors). Crude medians already put Promotional Disclosers ahead of the other three on every dimension — market cap, R&D/sales 13.2%, gross margin 61.0%, beta 1.09, price-to-sales 4.29 — and the residualized panel confirms this is the most consistently distinct segment: within the same sector and year, Promotional Disclosers show +0.57 log points of market cap (p < 0.001), +6.1 percentage points of R&D-to-sales (p < 0.001), +10.6 points of gross margin (p < 0.001), +0.10 of beta (p = 0.010), and +1.17 of price-to-sales (p = 0.011) — significant on five of the nine dimensions tested. The other three segments separate less consistently but not identically: Governance Adopters show a market-cap premium as large as the Promotional Disclosers' (+0.44 log points, p < 0.001) together with lower beta (−0.07, p = 0.026) and a higher ROIC-minus-WACC spread (+0.06, p = 0.049) — a bigger, safer, modestly more value-creating profile rather than a growth-and-margin one. Third-Party Integrators show a smaller but real R&D premium (+3.4 points, p < 0.001), gross-margin premium (+4.8 points, p = 0.022), and beta premium (+0.06, p = 0.046). Risk Listers separate from No AI on almost nothing (only a marginal R&D premium, +4.8 points, p = 0.021). No segment shows higher revenue growth than its sector-year peers; growth does not separate the segments, and value creation (ROIC − WACC) separates only Governance Adopters, not the segment with the strongest growth-and-margin profile.
 
 ```{python}
 #| label: fig-economic-coefficients
-#| fig-cap: "Sector-year-adjusted effect of disclosure archetype on firm fundamentals, relative to No AI (95% CI, firm-clustered SE). Only Product Deployers separates consistently from the sector-year baseline."
+#| fig-cap: "Sector-year-adjusted effect of disclosure archetype on firm fundamentals, relative to No AI (95% CI, firm-clustered SE). Promotional Disclosers separate most consistently from the sector-year baseline; Governance Adopters separate on market cap and value creation, not on margin or growth."
 #| echo: false
 #| fig-width: 8.5
 #| fig-height: 4.8
@@ -1202,13 +1199,15 @@ OUTCOMES = [
     ("ps_ratio", "Price-to-sales"), ("next_revenue_yoy", "Revenue growth (t+1)"),
     ("roic_minus_wacc", "ROIC − WACC"),
 ]
-SEGMENTS = [("desplegadores_de_producto", "Product Deployers", "#059669"),
-            ("adoptantes_con_gobernanza", "Governed Adopters", "#2563EB"),
+SEGMENTS = [("promocionales", "Promotional Disclosers", "#059669"),
+            ("integradores_de_terceros", "Third-Party Integrators", "#7C3AED"),
+            ("adoptantes_con_gobernanza", "Governance Adopters", "#2563EB"),
             ("listadores_de_riesgo", "Risk Listers", "#DC2626")]
 
 fig, ax = plt.subplots(figsize=(8.5, 4.8), dpi=300)
 y0 = np.arange(len(OUTCOMES))
-offsets = {"desplegadores_de_producto": 0.22, "adoptantes_con_gobernanza": 0.0, "listadores_de_riesgo": -0.22}
+offsets = {"promocionales": 0.27, "integradores_de_terceros": 0.09,
+           "adoptantes_con_gobernanza": -0.09, "listadores_de_riesgo": -0.27}
 for seg, label, color in SEGMENTS:
     ys, xs, xerr = [], [], []
     for i, (key, _) in enumerate(OUTCOMES):
@@ -1222,7 +1221,7 @@ ax.axvline(0, color="#334155", lw=1)
 ax.set_yticks(y0); ax.set_yticklabels([lbl for _, lbl in OUTCOMES], fontsize=9.5)
 ax.invert_yaxis()
 ax.set_xlabel("Sector-year-adjusted effect vs. No AI (standard deviations)", fontsize=9.5, fontweight="bold")
-ax.set_title("Only Product Deployers is consistently, economically distinct", fontsize=11, fontweight="bold")
+ax.set_title("Promotional Disclosers separate most consistently, but not uniquely", fontsize=11, fontweight="bold")
 ax.legend(fontsize=8.5, loc="lower right", framealpha=0.9)
 ax.grid(True, axis="x", linestyle="--", alpha=0.3)
 plt.tight_layout()
@@ -1235,7 +1234,7 @@ plt.show()
 
 The central empirical test of the thesis asks a simple question in a careful way: once you already know how much a firm discloses about AI, and you already know its financial fundamentals, does *what* it says add anything? Five financial outcomes are tested — beta, idiosyncratic volatility, price-to-sales, R&D-to-sales, and next-year revenue growth — starting from the full 2021–2025 panel (2,475 firm-years, 508 firms). Each outcome then drops firm-years missing that outcome or a control variable (R&D/sales, for instance, has much thinner XBRL coverage than market cap) and firm-years whose sector-by-year cell has fewer than two firms, since a fixed effect needs at least two observations to be estimated; the resulting samples — reported in Table 5.1 — range from 649 firm-years (R&D-to-sales) to 1,039 (price-to-sales). For each outcome, four models are built on top of each other: a baseline with just financial fundamentals (M0); the baseline plus how much a firm discloses about AI (M1); M1 plus seven dimensions of what it discloses — how realized, how deployment-focused, how risk-focused, and so on (M2); and M1 plus which disclosure archetype the firm belongs to, as an alternative to the content dimensions (M3). The number that matters is how much better M2 predicts the outcome than M1 alone — that gap is the information content adds once volume is already accounted for. That gap is checked three different ways (a bootstrap confidence interval, a statistical test on the seven content coefficients, and a permutation test that shuffles the content variables across firms to see what a coincidence would look like) so a single lucky specification can't drive the result.
 
-The content block adds a partial R² of 2.4–4.2% across all five outcomes: beta +3.2 points (bootstrap CI [+1.9, +8.5], Wald F = 3.08, p = 0.004, permutation p = 0.005), idiosyncratic volatility +2.5 points (CI [+1.5, +5.9], Wald p = 0.001, permutation p = 0.005), price-to-sales +2.7 points (CI [+1.5, +7.9], Wald p = 0.005, permutation p = 0.005), R&D-to-sales +2.1 points (CI [+1.1, +7.0], Wald p = 0.019, permutation p = 0.005), and next-year revenue growth +2.3 points (CI [+0.7, +8.8], Wald p = 0.072, permutation p = 0.015). Every bootstrap interval excludes zero, adjusted R² rises with the content block in all five outcomes, the Wald test rejects at 5% in four of five (7% in growth), and the sector-by-year permutation — which destroys only the content-outcome association while preserving sector, year, fundamentals, and volume — rejects in all five. The magnitude is modest but real: of the same order as what disclosure volume itself contributes (0–4 points) and larger than what segment membership contributes as a dummy (0–1 points).
+The content block adds a partial R² of 1.8–6.0% across all five outcomes: beta +3.3 points (bootstrap CI [+1.5, +9.7], Wald F = 3.09, p = 0.004, permutation p = 0.005), idiosyncratic volatility +1.8 points (CI [+1.0, +5.7], Wald p = 0.203, permutation p = 0.050), price-to-sales +2.0 points (CI [+1.4, +8.3], Wald p = 0.048, permutation p = 0.020), R&D-to-sales +6.0 points (CI [+3.4, +15.8], Wald p = 0.001, permutation p = 0.005), and next-year revenue growth +5.2 points (CI [+0.9, +13.2], Wald p < 0.001, permutation p = 0.005). Every bootstrap interval excludes zero, adjusted R² rises with the content block in all five outcomes, the Wald test rejects at 5% in three of five (idiosyncratic volatility falls short at p = 0.203), and the sector-by-year permutation — which destroys only the content-outcome association while preserving sector, year, fundamentals, and volume — rejects in all five. The magnitude is modest but real: of the same order as what disclosure volume itself contributes (0.2–5.6 points) and larger than what segment membership contributes as a dummy (0.1–1.7 points).
 
 ```{python}
 #| label: fig-incremental-r2
@@ -1280,7 +1279,7 @@ Re-expressing the content block as within-firm semantic shares (each concept's f
 
 ## What vs. how
 
-Six activity-count families (customer-facing deployment, internal deployment, own AI, named provider, infrastructure, quantified outcome, log-transformed intensities with zeros) are entered as an alternative content block and as an additional block layered on top of the semantic dimensions. The two blocks are not redundant: together they raise ΔR² to 3.7–6.3 points across the five outcomes, and each block retains at least half its individual contribution once the other is already included — with two informative exceptions. In idiosyncratic volatility, activity absorbs almost all of the semantic signal (semantics given activity ΔR² = +0.009, p = 0.50): idiosyncratic risk tracks what a firm does, not how it narrates it. In revenue growth, activity contributes roughly twice what semantic style contributes (+0.052 vs. +0.023) and style nearly vanishes once activity is controlled (p = 0.24): growth is anticipated by the concrete activity a firm describes, not by its rhetorical specificity. In beta and price-to-sales both blocks hold up independently. The joint reading: specificity of language matters in addition to disclosed activity, not as a substitute for it, and where the outcome is fundamentally about "doing" — idiosyncratic risk, growth — the activity block dominates.
+Six activity-count families (customer-facing deployment, internal deployment, own AI, named provider, infrastructure, quantified outcome, log-transformed intensities with zeros) are entered as an alternative content block and as an additional block layered on top of the semantic dimensions. The two blocks are not redundant: together they raise ΔR² to 2.1–7.8 points across the five outcomes, and each block retains at least half its individual contribution once the other is already included — with two informative exceptions. In idiosyncratic volatility, activity absorbs most of the semantic signal (semantics given activity ΔR² = +0.009, p = 0.50): idiosyncratic risk tracks what a firm does more than how it narrates it. In revenue growth, activity contributes roughly 2.4 times what semantic style contributes once each is conditioned on the other (+0.029 given semantics vs. +0.012 given activity): growth is anticipated more by the concrete activity a firm describes than by its rhetorical specificity, though both remain jointly informative. In beta and price-to-sales both blocks hold up independently, each still significant conditional on the other. The joint reading: specificity of language matters in addition to disclosed activity, not as a substitute for it, and where the outcome is fundamentally about "doing" — idiosyncratic risk, growth — the activity block dominates.
 
 ```{python}
 #| label: fig-what-vs-how
@@ -1544,8 +1543,8 @@ with open(data_path) as f:
 
 fig, axes = plt.subplots(1, 2, figsize=(9.8, 3.8), sharey=False, dpi=300)
 titles = [
-    ("promo_per_1k", "Promotional frames per 1,000 paragraphs"),
-    ("risk_per_1k", "Risk frames per 1,000 paragraphs")
+    ("promo_per_1k", "Promotional frames per 1,000 words"),
+    ("risk_per_1k", "Risk frames per 1,000 words")
 ]
 for ax, (outcome, title) in zip(axes, titles):
     o = d["sec"]["outcomes"][outcome]
@@ -1566,11 +1565,11 @@ plt.tight_layout()
 plt.show()
 ```
 
-A simpler difference-in-differences design (108 more-promotional firms vs. 382 controls, split by pre-period promotional intensity) finds that the more-promotional group added more governance and specificity after December 2023 than the control group (+0.57 and +1.15 per 1,000 paragraphs, p < 0.001), consistent in direction with a scrutiny response, but pre-trends sit at the margin of significance (p = 0.06–0.09) and the jump concentrates entirely in the 2024 10-K filing season rather than tracking the enforcement timeline.
+A simpler difference-in-differences design (108 more-promotional firms vs. 382 controls, split by pre-period promotional intensity) finds that the more-promotional group added more governance and specificity after December 2023 than the control group (+0.0084 and +0.0161 per 1,000 words, p = 0.001 and p < 0.001), consistent in direction with a scrutiny response; pre-trends for both outcomes are clean (p = 0.138 and p = 0.245), though the same-dimension reference outcome — promotional intensity itself — has a pre-trend that sits at the margin of significance (p = 0.053), and the jump concentrates in the 2024 filing season rather than tracking the enforcement timeline precisely.
 
 ```{python}
 #| label: fig-shock-did-spec
-#| fig-cap: "Difference-in-differences dynamic trajectory: specific disclosure intensity per 1,000 paragraphs following SEC regulatory scrutiny."
+#| fig-cap: "Difference-in-differences dynamic trajectory: specific disclosure intensity per 1,000 words following SEC regulatory scrutiny."
 #| echo: false
 #| fig-width: 7.2
 #| fig-height: 3.8
@@ -1810,11 +1809,11 @@ Across the corpus, promotion with concrete activity behind it and promotion with
 
 ## Issuer implications
 
-The measurement built across this thesis converts directly into a disclosure checklist. Credible AI disclosure names a concrete activity (not "AI capabilities," which 86% of firms use as an empty placeholder object); states a clear stage (deployed or scaled, not merely explored or piloted); names a specific product or process; reports a quantified outcome; discloses the source of the AI, including provider and partner relationships, since 16% of activities in the corpus leave this unstated and undeclared origin correlates with the least-grounded segment (Risk Listers, 34% undeclared); and — the dimension issuers have the least visibility into internally — is consistent between what is said on the earnings call and what is filed with the SEC, since the SEC's own enforcement rationale in the Welltower matter targets exactly this consistency, not the promotional content of the filing per se.
+The measurement built across this thesis converts directly into a disclosure checklist. Credible AI disclosure names a concrete activity (not "AI capabilities," which 86% of firms use as an empty placeholder object); states a clear stage (deployed or scaled, not merely explored or piloted); names a specific product or process; reports a quantified outcome; discloses the source of the AI, including provider and partner relationships, since 16% of activities in the corpus leave this unstated and undeclared origin correlates with the least-grounded segment (Risk Listers, 45% undeclared); and — the dimension issuers have the least visibility into internally — is consistent between what is said on the earnings call and what is filed with the SEC, since the SEC's own enforcement rationale in the Welltower matter targets exactly this consistency, not the promotional content of the filing per se.
 
 ## Investor implications
 
-Of the textual dimensions available in AI disclosure, specificity carries incremental economic information (Chapter 5: 2–4 points of partial R² in beta, idiosyncratic volatility, price-to-sales, R&D-to-sales, and next-year revenue growth), while promotional tone carries essentially none. Disclosed activity adds information beyond semantic style, and dominates it specifically where the outcome concerns operating risk and growth. Investors should read earnings-call AI claims against what the same firm has filed: the same activity mix is described in both venues, and the call does supply concrete evidence the filing typically omits — quantified outcomes, named providers, named products — alongside more promotional language, so cross-venue consistency, not the call's promotional tone by itself, is the more useful credibility signal — a gap that has been widening since the 2023 AI boom and has shown no sign of narrowing since the SEC's December 2023 warning.
+Of the textual dimensions available in AI disclosure, specificity carries incremental economic information (Chapter 5: 1.8–6.0 points of partial R² in beta, idiosyncratic volatility, price-to-sales, R&D-to-sales, and next-year revenue growth), while promotional tone carries essentially none. Disclosed activity adds information beyond semantic style, and dominates it specifically where the outcome concerns operating risk and growth. Investors should read earnings-call AI claims against what the same firm has filed: the same activity mix is described in both venues, and the call does supply concrete evidence the filing typically omits — quantified outcomes, named providers, named products — alongside more promotional language, so cross-venue consistency, not the call's promotional tone by itself, is the more useful credibility signal — a gap that has been widening since the 2023 AI boom and has shown no sign of narrowing since the SEC's December 2023 warning.
 
 ## Discussion against theory
 
@@ -1835,7 +1834,7 @@ All three washing measures are best read through Meyer and Rowan's [-@meyer1977]
 
 # Conclusions
 
-The thesis's main empirical findings are five. AI disclosure grew 7.6-fold in intensity and reached 92% of S&P 500 firms between 2021 and 2025, with the composition of that growth shifting decisively toward risk and governance content rather than promotion. Disclosure organizes into a reproducible three-segment taxonomy — Product Deployers, Governed Adopters, Risk Listers, plus a rule-based No AI segment — that corresponds to genuinely distinct firm types only for Product Deployers; the other two segments differ in register, not in underlying economics. The semantic content and disclosed activity of AI disclosure carry modest but robust incremental economic information (2.4–4.2 points of partial R² for semantic content alone, 3.7–6.3 points with disclosed activity added) beyond disclosure volume and financial fundamentals, concentrated in specificity and in concrete activity rather than in promotional tone. Comparing the same firm in the same fiscal year across venues, the *mix* of disclosed AI activity is nearly identical between earnings calls and SEC filings, but calls attach far more concrete evidence and promotion to that same activity — 10 times more promotional statements and 17 times more quantified claims per 1,000 words — a within-firm, within-year venue-associated gap that opened with the 2023 boom and has not closed despite the SEC's 2024 AI-washing enforcement. And AI washing is not one phenomenon but at least three, each identifying largely non-overlapping firms, with the cross-venue gap the closest match to the mechanism regulators have enforced so far.
+The thesis's main empirical findings are five. AI disclosure grew nearly seven-fold in intensity and reached 92% of S&P 500 firms between 2021 and 2025, with the composition of that growth shifting decisively toward risk and governance content rather than promotion. Disclosure organizes into a reproducible four-segment taxonomy — Promotional Disclosers, Third-Party Integrators, Governance Adopters, Risk Listers, plus a rule-based No AI segment — that corresponds to genuinely distinct firm types most consistently for Promotional Disclosers; Governance Adopters separate on market capitalization and value creation but not on margin or growth, while Third-Party Integrators and Risk Listers differ from non-disclosers mostly in register rather than in underlying economics. The semantic content and disclosed activity of AI disclosure carry modest but robust incremental economic information (1.8–6.0 points of partial R² for semantic content alone, 2.1–7.8 points with disclosed activity added) beyond disclosure volume and financial fundamentals, concentrated in specificity and in concrete activity rather than in promotional tone. Comparing the same firm in the same fiscal year across venues, the *mix* of disclosed AI activity is nearly identical between earnings calls and SEC filings, but calls attach far more concrete evidence and promotion to that same activity — 10 times more promotional statements and 17 times more quantified claims per 1,000 words — a within-firm, within-year venue-associated gap that opened with the 2023 boom and has not closed despite the SEC's 2024 AI-washing enforcement. And AI washing is not one phenomenon but at least three, each identifying largely non-overlapping firms, with the cross-venue gap the closest match to the mechanism regulators have enforced so far.
 
 The methodological contribution is a five-layer, largely reproducible extraction pipeline that recovers structured, falsifiable claims and grounded activities from over nine million paragraphs at a cost no purely human-coded design could match, with venue-specific measurement error documented rather than assumed away. The managerial contribution is a concrete disclosure checklist for issuers and a cross-venue credibility framework for investors, both grounded in what the measurement shows carries information.
 
@@ -1904,8 +1903,8 @@ data_path = Path("../data/processed/clusters/firm_activity_profiles.parquet")
 if not data_path.exists():
     data_path = Path("data/processed/clusters/firm_activity_profiles.parquet")
 df = pd.read_parquet(data_path)
-SEGS = ["desplegadores_de_producto", "adoptantes_con_gobernanza", "listadores_de_riesgo", "sin_ia"]
-LABELS = ["Product Deployers", "Governed Adopters", "Risk Listers", "Non-Disclosers"]
+SEGS = ["promocionales", "integradores_de_terceros", "adoptantes_con_gobernanza", "listadores_de_riesgo", "sin_ia"]
+LABELS = ["Promotional Disclosers", "Third-Party Integrators", "Governance Adopters", "Risk Listers", "Non-Disclosers"]
 g = df.groupby("segmento")
 n = df["segmento"].value_counts()
 has_activity = df["n_activities"] > 0
@@ -2105,7 +2104,7 @@ for k, vals in d["stability_by_k"].items():
 Markdown(tabulate(table, headers=["k", "Per-segment Jaccard stability", "Minimum", "Usable (>=0.60)?"]))
 ```
 
-**Robustness to disclosure intensity.** Re-estimating the three-segment solution without disclosure intensity in the clustering features yields an Adjusted Rand Index of 0.78 against the original segmentation; 98.2% of Product Deployers remain in the corresponding cluster, which still shows a 4x-higher median disclosure intensity (5.6 vs. 1.3–1.5 frames per 1,000 paragraphs) purely as a byproduct of its behavioural profile — high deployment, high customer-facing product share. The segment does not depend on including disclosure volume as a clustering feature.
+**Robustness to disclosure intensity.** Re-estimating the four-segment solution without disclosure intensity in the clustering features yields an Adjusted Rand Index of 0.667 against the original segmentation; 69.4% of Promotional Disclosers remain in the corresponding cluster (down from a near-total 97.1% self-match at k=4 *with* intensity included, per the contingency table underlying this check), which still shows a 4x-to-10x-higher median disclosure intensity even without intensity in the fit (0.12 vs. 0.02–0.04 frames per 1,000 words for the other clusters) purely as a byproduct of its behavioural profile — high deployment, high customer-facing product share. Intensity is doing real work here: it is not merely relabeling a group that the behavioural features alone would already isolate, and dropping it produces a visibly noisier partition, not the same one.
 
 **Conditional promotional excess, full specification.** The fitted model is a frame-level logistic regression: `logit(P(promotional)) = −4.297 + 2.913 × behaviour_index + 0.970 × [DEF 14A] + 0.054 × [8-K]`, where `behaviour_index` is computed only from each firm's non-promotional frames to avoid a mechanical link between the predictor and the outcome. The uncorrected specification (no form fixed effects) tags 41% of "washing-tail" frames as proxy-statement frames versus 23% for the rest of the corpus, confirming that form composition alone would bias the test toward proxy-heavy disclosers. The null distribution is modeled as a Poisson-binomial (each frame carries its own predicted probability, by form), corrected for intra-document dependence (ICC = 0.043, estimated by one-way ANOVA on model residuals, giving a design effect of 1.18 at a median of 5.3 frames per filing) via an equivalent beta-binomial test, with Benjamini-Hochberg [@benjamini1995] correction at 5% across the 449 firms with at least five frames, both tails. Estimating dispersion at the firm level instead of the document level — treating between-firm heterogeneity as noise — makes the test mark nobody in either tail; that heterogeneity is the phenomenon being measured, not noise to be absorbed.
 
