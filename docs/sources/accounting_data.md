@@ -298,6 +298,40 @@ with the frames fallback, after all three fixes:
 (`capex` and `eps_diluted` tag chains widened 2026-09-08 — see the 10-K
 section above for the fallback-tag detail, ported here identically.)
 
+**The 517×23 grid itself understates coverage** (2026-09-08): it assumes
+every one of the 517 universe tickers filed a 10-Q every single quarter
+across the full 2021Q1–2026Q3 window, which isn't true — IPOs, delistings,
+and M&A leave genuine gaps. The real denominator is how many
+(ticker, quarter) cells the ticker was actually filing in at all (any
+XBRL fact, any concept, landing in that quarter): **11,335 of the
+11,891-cell grid**, 556 cells (4.7%) don't exist to be covered. Against
+that real ceiling, inline-only coverage reads meaningfully higher for
+every metric that matters most:
+
+| metric | vs. 11,891-cell grid | vs. 11,335-cell real ceiling |
+|---|---|---|
+| revenue | 87.6% | **91.9%** |
+| net_income | 89.6% | **94.0%** |
+| eps_diluted | 87.8% | **92.1%** |
+| assets | 90.3% | **94.8%** |
+| equity | 90.9% | **95.3%** |
+| capex | 79.8% | **83.7%** |
+| debt | 77.6% | **81.4%** |
+| sga_expense | 72.0% | **75.5%** |
+| operating_income | 71.1% | **74.6%** |
+| current_assets / current_liabilities | 76.1% | **79.8%** |
+| cogs | 55.5% | **58.3%** |
+| rd_expense | 30.4% | **31.9%** |
+
+The grid-based table above is kept as the primary reference because it's
+a fixed, reproducible denominator that makes before/after comparisons
+across today's fixes exact — but the ceiling-based numbers are the
+honest answer to "is coverage good": core P&L and balance-sheet items
+(revenue, net income, EPS, assets, equity) sit at 92-95% of what's
+actually achievable. `rd_expense` and `cogs` are the only metrics still
+genuinely low against either denominator — confirmed sector-driven, not
+a coverage bug, the same way as the 10-K panel above.
+
 The YTD-differencing fix alone moved these numbers far more than any
 tag-fallback widening or the frames fallback: capex 24.7%→76.3% (+52pp),
 revenue 69.9%→87.4%, net_income 71.4%→89.5%, eps_diluted 69.7%→87.3%,
