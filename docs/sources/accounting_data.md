@@ -144,6 +144,48 @@ NULL rather than filled from that alone, since a partial figure passed
 off as the whole construct would be a silently biased, worse-than-missing
 value. `da` 80%→92%, `pretax_income` 96%→97.5%.
 
+**Two individual filer errors found and corrected (2026-09-08), via a
+sanity sweep over the finished panel rather than a source-side check —
+implausible values (negative debt, zero shares) rather than missing
+ones.**
+- Ball Corporation's own 2022-02-16 10-K tags `dei:EntityCommonStockSharesOutstanding`
+  as exactly 0.0 on its cover page — every adjacent filing shows
+  ~310-330M shares. A public filer never genuinely has zero shares
+  outstanding, so this is a filer tagging error, not a fact. Treated as
+  missing rather than propagated into a spurious zero market cap.
+- DuPont's own 2021-02-12 10-K tags `us-gaap:LongTermDebt` as **-$21.811B**
+  in the SAME filing where the sibling concept
+  `LongTermDebtAndCapitalLeaseObligations` correctly shows +$21.806B for
+  the identical period — a sign-tagging error, not a real negative
+  liability. `NEVER_NEGATIVE_CONCEPTS` now drops negative values for any
+  concept that can never legitimately be negative (assets, current
+  assets/liabilities, long-term debt, cash — NOT equity, which is
+  genuinely negative for ~18% of firm-years from buybacks) before the
+  fallback-priority resolution runs, so the correct sibling concept is
+  recovered automatically rather than the panel silently carrying an
+  impossible value. `debt_to_equity` for DD/2021 flipped from a
+  nonsensical -0.57 to the correct +0.57. Ported to the 10-Q panel too
+  (no occurrences there currently — purely defensive).
+
+**Known, unresolved limitation: bank `revenue` is understated for ~7-9
+tickers (2026-09-08), found but NOT fixed — flagged rather than guessed
+at.** FITB, ZION, CMA, SIVB, HBAN, RF and PBCT never tag a combined
+`Revenues`/`RevenueFromContractWithCustomer...` concept; the only concept
+available scopes strictly to fee income under ASC 606, which structurally
+EXCLUDES net interest income — a bank's core revenue. Fifth Third (FITB)
+reads ~$580M when its actual total revenue is several billion. The
+obvious fix — sum `InterestAndDividendIncomeOperating` +
+`NoninterestIncome` — does NOT reconcile against how banks that already
+have a good `Revenues` tag (JPM, BAC, COF) define it: the sum uses GROSS
+interest income, while their own `Revenues` tag appears to net out
+interest expense, so applying the sum universally would inflate revenue
+for the banks that already work and use an inconsistent definition
+across the sector. Needs bank-specific net-interest-income construction
+(gross interest income minus interest expense, both individually
+unreliable per-bank in inline-XBRL) verified against each affected
+ticker's actual reported figures before fixing — not attempted here to
+avoid trading a known small error for an unverified, possibly larger one.
+
 Net coverage effect of all 10-K-panel fixes together (dimensional filter
 + dimensional-singleton fallback + dual-class shares + debt/capex/eps
 fallbacks + da/pretax_income component sums + as-of resolution +

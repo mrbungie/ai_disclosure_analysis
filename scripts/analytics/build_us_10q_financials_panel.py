@@ -90,6 +90,13 @@ TAGS = {
 }
 INSTANT = {"assets", "current_assets", "current_liabilities", "equity", "debt"}
 ALL_TAGS = sorted({t for v in TAGS.values() for t in v})
+# Balance-sheet concepts that can never legitimately be negative - unlike
+# equity (real, from buybacks - McDonald's, Starbucks, ...), a negative
+# value here is a filer sign-tagging error. Verified case ported from
+# build_firm_financials.py: DuPont's 2021-02-12 10-K tags us-gaap:LongTermDebt
+# as -$21.811B in the SAME filing where the sibling concept
+# LongTermDebtAndCapitalLeaseObligations correctly shows +$21.806B.
+NEVER_NEGATIVE_TAGS = {t for m in ("assets", "current_assets", "current_liabilities", "debt") for t in TAGS[m]}
 
 
 def dimensional_singletons(dim_facts: pd.DataFrame) -> pd.DataFrame:
@@ -191,6 +198,7 @@ def main():
         if len(d):
             chunks.append(d)
     base = pd.concat(chunks, ignore_index=True)
+    base = base[~(base["concept"].isin(NEVER_NEGATIVE_TAGS) & (base["numeric_value"] < 0))]
     base["end"] = pd.to_datetime(base["period_end"])
     base["start"] = pd.to_datetime(base["period_start"])
     base["days"] = (base["end"] - base["start"]).dt.days

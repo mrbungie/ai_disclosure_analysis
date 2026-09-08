@@ -186,6 +186,20 @@ INSTANT_METRICS: dict[str, list[str]] = {
 }
 SHARES_METRIC = {"shares_out": ["dei:EntityCommonStockSharesOutstanding"]}
 
+# Balance-sheet concepts that can never legitimately be negative — a
+# negative value here is a filer sign-tagging error, not a fact. Verified
+# case: DuPont's own 2021-02-12 10-K tags us-gaap:LongTermDebt as
+# -$21.811B in the SAME filing where the sibling concept
+# LongTermDebtAndCapitalLeaseObligations correctly shows +$21.806B for
+# the identical period — a sign flip, not a real negative liability.
+# Dropping the impossible value lets the normal fallback-priority chain
+# recover the correct sibling concept instead of guessing at a fix.
+NEVER_NEGATIVE_CONCEPTS = {
+    concept
+    for metric in ("total_assets", "current_assets", "current_liabilities", "long_term_debt", "cash")
+    for concept in INSTANT_METRICS[metric]
+}
+
 GROWTH_METRICS = ["revenue", "rd_expense", "capex", "sga_expense"]
 LEVEL_COLUMNS = ["revenue", "rd_expense", "capex", "sga_expense"]
 
@@ -509,6 +523,7 @@ def main() -> None:
         dual_class_shares = load_dual_class_shares(con, args.xbrl_glob)
     finally:
         con.close()
+    facts = facts[~(facts["concept"].isin(NEVER_NEGATIVE_CONCEPTS) & (facts["value"] < 0))]
     filings["filing_date"] = pd.to_datetime(filings["filing_date"])
     print(f"{len(filings):,} filings 10-K | {len(facts):,} hechos XBRL "
           f"({facts['ticker'].nunique():,} tickers)")
@@ -518,6 +533,13 @@ def main() -> None:
     duration = fill_via_component_sum(facts, duration, "pretax_income", PRETAX_COMPONENTS)
     instants = pivot_metrics(facts, INSTANT_METRICS, "instant")
     shares = pivot_metrics(facts, SHARES_METRIC, "instant")
+    # A public filer never genuinely has zero shares outstanding; a 0 here
+    # is a filer tagging error, not a fact — verified against Ball Corp's
+    # own 2022-02-16 10-K, which tagged its cover-page share count as
+    # exactly 0.0 (every adjacent filing shows ~310-330M). Treated as
+    # missing so it doesn't produce spurious zero market cap / infinite
+    # EPS-type ratios downstream.
+    shares.loc[shares["shares_out"] <= 0, "shares_out"] = np.nan
     shares = (shares.merge(dual_class_shares, on=["ticker", "period_end"],
                            how="outer", suffixes=("", "_dual_class"))
                      .assign(shares_out=lambda d: d["shares_out"].fillna(d["shares_out_dual_class"]))
