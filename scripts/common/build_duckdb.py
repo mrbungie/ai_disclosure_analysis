@@ -842,6 +842,21 @@ def main(with_text_tables: bool = False):
         """,
     }
 
+    # The 03_market_data views are optional, exactly like the paragraph
+    # sources above: a box that only pulled the text tree (sections +
+    # manifests) to run embeddings has no data/raw/market/ at all, and a
+    # missing price file there must not abort a build whose text tables
+    # don't depend on it. Same _existing() rule, applied after the literal
+    # because these are plain dict entries rather than comprehensions.
+    for _view_name, _view_src in (
+        ("market_prices", f"{market_prices_dir}/*.parquet"),
+        ("market_factors_daily", f"{market_factors_dir}/ff3_daily.parquet"),
+        ("market_factors_monthly", f"{market_factors_dir}/ff3_monthly.parquet"),
+    ):
+        if not _existing(_view_src):
+            del views[_view_name]
+            print(f"  skipping {_view_name} (no files matching {_view_src})")
+
     if with_text_tables:
         # Two leaf-level text granularities, both ACROSS EVERY FORM AND
         # COUNTRY — not split by source (see _paragraph_select_sql's
