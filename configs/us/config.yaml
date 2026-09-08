@@ -612,5 +612,6 @@ storage:
   raw_html_8k: data/raw/filings_8k
   raw_sec_letters: data/raw/sec_letters
   raw_xbrl_facts: data/raw/xbrl_facts/us
+  raw_xbrl_frames_alt: data/raw/xbrl_frames_alt
   interim_manifests: data/interim/manifests
   interim_sections: data/interim/sections

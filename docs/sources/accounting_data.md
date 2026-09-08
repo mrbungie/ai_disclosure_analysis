@@ -83,6 +83,43 @@ Same annual/quarterly closes as `01_fetch_filings.py`
 narrative filings; no manual-download path has been built for XBRL yet
 since it wasn't asked for.
 
+## US 10-Q shock series — frames as an alternative source, coverage measured
+
+`scripts/us/04_extract_inline_xbrl_facts.py` parses inline XBRL directly out
+of each cached 10-Q filing's own HTML (point-in-time, firm's own fiscal
+quarter). `scripts/us/05_fetch_xbrl_frames_alt.py` pulls the same 13 core
+metrics from SEC's XBRL "frames" API instead — one call per (tag, calendar
+quarter), returning every filer's value for that exact calendar period
+across the whole SEC universe, then filtered down to the 517-ticker
+universe. Stored separately, never merged, at
+`data/raw/xbrl_frames_alt/us_10q_frames.parquet`
+(`configs/us/config.yaml:storage.raw_xbrl_frames_alt`).
+
+Measured directly (2026-09-08) against the 517-ticker × 22-quarter
+(2021Q1–2026Q2, 11,374 possible firm-quarter cells) 10-Q panel:
+
+- Frames coverage is **worse**, not better, for every duration metric —
+  revenue 34.5% vs. 91.8% for the inline-XBRL extraction, capex 19.1% vs.
+  81.2%, cogs 13.0% vs. 56.8%. Reason: a frame only returns a value when a
+  filer's fiscal period exactly matches the calendar-quarter boundary
+  (`CY2024Q2`/`CY2024Q2I`) — any non-December fiscal-year-end filer is
+  silently absent from that quarter's frame, and duration facts (revenue,
+  capex, opex-style line items) need BOTH period bounds to match, which
+  filters out far more filers than the instant (balance-sheet) facts.
+- Instant/balance-sheet metrics degrade less (assets 94.6% vs. 94.0%,
+  current assets/liabilities ~80% either way) since only the period-end
+  date needs to align.
+- Used as a fallback/union source (fill an inline-XBRL gap with the frame
+  value when the inline extraction has nothing for that firm-quarter),
+  frames adds only 0.1–1.0 percentage points of coverage per metric — not
+  a meaningful improvement.
+
+Conclusion: the per-filing inline-XBRL extraction is already the
+higher-coverage source for this panel precisely because it follows each
+firm's own fiscal calendar instead of forcing a calendar-quarter grid.
+Frames data is kept as a documented alternative for cross-checking values,
+not as a coverage fix.
+
 ## Actual run results (2026-09-03)
 
 **US** (`scripts/us/03_fetch_accounting_data.py`, 516 tickers): 514
