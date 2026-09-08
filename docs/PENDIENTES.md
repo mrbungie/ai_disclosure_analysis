@@ -22,9 +22,7 @@ for p in interim/ai_classify interim/prefilter_predictions_unique interim/manife
 Claves en `.env`: `OPENROUTER_API_KEY` (clasificación), `B2_KEY_ID` /
 `B2_APPLICATION_KEY` / `B2_BUCKET` / `RCLONE_REMOTE_NAME` (datos).
 
-**Entorno.** `uv sync` falla por un conflicto de resolución entre
-`sentence-transformers==6.0.1` y el extra `pdf-vlm-mineru`; todo corre con
-`uv run --frozen --no-sync python ...` sobre el `.venv`. `statsmodels` y
+**Entorno.** `uv sync` resuelve. `statsmodels` y
 `matplotlib` no están declarados en `pyproject.toml`
 (`uv pip install --python .venv/bin/python statsmodels matplotlib`). No hace
 falta GPU: embeddings y scoring están corridos para todo el corpus.

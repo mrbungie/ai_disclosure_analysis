@@ -137,8 +137,16 @@ SEP = r"[|#*_\s\-–—:\[\]]*"
 # FIRST digit after "Items" still correctly captures the primary item
 # (2, our actual 10-Q extraction target) even though the second item
 # folded into the same heading can't get its own separate boundary.
+# Some filers (EXPE confirmed) prefix the real body heading with the Part
+# label itself — "Part I. Item\xa02. Management's Discussion..." — instead
+# of restating "Item 2" alone. Without this, ITEM_RE's `^\s*(?:SEP)*`
+# can't skip "Part I." (SEP is punctuation-only, no letters), so the whole
+# line silently fails to match and the heading is invisible. The optional
+# leading group only accepts "Part" + a roman numeral + SEP punctuation
+# directly before "Item" — never arbitrary words — so it can't swallow an
+# unrelated sentence that merely mentions "Part" earlier in the line.
 ITEM_RE = re.compile(
-    rf"^\s*(?:{SEP})\s*Items?{SEP}(\d{{1,2}})(?!\d)(?:\.?([A-C])(?![a-z])|\s*\(([A-C])\))?\.?{SEP}",
+    rf"^\s*(?:{SEP})\s*(?:Part{SEP}[IVX]{{1,3}}\.?{SEP})?Items?{SEP}(\d{{1,2}})(?!\d)(?:\.?([A-C])(?![a-z])|\s*\(([A-C])\))?\.?{SEP}",
     re.IGNORECASE,
 )
 
@@ -165,7 +173,19 @@ def _item_key(match: re.Match) -> str:
 # (MD&A)."), confirmed by direct inspection. One shared pattern, applied to
 # whichever item number it means on each form (Item 7 on a 10-K, Item 2 on
 # a 10-Q — see ITEM_ALIASES' docstring above).
-_MDA_ALIAS_RE = re.compile(r"^\s*\|?\s*MANAGEMENT.S\s+DISCUSSION\s*(?:&|AND)\s*ANALYSIS\b", re.IGNORECASE)
+# Two more confirmed variants of the same bare heading, folded into one
+# alias regex rather than a new dict entry (still keyed to the same fixed
+# item number, form-by-form):
+#   - ETR: "Management's FINANCIAL Discussion and Analysis" — one extra
+#     word inserted between "Management's" and "Discussion" (combined-
+#     utility-registrant filing convention).
+#   - MRNA: "2. MANAGEMENT'S DISCUSSION AND ANALYSIS..." — a bare item
+#     number (no "Item" word) directly prefixing the same phrase. The
+#     digit prefix is only accepted glued to this exact phrase, so it
+#     can't false-match an unrelated numbered list line elsewhere.
+_MDA_ALIAS_RE = re.compile(
+    r"^\s*\|?\s*(?:\d{1,2}\.\s*)?MANAGEMENT.S\s+(?:FINANCIAL\s+)?DISCUSSION\s*(?:&|AND)\s*ANALYSIS\b",
+    re.IGNORECASE)
 
 ITEM_ALIASES: dict[str, dict[str, re.Pattern]] = {
     "10-K": {
@@ -212,6 +232,61 @@ def _item_heading_is_link_wrapped(line: str) -> bool:
     return item_pos == -1 or open_pos < item_pos
 
 
+def _part_line_is_bare_label(line: str) -> bool:
+    """True if the line is JUST "PART I" / "PART II" (or that plus pure
+    punctuation), nothing else — the signature of a lone TOC section
+    divider that introduces its own table right after (BLK, CHD, EG
+    confirmed: "PART I" / "PART II" as standalone lines directly above
+    that Part's own pipe-table TOC), as opposed to a real heading, which
+    always carries a title on the same line ("PART I – FINANCIAL
+    INFORMATION", "Part I - Item 1. Business", "PART I. FINANCIAL
+    INFORMATION" — confirmed on HIG, BLK's/TSN's real headings). Checked
+    by what's left on the line after the "PART N" match itself: a real
+    heading's remainder is a real word or two; a bare label's remainder
+    is empty or pure punctuation/whitespace."""
+    m = _PART_RE.search(line)
+    if not m:
+        return False
+    rest = re.sub(r"[\s\-–—:.,]+", "", line[m.end():])
+    return not rest
+
+
+def _part_heading_is_narrative_mention(line: str) -> bool:
+    """True when "Part N" is embedded in an ordinary sentence ABOUT that
+    Part, not stating it (ALL's 10-K confirmed: "Part\xa0III of this Form
+    10-K incorporates by reference certain information from the
+    registrant's definitive proxy statement..." — a cross-reference
+    sentence, not Part III's own opening heading). A real heading's title
+    always starts with a capital letter directly after the "Part N" match
+    (however punctuated: "PART I – FINANCIAL INFORMATION", "Part I, Item
+    3. Quantitative..."); a narrative mention continues in lowercase, as
+    the next word of the sentence ("of this Form...")."""
+    m = _PART_RE.search(line)
+    if not m:
+        return False
+    rest = line[m.end():].lstrip(" \t\xa0-–—:.,|")
+    return bool(rest) and rest[0].isalpha() and rest[0].islower()
+
+
+def _part_heading_is_link_wrapped(line: str) -> bool:
+    """Same signature as `_item_heading_is_link_wrapped`, for `_PART_RE`
+    matches. TSN's 10-Q TOC lists "PART I"/"PART II" as bare markdown links
+    with no surrounding "|" table ("[PART I. FINANCIAL INFORMATION](#a)"),
+    so `_part_windows`' old "no pipe = real heading" rule picked the TOC
+    row as the window boundary, dragging the whole rest of the document
+    (including the real Part I content) into a mislabeled "Part II"
+    window. A real "PART I" heading is bare text, never link-wrapped."""
+    m = _PART_RE.search(line)
+    if not m:
+        return False
+    matched = m.group(0)
+    open_pos = matched.find("[")
+    if open_pos == -1:
+        return False
+    part_pos = matched.upper().find("PART")
+    return part_pos == -1 or open_pos < part_pos
+
+
 def clean_html_to_lines(html_path: Path) -> list[str]:
     """Filing HTML is stored gzip-compressed (.html.gz — iXBRL-era 10-Ks
     compress ~90%+, see scripts/us/10k/01_fetch_filings.py). Transparently
@@ -234,6 +309,35 @@ def item_sort_key(item_key: str) -> tuple[int, int]:
     return (num, letter_rank)
 
 
+# Same signal as `_part_heading_is_narrative_mention`, generalized to any
+# regex match: a real heading's title starts with a capital letter right
+# after the match; a narrative CROSS-REFERENCE to that item number
+# continues the sentence in lowercase (INCY confirmed: "Items\xa010 (as to
+# directors and Delinquent Section\xa016(a) Reports), 11, 12, 13 and 14 is
+# incorporated by reference..." — a front-matter incorporation-by-
+# reference notice, not Item 10's own heading; ITEM_RE still matches
+# "Items 10" since "Items" with a trailing "s" is deliberately accepted —
+# see ITEM_RE's docstring on NTRS). Left unfiltered by this check
+# previously, such a mention can rank ahead of every real, correctly-
+# ordered Item heading that follows it, and the strictly-increasing `kept`
+# filter in `_segment_window` then rejects ALL of them as "out of order" —
+# confirmed on INCY: one such mention at line 57 (rank 10) silently wiped
+# out real Items 1 through 7A found hundreds of lines later.
+_LEADING_AND_ITEM_RE = re.compile(r"^and\s+\d{1,2}[A-C]?\.?\s*", re.IGNORECASE)
+
+
+def _match_is_narrative_mention(line: str, match_end: int) -> bool:
+    rest = line[match_end:].lstrip(" \t\xa0-–—:.,([|")
+    # A combined heading (FCX: "Items 7. and 7A. Management's Discussion
+    # and Analysis...", NTRS's analogous "Items 2. and 3." — see ITEM_RE's
+    # docstring) continues in lowercase too ("and 7A. Management's...").
+    # Stripping that specific "and N[A-C]?." continuation before the
+    # casing check tells it apart from an actual narrative sentence,
+    # which never has this shape right after the item number.
+    rest = _LEADING_AND_ITEM_RE.sub("", rest, count=1)
+    return bool(rest) and rest[0].isalpha() and rest[0].islower()
+
+
 def _raw_candidates(lines: list[str], form: str = "10-K") -> list[tuple[str, int]]:
     """Every line that looks like an Item heading, TOC or real, in document
     order — no filtering yet. `form` selects which ITEM_ALIASES apply."""
@@ -242,7 +346,8 @@ def _raw_candidates(lines: list[str], form: str = "10-K") -> list[tuple[str, int
     for i, line in enumerate(lines):
         m = ITEM_RE.search(line)
         if m:
-            found.append((_item_key(m), i))
+            if not _match_is_narrative_mention(line, m.end()):
+                found.append((_item_key(m), i))
             continue
         for item_key, alias_re in aliases.items():
             if alias_re.search(line):
@@ -284,7 +389,55 @@ def _is_toc_formatted_row(line: str) -> bool:
     return len(non_empty_cells) >= 2
 
 
-def _toc_prefix_end(raw: list[tuple[str, int]], lines: list[str]) -> int:
+PROSE_MIN_LEN = 120
+
+# Filers confirmed, by direct inspection, to table-format EVERY real body
+# heading exactly like a TOC row ("| ITEM 1. | | | BUSINESS | | |"), not
+# just the TOC itself — all Workiva-generated iXBRL 10-Ks. For these
+# specific filers only, `_toc_prefix_end` additionally stops the TOC
+# prefix at the first table-formatted candidate immediately followed by
+# real prose (`_is_followed_by_prose`), since shape alone can't tell their
+# real headings from TOC rows. Tried this as a general rule first — it
+# regressed roughly a third of a 80-filing sample (WDC lost all 3 target
+# items outright; MA, INCY, PXD, TDY, CTAS, IR, BXP, JNJ lost most of
+# their Item 1/1A/7 content) — false-positive "prose" lines (a short
+# sub-heading, a page-break artifact) exist elsewhere in this corpus that
+# happen to clear `PROSE_MIN_LEN` with no "|", so the extra check must be
+# scoped to filers that actually need it, not applied corpus-wide.
+WORKIVA_TABLE_HEADING_TICKERS = {"WFC", "SYK", "ADM", "KR", "AIG", "PCAR", "WMT", "UAA", "LHX"}
+
+
+_JUNK_LINE_MAX_LEN = 3  # a lone zero-width space, bullet, or similar filler
+_JUNK_LOOKAHEAD = 5     # how many such junk lines to skip before giving up
+
+
+def _is_followed_by_prose(lines: list[str], line_idx: int, min_len: int = PROSE_MIN_LEN) -> bool:
+    """True if a real paragraph follows `line_idx` within a few lines —
+    long, no "|" table formatting — rather than another TOC row. Some
+    filers (KR confirmed) insert a near-invisible filler line (a lone
+    zero-width space, `\\u200b`) between a real table-formatted heading and
+    its body paragraph; `clean_html_to_lines` keeps it (Python's `.strip()`
+    doesn't treat `\\u200b` as whitespace), so checking only the immediate
+    next line missed the real prose sitting one line further. Skipping a
+    short run of such near-empty junk lines before giving up on "no prose
+    follows" fixes that without weakening the TOC-row rejection: a genuine
+    TOC entry is followed by another TOC entry (another "|" row) however
+    many junk lines separate them, never by a real paragraph.
+    See `WORKIVA_TABLE_HEADING_TICKERS` for why this check exists and why
+    it is NOT applied to every filer."""
+    idx = line_idx + 1
+    skipped = 0
+    while idx < len(lines) and skipped <= _JUNK_LOOKAHEAD:
+        candidate = lines[idx]
+        if len(candidate) <= _JUNK_LINE_MAX_LEN:
+            idx += 1
+            skipped += 1
+            continue
+        return len(candidate) >= min_len and "|" not in candidate
+    return False
+
+
+def _toc_prefix_end(raw: list[tuple[str, int]], lines: list[str], ticker: str | None = None) -> int:
     """Index into `raw` (not a line number) of the first candidate that is
     NOT part of the initial run of TABLE-ROW-FORMATTED candidates starting
     at raw[0] — i.e. where the TOC ends and body content begins. Returns 0
@@ -301,11 +454,19 @@ def _toc_prefix_end(raw: list[tuple[str, int]], lines: list[str]) -> int:
     in the combined TOC are table rows, so the prefix keeps extending
     across the restart; the first candidate that ISN'T a table row is
     unambiguously the first real heading, regardless of what number it
-    is."""
+    is.
+
+    For `ticker in WORKIVA_TABLE_HEADING_TICKERS` only, one more stop
+    condition applies: those filers table-format every real body heading
+    too, so a table-formatted candidate immediately followed by an actual
+    paragraph (`_is_followed_by_prose`) ends the prefix right there."""
+    check_prose = ticker in WORKIVA_TABLE_HEADING_TICKERS
     last_line_idx = None
     prefix_len = 0
     for _item_key, line_idx in raw:
         if not _is_toc_formatted_row(lines[line_idx]):
+            break
+        if check_prose and _is_followed_by_prose(lines, line_idx):
             break
         if last_line_idx is not None and line_idx - last_line_idx > MAX_TOC_GAP:
             break
@@ -402,34 +563,92 @@ def _part_windows(lines: list[str]) -> list[tuple[str, int, int]]:
     own window (confirmed: MSFT's Item 1/1A vanished entirely this way —
     the window started 34 "PART I" page-headers too late)."""
     trailing_index_start = _trailing_index_start(lines)
-    candidates: dict[str, int] = {}
-    non_table_candidates: dict[str, int] = {}
+    # Every occurrence of each label is kept (not just the first), grouped
+    # into two tiers — bare-text-or-link (never a TOC row) and plain
+    # non-table (could still be a TOC row on filers with no "|" in their
+    # TOC at all) — falling back to table-row occurrences only when a
+    # label has neither. A single "first occurrence wins" pick (the
+    # original design) turned out unsafe in BOTH directions: some filers
+    # repeat a bare "PART I" / "PART II" pair as a running header sitting
+    # right at/before the TOC — TWICE, close together — before the real,
+    # correctly-spaced heading later on (PVH, WBA confirmed: first pair
+    # only ~15-25 lines apart, real pair 1000+ lines apart); a fixed
+    # "first" pick locks onto the bogus early pair. Keeping every
+    # occurrence and validating candidate PAIRS by span (below) recovers
+    # the real heading without reintroducing the MSFT running-page-header
+    # regression the original "first, not last" rule fixed (MSFT's real
+    # heading IS its first occurrence, so the earliest-valid-candidate
+    # search still lands on it).
+    # Link-wrapped non-table lines are excluded outright — a real heading
+    # never links to itself (see `_part_heading_is_link_wrapped`), so
+    # these are TOC rows regardless of position (TSN confirmed). A bare
+    # "PART I" divider line with no title (BLK/CHD/EG's lone-line-above-
+    # its-own-TOC-table pattern) is NOT excluded here, unlike the
+    # original single-candidate design: it turned out to ALSO be the
+    # genuine section-opening heading on other filers (ALL confirmed:
+    # "Part\xa0I" bare, directly above the real "Item\xa01.\xa0Business").
+    # The span validation below (not a pre-filter on this one shape)
+    # is what tells the two apart — BLK/CHD/EG's bogus pair sits right
+    # next to its own TOC table (small span, rejected), ALL's real pair
+    # spans the whole Part I content (large span, accepted).
+    non_table_occ: dict[str, list[int]] = {}
+    table_occ: dict[str, list[int]] = {}
     for i, line in enumerate(lines):
         if i >= trailing_index_start:
             break  # everything from here on is the trailing cross-reference index
         m = _PART_RE.search(line)
-        if m:
-            label = m.group(1).upper()
-            candidates[label] = i  # last occurrence of any form (fallback)
-            if "|" not in line and label not in non_table_candidates:
-                non_table_candidates[label] = i  # FIRST non-table-row occurrence
-    candidates.update(non_table_candidates)
+        if not m or _part_heading_is_narrative_mention(line):
+            continue
+        label = m.group(1).upper()
+        if "|" in line:
+            table_occ.setdefault(label, []).append(i)
+            continue
+        if not _part_heading_is_link_wrapped(line):
+            non_table_occ.setdefault(label, []).append(i)
 
-    ordered = sorted(candidates.items(), key=lambda kv: kv[1])
-    kept = []
-    last_rank = 0
-    for label, idx in ordered:
-        rank = _ROMAN_RANK.get(label, 0)
-        if rank > last_rank:
-            kept.append((label, idx))
-            last_rank = rank
+    def pool(label: str) -> list[int]:
+        return non_table_occ.get(label) or table_occ.get(label) or []
 
-    if len(kept) < 2:
+    ranks_present = sorted(
+        {l for l in set(non_table_occ) | set(table_occ) if l in _ROMAN_RANK},
+        key=lambda l: _ROMAN_RANK[l])
+    if len(ranks_present) < 2:
+        return [("I", 0, len(lines))]
+
+    # A real Part I always contains substantial content (at minimum Item
+    # 1's financial statements) — a candidate pair narrower than this is
+    # near-certainly TOC/page-header noise, not a genuine section
+    # boundary (confirmed: ABT's only bare pair sits 4 lines apart, a
+    # trailing running-header artifact, not real headings).
+    MIN_PART_SPAN = 100
+
+    chosen: list[tuple[str, int]] = []
+    prev_idx = -1
+    for rank_i, label in enumerate(ranks_present):
+        candidates = [i for i in pool(label) if i > prev_idx]
+        if not candidates:
+            break
+        if rank_i == len(ranks_present) - 1:
+            chosen_idx = candidates[0]
+        else:
+            next_pool = pool(ranks_present[rank_i + 1])
+            chosen_idx = next(
+                (c for c in candidates if any(n - c >= MIN_PART_SPAN for n in next_pool)),
+                candidates[0])  # no validated pair found; best effort, unchanged from before
+        chosen.append((label, chosen_idx))
+        prev_idx = chosen_idx
+
+    if len(chosen) < 2 or chosen[1][1] - chosen[0][1] < MIN_PART_SPAN:
+        # Even the best candidate pair found is implausibly narrow (no
+        # real alternative existed — confirmed on DUK, whose only "PART
+        # I"/"PART II" occurrences are a single adjacent table-row pair
+        # with no real body heading restated at all). Trust the Item-
+        # level segmentation over a fabricated Part split.
         return [("I", 0, len(lines))]
 
     windows = []
-    for i, (label, start_idx) in enumerate(kept):
-        end_idx = kept[i + 1][1] if i + 1 < len(kept) else len(lines)
+    for i, (label, start_idx) in enumerate(chosen):
+        end_idx = chosen[i + 1][1] if i + 1 < len(chosen) else len(lines)
         windows.append((label, start_idx, end_idx))
     return windows
 
@@ -520,7 +739,7 @@ def _segment_window(
     return segments
 
 
-def general_segment(lines: list[str], form: str = "10-K") -> dict[str, str]:
+def general_segment(lines: list[str], form: str = "10-K", ticker: str | None = None) -> dict[str, str]:
     """One segment per recognizable "Item N[A-C]" heading. `form` ("10-K"
     or "10-Q") selects which ITEM_ALIASES apply — see that dict's
     docstring for why the same alias text can mean a different item
@@ -557,7 +776,7 @@ def general_segment(lines: list[str], form: str = "10-K") -> dict[str, str]:
     fixes this without reverting to a pure index-based rule (which would
     wrongly suffix a 10-K's legitimate, non-colliding Part II+ items)."""
     all_raw = _raw_candidates(lines, form=form)
-    toc_prefix_len = _toc_prefix_end(all_raw, lines)
+    toc_prefix_len = _toc_prefix_end(all_raw, lines, ticker=ticker)
     toc_end_line = all_raw[toc_prefix_len - 1][1] if toc_prefix_len > 0 else -1
 
     windows = _part_windows(lines)

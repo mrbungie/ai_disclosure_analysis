@@ -1,4 +1,4 @@
-.PHONY: test install-deps tickers-tui build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market duckdb duckdb-text prefilter analytics analytics-text analytics-financials analytics-panels help
+.PHONY: test install-deps tickers-tui build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market duckdb duckdb-text prefilter analytics analytics-text analytics-financials analytics-panels analytics-activities b2-check refresh-stale help
 
 # Default target
 all: test
@@ -117,9 +117,33 @@ analytics-panels:
 	.venv/bin/python scripts/analytics/shock_analysis.py $(ARGS)
 	.venv/bin/python scripts/analytics/shock_did_simple.py $(ARGS)
 
-analytics: analytics-text analytics-financials analytics-panels
+analytics-activities:
+	@echo "Perfiles de actividad por empresa desde gold_ai_frames (activity_profiles)..."
+	.venv/bin/python scripts/analytics/activity_profiles.py $(ARGS)
+
+analytics: analytics-text analytics-financials analytics-panels analytics-activities
 
 # ---- 10_fusion: merging the 10-K text pipeline with market data — not built yet ----
+
+# ---- refresh-stale: rebuild everything the thesis .qmd cites, after any
+# upstream change (new embeddings, new XBRL fixes, new AI classify/activities
+# runs) — this project has multiple parallel agent sessions sharing the same
+# B2 bucket, so "stale" here specifically means "some other session pushed
+# raw/interim data this local checkout hasn't pulled yet," not just "code
+# changed." b2-check surfaces that gap FIRST (report only, never auto-pulls —
+# a blind pull can eat the B2 download cap, see sync_data_b2.sh's own
+# comments) so a stale local run doesn't silently bake outdated numbers into
+# data/processed/. duckdb-text and analytics both regenerate from whatever is
+# on local disk after that check.
+
+b2-check:
+	@echo "Verificando si B2 tiene datos que este checkout local no bajó todavía (no descarga nada, solo reporta)..."
+	@bash scripts/common/sync_data_b2.sh pull --dry-run 2>&1 | tail -6
+	@echo "Si hay archivos listados arriba: 'bash scripts/common/sync_data_b2.sh pull --path <subruta>' antes de refresh-stale."
+
+refresh-stale: b2-check duckdb-text analytics
+	@echo "duckdb + data/processed/clusters reconstruidos desde el disco local actual."
+	@echo "Si b2-check reportó pendientes, esto NO los incluyó — bajarlos y volver a correr."
 
 help:
 	@echo "Available Makefile commands:"
@@ -149,5 +173,9 @@ help:
 	@echo ""
 	@echo "  make duckdb                   (Re)build duckdb/thesis.duckdb — SQL views over every parquet output (fast)"
 	@echo "  make duckdb-text              Also (re)build paragraphs/sentences tables (~52s, regex-heavy)"
+	@echo ""
+	@echo "  make analytics-activities     Perfiles de actividad por empresa (activity_profiles.py)"
+	@echo "  make b2-check                 Reporta si B2 tiene data que este checkout local no bajó (no descarga nada)"
+	@echo "  make refresh-stale            b2-check -> duckdb-text -> analytics (todo lo que cita thesis.qmd, desde el disco local actual)"
 	@echo ""
 	@echo "  10_fusion: not built yet"

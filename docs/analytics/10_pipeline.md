@@ -38,8 +38,66 @@ python scripts/analytics/<script>.py` o, para el bloque financiero,
 
 ## Decisiones de construcción que afectan cifras
 
-1. **Cadenas de fallback de conceptos XBRL**: cobertura de capex 87%, SG&A
-   80%, `net_margin` 98%, revenue 98%.
+1. **Cadenas de fallback de conceptos XBRL**, sobre inline-XBRL por filing
+   (`data/raw/xbrl_facts/us_by_filing/`, no el bulk de Company Facts, que
+   colapsa reexpresiones), con dos correcciones de fondo (2026-09-08,
+   `docs/sources/accounting_data.md` tiene el detalle completo): (a)
+   excluir hechos dimensionales (`has_dimensions`) — sin esto un desglose
+   por segmento puede compartir concepto y período con el consolidado y
+   corromperlo (Amazon FY2021 `us-gaap:Revenues` sólo existía como un
+   segmento de ~$55M); (b) resolver reexpresiones por FECHA de filing más
+   temprana, no por mediana ni por "el filing más reciente" — este panel
+   alimenta joins as-of, así que el valor de un período tiene que ser el
+   que ese filing efectivamente reveló, nunca uno corregido después.
+   Validado sumando ingresos trimestrales contra el ingreso anual
+   independiente: 99.0% dentro de 1% para empresas de año fiscal
+   calendario (n=1.665, ver `docs/sources/accounting_data.md` para el
+   historial completo de esta cifra). (c) fallback de "singleton
+   dimensional", con un requisito de corroboración añadido después de que
+   este mismo check bajara: un emisor que taggea una métrica con UN solo
+   miembro dimensional cada período Y ese valor está corroborado por >=2
+   observaciones (no basta con que sea el único valor — el R&D de GM tiene
+   3+ observaciones por año; el `RevenueFromContractWithCustomer...` de
+   APA FY2022 tenía exactamente 1, un renglón de producto/geografía de
+   $18M, no el total de ~$11B, y pasaba trivialmente "valor único" por no
+   tener con qué discrepar) se recupera; una celda con 2+ valores
+   DISTINTOS (desglose real) se deja NULL en vez de adivinar — verificado
+   también contra el `cost_of_revenue` de AEP/AMT/APA/ATVI (4-17 valores
+   dimensionales distintos por período, desgloses reales, correctamente no
+   rellenados).
+
+   (d) cadenas de `capex`/`eps_diluted` ampliadas con
+   `PaymentsToAcquireOtherPropertyPlantAndEquipment`/`PaymentsForCapitalImprovements`
+   (nombre propio de REITs para capex) y `EarningsPerShareBasicAndDiluted`.
+   (e) `revenue` de bancos: FITB/ZION/CMA/SIVB/HBAN/RF/PBCT nunca taggean
+   `Revenues` combinado, sólo un concepto acotado a ingreso por comisiones
+   (ASC 606) que excluye el ingreso neto por intereses — el negocio
+   principal de un banco (FITB leía ~$580M contra varios miles de millones
+   reales). `InterestIncomeExpenseNet + NoninterestIncome = Revenues` es
+   una identidad contable verificada (0.0% de diferencia contra
+   BAC/COF/JPM/C/PNC, que sí taggean el combinado), aplicada como
+   REEMPLAZO (no relleno) porque el valor previo no estaba vacío, estaba
+   mal. Esta corrección sola movió la validación de 97.0%→99.0%.
+
+   Cobertura resultante (504 tickers, 2.868 filas 10-K alineadas): revenue
+   99.1%, net_income 99.7%, total_assets/equity 100%, shares_out 99.9%,
+   eps_diluted 97.6%, capex 91.2%, SG&A 80.7%, operating_income 80.0%,
+   long_term_debt 89.6% (subió de 84% al agregar
+   `LongTermDebtAndCapitalLeaseObligations`/`NotesPayable` a la cadena y
+   el fallback dimensional), current_assets/current_liabilities 85%,
+   debt_to_equity 83.7%, cost_of_revenue 61.4%, rd_expense 46.0%.
+   `shares_out` llegó a 99.9% sumando los hechos dimensionales por clase de
+   acción para emisores de doble clase (GOOGL, META, BRK.B, ...) que sólo
+   taggean `EntityCommonStockSharesOutstanding` por clase, no como total
+   consolidado (`docs/sources/accounting_data.md`). `rd_expense` y
+   `cost_of_revenue` quedan bajos genuinamente por sector (utilities,
+   aseguradoras, aerolíneas, REITs no taggean una línea de I+D o de costo
+   de ventas), no por una cadena de fallback incompleta. `debt_to_equity`
+   y `current_assets`/`current_liabilities` tampoco son cadenas
+   incompletas: ~18% de empresas-año tiene equity contable negativo
+   (recompras agresivas — McDonald's, Booking, Philip Morris) donde el
+   ratio queda NULL a propósito, y ~15% del universo (bancos, aseguradoras,
+   REITs) presenta balance no clasificado sin corte corriente/no corriente.
 2. **`next_*_yoy` se anula cuando el gap fiscal sale de [340, 380] días.**
 3. **Denominadores ≤ 0 producen NULL**, no un ratio absurdo (ROE con equity
    negativo, P/E con EPS negativo).
@@ -75,7 +133,6 @@ umbral vigente y las versiones congeladas están en `docs/FREEZE.md`.
 
 ## Pendiente
 
-- `statsmodels` y `matplotlib` no están declarados en `pyproject.toml`, y
-  `uv sync` falla por el conflicto `sentence-transformers` / extra
-  `pdf-vlm-mineru`; se corre con `--frozen --no-sync`.
+- `statsmodels` y `matplotlib` no están declarados en `pyproject.toml`
+  (`uv pip install --python .venv/bin/python statsmodels matplotlib`).
 - Los descriptivos SQL del apéndice no tienen script.

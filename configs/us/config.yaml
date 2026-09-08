@@ -19,6 +19,18 @@ corpus:
       from: '2021-01-01'
       to: '2026-09-01'
     amendments: false
+  # Emisores privados extranjeros (ASML, HMC, TM, TSM, UL) no presentan
+  # 10-K/DEF 14A/8-K — reportan vía 20-F (anual) en su lugar. Sin esto,
+  # esas 5 firmas del universo quedan con cero filings, no por ausencia
+  # real de disclosure sino porque el pipeline solo pedía formularios
+  # domésticos.
+  filings_20f:
+    forms:
+    - 20-F
+    filing_date:
+      from: '2021-01-01'
+      to: '2026-09-01'
+    amendments: false
   # docs/document_expansion_plan.md Fase 3 — gobernanza (Board Committees,
   # Risk Oversight, CD&A), un DEF 14A por empresa por año, volumen bajo.
   filings_proxy:
@@ -596,8 +608,10 @@ storage:
   raw_submissions: data/raw/sec_submissions
   raw_html: data/raw/filings_html
   raw_html_proxy: data/raw/filings_proxy
+  raw_html_20f: data/raw/filings_20f
   raw_html_8k: data/raw/filings_8k
   raw_sec_letters: data/raw/sec_letters
   raw_xbrl_facts: data/raw/xbrl_facts/us
+  raw_xbrl_frames_alt: data/raw/xbrl_frames_alt
   interim_manifests: data/interim/manifests
   interim_sections: data/interim/sections

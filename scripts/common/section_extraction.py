@@ -69,7 +69,7 @@ def _process_one(row, target_items, form, clean_html_to_lines, general_segment, 
 
     try:
         lines = clean_html_to_lines(html_path)
-        all_segments = general_segment(lines, form=form)
+        all_segments = general_segment(lines, form=form, ticker=ticker)
         sections = []
         extracted_details = {}
         n_found = 0

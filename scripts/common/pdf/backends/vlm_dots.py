@@ -1,15 +1,14 @@
 """
 scripts/common/pdf/backends/vlm_dots.py — dots.mocr backend.
 
-Kept as an alternative to MinerU rather than the default: on the POC
-(docs/analytics/pdf-backend-poc.md) it matched MinerU's table-cell recall
-and produced slightly richer table markup (<br> inside cells, <strong> on
-a subtotal row, real <thead>), but it has one weakness that matters for
-this corpus specifically — it has no block type for gutter/margin notes,
-so the CMF and GRI reference markers printed down the side of every
-Memoria page come back as ordinary Text blocks and land in the prose
-corpus. It's the better choice if what you need is faithful table markup;
-MinerU is the better choice for a clean narrative corpus.
+Not the default: on the POC (docs/analytics/pdf-backend-poc.md) it had
+the best table-cell recall measured and produced the richest table markup
+(<br> inside cells, <strong> on a subtotal row, real <thead>), but it has
+one weakness that matters for this corpus specifically — it has no block
+type for gutter/margin notes, so the CMF and GRI reference markers printed
+down the side of every Memoria page come back as ordinary Text blocks and
+land in the prose corpus. It's the better choice if what you need is
+faithful table markup, not a clean narrative corpus.
 
 Its vision tower imports flash-attn unconditionally, and Dao-AILab ships
 no sm_120 (Blackwell / RTX 5090) wheel. `SDPA_FLASH_ATTN_SHIM` below is an

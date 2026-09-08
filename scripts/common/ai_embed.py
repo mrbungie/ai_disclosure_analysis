@@ -105,6 +105,99 @@ def register_embedded_keys(con, usable: list[Path], view: str = "embedded_keys")
     return con.execute(f"SELECT count(*) FROM {view}").fetchone()[0]
 
 
+def register_embedded_keys_combined(con, index_path: Path | None, extra_parts: list[Path],
+                                     view: str = "embedded_keys") -> int:
+    """Same `view` contract as `register_embedded_keys`, but unions TWO
+    sources instead of picking one: the lightweight index (whatever
+    coverage it already claims) plus any local part files NOT already
+    reflected in it (`extra_parts` -- e.g. a part this box just wrote
+    itself, on top of an index it only pulled). Never re-reads a part
+    the index already accounts for. Safe with either input empty/None."""
+    sources = []
+    if index_path is not None:
+        sources.append(f"SELECT text_hash FROM read_parquet('{index_path}')")
+    if extra_parts:
+        files = ", ".join(f"'{p}'" for p in extra_parts)
+        sources.append(f"SELECT text_hash FROM read_parquet([{files}], union_by_name=True)")
+    if not sources:
+        con.execute(f"CREATE OR REPLACE TEMP VIEW {view} AS SELECT NULL::UBIGINT AS text_hash WHERE false")
+        return 0
+    con.execute(f"CREATE OR REPLACE TEMP VIEW {view} AS "
+                f"SELECT DISTINCT text_hash FROM ({' UNION ALL '.join(sources)})")
+    return con.execute(f"SELECT count(*) FROM {view}").fetchone()[0]
+
+
+INDEX_FILENAME = "paragraph_embeddings_index.parquet"
+INDEX_MANIFEST_FILENAME = "paragraph_embeddings_index.json"
+
+
+def load_embedded_index(output_dir: Path, model_name: str, dtype: str) -> Path | None:
+    """A lightweight substitute for pulling every embedding part just to
+    learn WHICH texts are already done. The full parts are ~12GB
+    (fixed_size_list<float16, 1024> per row); the set of already-embedded
+    `text_hash` values is a few MB (one uint64 per unique text, ~4.8M rows
+    at time of writing). A consumer that only needs to know what's
+    PENDING -- not read any existing vector -- never needs the 12GB at
+    all: `run_embed` uses this instead of `verify_parts`+
+    `register_embedded_keys` whenever no local parts are present but this
+    index is.
+
+    Returns the index parquet path if a valid, config-matching index
+    exists, else None (falls back to the full-parts path, or to "nothing
+    embedded yet" if neither exists)."""
+    index_path = output_dir / INDEX_FILENAME
+    manifest_path = output_dir / INDEX_MANIFEST_FILENAME
+    if not (index_path.exists() and manifest_path.exists()):
+        return None
+    try:
+        sidecar = json.loads(manifest_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    if sidecar.get("model") != model_name or sidecar.get("dtype") != dtype:
+        return None
+    return index_path
+
+
+def register_embedded_keys_from_index(con, index_path: Path, view: str = "embedded_keys") -> int:
+    """Same contract as `register_embedded_keys` (creates the `view` TEMP
+    VIEW every downstream query reads), sourced from the lightweight index
+    instead of the full embedding parts."""
+    con.execute(f"CREATE OR REPLACE TEMP VIEW {view} AS "
+                f"SELECT DISTINCT text_hash FROM read_parquet('{index_path}')")
+    return con.execute(f"SELECT count(*) FROM {view}").fetchone()[0]
+
+
+def write_embedded_index(output_dir: Path, model_name: str, dtype: str, text_hashes,
+                          part_files: list[str]) -> tuple[Path, int]:
+    """Writes/overwrites the lightweight index from an ALREADY-KNOWN set of
+    text_hash values (`run_embed` builds this in-memory as the union of
+    whatever `embedded_keys` view it started the run with -- however that
+    was sourced -- plus any hashes newly embedded THIS run; see the call
+    site). Never re-scans the big parts to produce it: the set is already
+    known to the caller more cheaply than a rescan would recompute it.
+
+    `part_files` is bookkeeping only (which part files this index's
+    coverage claims to reflect) -- not re-verified here, since the whole
+    point of this path is not needing those files locally."""
+    index_path = output_dir / INDEX_FILENAME
+    staging = index_path.with_suffix(".parquet.partial")
+    table = pa.Table.from_arrays(
+        [pa.array(sorted(text_hashes), type=pa.uint64())], names=["text_hash"])
+    writer = pq.ParquetWriter(staging, table.schema, compression="zstd")
+    try:
+        writer.write_table(table)
+    finally:
+        writer.close()
+    staging.replace(index_path)
+    manifest_path = output_dir / INDEX_MANIFEST_FILENAME
+    manifest_path.write_text(json.dumps({
+        "model": model_name, "dtype": dtype, "n_hashes": len(text_hashes),
+        "part_files": sorted(part_files),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }, indent=2, sort_keys=True) + "\n")
+    return index_path, len(text_hashes)
+
+
 def pending_sql(limit: int = 0, against: str = "embedded_keys", source: str = "paragraphs",
                  countries: tuple[str, ...] | None = None) -> str:
     """`source` is `paragraphs` (one row per INSTANCE -- the original,
@@ -189,6 +282,31 @@ def run_embed(
         print(f"  part from another config ignored: {Path(bad['path']).name} "
               f"(model={bad['model']}, dtype={bad['dtype']}, rows={bad['rows']})", flush=True)
 
+    # A box may have the lightweight index, some/all of the real parts, or
+    # both -- e.g. a box that only pulled the index, then itself wrote one
+    # new part, has 1 usable part locally that ISN'T reflected in the
+    # index yet. Using "usable parts" and "the index" as mutually
+    # exclusive alternatives (only fall back to the index when NO local
+    # parts exist at all) silently drops the index's coverage the moment
+    # even one local part shows up -- caught by testing exactly this
+    # sequence (index-only run, then a second run after it had written a
+    # part). The correct rule: always prefer the index for whatever it
+    # already covers, and ADD ONLY the local parts NOT already reflected
+    # in it (by filename) -- never re-derive coverage the index already
+    # has just because some unrelated new file is now sitting locally.
+    prior_index = load_embedded_index(output_dir, model_name, dtype) if resume else None
+    indexed_files: set[str] = set()
+    if prior_index is not None:
+        try:
+            indexed_files = set(json.loads((output_dir / INDEX_MANIFEST_FILENAME).read_text())
+                                 .get("part_files", []))
+        except (OSError, json.JSONDecodeError):
+            prior_index = None
+    extra_usable = [p for p in usable if p.name not in indexed_files]
+    if prior_index is not None:
+        print(f"Using lightweight index {prior_index.name} ({len(indexed_files)} part(s) reflected) "
+              f"+ {len(extra_usable)} local part(s) not yet folded into it.", flush=True)
+
     con = duckdb.connect(str(database), read_only=True)
     try:
         country_where = ""
@@ -199,7 +317,8 @@ def run_embed(
         if row_count == 0:
             raise ValueError(f"{source_relation} is empty (for countries={countries}); "
                               f"build it with `make duckdb-text` first")
-        embedded = register_embedded_keys(con, usable)
+        embedded = register_embedded_keys_combined(con, prior_index, extra_usable)
+        prior_part_files = sorted(indexed_files)
         coverage = con.execute(f"""
             SELECT p.country_code, p.form, count(*) AS paragraphs,
                    count(*) FILTER (WHERE EXISTS (SELECT 1 FROM embedded_keys AS e WHERE e.text_hash = p.text_hash)) AS embedded
@@ -228,6 +347,19 @@ def run_embed(
             manifest["verify_only"] = True
             if target_rows == 0 and not verify_only:
                 print("Nothing pending — every paragraph already has a vector.", flush=True)
+            if extra_usable:
+                # Bootstrap/refresh case: this box has local parts not yet
+                # folded into the index (either there's no index yet, or
+                # some local parts postdate it) -- publish/resync the
+                # index even though no new embedding happened this run,
+                # so a box that only pulls the index later stays correct.
+                # `embedded_keys` is already the combined (index +
+                # extra_usable) view set up above; no rescan needed.
+                index_path, n_hashes = write_embedded_index(
+                    output_dir, model_name, dtype,
+                    con.execute("SELECT text_hash FROM embedded_keys").fetchnumpy()["text_hash"].tolist(),
+                    sorted(indexed_files | {p.name for p in usable}))
+                manifest["index_path"], manifest["index_hashes"] = str(index_path), n_hashes
             return [], _write_manifest(output_dir, run_id, manifest)
 
         device = resolve_device(device)
@@ -243,6 +375,13 @@ def run_embed(
               f"stopped on {plan['stop_reason']} at {plan['saturated_tokens_per_second']/1000:,.1f}k tok/s",
               flush=True)
 
+        # Snapshot of what "already embedded" meant AT THE START of this run
+        # (however `embedded_keys` was sourced -- full parts or the
+        # lightweight index) -- kept in memory so the index can be
+        # refreshed at the end as prior_hashes | newly_embedded_hashes,
+        # with no rescan of any parquet, big or small.
+        prior_hashes = con.execute("SELECT text_hash FROM embedded_keys").fetchnumpy()["text_hash"]
+
         result = con.execute(pending_sql(limit, source=source_relation, countries=countries))
         reporter = ThroughputReporter(target_rows, "embedding", progress_seconds, device)
         written: list[Path] = []
@@ -250,6 +389,7 @@ def run_embed(
         buffered_rows = 0
         embedded_rows = 0
         encode_seconds = 0.0
+        new_hash_arrays: list[pa.Array] = []
 
         def flush() -> None:
             nonlocal buffered, buffered_rows
@@ -264,9 +404,11 @@ def run_embed(
             texts = chunk.pop("paragraph_text").fillna("").tolist()
             vectors, chunk_seconds = encode_planned(model, texts, plan, reporter)
             encode_seconds += chunk_seconds
+            hash_array = _text_hashes(texts)
+            new_hash_arrays.append(hash_array)
             table = pa.Table.from_pandas(chunk, preserve_index=False).append_column(
                 "embedding", _embedding_column(vectors)).append_column(
-                "text_hash", _text_hashes(texts)).append_column(
+                "text_hash", hash_array).append_column(
                 "model", pa.array([model_name] * len(texts)).dictionary_encode()).append_column(
                 "dtype", pa.array([dtype] * len(texts)).dictionary_encode()).append_column(
                 "run_id", pa.array([run_id] * len(texts)).dictionary_encode())
@@ -287,6 +429,16 @@ def run_embed(
         "wall_seconds": time.perf_counter() - reporter.started,
         "finished_at": datetime.now(timezone.utc).isoformat(),
     })
+    if written:
+        # Refresh the lightweight index: prior_hashes (whatever coverage
+        # this run STARTED with, full-parts- or index-sourced) union the
+        # hashes just embedded -- no rescan needed either way.
+        new_hashes = (pa.concat_arrays(new_hash_arrays) if new_hash_arrays
+                     else pa.array([], type=pa.uint64()))
+        merged_hashes = set(prior_hashes.tolist()) | set(new_hashes.to_pylist())
+        contributing = sorted(set(prior_part_files) | {p.name for p in usable} | {p.name for p in written})
+        index_path, n_hashes = write_embedded_index(output_dir, model_name, dtype, merged_hashes, contributing)
+        manifest["index_path"], manifest["index_hashes"] = str(index_path), n_hashes
     return written, _write_manifest(output_dir, run_id, manifest)
 
 

@@ -44,8 +44,23 @@ Diferencias deliberadas respecto de la versión perdida (rige lo nuevo):
      negativo -> ROE/PB/deuda-equity nulos). La versión anterior los dejaba
      entrar y después los winsorizaba al 2-98%.
 
-Determinístico, sin LLM, sin costo de API: lee `data/raw/xbrl_facts/us/` y
-`filing_manifest` y no escribe nada fuera de `data/processed/clusters/`.
+  d. Fuente de los hechos XBRL: `data/raw/xbrl_facts/us_by_filing/`, el
+     inline-XBRL parseado directamente de cada 10-K/10-Q cacheado
+     (`scripts/us/04_extract_inline_xbrl_facts.py`), no el bulk pull de SEC
+     Company Facts (`data/raw/xbrl_facts/us/`, `scripts/us/03_fetch_accounting_data.py`).
+     Company Facts colapsa reexpresiones: el valor que devuelve para un
+     period_end puede ser el que la empresa reportó AÑOS después de ese
+     10-K, no el que ese 10-K efectivamente reveló — filtra el propósito de
+     `disclosed_period_end` (dato conocido al momento del filing). El
+     inline-XBRL, al venir del HTML de cada filing individual, no tiene ese
+     problema. `docs/sources/accounting_data.md` tiene la cobertura vigente
+     y el detalle de los bugs de fondo encontrados y corregidos en esta
+     fuente (hechos dimensionales corrompiendo el consolidado, fugas de
+     reexpresión) — no se repite aquí para no tener el número en dos
+     lugares que se puedan desincronizar.
+
+Determinístico, sin LLM, sin costo de API: lee `data/raw/xbrl_facts/us_by_filing/`
+y `filing_manifest` y no escribe nada fuera de `data/processed/clusters/`.
 
 Uso:
     uv run python scripts/analytics/build_firm_financials.py
@@ -62,7 +77,7 @@ import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
-XBRL_GLOB = REPO_ROOT / "data" / "raw" / "xbrl_facts" / "us" / "*.parquet"
+XBRL_GLOB = REPO_ROOT / "data" / "raw" / "xbrl_facts" / "us_by_filing" / "*.parquet"
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
 
 ANNUAL_MIN_DAYS, ANNUAL_MAX_DAYS = 340, 380
@@ -96,6 +111,12 @@ DURATION_METRICS: dict[str, list[str]] = {
     "rd_expense": [
         "us-gaap:ResearchAndDevelopmentExpense",
         "us-gaap:ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost",
+        # Mismo gasto corriente de I+D, desagregado para software por algunos
+        # emisores (p. ej. Adobe); no confundir con costos de desarrollo
+        # capitalizados, de petróleo/inmobiliario o I+D en proceso adquirido.
+        "us-gaap:ResearchAndDevelopmentExpenseSoftwareExcludingAcquiredInProcessCost",
+        # Equivalente IFRS para los emisores extranjeros del universo US.
+        "ifrs-full:ResearchAndDevelopmentExpense",
     ],
     "sga_expense": [
         "us-gaap:SellingGeneralAndAdministrativeExpense",
@@ -104,6 +125,10 @@ DURATION_METRICS: dict[str, list[str]] = {
     "capex": [
         "us-gaap:PaymentsToAcquirePropertyPlantAndEquipment",
         "us-gaap:PaymentsToAcquireProductiveAssets",
+        "us-gaap:PaymentsToAcquireOtherPropertyPlantAndEquipment",
+        # REITs' own name for capex: cash spent improving real estate
+        # already owned, not acquiring new PP&E outright.
+        "us-gaap:PaymentsForCapitalImprovements",
     ],
     "operating_income": ["us-gaap:OperatingIncomeLoss"],
     "net_income": [
@@ -124,7 +149,14 @@ DURATION_METRICS: dict[str, list[str]] = {
         "us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments",
     ],
     "tax_expense": ["us-gaap:IncomeTaxExpenseBenefit"],
-    "eps_diluted": ["us-gaap:EarningsPerShareDiluted"],
+    "eps_diluted": [
+        "us-gaap:EarningsPerShareDiluted",
+        # Filers with a simple capital structure (no dilutive securities)
+        # sometimes tag one combined basic-and-diluted figure instead of
+        # a separate diluted concept; the two are equal by definition
+        # when this tag is used, so it's a safe fallback, not a proxy.
+        "us-gaap:EarningsPerShareBasicAndDiluted",
+    ],
 }
 
 INSTANT_METRICS: dict[str, list[str]] = {
@@ -138,6 +170,14 @@ INSTANT_METRICS: dict[str, list[str]] = {
     "long_term_debt": [
         "us-gaap:LongTermDebtNoncurrent",
         "us-gaap:LongTermDebt",
+        # Filers that fold finance-lease obligations into the debt line
+        # instead of a separate LongTermDebt concept (e.g. CSX, Cardinal
+        # Health, Cummins) -> 45 tickers (~9%) had zero debt tag without
+        # this pair; adding both recovers 26 of them.
+        "us-gaap:LongTermDebtAndCapitalLeaseObligations",
+        # Some non-financial filers (homebuilders, distributors) tag their
+        # long-term borrowings as NotesPayable rather than LongTermDebt.
+        "us-gaap:NotesPayable",
     ],
     "cash": [
         "us-gaap:CashAndCashEquivalentsAtCarryingValue",
@@ -146,8 +186,62 @@ INSTANT_METRICS: dict[str, list[str]] = {
 }
 SHARES_METRIC = {"shares_out": ["dei:EntityCommonStockSharesOutstanding"]}
 
+# Balance-sheet concepts that can never legitimately be negative — a
+# negative value here is a filer sign-tagging error, not a fact. Verified
+# case: DuPont's own 2021-02-12 10-K tags us-gaap:LongTermDebt as
+# -$21.811B in the SAME filing where the sibling concept
+# LongTermDebtAndCapitalLeaseObligations correctly shows +$21.806B for
+# the identical period — a sign flip, not a real negative liability.
+# Dropping the impossible value lets the normal fallback-priority chain
+# recover the correct sibling concept instead of guessing at a fix.
+NEVER_NEGATIVE_CONCEPTS = {
+    concept
+    for metric in ("total_assets", "current_assets", "current_liabilities", "long_term_debt", "cash")
+    for concept in INSTANT_METRICS[metric]
+}
+
 GROWTH_METRICS = ["revenue", "rd_expense", "capex", "sga_expense"]
 LEVEL_COLUMNS = ["revenue", "rd_expense", "capex", "sga_expense"]
+
+# `da` sum-fallback: 58 of 509 tickers never tag a combined D&A concept but
+# DO tag depreciation and intangible amortization as two separate line
+# items (verified magnitudes plausible, e.g. ABT: $1.1B depreciation +
+# $2.18B amortization). Only filled when BOTH components exist for that
+# (ticker, period_end) — a company with only one tagged would understate
+# D&A if filled from that alone, a different, worse-biased definition
+# than simply leaving it NULL (CLAUDE.md: one construct, one formula).
+DA_COMPONENTS = {
+    "depreciation_only": ["us-gaap:Depreciation"],
+    "amortization_only": ["us-gaap:AmortizationOfIntangibleAssets"],
+}
+
+# `pretax_income` sum-fallback: same pattern, smaller (6 tickers) — BR,
+# CMA, LH, MCD, ORCL, PFG tag domestic and foreign pretax income
+# separately instead of one combined concept.
+PRETAX_COMPONENTS = {
+    "pretax_domestic": ["us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesDomestic"],
+    "pretax_foreign": ["us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesForeign"],
+}
+
+# Bank `revenue` OVERRIDE (not fill — see fill_via_component_sum's
+# override mode): verified accounting identity, InterestIncomeExpenseNet
+# (net interest income, i.e. interest income already net of interest
+# expense) + NoninterestIncome = Revenues at 0.0% difference against
+# every year of BAC/COF/JPM/C/PNC, the banks that already tag a working
+# combined Revenues concept. FITB/ZION/CMA/SIVB/HBAN/RF/PBCT never tag
+# that combined concept — only one scoped to ASC 606 fee income, which
+# structurally excludes net interest income, a bank's core revenue
+# (FITB reads ~$580M against several billion actually earned). Gross
+# interest income (InterestAndDividendIncomeOperating) does NOT reconcile
+# to Revenues the same way — checked and rejected before landing on the
+# net figure. NoninterestIncome is tagged by exactly 27 tickers in this
+# universe, every one financial-sector (SIC 6021/6022/6035/6141/6199/6211
+# — banks, thrifts, consumer credit, broker-dealers); safe to apply
+# unconditionally rather than needing a SIC-code gate.
+BANK_REVENUE_COMPONENTS = {
+    "bank_net_interest_income": ["us-gaap:InterestIncomeExpenseNet"],
+    "bank_noninterest_income": ["us-gaap:NoninterestIncome"],
+}
 
 
 def _concept_priority(metrics: dict[str, list[str]]) -> pd.DataFrame:
@@ -162,28 +256,156 @@ def load_facts(con: duckdb.DuckDBPyConnection, glob: Path) -> pd.DataFrame:
     (ticker, concepto, period_type, period_end).
 
     XBRL repite cada cifra anual en 2-3 filings distintos (los comparativos
-    del año anterior), y las repeticiones pueden diferir por reexpresiones.
-    Se toma la MEDIANA de las repeticiones, que es robusta a una reexpresión
-    aislada — misma regla que documenta 05_senal_incremental.md."""
+    del año anterior). Se toma el valor de la PRIMERA vez que se reportó —
+    no la mediana ni el más reciente — porque este panel alimenta joins
+    as-of: el valor asignado a un período tiene que ser el que un lector de
+    ESE filing podía conocer entonces, nunca uno corregido por una
+    reexpresión posterior. Mediana era la regla anterior (robusta a una
+    reexpresión aislada, documentada en 05_senal_incremental.md) pero deja
+    entrar información del futuro — verificado con DISH FY2021 revenue,
+    donde un 10-K de 2024 post-fusión con EchoStar retaggea el período a
+    ~10x lo que dos filings previos y mutuamente consistentes ya habían
+    reportado; la mediana la habría tomado si el voto hubiera sido 2 a 1 al
+    revés. "Primera vez reportado" es correcta pase lo que pase con el
+    conteo de votos, porque es la única regla que nunca mira un filing
+    posterior al que se está alineando.
+
+    `has_dimensions` se excluye cuando existe: un inline-XBRL fact
+    dimensional (contexto con `explicitMember`/`typedMember`, p. ej. el
+    desglose por segmento de negocio o geografía) puede compartir el MISMO
+    concepto y período que el total consolidado — `us-gaap:Revenues` de
+    Amazon FY2021 sólo existía como un contexto dimensional de ~$55M (un
+    segmento), no como el total de ~$470M. Sin este filtro esos hechos
+    entran junto con — o en vez de — el consolidado y lo corrompen.
+    `data/raw/xbrl_facts/us_by_filing/` trae la columna; fuentes que no la
+    traen (p. ej. el bulk de Company Facts) no la necesitan porque ya
+    devuelven un único valor no dimensional por concepto-período — esas
+    mismas fuentes tampoco traen `filing_date` por hecho individual (es un
+    bulk pull, no por filing), así que caen de vuelta a la mediana."""
+    columns = {row[0] for row in con.execute(
+        f"DESCRIBE SELECT * FROM read_parquet('{glob}', union_by_name=True) LIMIT 0").fetchall()}
+    has_dims_col = "has_dimensions" in columns
+    dims_filter = "AND has_dimensions IS NOT TRUE" if has_dims_col else ""
+    if "filing_date" in columns:
+        facts = con.execute(f"""
+            SELECT ticker, concept, period_type, period_start, period_end, numeric_value AS value,
+                   filing_date, FALSE AS is_dimensional
+            FROM (
+                SELECT ticker, concept, period_type, period_start, period_end, numeric_value, filing_date,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY ticker, concept, period_type, period_start, period_end
+                           ORDER BY filing_date ASC) AS rn
+                FROM read_parquet('{glob}', union_by_name=True)
+                WHERE numeric_value IS NOT NULL AND ticker IS NOT NULL {dims_filter}
+            )
+            WHERE rn = 1
+        """).fetchdf()
+        if has_dims_col:
+            facts = pd.concat([facts, _load_dimensional_singletons(con, glob)], ignore_index=True)
+    else:
+        facts = con.execute(f"""
+            SELECT ticker, concept, period_type, period_start, period_end,
+                   median(numeric_value) AS value, NULL AS filing_date, FALSE AS is_dimensional
+            FROM read_parquet('{glob}', union_by_name=True)
+            WHERE numeric_value IS NOT NULL AND ticker IS NOT NULL {dims_filter}
+            GROUP BY 1, 2, 3, 4, 5
+        """).fetchdf()
+    # us_by_filing (inline-XBRL) stores period_start/period_end as raw XBRL
+    # context strings, not parsed dates; us (company facts) already returns
+    # them as datetimes. Normalize so downstream day-count arithmetic works
+    # for either source.
+    facts["period_start"] = pd.to_datetime(facts["period_start"], errors="coerce")
+    facts["period_end"] = pd.to_datetime(facts["period_end"], errors="coerce")
+    return facts
+
+
+def _load_dimensional_singletons(con: duckdb.DuckDBPyConnection, glob: Path) -> pd.DataFrame:
+    """Last-resort fallback for (ticker, concept, period) cells where NO
+    non-dimensional fact exists at all, but every dimensional context
+    tagged for that cell agrees on one value AND that value is
+    corroborated by at least 2 observations (the original filing plus at
+    least one comparative repeat — the same repetition every other fact
+    in this pipeline gets, see `load_facts`'s docstring).
+
+    Some filers (GM, General Dynamics, Sherwin-Williams, ...) tag a metric
+    with exactly one dimensional member every period — not a true segment
+    breakdown needing summation, just the whole-company figure filed under
+    a dimensional context (verified against GM's R&D: $9.8B FY2022,
+    $9.9B FY2023, matching its actual reported figures, corroborated by 3
+    separate filings). Requiring a SINGLE distinct value across all
+    contexts for that cell is NOT enough on its own — verified case: APA's
+    us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax for
+    FY2022 has exactly ONE dimensional observation ($18M, a single
+    product/geography line, not the ~$11B total) which trivially passes
+    "single distinct value" simply because there's nothing to disagree
+    with it. Requiring >=2 observations rejects one-off, uncorroborated
+    tags like that one while still keeping GM's (3+ observations every
+    year) — a real multi-segment breakdown (2+ DIFFERENT values, at any
+    observation count) is still left NULL rather than guessed at by
+    picking or summing arbitrarily. `pivot_metrics()` only reaches for
+    this after every non-dimensional concept in the fallback chain has
+    nothing — see `is_dimensional` there."""
     return con.execute(f"""
-        SELECT ticker, concept, period_type, period_start, period_end,
-               median(numeric_value) AS value
-        FROM read_parquet('{glob}', union_by_name=True)
-        WHERE numeric_value IS NOT NULL AND ticker IS NOT NULL
-        GROUP BY 1, 2, 3, 4, 5
+        SELECT ticker, concept, period_type, period_start, period_end, value, filing_date, TRUE AS is_dimensional
+        FROM (
+            SELECT ticker, concept, period_type, period_start, period_end, numeric_value AS value, filing_date,
+                   count(DISTINCT numeric_value) OVER (
+                       PARTITION BY ticker, concept, period_type, period_start, period_end) AS n_distinct,
+                   count(*) OVER (
+                       PARTITION BY ticker, concept, period_type, period_start, period_end) AS n_obs,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY ticker, concept, period_type, period_start, period_end
+                       ORDER BY filing_date ASC) AS rn
+            FROM read_parquet('{glob}', union_by_name=True)
+            WHERE numeric_value IS NOT NULL AND ticker IS NOT NULL AND has_dimensions
+        )
+        WHERE rn = 1 AND n_distinct = 1 AND n_obs >= 2
     """).fetchdf()
 
 
 def pivot_metrics(facts: pd.DataFrame, metrics: dict[str, list[str]],
                   period_type: str) -> pd.DataFrame:
-    """(ticker, period_end) x métrica, resolviendo la cadena de fallback:
-    para cada celda gana el concepto de menor `priority` que tenga dato."""
+    """(ticker, period_end) x métrica, resolviendo la cadena de fallback.
+
+    Orden de desempate: PRIMERO `filing_date` (el concepto disponible más
+    temprano gana), la cadena de prioridad (`DURATION_METRICS`/
+    `INSTANT_METRICS`) sólo rompe empates entre conceptos disponibles el
+    MISMO día. Nunca al revés — el caso que lo exige es Iron Mountain
+    FY2022 Q1: el 10-Q original de 2022 sólo taggeaba
+    `RevenueFromContractWithCustomerExcludingAssessedTax` ($497M);
+    `us-gaap:Revenues` para ese mismo trimestre aparece por primera vez
+    más de un año después, en 2023, como comparativo reexpresado a ~2.5x
+    el valor original. Prioridad-primero habría preferido `Revenues` (más
+    arriba en la cadena) y arrastrado esa reexpresión aunque sea posterior
+    al trimestre por más de un año — exactamente la fuga que este panel
+    existe para evitar. Fecha-primero mantiene el valor que efectivamente
+    se conocía en 2022.
+
+    `is_dimensional` va PRIMERO en el desempate, antes que fecha: un hecho
+    dimensional de valor único (ver `_load_dimensional_singletons`) sólo
+    se usa cuando NINGÚN concepto no-dimensional tiene dato para esa celda,
+    sin importar qué tan reciente sea — nunca reemplaza un total real.
+
+    Probado y DESCARTADO (2026-09-08): "el valor más grande gana" como
+    desempate de mismo día para `revenue`. Arreglaba General Mills
+    (`Revenues` taggeado como subtotal de ~$2.19B en el mismo filing
+    donde `RevenueFromContractWithCustomerExcludingAssessedTax` es el
+    total real de ~$18.1B) pero rompía Mastercard (su tag
+    `RevenueFromContract...ExcludingAssessedTax` es internamente
+    inconsistente — el acumulado a 9 meses SUPERA el total anual real —
+    mientras `Revenues` telescopa exacto al FY: $5.17B+$5.50B+$5.76B+
+    $5.82B=$22.24B) y Philip Morris (`IncludingAssessedTax` es ~2x más
+    grande por impuestos al tabaco de traspaso, no por ser "más completo").
+    El efecto neto sobre la reconciliación trimestral-vs-anual fue
+    NEGATIVO (99.0%→97.7% dentro de 1%). GIS queda como brecha residual
+    conocida y aceptada en vez de una heurística que rompe otros
+    tickers para arreglarlo — ver `docs/sources/accounting_data.md`."""
     priority = _concept_priority(metrics)
     df = facts[facts["period_type"] == period_type].merge(priority, on="concept")
     if period_type == "duration":
         days = (df["period_end"] - df["period_start"]).dt.days
         df = df[(days >= ANNUAL_MIN_DAYS) & (days <= ANNUAL_MAX_DAYS)]
-    df = (df.sort_values(["ticker", "period_end", "metric", "priority"])
+    df = (df.sort_values(["ticker", "period_end", "metric", "is_dimensional", "filing_date", "priority"])
             .drop_duplicates(["ticker", "period_end", "metric"], keep="first"))
     wide = df.pivot_table(index=["ticker", "period_end"], columns="metric",
                           values="value", aggfunc="first").reset_index()
@@ -192,6 +414,78 @@ def pivot_metrics(facts: pd.DataFrame, metrics: dict[str, list[str]],
         if metric not in wide.columns:
             wide[metric] = np.nan
     return wide.sort_values(["ticker", "period_end"]).reset_index(drop=True)
+
+
+def fill_via_component_sum(facts: pd.DataFrame, duration: pd.DataFrame, target: str,
+                            components: dict[str, list[str]], override: bool = False) -> pd.DataFrame:
+    """Fill (or, with `override=True`, REPLACE) `duration[target]` by
+    summing two complementary concepts, ONLY where BOTH components exist
+    for that (ticker, period_end). A filer with just one tagged keeps
+    whatever `target` already had (fill mode) or NULL (override mode)
+    rather than being filled from that one component alone — a partial
+    figure passed off as the full construct is a worse, silently biased
+    definition than a missing value (CLAUDE.md: one construct, one
+    formula). `components` keys become temporary pivot columns; values are
+    each a 1-concept fallback chain reusing `pivot_metrics`'s machinery.
+
+    `override=True` is for when the sum is a verified accounting IDENTITY
+    for the construct, not just a same-magnitude proxy — e.g. bank
+    revenue = InterestIncomeExpenseNet + NoninterestIncome, checked at
+    0.0% difference against every bank that already tags a combined
+    `Revenues` concept (BAC/COF/JPM/C/PNC, every year). For those banks,
+    `target` is NOT null — it's already (wrongly) populated from a
+    concept scoped to ASC 606 fee income only, which structurally
+    excludes net interest income (FITB's shows ~$580M against several
+    billion in actual revenue). Fill mode would never reach it since
+    there's nothing to fill; override mode replaces it with the correct,
+    verified total whenever both components are available."""
+    parts = pivot_metrics(facts, components, "duration")
+    keys = list(components)
+    summed = (parts.dropna(subset=keys)
+                    .assign(_summed=lambda d: d[keys].sum(axis=1))
+                    [["ticker", "period_end", "_summed"]])
+    duration = duration.merge(summed, on=["ticker", "period_end"], how="left")
+    if override:
+        duration[target] = duration["_summed"].where(duration["_summed"].notna(), duration[target])
+    else:
+        duration[target] = duration[target].fillna(duration["_summed"])
+    return duration.drop(columns=["_summed"])
+
+
+def load_dual_class_shares(con: duckdb.DuckDBPyConnection, glob: Path) -> pd.DataFrame:
+    """Fallback `shares_out` for dual/multi-class filers (GOOGL, META,
+    BRK.B, F, CMCSA, ...) that tag `dei:EntityCommonStockSharesOutstanding`
+    ONLY per share class — one dimensional context per class, no
+    non-dimensional total — so `load_facts()`'s has_dimensions filter
+    (needed to keep segment breakdowns out of revenue/etc., see
+    `load_facts` docstring) correctly excludes them, but then has nothing
+    to fall back to. 40 of 510 tickers had zero shares_out without this.
+
+    Verified against GOOGL: exactly 3 dimensional contexts per filing
+    (its 3 share classes), summing to a plausible total (~665M pre-split
+    2021, ~12.6B post 20:1 split from mid-2022 on — matches GOOGL's known
+    share count both sides of the split). Summed per (ticker, period_end,
+    accession_number) — never across filings, so a share count is never
+    double-counted with a stale prior-filing class figure — then resolved
+    to the EARLIEST filing_date per (ticker, period_end), same as-of rule
+    as `load_facts`."""
+    columns = {row[0] for row in con.execute(
+        f"DESCRIBE SELECT * FROM read_parquet('{glob}', union_by_name=True) LIMIT 0").fetchall()}
+    if "has_dimensions" not in columns:
+        return pd.DataFrame(columns=["ticker", "period_end", "shares_out"])
+    per_filing = con.execute(f"""
+        SELECT ticker, period_end, accession_number, filing_date, sum(numeric_value) AS value
+        FROM read_parquet('{glob}', union_by_name=True)
+        WHERE concept = 'dei:EntityCommonStockSharesOutstanding'
+          AND period_type = 'instant' AND has_dimensions AND numeric_value IS NOT NULL
+        GROUP BY 1, 2, 3, 4
+    """).fetchdf()
+    per_filing["period_end"] = pd.to_datetime(per_filing["period_end"], errors="coerce")
+    per_filing["filing_date"] = pd.to_datetime(per_filing["filing_date"], errors="coerce")
+    resolved = (per_filing
+                .sort_values(["ticker", "period_end", "filing_date"])
+                .drop_duplicates(["ticker", "period_end"], keep="first"))
+    return resolved.rename(columns={"value": "shares_out"})[["ticker", "period_end", "shares_out"]]
 
 
 def align_to_filings(filings: pd.DataFrame, annual: pd.DataFrame,
@@ -289,15 +583,31 @@ def main() -> None:
             WHERE country_code = 'us' AND ticker IS NOT NULL
         """).fetchdf()
         facts = load_facts(con, args.xbrl_glob)
+        dual_class_shares = load_dual_class_shares(con, args.xbrl_glob)
     finally:
         con.close()
+    facts = facts[~(facts["concept"].isin(NEVER_NEGATIVE_CONCEPTS) & (facts["value"] < 0))]
     filings["filing_date"] = pd.to_datetime(filings["filing_date"])
     print(f"{len(filings):,} filings 10-K | {len(facts):,} hechos XBRL "
           f"({facts['ticker'].nunique():,} tickers)")
 
     duration = pivot_metrics(facts, DURATION_METRICS, "duration")
+    duration = fill_via_component_sum(facts, duration, "da", DA_COMPONENTS)
+    duration = fill_via_component_sum(facts, duration, "pretax_income", PRETAX_COMPONENTS)
+    duration = fill_via_component_sum(facts, duration, "revenue", BANK_REVENUE_COMPONENTS, override=True)
     instants = pivot_metrics(facts, INSTANT_METRICS, "instant")
     shares = pivot_metrics(facts, SHARES_METRIC, "instant")
+    # A public filer never genuinely has zero shares outstanding; a 0 here
+    # is a filer tagging error, not a fact — verified against Ball Corp's
+    # own 2022-02-16 10-K, which tagged its cover-page share count as
+    # exactly 0.0 (every adjacent filing shows ~310-330M). Treated as
+    # missing so it doesn't produce spurious zero market cap / infinite
+    # EPS-type ratios downstream.
+    shares.loc[shares["shares_out"] <= 0, "shares_out"] = np.nan
+    shares = (shares.merge(dual_class_shares, on=["ticker", "period_end"],
+                           how="outer", suffixes=("", "_dual_class"))
+                     .assign(shares_out=lambda d: d["shares_out"].fillna(d["shares_out_dual_class"]))
+                     .drop(columns=["shares_out_dual_class"]))
     print(f"anuales: {len(duration):,} (ticker, period_end) | "
           f"instantáneos: {len(instants):,} | shares: {len(shares):,}")
 

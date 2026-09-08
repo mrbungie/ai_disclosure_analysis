@@ -3,7 +3,7 @@ scripts/common/pdf/pipeline.py — the country-agnostic entry point:
 PDF bytes in, paragraph rows out, whichever backend you name.
 
     from scripts.common.pdf import pipeline
-    rows = pipeline.extract_paragraphs(pdf_parts, backend="mineru", country_code="cl")
+    rows = pipeline.extract_paragraphs(pdf_parts, backend="paddleocr_vl", country_code="cl")
 
 WHY THERE IS A TRIAGE STEP. The Chilean corpus is ~2,100 PDFs and roughly
 300,000 pages. At the ~11 s/page a VLM costs through plain `transformers`
@@ -72,10 +72,10 @@ class PdfExtractor:
     """Holds the backend(s) across many documents.
 
     This is a class and not just a function because of what a VLM backend
-    costs to construct: `MinerU2.5-Pro` is 2.2 GB of weights, and building
-    a fresh backend per document — which a plain function taking
-    `backend="mineru"` would do — reloads them for every filing in a
-    2,100-document corpus. One extractor, reused, loads them once.
+    costs to construct: the weights run to gigabytes, and building a fresh
+    backend per document — which a plain function taking `backend=...`
+    would do — reloads them for every filing in a 2,100-document corpus.
+    One extractor, reused, loads them once.
 
     Not thread-safe, and deliberately so: one extractor owns one GPU
     context. Run several only if you have several GPUs.
