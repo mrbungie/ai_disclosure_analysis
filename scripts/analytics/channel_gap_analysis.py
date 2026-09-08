@@ -399,8 +399,8 @@ def main() -> None:
     cross = {}
     ws = args.output_dir / "firm_washing_score.parquet"
     if ws.exists():
-        w = pd.read_parquet(ws)[["ticker", "exceso", "washing", "callada", "n_frames"]]
-        m = firm.merge(w, on="ticker", how="inner"); m["exceso_rel"] = m["exceso"] / m["n_frames"]
+        w = pd.read_parquet(ws)[["ticker", "w", "washing", "callada", "n_promo"]]
+        m = firm.merge(w, on="ticker", how="inner"); m["exceso_rel"] = m["w"]
         cross["spearman_gap_vs_score09"] = float(m["gap_promotional"].corr(m["exceso_rel"], method="spearman")); cross["n"] = int(len(m))
         cross["gap_of_09_washing"] = {t: float(v) for t, v in m.loc[m.washing, ["ticker", "gap_promotional"]].values}
         print(f"\nSpearman(brecha por canal, exceso de 09) = {cross['spearman_gap_vs_score09']:+.3f} (n={cross['n']})")

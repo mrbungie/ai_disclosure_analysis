@@ -161,7 +161,8 @@ def _filing_manifest_selects(countries: list[tuple[str, dict]], dirs) -> list[st
             continue
         parts = [f"SELECT '{country}' AS country_code, * FROM {base_path}"]
         for extra in ("filing_manifest_proxy", "filing_manifest_8k",
-                      "filing_manifest_earnings_calls"):
+                      "filing_manifest_earnings_calls", "filing_manifest_earnings_calls_equibles",
+                      "filing_manifest_earnings_calls_stockanalysis", "filing_manifest_20f"):
             source = _manifest_source(f"{manifests_dir}/{extra}")
             if source:
                 # scripts/us/earnings_calls/01_fetch_transcripts.py writes
@@ -802,6 +803,20 @@ def main(with_text_tables: bool = False):
             if _existing(f"{dirs(cfg)[1]}/filing_sections_proxy__run=*__part=*.parquet")
         ]),
         "filing_sections_proxy": "SELECT * FROM extraction_trace_proxy WHERE found",
+        # 20-F — foreign private issuers' annual report (ASML, HMC, TM,
+        # TSM, UL), same "whole document as one section" choice as proxy
+        # (see scripts/us/20f/segmenter_20f.py). Never pooled with the
+        # domestic 10-K panel.
+        "extraction_trace_20f": _union([
+            f"""
+            SELECT '{country}' AS country_code, *
+            FROM read_parquet('{dirs(cfg)[1]}/filing_sections_20f__run=*__part=*.parquet', union_by_name=True)
+            QUALIFY row_number() OVER (PARTITION BY accession_number, item_key ORDER BY run_date DESC) = 1
+            """
+            for country, cfg in countries
+            if _existing(f"{dirs(cfg)[1]}/filing_sections_20f__run=*__part=*.parquet")
+        ]),
+        "filing_sections_20f": "SELECT * FROM extraction_trace_20f WHERE found",
         # 8-K — same "whole document as one section" choice, see
         # scripts/us/8k/segmenter_8k.py. Also not a separate instrument,
         # just another form type sharing the filing_manifest lookup.
@@ -826,6 +841,21 @@ def main(with_text_tables: bool = False):
             SELECT * FROM read_parquet('{market_factors_dir}/ff3_monthly.parquet')
         """,
     }
+
+    # The 03_market_data views are optional, exactly like the paragraph
+    # sources above: a box that only pulled the text tree (sections +
+    # manifests) to run embeddings has no data/raw/market/ at all, and a
+    # missing price file there must not abort a build whose text tables
+    # don't depend on it. Same _existing() rule, applied after the literal
+    # because these are plain dict entries rather than comprehensions.
+    for _view_name, _view_src in (
+        ("market_prices", f"{market_prices_dir}/*.parquet"),
+        ("market_factors_daily", f"{market_factors_dir}/ff3_daily.parquet"),
+        ("market_factors_monthly", f"{market_factors_dir}/ff3_monthly.parquet"),
+    ):
+        if not _existing(_view_src):
+            del views[_view_name]
+            print(f"  skipping {_view_name} (no files matching {_view_src})")
 
     if with_text_tables:
         # Two leaf-level text granularities, both ACROSS EVERY FORM AND
@@ -866,6 +896,12 @@ def main(with_text_tables: bool = False):
             )
         else:
             print("  skipping DEF 14A paragraphs (no filing_sections_proxy files yet)")
+        if "filing_sections_20f" in views:
+            paragraph_stage_specs.append(
+                ("_paragraphs_stage_20f", _paragraph_select_sql("20-F", "filing_sections_20f"))
+            )
+        else:
+            print("  skipping 20-F paragraphs (no filing_sections_20f files yet)")
         if "filing_sections_8k" in views:
             paragraph_stage_specs.append(
                 ("_paragraphs_stage_8k", _paragraph_select_sql("8-K", "filing_sections_8k"))

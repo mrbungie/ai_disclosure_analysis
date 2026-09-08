@@ -5,7 +5,6 @@ torch) must still be able to run the PyMuPDF backend, and importing
 _BACKENDS = {
     "pymupdf": ("scripts.common.pdf.backends.pymupdf_layout", "PyMuPdfBackend"),
     "paddleocr_vl": ("scripts.common.pdf.backends.vlm_paddle", "PaddleOcrVlBackend"),
-    "mineru": ("scripts.common.pdf.backends.vlm_mineru", "MinerUBackend"),
     "dots": ("scripts.common.pdf.backends.vlm_dots", "DotsMocrBackend"),
 }
 

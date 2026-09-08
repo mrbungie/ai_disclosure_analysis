@@ -163,7 +163,7 @@ def main():
     parser.add_argument("--comment", default="run", help="Short label for this run, embedded in output filenames/columns.")
     parser.add_argument("--backend", default=None,
                         help="PDF backend, overriding configs/cl/config.yaml's pdf.backend "
-                             "(pymupdf | paddleocr_vl | mineru | dots — see "
+                             "(pymupdf | paddleocr_vl | dots — see "
                              "scripts/common/pdf/backends/).")
     parser.add_argument("--no-triage", action="store_true",
                         help="Run the chosen backend on EVERY page instead of routing cheap "
