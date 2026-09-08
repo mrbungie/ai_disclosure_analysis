@@ -60,12 +60,22 @@ python scripts/analytics/<script>.py` o, para el bloque financiero,
    (4-17 valores dimensionales distintos por período, desgloses reales por
    segmento/tipo de costo, correctamente no rellenados).
 
+   (d) cadenas de `capex`/`eps_diluted` ampliadas con
+   `PaymentsToAcquireOtherPropertyPlantAndEquipment`/`PaymentsForCapitalImprovements`
+   (nombre propio de REITs para capex) y `EarningsPerShareBasicAndDiluted`
+   — capex 87%→91%, la ganancia más grande desde el fallback original de
+   `long_term_debt`. `operating_income` y `sga_expense`/`cost_of_revenue`
+   se reauditaron con el mismo método y no dieron nada usable: lo que
+   taggean en su lugar son renglones de flujo de caja o conceptos
+   parciales, no equivalentes.
+
    Cobertura resultante (504 tickers, 2.868 filas 10-K alineadas): revenue
-   98%, net_income 99.7%, total_assets/equity/shares_out 100%, capex 87%,
-   SG&A 81%, operating_income 80%, long_term_debt 90% (subió de 84% al
-   agregar `LongTermDebtAndCapitalLeaseObligations`/`NotesPayable` a la
-   cadena y el fallback dimensional), current_assets/current_liabilities
-   85%, debt_to_equity 84%, cost_of_revenue 62%, rd_expense 46%.
+   98%, net_income 99.7%, total_assets/equity/shares_out 100%, eps_diluted
+   98%, capex 91%, SG&A 81%, operating_income 80%, long_term_debt 90%
+   (subió de 84% al agregar `LongTermDebtAndCapitalLeaseObligations`/
+   `NotesPayable` a la cadena y el fallback dimensional),
+   current_assets/current_liabilities 85%, debt_to_equity 84%,
+   cost_of_revenue 62%, rd_expense 46%.
    `shares_out` llegó a 100% sumando los hechos dimensionales por clase de
    acción para emisores de doble clase (GOOGL, META, BRK.B, ...) que sólo
    taggean `EntityCommonStockSharesOutstanding` por clase, no como total

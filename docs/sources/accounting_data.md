@@ -115,13 +115,31 @@ financial institutions/REITs whose own XBRL tagging inconsistently
 switches concept scope across periods within the same fiscal year — a
 data-quality property of those specific filings, not a pipeline defect.
 
+**`capex`/`eps_diluted` fallback chains widened (2026-09-08), same
+audit method as everything else — check what the missing tickers
+actually tag instead of assuming the sector story:**
+`us-gaap:PaymentsToAcquireOtherPropertyPlantAndEquipment` and
+`us-gaap:PaymentsForCapitalImprovements` (REITs' own name for capex —
+cash spent improving real estate already owned, not acquiring new PP&E)
+recovered real gaps; `us-gaap:EarningsPerShareBasicAndDiluted` (used by
+filers with a simple capital structure, where basic and diluted are
+equal by definition — a safe fallback, not a proxy) closed a small one.
+`capex` 87%→91%, the largest single-tag-addition gain since the original
+`long_term_debt` fix. Checked the same way as always: `operating_income`
+(80%) and `sga_expense`/`cost_of_revenue`'s remaining gaps were
+re-audited too, and turned up nothing usable — the "missing" tickers'
+alternate tags are cash-flow-statement lines (`NetCashProvidedByUsedInOperatingActivities`,
+lease payments) or genuine partial concepts (`SellingAndMarketingExpense`
+without the G&A half), not equivalents.
+
 Net coverage effect of all 10-K-panel fixes together (dimensional filter
-+ dimensional-singleton fallback + dual-class shares + debt fallback +
-as-of resolution + priority-tiebreak fix), 504 tickers, 2,868 aligned
-10-K rows: `revenue` 98%, `net_income` 99.7%, `total_assets`/`equity`/
-`shares_out` 100%, `capex` 87%, `sga_expense` 81%, `operating_income`
-80%, `long_term_debt` 90%, `current_assets`/`current_liabilities` 85%,
-`debt_to_equity` 84%, `cost_of_revenue` 62%, `rd_expense` 46%.
++ dimensional-singleton fallback + dual-class shares + debt/capex/eps
+fallbacks + as-of resolution + priority-tiebreak fix), 504 tickers,
+2,868 aligned 10-K rows: `revenue` 98%, `net_income` 99.7%,
+`total_assets`/`equity`/`shares_out` 100%, `eps_diluted` 98%, `capex`
+91%, `sga_expense` 81%, `operating_income` 80%, `long_term_debt` 90%,
+`current_assets`/`current_liabilities` 85%, `debt_to_equity` 84%,
+`cost_of_revenue` 62%, `rd_expense` 46%.
 
 `shares_out` needed one more fix on top of the dimensional filter, not
 just the filter itself: multi-class-stock filers (GOOGL, META, BRK.B, F,
@@ -268,14 +286,17 @@ with the frames fallback, after all three fixes:
 | cogs | 55.5% | 55.7% | +0.2pp |
 | operating_income | 71.1% | 72.1% | +1.0pp |
 | sga_expense | 72.0% | 72.9% | +0.9pp |
-| capex | 76.6% | 77.4% | +0.8pp |
 | debt | 77.6% | 78.3% | +0.7pp |
+| capex | 79.8% | 80.5% | +0.7pp |
 | revenue | 87.6% | 87.9% | +0.3pp |
-| eps_diluted | 87.7% | 88.7% | +1.0pp |
+| eps_diluted | 87.8% | 88.8% | +1.0pp |
 | net_income | 89.6% | 90.6% | +1.0pp |
 | assets | 90.3% | 91.3% | +0.9pp |
 | equity | 90.9% | 91.7% | +0.9pp |
 | current_assets / current_liabilities | 76.1% | 77.0% | +0.9pp |
+
+(`capex` and `eps_diluted` tag chains widened 2026-09-08 — see the 10-K
+section above for the fallback-tag detail, ported here identically.)
 
 The YTD-differencing fix alone moved these numbers far more than any
 tag-fallback widening or the frames fallback: capex 24.7%→76.3% (+52pp),

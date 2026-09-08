@@ -125,6 +125,10 @@ DURATION_METRICS: dict[str, list[str]] = {
     "capex": [
         "us-gaap:PaymentsToAcquirePropertyPlantAndEquipment",
         "us-gaap:PaymentsToAcquireProductiveAssets",
+        "us-gaap:PaymentsToAcquireOtherPropertyPlantAndEquipment",
+        # REITs' own name for capex: cash spent improving real estate
+        # already owned, not acquiring new PP&E outright.
+        "us-gaap:PaymentsForCapitalImprovements",
     ],
     "operating_income": ["us-gaap:OperatingIncomeLoss"],
     "net_income": [
@@ -145,7 +149,14 @@ DURATION_METRICS: dict[str, list[str]] = {
         "us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments",
     ],
     "tax_expense": ["us-gaap:IncomeTaxExpenseBenefit"],
-    "eps_diluted": ["us-gaap:EarningsPerShareDiluted"],
+    "eps_diluted": [
+        "us-gaap:EarningsPerShareDiluted",
+        # Filers with a simple capital structure (no dilutive securities)
+        # sometimes tag one combined basic-and-diluted figure instead of
+        # a separate diluted concept; the two are equal by definition
+        # when this tag is used, so it's a safe fallback, not a proxy.
+        "us-gaap:EarningsPerShareBasicAndDiluted",
+    ],
 }
 
 INSTANT_METRICS: dict[str, list[str]] = {
