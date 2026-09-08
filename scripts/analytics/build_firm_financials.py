@@ -223,6 +223,26 @@ PRETAX_COMPONENTS = {
     "pretax_foreign": ["us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesForeign"],
 }
 
+# Bank `revenue` OVERRIDE (not fill — see fill_via_component_sum's
+# override mode): verified accounting identity, InterestIncomeExpenseNet
+# (net interest income, i.e. interest income already net of interest
+# expense) + NoninterestIncome = Revenues at 0.0% difference against
+# every year of BAC/COF/JPM/C/PNC, the banks that already tag a working
+# combined Revenues concept. FITB/ZION/CMA/SIVB/HBAN/RF/PBCT never tag
+# that combined concept — only one scoped to ASC 606 fee income, which
+# structurally excludes net interest income, a bank's core revenue
+# (FITB reads ~$580M against several billion actually earned). Gross
+# interest income (InterestAndDividendIncomeOperating) does NOT reconcile
+# to Revenues the same way — checked and rejected before landing on the
+# net figure. NoninterestIncome is tagged by exactly 27 tickers in this
+# universe, every one financial-sector (SIC 6021/6022/6035/6141/6199/6211
+# — banks, thrifts, consumer credit, broker-dealers); safe to apply
+# unconditionally rather than needing a SIC-code gate.
+BANK_REVENUE_COMPONENTS = {
+    "bank_net_interest_income": ["us-gaap:InterestIncomeExpenseNet"],
+    "bank_noninterest_income": ["us-gaap:NoninterestIncome"],
+}
+
 
 def _concept_priority(metrics: dict[str, list[str]]) -> pd.DataFrame:
     rows = [(concept, metric, rank)
@@ -302,32 +322,44 @@ def load_facts(con: duckdb.DuckDBPyConnection, glob: Path) -> pd.DataFrame:
 def _load_dimensional_singletons(con: duckdb.DuckDBPyConnection, glob: Path) -> pd.DataFrame:
     """Last-resort fallback for (ticker, concept, period) cells where NO
     non-dimensional fact exists at all, but every dimensional context
-    tagged for that cell agrees on one value.
+    tagged for that cell agrees on one value AND that value is
+    corroborated by at least 2 observations (the original filing plus at
+    least one comparative repeat — the same repetition every other fact
+    in this pipeline gets, see `load_facts`'s docstring).
 
     Some filers (GM, General Dynamics, Sherwin-Williams, ...) tag a metric
     with exactly one dimensional member every period — not a true segment
     breakdown needing summation, just the whole-company figure filed under
     a dimensional context (verified against GM's R&D: $9.8B FY2022,
-    $9.9B FY2023, matching its actual reported figures). Requiring a
-    SINGLE distinct value across all contexts for that cell is what makes
-    this safe to use automatically: a real multi-segment breakdown (2+
-    different values) is left NULL rather than guessed at by picking or
-    summing arbitrarily. `pivot_metrics()` only reaches for this after
-    every non-dimensional concept in the fallback chain has nothing —
-    see `is_dimensional` there."""
+    $9.9B FY2023, matching its actual reported figures, corroborated by 3
+    separate filings). Requiring a SINGLE distinct value across all
+    contexts for that cell is NOT enough on its own — verified case: APA's
+    us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax for
+    FY2022 has exactly ONE dimensional observation ($18M, a single
+    product/geography line, not the ~$11B total) which trivially passes
+    "single distinct value" simply because there's nothing to disagree
+    with it. Requiring >=2 observations rejects one-off, uncorroborated
+    tags like that one while still keeping GM's (3+ observations every
+    year) — a real multi-segment breakdown (2+ DIFFERENT values, at any
+    observation count) is still left NULL rather than guessed at by
+    picking or summing arbitrarily. `pivot_metrics()` only reaches for
+    this after every non-dimensional concept in the fallback chain has
+    nothing — see `is_dimensional` there."""
     return con.execute(f"""
         SELECT ticker, concept, period_type, period_start, period_end, value, filing_date, TRUE AS is_dimensional
         FROM (
             SELECT ticker, concept, period_type, period_start, period_end, numeric_value AS value, filing_date,
                    count(DISTINCT numeric_value) OVER (
                        PARTITION BY ticker, concept, period_type, period_start, period_end) AS n_distinct,
+                   count(*) OVER (
+                       PARTITION BY ticker, concept, period_type, period_start, period_end) AS n_obs,
                    ROW_NUMBER() OVER (
                        PARTITION BY ticker, concept, period_type, period_start, period_end
                        ORDER BY filing_date ASC) AS rn
             FROM read_parquet('{glob}', union_by_name=True)
             WHERE numeric_value IS NOT NULL AND ticker IS NOT NULL AND has_dimensions
         )
-        WHERE rn = 1 AND n_distinct = 1
+        WHERE rn = 1 AND n_distinct = 1 AND n_obs >= 2
     """).fetchdf()
 
 
@@ -370,22 +402,38 @@ def pivot_metrics(facts: pd.DataFrame, metrics: dict[str, list[str]],
 
 
 def fill_via_component_sum(facts: pd.DataFrame, duration: pd.DataFrame, target: str,
-                            components: dict[str, list[str]]) -> pd.DataFrame:
-    """Fill NULLs in `duration[target]` by summing two complementary
-    concepts (e.g. depreciation + amortization = D&A), ONLY where BOTH
-    components exist for that (ticker, period_end). A filer with just one
-    tagged is left NULL rather than filled from that alone — a partial
+                            components: dict[str, list[str]], override: bool = False) -> pd.DataFrame:
+    """Fill (or, with `override=True`, REPLACE) `duration[target]` by
+    summing two complementary concepts, ONLY where BOTH components exist
+    for that (ticker, period_end). A filer with just one tagged keeps
+    whatever `target` already had (fill mode) or NULL (override mode)
+    rather than being filled from that one component alone — a partial
     figure passed off as the full construct is a worse, silently biased
     definition than a missing value (CLAUDE.md: one construct, one
     formula). `components` keys become temporary pivot columns; values are
-    each a 1-concept fallback chain reusing `pivot_metrics`'s machinery."""
+    each a 1-concept fallback chain reusing `pivot_metrics`'s machinery.
+
+    `override=True` is for when the sum is a verified accounting IDENTITY
+    for the construct, not just a same-magnitude proxy — e.g. bank
+    revenue = InterestIncomeExpenseNet + NoninterestIncome, checked at
+    0.0% difference against every bank that already tags a combined
+    `Revenues` concept (BAC/COF/JPM/C/PNC, every year). For those banks,
+    `target` is NOT null — it's already (wrongly) populated from a
+    concept scoped to ASC 606 fee income only, which structurally
+    excludes net interest income (FITB's shows ~$580M against several
+    billion in actual revenue). Fill mode would never reach it since
+    there's nothing to fill; override mode replaces it with the correct,
+    verified total whenever both components are available."""
     parts = pivot_metrics(facts, components, "duration")
     keys = list(components)
     summed = (parts.dropna(subset=keys)
                     .assign(_summed=lambda d: d[keys].sum(axis=1))
                     [["ticker", "period_end", "_summed"]])
     duration = duration.merge(summed, on=["ticker", "period_end"], how="left")
-    duration[target] = duration[target].fillna(duration["_summed"])
+    if override:
+        duration[target] = duration["_summed"].where(duration["_summed"].notna(), duration[target])
+    else:
+        duration[target] = duration[target].fillna(duration["_summed"])
     return duration.drop(columns=["_summed"])
 
 
@@ -531,6 +579,7 @@ def main() -> None:
     duration = pivot_metrics(facts, DURATION_METRICS, "duration")
     duration = fill_via_component_sum(facts, duration, "da", DA_COMPONENTS)
     duration = fill_via_component_sum(facts, duration, "pretax_income", PRETAX_COMPONENTS)
+    duration = fill_via_component_sum(facts, duration, "revenue", BANK_REVENUE_COMPONENTS, override=True)
     instants = pivot_metrics(facts, INSTANT_METRICS, "instant")
     shares = pivot_metrics(facts, SHARES_METRIC, "instant")
     # A public filer never genuinely has zero shares outstanding; a 0 here

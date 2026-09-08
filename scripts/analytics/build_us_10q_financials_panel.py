@@ -89,7 +89,16 @@ TAGS = {
              "us-gaap:LongTermDebtAndCapitalLeaseObligations", "us-gaap:NotesPayable"],
 }
 INSTANT = {"assets", "current_assets", "current_liabilities", "equity", "debt"}
-ALL_TAGS = sorted({t for v in TAGS.values() for t in v})
+# Bank `revenue` OVERRIDE, ported from build_firm_financials.py: verified
+# accounting identity, InterestIncomeExpenseNet + NoninterestIncome =
+# Revenues at 0.0% difference for every bank that already tags a working
+# combined Revenues concept (BAC/COF/JPM/C/PNC). FITB/ZION/CMA/SIVB/HBAN/
+# RF/PBCT never tag that combined concept, only one scoped to ASC 606 fee
+# income that structurally excludes net interest income, a bank's core
+# revenue. NoninterestIncome is tagged by exactly 27 tickers in this
+# universe, every one financial-sector — safe to apply unconditionally.
+BANK_REVENUE_TAGS = ["us-gaap:InterestIncomeExpenseNet", "us-gaap:NoninterestIncome"]
+ALL_TAGS = sorted({t for v in TAGS.values() for t in v} | set(BANK_REVENUE_TAGS))
 # Balance-sheet concepts that can never legitimately be negative - unlike
 # equity (real, from buybacks - McDonald's, Starbucks, ...), a negative
 # value here is a filer sign-tagging error. Verified case ported from
@@ -102,18 +111,26 @@ NEVER_NEGATIVE_TAGS = {t for m in ("assets", "current_assets", "current_liabilit
 def dimensional_singletons(dim_facts: pd.DataFrame) -> pd.DataFrame:
     """Last-resort candidates from dimensional contexts: kept ONLY where
     every dimensional fact for a (ticker, concept, start, end) cell agrees
-    on one value — not a true multi-segment breakdown needing summation,
-    just the whole-company figure filed under a dimensional context.
+    on one value AND that value is corroborated by >=2 observations — not
+    a true multi-segment breakdown needing summation, just the
+    whole-company figure filed under a dimensional context.
     Verified against GM's R&D expense (tagged with one dimensional member
-    every period, matching GM's actual reported R&D: $9.8B FY2022, $9.9B
-    FY2023). A cell with 2+ DIFFERENT dimensional values (a real segment
-    split) is dropped rather than guessed at. Marked `is_dimensional=True`
-    so it never outranks a non-dimensional fact for the same cell — see
-    the priority sort in `main()`."""
+    every period, 3+ corroborating observations each year, matching GM's
+    actual reported R&D: $9.8B FY2022, $9.9B FY2023). The >=2-observation
+    floor matters on its own: APA's RevenueFromContractWithCustomer
+    ExcludingAssessedTax for FY2022 has exactly ONE dimensional
+    observation ($18M, a single product/geography line, not the ~$11B
+    total) — trivially "single distinct value" simply because there's
+    nothing to disagree with it. A cell with 2+ DIFFERENT dimensional
+    values (a real segment split, at any observation count) is still
+    dropped rather than guessed at. Marked `is_dimensional=True` so it
+    never outranks a non-dimensional fact for the same cell — see the
+    priority sort in `main()`."""
     if dim_facts.empty:
         return dim_facts.assign(is_dimensional=True)
     keys = ["ticker", "concept", "start", "end"]
-    single = dim_facts.groupby(keys)["numeric_value"].transform("nunique") == 1
+    grouped = dim_facts.groupby(keys)["numeric_value"]
+    single = (grouped.transform("nunique") == 1) & (grouped.transform("size") >= 2)
     return dim_facts[single].assign(is_dimensional=True)
 
 
@@ -233,10 +250,24 @@ def main():
     lag_days = (frames["filing_date"] - frames["period_end"]).dt.days
     frames = frames[lag_days.between(0, 120)]
 
-    duration_tags = sorted({t for m, tags in TAGS.items() if m not in INSTANT for t in tags})
+    duration_tags = sorted({t for m, tags in TAGS.items() if m not in INSTANT for t in tags}
+                           | set(BANK_REVENUE_TAGS))
     dq = discrete_quarters(base[base["concept"].isin(duration_tags) & base["start"].notna()])
     dq["cal_q"] = dq["end"].dt.year * 10 + dq["end"].dt.quarter
     dq = dq[dq["cal_q"].between(cal_q_min, cal_q_max)]
+
+    # Bank revenue OVERRIDE: one row per (ticker, cal_q) where BOTH
+    # components exist, summed — see BANK_REVENUE_TAGS above. Provenance
+    # (accession) taken from whichever component was filed later, the
+    # moment the sum itself became knowable (same reasoning as
+    # discrete_quarters's own endpoint choice).
+    bank_parts = first_disclosed(dq[dq["concept"].isin(BANK_REVENUE_TAGS)], ["ticker", "concept", "cal_q"])
+    bank_wide = bank_parts.pivot_table(index=["ticker", "cal_q"], columns="concept",
+                                        values="numeric_value", aggfunc="first").dropna()
+    bank_ref = (bank_parts.sort_values("filing_date")
+                          .drop_duplicates(["ticker", "cal_q"], keep="last")
+                          .set_index(["ticker", "cal_q"])["accession_number"])
+    bank_revenue = bank_wide.sum(axis=1).rename("value").to_frame().join(bank_ref).reset_index()
 
     instant_tags = sorted({t for m, tags in TAGS.items() if m in INSTANT for t in tags})
     inst = first_disclosed(base[base["concept"].isin(instant_tags)], ["ticker", "concept", "end"])
@@ -280,6 +311,17 @@ def main():
         sub = sub[["ticker", "cal_q", "numeric_value", "accession_number"]].rename(
             columns={"numeric_value": "value", "accession_number": "source_ref"})
         sub["source"] = "inline_xbrl"
+        if metric == "revenue" and not bank_revenue.empty:
+            # OVERRIDE, not fill: for banks that only tag the ASC-606
+            # fee-income-scoped concept (understates revenue by ~10x —
+            # e.g. FITB), the verified net-interest+noninterest sum
+            # replaces it even though `sub` already has a (wrong) value.
+            sub = sub.merge(bank_revenue, on=["ticker", "cal_q"], how="outer", suffixes=("", "_bank"))
+            has_bank = sub["value_bank"].notna()
+            sub["value"] = sub["value_bank"].where(has_bank, sub["value"])
+            sub["source_ref"] = sub["accession_number"].where(has_bank, sub["source_ref"])
+            sub["source"] = sub["source"].fillna("inline_xbrl")
+            sub = sub.drop(columns=["value_bank", "accession_number"])
 
         fsub = frames[frames["metric"] == metric][["ticker", "cal_q", "value", "accession_number"]].rename(
             columns={"accession_number": "source_ref"})

@@ -50,33 +50,43 @@ python scripts/analytics/<script>.py` o, para el bloque financiero,
    alimenta joins as-of, así que el valor de un período tiene que ser el
    que ese filing efectivamente reveló, nunca uno corregido después.
    Validado sumando ingresos trimestrales contra el ingreso anual
-   independiente: 98.7% dentro de 1% para empresas de año fiscal
-   calendario (n=1.626). (c) fallback de "singleton dimensional": un
-   emisor que taggea una métrica con UN solo miembro dimensional cada
-   período (no un desglose real por segmento) se recupera; una celda con
-   2+ valores dimensionales DISTINTOS (desglose real) se deja NULL en vez
-   de adivinar — verificado con el R&D de GM ($9.8B FY2022, $9.9B FY2023,
-   coincide con lo reportado) vs. el `cost_of_revenue` de AEP/AMT/APA/ATVI
-   (4-17 valores dimensionales distintos por período, desgloses reales por
-   segmento/tipo de costo, correctamente no rellenados).
+   independiente: 99.0% dentro de 1% para empresas de año fiscal
+   calendario (n=1.665, ver `docs/sources/accounting_data.md` para el
+   historial completo de esta cifra). (c) fallback de "singleton
+   dimensional", con un requisito de corroboración añadido después de que
+   este mismo check bajara: un emisor que taggea una métrica con UN solo
+   miembro dimensional cada período Y ese valor está corroborado por >=2
+   observaciones (no basta con que sea el único valor — el R&D de GM tiene
+   3+ observaciones por año; el `RevenueFromContractWithCustomer...` de
+   APA FY2022 tenía exactamente 1, un renglón de producto/geografía de
+   $18M, no el total de ~$11B, y pasaba trivialmente "valor único" por no
+   tener con qué discrepar) se recupera; una celda con 2+ valores
+   DISTINTOS (desglose real) se deja NULL en vez de adivinar — verificado
+   también contra el `cost_of_revenue` de AEP/AMT/APA/ATVI (4-17 valores
+   dimensionales distintos por período, desgloses reales, correctamente no
+   rellenados).
 
    (d) cadenas de `capex`/`eps_diluted` ampliadas con
    `PaymentsToAcquireOtherPropertyPlantAndEquipment`/`PaymentsForCapitalImprovements`
-   (nombre propio de REITs para capex) y `EarningsPerShareBasicAndDiluted`
-   — capex 87%→91%, la ganancia más grande desde el fallback original de
-   `long_term_debt`. `operating_income` y `sga_expense`/`cost_of_revenue`
-   se reauditaron con el mismo método y no dieron nada usable: lo que
-   taggean en su lugar son renglones de flujo de caja o conceptos
-   parciales, no equivalentes.
+   (nombre propio de REITs para capex) y `EarningsPerShareBasicAndDiluted`.
+   (e) `revenue` de bancos: FITB/ZION/CMA/SIVB/HBAN/RF/PBCT nunca taggean
+   `Revenues` combinado, sólo un concepto acotado a ingreso por comisiones
+   (ASC 606) que excluye el ingreso neto por intereses — el negocio
+   principal de un banco (FITB leía ~$580M contra varios miles de millones
+   reales). `InterestIncomeExpenseNet + NoninterestIncome = Revenues` es
+   una identidad contable verificada (0.0% de diferencia contra
+   BAC/COF/JPM/C/PNC, que sí taggean el combinado), aplicada como
+   REEMPLAZO (no relleno) porque el valor previo no estaba vacío, estaba
+   mal. Esta corrección sola movió la validación de 97.0%→99.0%.
 
    Cobertura resultante (504 tickers, 2.868 filas 10-K alineadas): revenue
-   98%, net_income 99.7%, total_assets/equity/shares_out 100%, eps_diluted
-   98%, capex 91%, SG&A 81%, operating_income 80%, long_term_debt 90%
-   (subió de 84% al agregar `LongTermDebtAndCapitalLeaseObligations`/
-   `NotesPayable` a la cadena y el fallback dimensional),
-   current_assets/current_liabilities 85%, debt_to_equity 84%,
-   cost_of_revenue 62%, rd_expense 46%.
-   `shares_out` llegó a 100% sumando los hechos dimensionales por clase de
+   99.1%, net_income 99.7%, total_assets/equity 100%, shares_out 99.9%,
+   eps_diluted 97.6%, capex 91.2%, SG&A 80.7%, operating_income 80.0%,
+   long_term_debt 89.6% (subió de 84% al agregar
+   `LongTermDebtAndCapitalLeaseObligations`/`NotesPayable` a la cadena y
+   el fallback dimensional), current_assets/current_liabilities 85%,
+   debt_to_equity 83.7%, cost_of_revenue 61.4%, rd_expense 46.0%.
+   `shares_out` llegó a 99.9% sumando los hechos dimensionales por clase de
    acción para emisores de doble clase (GOOGL, META, BRK.B, ...) que sólo
    taggean `EntityCommonStockSharesOutstanding` por clase, no como total
    consolidado (`docs/sources/accounting_data.md`). `rd_expense` y

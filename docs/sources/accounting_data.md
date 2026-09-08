@@ -104,16 +104,20 @@ independently-built annual revenue (10-K panel) for every ticker-year
 where all 4 quarters came from inline-XBRL. Restricted to calendar-fiscal-
 year firms (non-calendar firms, e.g. NVDA/ORCL/GIS, fail this check
 trivially because "calendar year" quarter grouping doesn't match their
-own fiscal year — a limitation of the check, not the panels): **98.7%
-within 1% of the annual figure, 99.0% within 5%**, n=1,626 (remeasured
-after adding the dimensional-singleton fallback below; the small drop
-from 99.1%/99.4% is expected — a few newly-filled cells come from a
-noisier, last-resort source, still net positive since coverage rose too).
-The handful of
-remaining outliers (BlackRock, Iron Mountain, Northern Trust) are
-financial institutions/REITs whose own XBRL tagging inconsistently
-switches concept scope across periods within the same fiscal year — a
-data-quality property of those specific filings, not a pipeline defect.
+own fiscal year — a limitation of the check, not the panels): **99.0%
+within 1% of the annual figure, 99.3% within 5%**, n=1,665. This number
+moved twice after first landing at 99.1%/99.4% (n=1,620): adding the
+dimensional-singleton fallback (below) dropped it to 98.7%/99.0% by
+letting in a few noisier last-resort cells, then requiring >=2
+corroborating observations for that same fallback (also below — APA's
+one-off $18M dimensional tag was the case that caught this) recovered
+precision while the bank `revenue` fix (above) fixed the single largest
+source of remaining error and grew n by recovering previously-NULL bank
+quarters. The remaining outliers (BlackRock, Iron Mountain, Pfizer,
+Berkshire Hathaway) are large, diversified filers whose own XBRL tagging
+inconsistently switches concept scope across periods or business
+segments — a data-quality property of those specific filings, not a
+pipeline defect.
 
 **`capex`/`eps_diluted` fallback chains widened (2026-09-08), same
 audit method as everything else — check what the missing tickers
@@ -167,35 +171,48 @@ ones.**
   nonsensical -0.57 to the correct +0.57. Ported to the 10-Q panel too
   (no occurrences there currently — purely defensive).
 
-**Known, unresolved limitation: bank `revenue` is understated for ~7-9
-tickers (2026-09-08), found but NOT fixed — flagged rather than guessed
-at.** FITB, ZION, CMA, SIVB, HBAN, RF and PBCT never tag a combined
+**Bank `revenue` understatement, found AND fixed (2026-09-08).** FITB,
+ZION, CMA, SIVB, HBAN, RF and PBCT never tag a combined
 `Revenues`/`RevenueFromContractWithCustomer...` concept; the only concept
 available scopes strictly to fee income under ASC 606, which structurally
-EXCLUDES net interest income — a bank's core revenue. Fifth Third (FITB)
-reads ~$580M when its actual total revenue is several billion. The
-obvious fix — sum `InterestAndDividendIncomeOperating` +
-`NoninterestIncome` — does NOT reconcile against how banks that already
-have a good `Revenues` tag (JPM, BAC, COF) define it: the sum uses GROSS
-interest income, while their own `Revenues` tag appears to net out
-interest expense, so applying the sum universally would inflate revenue
-for the banks that already work and use an inconsistent definition
-across the sector. Needs bank-specific net-interest-income construction
-(gross interest income minus interest expense, both individually
-unreliable per-bank in inline-XBRL) verified against each affected
-ticker's actual reported figures before fixing — not attempted here to
-avoid trading a known small error for an unverified, possibly larger one.
+EXCLUDES net interest income — a bank's core revenue (Fifth Third read
+~$580M when its actual total revenue is several billion). A first attempt
+— summing `InterestAndDividendIncomeOperating` (gross interest income) +
+`NoninterestIncome` — was checked and REJECTED: it doesn't reconcile
+against how banks that already have a good `Revenues` tag (JPM, BAC, COF,
+C, PNC) define it, because that sum uses gross interest income while
+their `Revenues` tag nets out interest expense.
+
+The correct construction, verified as an exact accounting identity:
+`us-gaap:InterestIncomeExpenseNet` (interest income already net of
+interest expense) + `NoninterestIncome` = `Revenues`, at **0.0%
+difference for every year of BAC/COF/JPM/C/PNC**. `NoninterestIncome` is
+tagged by exactly 27 tickers in this universe, every single one
+financial-sector (SIC 6021/6022/6035/6141/6199/6211 — banks, thrifts,
+consumer credit, broker-dealers), so the fix applies safely without a
+SIC-code gate: `fill_via_component_sum(..., override=True)` REPLACES
+`revenue` with the verified sum whenever both components exist, even
+though `revenue` isn't null for the affected banks (it's wrongly
+populated from the ASC-606-scoped concept) — the one case in this file
+where a fix overrides an already-populated value rather than filling a
+gap, justified specifically because the replacement is a checked
+identity, not a proxy. Ported identically to the 10-Q panel
+(`BANK_REVENUE_TAGS`, same override logic). Confirmed via the
+reconciliation check below: restricting to calendar-fiscal-year firms,
+agreement went from 97.0%→**99.0%** within 1% — the banks were the
+single largest contributor to reconciliation error before this fix.
 
 Net coverage effect of all 10-K-panel fixes together (dimensional filter
-+ dimensional-singleton fallback + dual-class shares + debt/capex/eps
-fallbacks + da/pretax_income component sums + as-of resolution +
++ corroborated dimensional-singleton fallback + dual-class shares +
+debt/capex/eps fallbacks + da/pretax_income component sums + bank revenue
+override + negative-value sanity guard + as-of resolution +
 priority-tiebreak fix), 504 tickers, 2,868 aligned 10-K rows: `revenue`
-98%, `net_income` 99.7%, `total_assets`/`equity`/`shares_out` 100%,
-`eps_diluted` 98%, `pretax_income` 97.5%, `tax_expense` 98.8%, `capex`
-91%, `da` 92%, `interest_expense` 82%, `sga_expense` 81%,
-`operating_income` 80%, `long_term_debt` 90%,
-`current_assets`/`current_liabilities` 85%, `debt_to_equity` 84%,
-`cost_of_revenue` 62%, `rd_expense` 46%.
+99.1%, `net_income` 99.7%, `total_assets`/`equity` 100%, `shares_out`
+99.9%, `eps_diluted` 97.6%, `pretax_income` 97.4%, `tax_expense` 98.9%,
+`capex` 91.2%, `da` 91.5%, `interest_expense` 80.8%, `sga_expense` 80.7%,
+`operating_income` 80.0%, `long_term_debt` 89.6%,
+`current_assets`/`current_liabilities` 85%, `debt_to_equity` 83.7%,
+`cost_of_revenue` 61.4%, `rd_expense` 46.0%.
 
 `shares_out` needed one more fix on top of the dimensional filter, not
 just the filter itself: multi-class-stock filers (GOOGL, META, BRK.B, F,
@@ -229,6 +246,20 @@ breakdowns) is left NULL rather than guessed at. Lifted `long_term_debt`
 either-doesn't-disclose or discloses-only-as-a-real-multi-way-breakdown
 case, not a single mislabeled total. The same fallback was ported to the
 10-Q panel (below) for consistency.
+
+**Corroboration requirement added (2026-09-08) — "single distinct value"
+alone was not enough.** Caught by the reconciliation check above dropping
+after this fallback shipped: APA's `RevenueFromContractWithCustomer
+ExcludingAssessedTax` for FY2022 has exactly ONE dimensional observation
+ever ($18M — a single product/geography line, not the ~$11B total),
+which trivially passes "single distinct value" simply because there's
+nothing to disagree with it — unlike GM's R&D, corroborated by 3+
+separate filings' comparatives every year. `_load_dimensional_singletons()`
+now additionally requires >=2 observations (the same repetition every
+other fact in this pipeline gets from XBRL's own prior-year-comparative
+convention) before accepting a dimensional-singleton value. Rejects
+one-off, uncorroborated tags like APA's while keeping every genuine case;
+recovered the reconciliation precision this fallback had cost.
 
 ## Chile — `scripts/cl/04_fetch_accounting_data.py`
 
