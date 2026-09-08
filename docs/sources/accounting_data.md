@@ -132,12 +132,26 @@ alternate tags are cash-flow-statement lines (`NetCashProvidedByUsedInOperatingA
 lease payments) or genuine partial concepts (`SellingAndMarketingExpense`
 without the G&A half), not equivalents.
 
+**`da`/`pretax_income` recovered via component summation, not tag
+fallback (2026-09-08).** 58 tickers never tag a combined D&A concept but
+DO tag depreciation and intangible amortization SEPARATELY (verified
+plausible: Abbott's $1.1B depreciation + $2.18B amortization ≈ its known
+D&A run-rate); 6 tickers (BR, CMA, LH, MCD, ORCL, PFG) split pretax
+income into domestic/foreign instead of one combined concept.
+`fill_via_component_sum()` sums the two ONLY where BOTH components exist
+for that (ticker, period_end) — a filer with just one tagged is left
+NULL rather than filled from that alone, since a partial figure passed
+off as the whole construct would be a silently biased, worse-than-missing
+value. `da` 80%→92%, `pretax_income` 96%→97.5%.
+
 Net coverage effect of all 10-K-panel fixes together (dimensional filter
 + dimensional-singleton fallback + dual-class shares + debt/capex/eps
-fallbacks + as-of resolution + priority-tiebreak fix), 504 tickers,
-2,868 aligned 10-K rows: `revenue` 98%, `net_income` 99.7%,
-`total_assets`/`equity`/`shares_out` 100%, `eps_diluted` 98%, `capex`
-91%, `sga_expense` 81%, `operating_income` 80%, `long_term_debt` 90%,
+fallbacks + da/pretax_income component sums + as-of resolution +
+priority-tiebreak fix), 504 tickers, 2,868 aligned 10-K rows: `revenue`
+98%, `net_income` 99.7%, `total_assets`/`equity`/`shares_out` 100%,
+`eps_diluted` 98%, `pretax_income` 97.5%, `tax_expense` 98.8%, `capex`
+91%, `da` 92%, `interest_expense` 82%, `sga_expense` 81%,
+`operating_income` 80%, `long_term_debt` 90%,
 `current_assets`/`current_liabilities` 85%, `debt_to_equity` 84%,
 `cost_of_revenue` 62%, `rd_expense` 46%.
 

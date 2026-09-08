@@ -189,6 +189,26 @@ SHARES_METRIC = {"shares_out": ["dei:EntityCommonStockSharesOutstanding"]}
 GROWTH_METRICS = ["revenue", "rd_expense", "capex", "sga_expense"]
 LEVEL_COLUMNS = ["revenue", "rd_expense", "capex", "sga_expense"]
 
+# `da` sum-fallback: 58 of 509 tickers never tag a combined D&A concept but
+# DO tag depreciation and intangible amortization as two separate line
+# items (verified magnitudes plausible, e.g. ABT: $1.1B depreciation +
+# $2.18B amortization). Only filled when BOTH components exist for that
+# (ticker, period_end) — a company with only one tagged would understate
+# D&A if filled from that alone, a different, worse-biased definition
+# than simply leaving it NULL (CLAUDE.md: one construct, one formula).
+DA_COMPONENTS = {
+    "depreciation_only": ["us-gaap:Depreciation"],
+    "amortization_only": ["us-gaap:AmortizationOfIntangibleAssets"],
+}
+
+# `pretax_income` sum-fallback: same pattern, smaller (6 tickers) — BR,
+# CMA, LH, MCD, ORCL, PFG tag domestic and foreign pretax income
+# separately instead of one combined concept.
+PRETAX_COMPONENTS = {
+    "pretax_domestic": ["us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesDomestic"],
+    "pretax_foreign": ["us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesForeign"],
+}
+
 
 def _concept_priority(metrics: dict[str, list[str]]) -> pd.DataFrame:
     rows = [(concept, metric, rank)
@@ -335,6 +355,26 @@ def pivot_metrics(facts: pd.DataFrame, metrics: dict[str, list[str]],
     return wide.sort_values(["ticker", "period_end"]).reset_index(drop=True)
 
 
+def fill_via_component_sum(facts: pd.DataFrame, duration: pd.DataFrame, target: str,
+                            components: dict[str, list[str]]) -> pd.DataFrame:
+    """Fill NULLs in `duration[target]` by summing two complementary
+    concepts (e.g. depreciation + amortization = D&A), ONLY where BOTH
+    components exist for that (ticker, period_end). A filer with just one
+    tagged is left NULL rather than filled from that alone — a partial
+    figure passed off as the full construct is a worse, silently biased
+    definition than a missing value (CLAUDE.md: one construct, one
+    formula). `components` keys become temporary pivot columns; values are
+    each a 1-concept fallback chain reusing `pivot_metrics`'s machinery."""
+    parts = pivot_metrics(facts, components, "duration")
+    keys = list(components)
+    summed = (parts.dropna(subset=keys)
+                    .assign(_summed=lambda d: d[keys].sum(axis=1))
+                    [["ticker", "period_end", "_summed"]])
+    duration = duration.merge(summed, on=["ticker", "period_end"], how="left")
+    duration[target] = duration[target].fillna(duration["_summed"])
+    return duration.drop(columns=["_summed"])
+
+
 def load_dual_class_shares(con: duckdb.DuckDBPyConnection, glob: Path) -> pd.DataFrame:
     """Fallback `shares_out` for dual/multi-class filers (GOOGL, META,
     BRK.B, F, CMCSA, ...) that tag `dei:EntityCommonStockSharesOutstanding`
@@ -474,6 +514,8 @@ def main() -> None:
           f"({facts['ticker'].nunique():,} tickers)")
 
     duration = pivot_metrics(facts, DURATION_METRICS, "duration")
+    duration = fill_via_component_sum(facts, duration, "da", DA_COMPONENTS)
+    duration = fill_via_component_sum(facts, duration, "pretax_income", PRETAX_COMPONENTS)
     instants = pivot_metrics(facts, INSTANT_METRICS, "instant")
     shares = pivot_metrics(facts, SHARES_METRIC, "instant")
     shares = (shares.merge(dual_class_shares, on=["ticker", "period_end"],
