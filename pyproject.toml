@@ -14,7 +14,7 @@ dependencies = [
     "markdownify>=0.11.0",
     "python-dotenv>=1.0.0",
     "yfinance>=1.7.0",
-    "pyyaml>=6.0.3",
+    "pyyaml>=6.0.2",   # 6.0.3 was an arbitrary floor; paddleocr (pdf-vlm) pins ==6.0.2
     "edgartools>=5.55.0",
     "sf-hamilton>=1.89.0",
     "duckdb>=1.5.5",
@@ -50,11 +50,6 @@ ops = [
 pdf-vlm = [
     "paddleocr[doc-parser]>=3.6.0",
     "opencv-python-headless>=4.10",   # opencv-python needs libGL; headless doesn't
-]
-pdf-vlm-mineru = [
-    "mineru-vl-utils[transformers]>=0.1.0",
-    "torch>=2.7",
-    "accelerate>=1.0",
 ]
 
 [tool.pytest.ini_options]

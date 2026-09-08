@@ -31,9 +31,9 @@ a profile there and nothing else.
   backend's call, not the caller's**: read `backend.max_workers` instead
   of assuming `os.cpu_count()`. A VLM backend reports 1 because it holds
   model weights on one GPU.
-- The GPU backends are optional dependency groups (`pdf-vlm`,
-  `pdf-vlm-mineru`), never base dependencies — a clean checkout must
-  still run the whole Chilean pipeline on `pymupdf`.
+- The GPU backends are an optional dependency group (`pdf-vlm`), never
+  base dependencies — a clean checkout must still run the whole Chilean
+  pipeline on `pymupdf`.
 - `scripts/cl/cmf_pdf_paragraphs.py` is a back-compat shim. Don't add to
   it.
 
