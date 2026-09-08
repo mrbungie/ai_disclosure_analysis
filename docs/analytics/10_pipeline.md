@@ -133,7 +133,6 @@ umbral vigente y las versiones congeladas están en `docs/FREEZE.md`.
 
 ## Pendiente
 
-- `statsmodels` y `matplotlib` no están declarados en `pyproject.toml`, y
-  `uv sync` falla por el conflicto `sentence-transformers` / extra
-  `pdf-vlm-mineru`; se corre con `--frozen --no-sync`.
+- `statsmodels` y `matplotlib` no están declarados en `pyproject.toml`
+  (`uv pip install --python .venv/bin/python statsmodels matplotlib`).
 - Los descriptivos SQL del apéndice no tienen script.

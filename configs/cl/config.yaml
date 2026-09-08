@@ -46,7 +46,7 @@ pdf:
   # transformers/local runs anywhere; vllm needs the model served and is
   # the only path with a tolerable corpus-scale wall clock. Measured from
   # 12,381 real pages: the corpus is ~171,000 pages, ~120,000 of which the
-  # triage sends to the VLM, so a single stream is ~200 h (mineru: ~340 h).
+  # triage sends to the VLM, so a single stream is ~200 h.
   # See the POC doc's throughput section — that arithmetic is the reason
   # any full re-extraction needs vllm, not the backend choice.
   runtime: transformers
