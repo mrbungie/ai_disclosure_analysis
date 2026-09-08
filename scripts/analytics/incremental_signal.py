@@ -111,6 +111,16 @@ def load(con) -> pd.DataFrame:
     m["sector_year"] = m["sic2"].astype(str) + "_" + m["year"].astype(str)
     acts = pd.read_parquet(OUT_DIR / "firm_year_activities.parquet")[["ticker", "year"] + list(ACTIVITY.values())]
     m = m.merge(acts, on=["ticker", "year"], how="left").fillna({c: 0.0 for c in ACTIVITY.values()})
+    # washing_z (washing_score.py): W = z(intensidad de divulgación de IA) -
+    # z(sustancia de la actividad de IA divulgada, ponderada por
+    # fundamentación). Sólo está definido para empresas-año con divulgación
+    # de IA (any_ai=1; 1,449 de 2,475): una empresa-año sin divulgación de
+    # IA no tiene una brecha divulgación-sustancia que preguntar. Se deja
+    # NaN para el resto, sin imputar — el bloque M4 usa sólo la submuestra
+    # con washing_z definido (ver `nested`).
+    wash = pd.read_parquet(OUT_DIR / "firm_year_washing_score.parquet")[["ticker", "year", "w"]].rename(columns={"w": "washing_z"})
+    m = m.merge(wash, on=["ticker", "year"], how="left")
+    m["washing_scored"] = m["washing_z"].notna()
     # texto sólo 10-K, para la robustez
     docs = document_table(con)
     k = aggregate(docs[docs["form"] == "10-K"].assign(year=lambda d: d["fecha"].dt.year), ["ticker", "year"])
@@ -123,18 +133,21 @@ def load(con) -> pd.DataFrame:
 def design(d: pd.DataFrame, y: str, block: str, fe: str, suffix: str = "") -> tuple[np.ndarray, np.ndarray, list[str]]:
     fund = [c for c in FUNDAMENTALS if c != y]
     X = d[fund].copy()
-    if block in ("M1", "M2", "M3", "M2A", "M2AB"):
+    if block in ("M1", "M2", "M3", "M2A", "M2AB", "M4"):
         X["volumen"] = np.log1p(d["frames_per_1k" if suffix == "__share" else f"frames_per_1k{suffix}"])
-    if block in ("M2", "M2AB"):
+    if block in ("M2", "M2AB", "M4"):
         for name, col in SEMANTIC.items():
             X[name] = d[f"share_{name}"] if suffix == "__share" else np.log1p(d[f"{col}{suffix}"])
-    if block in ("M2A", "M2AB"):
+    if block in ("M2A", "M2AB", "M4"):
         for name, col in ACTIVITY.items():
             X[name] = np.log1p(d[col])
     if block == "M3":
         for s in sorted(d["segmento"].unique()):
             if s != "sin_ia":
                 X[f"seg_{s}"] = (d["segmento"] == s).astype(float)
+    if block == "M4":
+        # Y = Volume + Specificity/content(M2) + Behavior(activities) + Washing.
+        X["washing"] = d["washing_z"]
     # efectos fijos por demeaning dentro del grupo
     g = d[fe].to_numpy()
     Xd = X - X.groupby(g).transform("mean")
@@ -223,14 +236,14 @@ def permutation_semantic(d: pd.DataFrame, y: str, fe: str, suffix: str, observed
 
 def nested(d: pd.DataFrame, y: str, fe: str = "sector_year", suffix: str = "") -> dict:
     if suffix == "__share":
-        need = [y] + [c for c in FUNDAMENTALS if c != y] + ["frames_per_1k"] + [f"share_{n}" for n in SEMANTIC] + [fe, "ticker", "segmento"]
+        need = [y] + [c for c in FUNDAMENTALS if c != y] + ["frames_per_1k"] + [f"share_{n}" for n in SEMANTIC] + [fe, "ticker", "segmento"] + list(ACTIVITY.values())
     else:
-        need = [y] + [c for c in FUNDAMENTALS if c != y] + [f"frames_per_1k{suffix}"] + [f"{c}{suffix}" for c in SEMANTIC.values()] + [fe, "ticker", "segmento"]
+        need = [y] + [c for c in FUNDAMENTALS if c != y] + [f"frames_per_1k{suffix}"] + [f"{c}{suffix}" for c in SEMANTIC.values()] + [fe, "ticker", "segmento"] + list(ACTIVITY.values())
     d = d.dropna(subset=need)
     d = d[d.groupby(fe)[y].transform("size") >= 2]
     out = {"n": int(len(d)), "n_firms": int(d["ticker"].nunique())}
     n_groups = int(d[fe].nunique())
-    for block in ("M0", "M1", "M2", "M3"):
+    for block in ("M0", "M1", "M2", "M3", "M2AB"):
         X, yy, _ = design(d, y, block, fe, suffix)
         out[f"r2_{block}"] = r2(X, yy)
         out[f"adj_r2_{block}"] = adj_r2(X, yy, n_groups)
@@ -239,6 +252,26 @@ def nested(d: pd.DataFrame, y: str, fe: str = "sector_year", suffix: str = "") -
     out["partial_r2_semantica"] = out["delta_r2_semantica"] / (1 - out["r2_M1"]) if out["r2_M1"] < 1 else np.nan
     out["delta_r2_volumen"] = out["r2_M1"] - out["r2_M0"]
     out["delta_r2_segmentos"] = out["r2_M3"] - out["r2_M1"]
+
+    # Washing (M4) sólo está definido en la submuestra con divulgación de IA
+    # (washing_z no-NaN): una empresa-año sin divulgación de IA no tiene una
+    # brecha divulgación-sustancia que preguntar. Se compara M4 contra M2AB
+    # en ESA submuestra (no en el panel extensivo de M0-M3), para que la
+    # comparación sea manzanas con manzanas.
+    dw = d.dropna(subset=["washing_z"])
+    dw = dw[dw.groupby(fe)[y].transform("size") >= 2]
+    out["n_washing"] = int(len(dw))
+    out["n_washing_firms"] = int(dw["ticker"].nunique())
+    if len(dw) > 20:
+        X_2ab, yy_w, _ = design(dw, y, "M2AB", fe, suffix)
+        X_4, _, _ = design(dw, y, "M4", fe, suffix)
+        out["r2_M2AB_washing_sample"] = r2(X_2ab, yy_w)
+        out["r2_M4"] = r2(X_4, yy_w)
+        out["delta_r2_washing"] = out["r2_M4"] - out["r2_M2AB_washing_sample"]
+    else:
+        out["r2_M2AB_washing_sample"] = np.nan
+        out["r2_M4"] = np.nan
+        out["delta_r2_washing"] = np.nan
     return out, d
 
 
@@ -295,13 +328,20 @@ def main() -> None:
         coefs = coefficients(d, y, "sector_year", "")
         wald = wald_semantic(d, y, "sector_year", "")
         perm = permutation_semantic(d, y, "sector_year", "", res["delta_r2_semantica"], args.permutations)
+        dw = d.dropna(subset=["washing_z"])
+        dw = dw[dw.groupby("sector_year")[y].transform("size") >= 2]
+        wald_washing = wald_block(dw, y, "M4", ["washing"], "sector_year") if len(dw) > 20 else {"F": float("nan"), "p": float("nan"), "df": 1}
         res.update(boot); res["coeficientes_M2"] = coefs; res["wald_semantica"] = wald; res["permutacion_semantica"] = perm
+        res["wald_washing"] = wald_washing
         ci = boot["delta_r2_ci95"]
         print(f"{label:26s} {res['n']:5d} {res['r2_M0']:6.3f} {res['r2_M1']:6.3f} {res['r2_M2']:6.3f} {res['r2_M3']:6.3f} "
               f"{res['delta_r2_semantica']:+8.4f} [{ci[0]:+.4f},{ci[1]:+.4f}] {res['delta_adj_r2_semantica']:+9.4f} "
               f"{res['partial_r2_semantica']:7.4f} {wald['F']:7.2f} {wald['p']:6.3f} {perm['p']:7.3f}")
         print(f"    R² ajustado M0/M1/M2/M3: {res['adj_r2_M0']:.3f} / {res['adj_r2_M1']:.3f} / {res['adj_r2_M2']:.3f} / {res['adj_r2_M3']:.3f} "
               f"| ΔR² volumen {res['delta_r2_volumen']:+.4f} | ΔR² segmentos {res['delta_r2_segmentos']:+.4f} | ΔR² nulo (perm) media {perm['null_mean']:+.4f}, p95 {perm['null_p95']:+.4f}")
+        print(f"    Y = Volume + content + behavior + Washing (M4, submuestra con divulgación de IA, n={res['n_washing']}): "
+              f"R²={res['r2_M4']:.3f} | ΔR² washing sobre volume+content+behavior = {res['delta_r2_washing']:+.4f} "
+              f"(Wald F={wald_washing['F']:.2f}, p={wald_washing['p']:.3f})")
         top = sorted(coefs.items(), key=lambda kv: -abs(kv[1]["beta_std"]))[:3]
         print("    " + " | ".join(f"{k}: {v['beta_std']:+.3f} (p={v['p']:.2f})" for k, v in top))
         report["outcomes"][label] = res
