@@ -95,30 +95,56 @@ universe. Stored separately, never merged, at
 `data/raw/xbrl_frames_alt/us_10q_frames.parquet`
 (`configs/us/config.yaml:storage.raw_xbrl_frames_alt`).
 
-Measured directly (2026-09-08) against the 517-ticker × 22-quarter
-(2021Q1–2026Q2, 11,374 possible firm-quarter cells) 10-Q panel:
+**Coverage bug found and fixed (2026-09-08):** an inline-XBRL fact keeps
+every duration context tagged in a filing under one concept, which mixes
+the single-quarter figure with YTD and full-year comparatives under the
+SAME tag (a 10-Q routinely tags both the 3-month and 6-month-YTD
+`Revenues` value). An initial coverage measurement that counted any
+duration fact landing in a calendar quarter as "covering" that quarter
+was therefore counting YTD/annual figures as quarterly ones, inflating
+apparent coverage (e.g. a bogus 91.8% for revenue). Restricting to
+duration facts spanning 75–100 days (one real fiscal quarter) before
+deduping gives the true figure — see
+`scripts/analytics/build_us_10q_financials_panel.py`.
 
-- Frames coverage is **worse**, not better, for every duration metric —
-  revenue 34.5% vs. 91.8% for the inline-XBRL extraction, capex 19.1% vs.
-  81.2%, cogs 13.0% vs. 56.8%. Reason: a frame only returns a value when a
-  filer's fiscal period exactly matches the calendar-quarter boundary
-  (`CY2024Q2`/`CY2024Q2I`) — any non-December fiscal-year-end filer is
-  silently absent from that quarter's frame, and duration facts (revenue,
-  capex, opex-style line items) need BOTH period bounds to match, which
-  filters out far more filers than the instant (balance-sheet) facts.
-- Instant/balance-sheet metrics degrade less (assets 94.6% vs. 94.0%,
-  current assets/liabilities ~80% either way) since only the period-end
-  date needs to align.
-- Used as a fallback/union source (fill an inline-XBRL gap with the frame
-  value when the inline extraction has nothing for that firm-quarter),
-  frames adds only 0.1–1.0 percentage points of coverage per metric — not
-  a meaningful improvement.
+True coverage against the 517-ticker × 22-quarter (2021Q1–2026Q2, 11,374
+possible firm-quarter cells) 10-Q panel, inline-XBRL only vs. combined
+with the frames fallback:
 
-Conclusion: the per-filing inline-XBRL extraction is already the
-higher-coverage source for this panel precisely because it follows each
-firm's own fiscal calendar instead of forcing a calendar-quarter grid.
-Frames data is kept as a documented alternative for cross-checking values,
-not as a coverage fix.
+| metric | inline-only | combined (+ frames) | gain |
+|---|---|---|---|
+| rd_expense | 20.8% | 22.4% | +1.6pp |
+| capex | 25.8% | 28.4% | +2.6pp |
+| cogs | 44.2% | 44.8% | +0.7pp |
+| sga_expense | 57.8% | 60.1% | +2.3pp |
+| operating_income | 58.2% | 61.3% | +3.0pp |
+| debt | 61.1% | 61.8% | +0.8pp |
+| revenue | 72.6% | 73.7% | +1.0pp |
+| eps_diluted | 72.5% | 75.8% | +3.2pp |
+| net_income | 74.3% | 77.3% | +3.1pp |
+| current_assets / current_liabilities | 79.2% | 80.1% | +1.0pp |
+| assets | 94.0% | 95.0% | +1.0pp |
+| equity | 94.6% | 95.5% | +0.9pp |
+
+Frames alone (not as a fallback) are still worse than inline-XBRL for
+every duration metric — a frame only returns a value when a filer's
+fiscal period exactly matches the calendar-quarter boundary
+(`CY2024Q2`/`CY2024Q2I`), silently dropping every non-December
+fiscal-year-end filer for that quarter. Used as a gap-filler instead
+(only where inline-XBRL has nothing for that firm-quarter), it adds a
+real, if modest, 0.7–3.2pp per metric.
+
+`rd_expense` and `capex` remain genuinely low-coverage (~20-28%) even
+combined — most filers simply don't break those out as a distinct
+line item every quarter, which no additional XBRL source fixes; a
+tighter tag-fallback list or industry-conditional imputation would be
+the next lever, not another data source.
+
+Consolidated panel (one row per ticker/year/quarter/metric, `source`
+column tracing inline_xbrl vs. frames_fallback, `source_ref` the
+accession number/filing) is built by
+`scripts/analytics/build_us_10q_financials_panel.py` into
+`data/processed/us_10q_financials_panel.parquet`.
 
 ## Actual run results (2026-09-03)
 
