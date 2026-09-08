@@ -4,10 +4,13 @@ panel for the 10-Q shock series, combining two US XBRL sources:
 
 1. Inline-XBRL per-filing facts (data/raw/xbrl_facts/us_by_filing/,
    scripts/us/04_extract_inline_xbrl_facts.py) — primary source, one value
-   per (ticker, calendar quarter), most-recently-filed value wins.
+   per (ticker, calendar quarter), EARLIEST-filed value wins (as-of safe:
+   see `first_disclosed()`).
 2. SEC XBRL frames (data/raw/xbrl_frames_alt/us_10q_frames.parquet,
    scripts/us/05_fetch_xbrl_frames_alt.py) — fallback ONLY for
-   (ticker, quarter) cells the inline-XBRL source has no value for.
+   (ticker, quarter) cells the inline-XBRL source has no value for, and
+   only rows filed within a normal quarterly-filing window (see the
+   frames as-of leak fix below).
 
 Coverage bug fixed here (2026-09-08): the inline-XBRL extractor keeps every
 duration fact tagged in a filing, which includes YTD and full-year
@@ -35,9 +38,17 @@ double-digit gains to operating_income, sga_expense and cogs too.
 also never disclose an R&D breakout in the YTD cash-flow/income statement
 either, so there is nothing to difference.
 
-The frames fallback recovers a further ~1pp per metric on top of that —
-real but marginal next to the two fixes above; inline-XBRL stays the
-primary source.
+Fourth fix, same day, different failure mode: the frames fallback itself
+wasn't as-of safe. SEC's frames API returns whatever value it currently
+has cached for (tag, entity, period) - frequently a LATER filing's
+comparative, not the period's own original disclosure. Joined against
+filing_manifest: 54% of frames rows have a filing lag over 120 days past
+period_end (median 387 days), versus the ~30-45 days a 10-Q actually has
+to file. Now filtered to a 0-120-day lag before use, which shrank the
+frames contribution from 0.7-3.2pp to 0.0-0.8pp per metric - most of what
+it used to add was leaked future information, not genuine coverage.
+inline-XBRL stays the primary source; frames is a small, now-safe
+top-up.
 
 Output: one row per (ticker, year, quarter, metric), with `source`
 (inline_xbrl | frames_fallback) and `source_ref` (accession number)
@@ -50,6 +61,7 @@ Usage:
 import glob
 from pathlib import Path
 
+import duckdb
 import pandas as pd
 import yaml
 
@@ -188,9 +200,30 @@ def main():
     base = pd.concat([base[~base["has_dimensions"]].assign(is_dimensional=False),
                        dimensional_singletons(base[base["has_dimensions"]])], ignore_index=True)
 
+    # SEC's frames API returns whatever value it currently has cached for
+    # (tag, entity, period) - which is frequently a LATER filing's
+    # comparative, not the period's own original disclosure: joined against
+    # filing_manifest, 54% of frames rows have a filing lag over 120 days
+    # past period_end (median 387 days) versus the ~30-45 days a 10-Q
+    # actually has to file. Keeping those would reintroduce exactly the
+    # restatement leakage the rest of this script exists to avoid, for a
+    # fallback source that only ever contributes ~1pp of coverage. Only
+    # frames rows filed within a normal quarterly-filing window are kept.
+    con = duckdb.connect("duckdb/thesis.duckdb", read_only=True)
+    manifest = con.execute("""
+        SELECT accession_number, filing_date FROM filing_manifest
+        UNION ALL
+        SELECT accession_number, filing_date FROM filing_manifest_10q
+    """).fetchdf()
+    con.close()
     frames = pd.read_parquet(f"{config['storage']['raw_xbrl_frames_alt']}/us_10q_frames.parquet")
     frames["cal_q"] = frames["year"] * 10 + frames["quarter"]
     frames = frames[frames["cal_q"].between(cal_q_min, cal_q_max)]
+    frames = frames.merge(manifest.drop_duplicates("accession_number"), on="accession_number", how="left")
+    frames["period_end"] = pd.to_datetime(frames["period_end"])
+    frames["filing_date"] = pd.to_datetime(frames["filing_date"])
+    lag_days = (frames["filing_date"] - frames["period_end"]).dt.days
+    frames = frames[lag_days.between(0, 120)]
 
     duration_tags = sorted({t for m, tags in TAGS.items() if m not in INSTANT for t in tags})
     dq = discrete_quarters(base[base["concept"].isin(duration_tags) & base["start"].notna()])

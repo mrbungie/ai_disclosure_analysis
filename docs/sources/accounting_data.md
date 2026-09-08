@@ -278,22 +278,22 @@ it only ever fills a genuine gap.
 
 True coverage against the 517-ticker × 23-quarter (2021Q1–2026Q3, 11,891
 possible firm-quarter cells) 10-Q panel, inline-XBRL only vs. combined
-with the frames fallback, after all three fixes:
+with the as-of-filtered frames fallback (see below), after all fixes:
 
 | metric | inline-only | combined (+ frames) | gain |
 |---|---|---|---|
-| rd_expense | 30.4% | 30.8% | +0.4pp |
-| cogs | 55.5% | 55.7% | +0.2pp |
-| operating_income | 71.1% | 72.1% | +1.0pp |
-| sga_expense | 72.0% | 72.9% | +0.9pp |
-| debt | 77.6% | 78.3% | +0.7pp |
-| capex | 79.8% | 80.5% | +0.7pp |
-| revenue | 87.6% | 87.9% | +0.3pp |
-| eps_diluted | 87.8% | 88.8% | +1.0pp |
-| net_income | 89.6% | 90.6% | +1.0pp |
-| assets | 90.3% | 91.3% | +0.9pp |
-| equity | 90.9% | 91.7% | +0.9pp |
-| current_assets / current_liabilities | 76.1% | 77.0% | +0.9pp |
+| rd_expense | 30.4% | 30.4% | +0.1pp |
+| cogs | 55.5% | 55.6% | +0.0pp |
+| operating_income | 71.1% | 71.3% | +0.1pp |
+| sga_expense | 72.0% | 72.1% | +0.1pp |
+| capex | 79.8% | 79.9% | +0.1pp |
+| debt | 77.6% | 78.2% | +0.5pp |
+| eps_diluted | 87.8% | 87.9% | +0.2pp |
+| revenue | 87.6% | 87.7% | +0.0pp |
+| net_income | 89.6% | 89.8% | +0.1pp |
+| equity | 90.9% | 91.3% | +0.5pp |
+| assets | 90.3% | 91.1% | +0.7pp |
+| current_assets / current_liabilities | 76.1% | 76.9% | +0.8pp |
 
 (`capex` and `eps_diluted` tag chains widened 2026-09-08 — see the 10-K
 section above for the fallback-tag detail, ported here identically.)
@@ -363,8 +363,24 @@ every duration metric — a frame only returns a value when a filer's
 fiscal period exactly matches the calendar-quarter boundary
 (`CY2024Q2`/`CY2024Q2I`), silently dropping every non-December
 fiscal-year-end filer for that quarter. Used as a gap-filler instead
-(only where inline-XBRL has nothing for that firm-quarter), it adds a
-real, if modest, 0.7–3.2pp per metric.
+(only where inline-XBRL has nothing for that firm-quarter), it originally
+added 0.7–3.2pp per metric.
+
+**Frames as-of leak, found and fixed (2026-09-08).** The SEC frames API
+doesn't return "the value as originally disclosed" — it returns whatever
+value SEC's system currently has cached for that (tag, entity, period),
+which is very often a LATER filing's comparative. Joined against
+`filing_manifest`/`filing_manifest_10q` to get each frame row's actual
+filing_date: 54% of frames rows have a filing lag over 120 days past
+`period_end` (median 387 days), against the ~30-45 days a 10-Q actually
+has to file. Using those unfiltered would have reintroduced exactly the
+restatement leakage the rest of this panel exists to avoid — in the
+fallback source, no less, the one part of the panel that hadn't been
+checked for it. `build_us_10q_financials_panel.py` now keeps only frames
+rows with a 0-120-day filing lag before using them as a gap-filler. The
+frames contribution shrank accordingly, from 0.7-3.2pp to 0.0-0.8pp per
+metric (table above) — most of what frames used to add was itself
+leaked future information, not genuine extra coverage.
 
 Consolidated panel (one row per ticker/year/quarter/metric, `source`
 column tracing inline_xbrl vs. frames_fallback, `source_ref` the
