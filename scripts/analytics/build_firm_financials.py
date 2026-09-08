@@ -219,11 +219,12 @@ def load_facts(con: duckdb.DuckDBPyConnection, glob: Path) -> pd.DataFrame:
     bulk pull, no por filing), así que caen de vuelta a la mediana."""
     columns = {row[0] for row in con.execute(
         f"DESCRIBE SELECT * FROM read_parquet('{glob}', union_by_name=True) LIMIT 0").fetchall()}
-    dims_filter = "AND has_dimensions IS NOT TRUE" if "has_dimensions" in columns else ""
+    has_dims_col = "has_dimensions" in columns
+    dims_filter = "AND has_dimensions IS NOT TRUE" if has_dims_col else ""
     if "filing_date" in columns:
         facts = con.execute(f"""
             SELECT ticker, concept, period_type, period_start, period_end, numeric_value AS value,
-                   filing_date
+                   filing_date, FALSE AS is_dimensional
             FROM (
                 SELECT ticker, concept, period_type, period_start, period_end, numeric_value, filing_date,
                        ROW_NUMBER() OVER (
@@ -234,10 +235,12 @@ def load_facts(con: duckdb.DuckDBPyConnection, glob: Path) -> pd.DataFrame:
             )
             WHERE rn = 1
         """).fetchdf()
+        if has_dims_col:
+            facts = pd.concat([facts, _load_dimensional_singletons(con, glob)], ignore_index=True)
     else:
         facts = con.execute(f"""
             SELECT ticker, concept, period_type, period_start, period_end,
-                   median(numeric_value) AS value, NULL AS filing_date
+                   median(numeric_value) AS value, NULL AS filing_date, FALSE AS is_dimensional
             FROM read_parquet('{glob}', union_by_name=True)
             WHERE numeric_value IS NOT NULL AND ticker IS NOT NULL {dims_filter}
             GROUP BY 1, 2, 3, 4, 5
@@ -249,6 +252,38 @@ def load_facts(con: duckdb.DuckDBPyConnection, glob: Path) -> pd.DataFrame:
     facts["period_start"] = pd.to_datetime(facts["period_start"], errors="coerce")
     facts["period_end"] = pd.to_datetime(facts["period_end"], errors="coerce")
     return facts
+
+
+def _load_dimensional_singletons(con: duckdb.DuckDBPyConnection, glob: Path) -> pd.DataFrame:
+    """Last-resort fallback for (ticker, concept, period) cells where NO
+    non-dimensional fact exists at all, but every dimensional context
+    tagged for that cell agrees on one value.
+
+    Some filers (GM, General Dynamics, Sherwin-Williams, ...) tag a metric
+    with exactly one dimensional member every period — not a true segment
+    breakdown needing summation, just the whole-company figure filed under
+    a dimensional context (verified against GM's R&D: $9.8B FY2022,
+    $9.9B FY2023, matching its actual reported figures). Requiring a
+    SINGLE distinct value across all contexts for that cell is what makes
+    this safe to use automatically: a real multi-segment breakdown (2+
+    different values) is left NULL rather than guessed at by picking or
+    summing arbitrarily. `pivot_metrics()` only reaches for this after
+    every non-dimensional concept in the fallback chain has nothing —
+    see `is_dimensional` there."""
+    return con.execute(f"""
+        SELECT ticker, concept, period_type, period_start, period_end, value, filing_date, TRUE AS is_dimensional
+        FROM (
+            SELECT ticker, concept, period_type, period_start, period_end, numeric_value AS value, filing_date,
+                   count(DISTINCT numeric_value) OVER (
+                       PARTITION BY ticker, concept, period_type, period_start, period_end) AS n_distinct,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY ticker, concept, period_type, period_start, period_end
+                       ORDER BY filing_date ASC) AS rn
+            FROM read_parquet('{glob}', union_by_name=True)
+            WHERE numeric_value IS NOT NULL AND ticker IS NOT NULL AND has_dimensions
+        )
+        WHERE rn = 1 AND n_distinct = 1
+    """).fetchdf()
 
 
 def pivot_metrics(facts: pd.DataFrame, metrics: dict[str, list[str]],
@@ -267,13 +302,18 @@ def pivot_metrics(facts: pd.DataFrame, metrics: dict[str, list[str]],
     arriba en la cadena) y arrastrado esa reexpresión aunque sea posterior
     al trimestre por más de un año — exactamente la fuga que este panel
     existe para evitar. Fecha-primero mantiene el valor que efectivamente
-    se conocía en 2022."""
+    se conocía en 2022.
+
+    `is_dimensional` va PRIMERO en el desempate, antes que fecha: un hecho
+    dimensional de valor único (ver `_load_dimensional_singletons`) sólo
+    se usa cuando NINGÚN concepto no-dimensional tiene dato para esa celda,
+    sin importar qué tan reciente sea — nunca reemplaza un total real."""
     priority = _concept_priority(metrics)
     df = facts[facts["period_type"] == period_type].merge(priority, on="concept")
     if period_type == "duration":
         days = (df["period_end"] - df["period_start"]).dt.days
         df = df[(days >= ANNUAL_MIN_DAYS) & (days <= ANNUAL_MAX_DAYS)]
-    df = (df.sort_values(["ticker", "period_end", "metric", "filing_date", "priority"])
+    df = (df.sort_values(["ticker", "period_end", "metric", "is_dimensional", "filing_date", "priority"])
             .drop_duplicates(["ticker", "period_end", "metric"], keep="first"))
     wide = df.pivot_table(index=["ticker", "period_end"], columns="metric",
                           values="value", aggfunc="first").reset_index()

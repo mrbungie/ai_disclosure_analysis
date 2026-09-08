@@ -50,19 +50,26 @@ python scripts/analytics/<script>.py` o, para el bloque financiero,
    alimenta joins as-of, así que el valor de un período tiene que ser el
    que ese filing efectivamente reveló, nunca uno corregido después.
    Validado sumando ingresos trimestrales contra el ingreso anual
-   independiente: 99.1% dentro de 1% para empresas de año fiscal
-   calendario (n=1.620).
+   independiente: 98.7% dentro de 1% para empresas de año fiscal
+   calendario (n=1.626). (c) fallback de "singleton dimensional": un
+   emisor que taggea una métrica con UN solo miembro dimensional cada
+   período (no un desglose real por segmento) se recupera; una celda con
+   2+ valores dimensionales DISTINTOS (desglose real) se deja NULL en vez
+   de adivinar — verificado con el R&D de GM ($9.8B FY2022, $9.9B FY2023,
+   coincide con lo reportado) vs. el `cost_of_revenue` de AEP/AMT/APA/ATVI
+   (4-17 valores dimensionales distintos por período, desgloses reales por
+   segmento/tipo de costo, correctamente no rellenados).
 
-   Cobertura resultante (503 tickers, 2.862 filas 10-K alineadas): revenue
+   Cobertura resultante (504 tickers, 2.868 filas 10-K alineadas): revenue
    98%, net_income 99.7%, total_assets/equity/shares_out 100%, capex 87%,
-   SG&A 80%, operating_income 80%, long_term_debt 88% (subió de 84% al
+   SG&A 81%, operating_income 80%, long_term_debt 90% (subió de 84% al
    agregar `LongTermDebtAndCapitalLeaseObligations`/`NotesPayable` a la
-   cadena), current_assets/current_liabilities 85%, debt_to_equity 82%,
-   cost_of_revenue 60%, rd_expense 45%. `shares_out` llegó a 100% sumando
-   los hechos dimensionales por clase de acción para emisores de doble
-   clase (GOOGL, META, BRK.B, ...) que sólo taggean `EntityCommonStockSharesOutstanding`
-   por clase, no como total consolidado (`docs/sources/accounting_data.md`).
-   `rd_expense` y
+   cadena y el fallback dimensional), current_assets/current_liabilities
+   85%, debt_to_equity 84%, cost_of_revenue 62%, rd_expense 46%.
+   `shares_out` llegó a 100% sumando los hechos dimensionales por clase de
+   acción para emisores de doble clase (GOOGL, META, BRK.B, ...) que sólo
+   taggean `EntityCommonStockSharesOutstanding` por clase, no como total
+   consolidado (`docs/sources/accounting_data.md`). `rd_expense` y
    `cost_of_revenue` quedan bajos genuinamente por sector (utilities,
    aseguradoras, aerolíneas, REITs no taggean una línea de I+D o de costo
    de ventas), no por una cadena de fallback incompleta. `debt_to_equity`

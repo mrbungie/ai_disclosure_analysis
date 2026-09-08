@@ -104,40 +104,57 @@ independently-built annual revenue (10-K panel) for every ticker-year
 where all 4 quarters came from inline-XBRL. Restricted to calendar-fiscal-
 year firms (non-calendar firms, e.g. NVDA/ORCL/GIS, fail this check
 trivially because "calendar year" quarter grouping doesn't match their
-own fiscal year — a limitation of the check, not the panels): **99.1%
-within 1% of the annual figure, 99.4% within 5%**, n=1,620. The handful of
+own fiscal year — a limitation of the check, not the panels): **98.7%
+within 1% of the annual figure, 99.0% within 5%**, n=1,626 (remeasured
+after adding the dimensional-singleton fallback below; the small drop
+from 99.1%/99.4% is expected — a few newly-filled cells come from a
+noisier, last-resort source, still net positive since coverage rose too).
+The handful of
 remaining outliers (BlackRock, Iron Mountain, Northern Trust) are
 financial institutions/REITs whose own XBRL tagging inconsistently
 switches concept scope across periods within the same fiscal year — a
 data-quality property of those specific filings, not a pipeline defect.
 
-Net coverage effect of all four 10-K-panel fixes together (dimensional
-filter + debt fallback + as-of resolution + priority-tiebreak fix),
-503 tickers, 2,862 aligned 10-K rows: `revenue` 98%, `net_income` 99.7%,
-`total_assets`/`equity` 100%, `shares_out` 100%, `capex` 87%,
-`sga_expense` 80%, `operating_income` 80%, `long_term_debt` 88%,
-`current_assets`/`current_liabilities` 85%, `debt_to_equity` 82%,
-`cost_of_revenue` 60%, `rd_expense` 45%. The lower-coverage metrics are
-sector-driven, not tag gaps — confirmed the same way as the 10-Q section
-below: checking what concepts the "missing" tickers actually use instead
-turns up pension/lease/treasury-cost tags for `rd_expense`, nothing
-revenue- or R&D-shaped.
+Net coverage effect of all 10-K-panel fixes together (dimensional filter
++ dimensional-singleton fallback + dual-class shares + debt fallback +
+as-of resolution + priority-tiebreak fix), 504 tickers, 2,868 aligned
+10-K rows: `revenue` 98%, `net_income` 99.7%, `total_assets`/`equity`/
+`shares_out` 100%, `capex` 87%, `sga_expense` 81%, `operating_income`
+80%, `long_term_debt` 90%, `current_assets`/`current_liabilities` 85%,
+`debt_to_equity` 84%, `cost_of_revenue` 62%, `rd_expense` 46%.
 
-`shares_out` (`dei:EntityCommonStockSharesOutstanding`) needed one more
-fix on top of the dimensional filter, not just the filter itself:
-multi-class-stock filers (GOOGL, META, BRK.B, F, CMCSA, and 36 others —
-40 of 510 tickers) tag shares outstanding ONLY per share class, as
-dimensional facts, with no non-dimensional total at all — so excluding
-`has_dimensions` correctly protected revenue/etc. from segment
-contamination but left these 40 tickers with zero shares_out.
-`load_dual_class_shares()` in `build_firm_financials.py` sums the
-per-class dimensional facts within each filing (never across filings, so
-a share count never mixes with a stale prior filing's class figure),
-resolved to the earliest filing_date per period like everything else.
-Verified against GOOGL: exactly 3 dimensional contexts per filing (its 3
-share classes), summing to ~665M pre-split (2021-2022) and ~12.6B
-post-20:1-split (mid-2022 on) — both match GOOGL's actual known share
-counts. Took `shares_out` from 91%→100%.
+`shares_out` needed one more fix on top of the dimensional filter, not
+just the filter itself: multi-class-stock filers (GOOGL, META, BRK.B, F,
+CMCSA, and 36 others — 40 of 510 tickers) tag shares outstanding ONLY per
+share class, as dimensional facts, with no non-dimensional total at all —
+so excluding `has_dimensions` correctly protected revenue/etc. from
+segment contamination but left these 40 tickers with zero shares_out.
+`load_dual_class_shares()` sums the per-class dimensional facts within
+each filing (never across filings), resolved to the earliest filing_date
+per period like everything else. Verified against GOOGL: exactly 3
+dimensional contexts per filing (its 3 share classes), summing to ~665M
+pre-split (2021-2022) and ~12.6B post-20:1-split (mid-2022 on) — both
+match GOOGL's actual known share counts. Took `shares_out` from
+91%→100%.
+
+**Dimensional-singleton fallback (2026-09-08), applied to every metric,
+not just shares_out.** GM, General Dynamics, Sherwin-Williams and 3
+others tag `rd_expense` with exactly ONE dimensional member every period
+— not a segment breakdown needing summation, just the whole-company
+figure filed under a dimensional context (GM's tagged R&D matches its
+actual reported figures: $9.8B FY2022, $9.9B FY2023). `_load_dimensional_singletons()`
+recovers any (ticker, concept, period) cell where every dimensional fact
+agrees on a single value, ranked strictly BELOW every non-dimensional
+concept in the fallback chain (see `is_dimensional` in `pivot_metrics`) —
+a cell with 2+ DIFFERENT dimensional values (a genuine multi-segment
+split, checked directly: AEP/AMT/APA/ATVI's `cost_of_revenue` has 4-17
+distinct dimensional values per period, real segment/cost-type
+breakdowns) is left NULL rather than guessed at. Lifted `long_term_debt`
+88%→90%, `cost_of_revenue` 60%→62%, `sga_expense` 80%→81%, `rd_expense`
+45%→46% — small because most of the remaining gap in each is a genuine
+either-doesn't-disclose or discloses-only-as-a-real-multi-way-breakdown
+case, not a single mislabeled total. The same fallback was ported to the
+10-Q panel (below) for consistency.
 
 ## Chile — `scripts/cl/04_fetch_accounting_data.py`
 
@@ -232,21 +249,30 @@ its known quarterly figures and matched (e.g. FY2020: Q2 $1.85B, Q3
 $1.57B, Q4 $1.78B — all economically plausible for Apple's capex run-rate
 in that period).
 
+**Coverage bug #3 (2026-09-08): dimensional-singleton fallback, ported
+from the 10-K panel.** Same fix as `_load_dimensional_singletons()` there
+— a filer that tags a metric with exactly ONE dimensional member every
+period (not a real segment split) is recovered; a cell with 2+ different
+dimensional values is left NULL. Ranked strictly below any
+non-dimensional concept, at every dedup step (`is_dimensional` sorts
+before `filing_date` throughout `build_us_10q_financials_panel.py`), so
+it only ever fills a genuine gap.
+
 True coverage against the 517-ticker × 23-quarter (2021Q1–2026Q3, 11,891
 possible firm-quarter cells) 10-Q panel, inline-XBRL only vs. combined
-with the frames fallback, after both fixes:
+with the frames fallback, after all three fixes:
 
 | metric | inline-only | combined (+ frames) | gain |
 |---|---|---|---|
-| rd_expense | 30.2% | 30.6% | +0.4pp |
-| cogs | 54.0% | 54.1% | +0.1pp |
-| operating_income | 70.9% | 71.8% | +0.9pp |
-| sga_expense | 71.3% | 72.2% | +0.9pp |
-| capex | 76.3% | 77.0% | +0.7pp |
+| rd_expense | 30.4% | 30.8% | +0.4pp |
+| cogs | 55.5% | 55.7% | +0.2pp |
+| operating_income | 71.1% | 72.1% | +1.0pp |
+| sga_expense | 72.0% | 72.9% | +0.9pp |
+| capex | 76.6% | 77.4% | +0.8pp |
 | debt | 77.6% | 78.3% | +0.7pp |
-| revenue | 87.4% | 87.7% | +0.3pp |
-| eps_diluted | 87.3% | 88.3% | +1.0pp |
-| net_income | 89.5% | 90.4% | +0.9pp |
+| revenue | 87.6% | 87.9% | +0.3pp |
+| eps_diluted | 87.7% | 88.7% | +1.0pp |
+| net_income | 89.6% | 90.6% | +1.0pp |
 | assets | 90.3% | 91.3% | +0.9pp |
 | equity | 90.9% | 91.7% | +0.9pp |
 | current_assets / current_liabilities | 76.1% | 77.0% | +0.9pp |

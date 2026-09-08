@@ -79,6 +79,24 @@ INSTANT = {"assets", "current_assets", "current_liabilities", "equity", "debt"}
 ALL_TAGS = sorted({t for v in TAGS.values() for t in v})
 
 
+def dimensional_singletons(dim_facts: pd.DataFrame) -> pd.DataFrame:
+    """Last-resort candidates from dimensional contexts: kept ONLY where
+    every dimensional fact for a (ticker, concept, start, end) cell agrees
+    on one value — not a true multi-segment breakdown needing summation,
+    just the whole-company figure filed under a dimensional context.
+    Verified against GM's R&D expense (tagged with one dimensional member
+    every period, matching GM's actual reported R&D: $9.8B FY2022, $9.9B
+    FY2023). A cell with 2+ DIFFERENT dimensional values (a real segment
+    split) is dropped rather than guessed at. Marked `is_dimensional=True`
+    so it never outranks a non-dimensional fact for the same cell — see
+    the priority sort in `main()`."""
+    if dim_facts.empty:
+        return dim_facts.assign(is_dimensional=True)
+    keys = ["ticker", "concept", "start", "end"]
+    single = dim_facts.groupby(keys)["numeric_value"].transform("nunique") == 1
+    return dim_facts[single].assign(is_dimensional=True)
+
+
 def first_disclosed(facts: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
     """Collapse repeated (keys) observations across filings to the value
     from the EARLIEST filing_date — not the most recent, not the median.
@@ -94,9 +112,14 @@ def first_disclosed(facts: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
     favor the original figure. "Earliest filing" is right regardless of
     the vote count, because it is the only rule that never looks at a
     filing later than the one whose value is being resolved.
+
+    `is_dimensional` sorts first when present: a dimensional-singleton
+    fallback (see `dimensional_singletons`) never outranks a real
+    non-dimensional fact for the same cell, no matter which is older.
     """
+    tiebreak = (["is_dimensional"] if "is_dimensional" in facts.columns else []) + ["filing_date"]
     return (facts
-            .sort_values(keys + ["filing_date"])
+            .sort_values(keys + tiebreak)
             .drop_duplicates(keys, keep="first"))
 
 
@@ -124,10 +147,17 @@ def discrete_quarters(duration_facts: pd.DataFrame) -> pd.DataFrame:
                 continue
             value = group.loc[i, "numeric_value"] if i == 0 else (
                 group.loc[i, "numeric_value"] - group.loc[i - 1, "numeric_value"])
+            # A quarter derived by differencing a dimensional-singleton
+            # endpoint (either side) is itself marked dimensional, so it
+            # still loses a cross-concept priority tie to a fully
+            # non-dimensional quarter.
+            is_dim = bool(group.loc[i, "is_dimensional"]) or (
+                i > 0 and bool(group.loc[i - 1, "is_dimensional"]))
             out.append((ticker, concept, group.loc[i, "end"], value,
-                        group.loc[i, "accession_number"], group.loc[i, "filing_date"]))
+                        group.loc[i, "accession_number"], group.loc[i, "filing_date"], is_dim))
     return pd.DataFrame(
-        out, columns=["ticker", "concept", "end", "numeric_value", "accession_number", "filing_date"])
+        out, columns=["ticker", "concept", "end", "numeric_value", "accession_number", "filing_date",
+                       "is_dimensional"])
 
 
 def main():
@@ -144,7 +174,7 @@ def main():
     for f in files:
         d = pd.read_parquet(f, columns=["ticker", "accession_number", "filing_date", "has_dimensions",
                                          "concept", "numeric_value", "period_start", "period_end"])
-        d = d[(~d["has_dimensions"]) & (d["concept"].isin(ALL_TAGS))]
+        d = d[d["concept"].isin(ALL_TAGS)]
         if len(d):
             chunks.append(d)
     base = pd.concat(chunks, ignore_index=True)
@@ -154,6 +184,8 @@ def main():
     base["cal_q"] = base["end"].dt.year * 10 + base["end"].dt.quarter
     base = base[base["cal_q"].between(cal_q_min, cal_q_max)]
     base["filing_date"] = pd.to_datetime(base["filing_date"])
+    base = pd.concat([base[~base["has_dimensions"]].assign(is_dimensional=False),
+                       dimensional_singletons(base[base["has_dimensions"]])], ignore_index=True)
 
     frames = pd.read_parquet(f"{config['storage']['raw_xbrl_frames_alt']}/us_10q_frames.parquet")
     frames["cal_q"] = frames["year"] * 10 + frames["quarter"]
@@ -194,10 +226,14 @@ def main():
         #     pulled in that later restatement even though it postdates
         #     the quarter by over a year. Date-first correctly keeps the
         #     $497M value that was actually knowable in 2022.
+        # `is_dimensional` sorts before filing_date here too: a
+        # dimensional-singleton fallback (see `dimensional_singletons`)
+        # never outranks a real non-dimensional value from a DIFFERENT
+        # concept just because it happens to have an earlier date.
         priority = {concept: rank for rank, concept in enumerate(tags)}
         sub["priority"] = sub["concept"].map(priority)
         sub = first_disclosed(sub, ["ticker", "concept", "cal_q"])
-        sub = (sub.sort_values(["ticker", "cal_q", "filing_date", "priority"])
+        sub = (sub.sort_values(["ticker", "cal_q", "is_dimensional", "filing_date", "priority"])
                   .drop_duplicates(["ticker", "cal_q"], keep="first"))
         sub = sub[["ticker", "cal_q", "numeric_value", "accession_number"]].rename(
             columns={"numeric_value": "value", "accession_number": "source_ref"})
