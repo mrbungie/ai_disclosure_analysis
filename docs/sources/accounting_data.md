@@ -114,10 +114,33 @@ one-off $18M dimensional tag was the case that caught this) recovered
 precision while the bank `revenue` fix (above) fixed the single largest
 source of remaining error and grew n by recovering previously-NULL bank
 quarters. The remaining outliers (BlackRock, Iron Mountain, Pfizer,
-Berkshire Hathaway) are large, diversified filers whose own XBRL tagging
-inconsistently switches concept scope across periods or business
-segments — a data-quality property of those specific filings, not a
-pipeline defect.
+Berkshire Hathaway, General Mills) are large, diversified filers whose
+own XBRL tagging inconsistently switches concept scope across periods or
+business segments — a data-quality property of those specific filings,
+not a pipeline defect.
+
+**Tried and REJECTED (2026-09-08): "larger value wins" as the same-date
+revenue tie-break.** General Mills tags `us-gaap:Revenues` (priority 0,
+the highest) as a ~$2.19B subtotal in the SAME filing where
+`RevenueFromContractWithCustomerExcludingAssessedTax` (priority 1) is the
+real ~$18.1B total — the OPPOSITE of Capital One, where `Revenues`
+correctly IS the total. No fixed priority order serves both. "The total
+is always >= any subset" looked like the fix — a direct sweep found 168
+same-date multi-concept revenue cells with >1.5x discrepancy, mostly
+REITs with a tiny ancillary line under the same concept name, which this
+rule would have correctly ignored. Implemented, then reverted after
+checking its effect: it fixed GIS but broke Mastercard (its
+`RevenueFromContract...ExcludingAssessedTax` tag is internally
+inconsistent — 9-month YTD alone EXCEEDS the real full-year total — while
+`Revenues` telescopes exactly: $5.17B+$5.50B+$5.76B+$5.82B=$22.24B) and
+Philip Morris (`IncludingAssessedTax` reads ~2x larger from tobacco
+excise-tax pass-through, not from being more complete). Net effect on the
+reconciliation check was NEGATIVE (99.0%→97.7% within 1%). "Larger" isn't
+a safe universal proxy for "more complete" — it conflates a genuine
+subset-vs-total relationship with unrelated reasons a duplicate tag can
+be inflated (gross-of-tax presentation, a broken filer tag). GIS's
+revenue understatement stays an accepted, documented residual gap rather
+than a heuristic that trades one ticker's fix for other tickers' errors.
 
 **`capex`/`eps_diluted` fallback chains widened (2026-09-08), same
 audit method as everything else — check what the missing tickers

@@ -384,7 +384,22 @@ def pivot_metrics(facts: pd.DataFrame, metrics: dict[str, list[str]],
     `is_dimensional` va PRIMERO en el desempate, antes que fecha: un hecho
     dimensional de valor único (ver `_load_dimensional_singletons`) sólo
     se usa cuando NINGÚN concepto no-dimensional tiene dato para esa celda,
-    sin importar qué tan reciente sea — nunca reemplaza un total real."""
+    sin importar qué tan reciente sea — nunca reemplaza un total real.
+
+    Probado y DESCARTADO (2026-09-08): "el valor más grande gana" como
+    desempate de mismo día para `revenue`. Arreglaba General Mills
+    (`Revenues` taggeado como subtotal de ~$2.19B en el mismo filing
+    donde `RevenueFromContractWithCustomerExcludingAssessedTax` es el
+    total real de ~$18.1B) pero rompía Mastercard (su tag
+    `RevenueFromContract...ExcludingAssessedTax` es internamente
+    inconsistente — el acumulado a 9 meses SUPERA el total anual real —
+    mientras `Revenues` telescopa exacto al FY: $5.17B+$5.50B+$5.76B+
+    $5.82B=$22.24B) y Philip Morris (`IncludingAssessedTax` es ~2x más
+    grande por impuestos al tabaco de traspaso, no por ser "más completo").
+    El efecto neto sobre la reconciliación trimestral-vs-anual fue
+    NEGATIVO (99.0%→97.7% dentro de 1%). GIS queda como brecha residual
+    conocida y aceptada en vez de una heurística que rompe otros
+    tickers para arreglarlo — ver `docs/sources/accounting_data.md`."""
     priority = _concept_priority(metrics)
     df = facts[facts["period_type"] == period_type].merge(priority, on="concept")
     if period_type == "duration":

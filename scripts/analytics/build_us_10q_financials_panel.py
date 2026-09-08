@@ -303,6 +303,20 @@ def main():
         # dimensional-singleton fallback (see `dimensional_singletons`)
         # never outranks a real non-dimensional value from a DIFFERENT
         # concept just because it happens to have an earlier date.
+        #
+        # Tried and REVERTED (2026-09-08): "larger value wins" as the
+        # same-date tie-break for revenue. Fixed General Mills (Revenues
+        # tagged as a $2.19B subtotal vs the real $18.1B total under
+        # RevenueFromContract...) but broke Mastercard: its RevenueFrom
+        # Contract...ExcludingAssessedTax tag is internally inconsistent
+        # (Q3 YTD alone EXCEEDS the actual full-year total) while its
+        # Revenues tag telescopes exactly to the FY figure
+        # ($5.17B+$5.50B+$5.76B+$5.82B=$22.24B, exact) - "larger" picked
+        # the broken one. Net effect on the quarterly-vs-annual
+        # reconciliation check was NEGATIVE (99.0%->97.7% within 1%), so
+        # this reverted to author priority. GIS is a known, accepted
+        # residual gap rather than a heuristic that breaks other tickers
+        # to fix it.
         priority = {concept: rank for rank, concept in enumerate(tags)}
         sub["priority"] = sub["concept"].map(priority)
         sub = first_disclosed(sub, ["ticker", "concept", "cal_q"])
