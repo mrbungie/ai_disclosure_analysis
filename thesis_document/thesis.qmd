@@ -200,7 +200,9 @@ Markdown(tabulate([[form, f"{n:,}"] for form, n in rows], headers=["Form", "Docu
 
 ## How AI disclosure is measured
 
-The measurement pipeline moves through four stages: the raw corpus, a machine-learning prefilter, semantic-frame extraction, and disclosed-activity extraction. The unit of analysis changes at each stage (document, deduplicated text, individual claim, concrete activity) because each stage needs a different unit to do its job. Conceptually, this multi-stage inference architecture instantiates the classical Knowledge Discovery in Databases (KDD) process [@fayyad1996, pp. 40--41]---progressing through selection, preprocessing, transformation, data mining, and pattern evaluation---and aligns with the Cross-Industry Standard Process for Data Mining (CRISP-DM) framework [@shearer2000, pp. 15--19], mapping regulatory and corporate understanding into disciplined, reproducible data engineering and model evaluation stages.
+The measurement pipeline moves through four stages: the raw corpus, a machine-learning prefilter, semantic-frame extraction, and disclosed-activity extraction. The unit of analysis changes at each stage (document, deduplicated text, individual claim, concrete activity) because each stage needs a different unit to do its job. Conceptually, this multi-stage inference architecture instantiates the classical Knowledge Discovery in Databases (KDD) process [@fayyad1996, pp. 40--41]---progressing through selection, preprocessing, transformation, data mining, and pattern evaluation---and aligns with the Cross-Industry Standard Process for Data Mining (CRISP-DM) framework [@shearer2000, pp. 15--19], mapping regulatory and corporate understanding into disciplined, reproducible data engineering and model evaluation stages. @fig-pipeline-architecture illustrates this end-to-end data acquisition, inference, and multi-source fusion architecture.
+
+![End-to-end data acquisition, inference, and multi-source fusion pipeline.](svgs/pipeline_diagrama.svg){#fig-pipeline-architecture width="100%"}
 
 ```{python}
 #| label: fig-funnel-corpus
@@ -340,11 +342,36 @@ Markdown(tabulate(table, headers=["Stage", "Unit of Observation", "Operational F
 
 ### How the pipeline works
 
-Three design choices matter for interpreting the results that follow:
+The pipeline starts from a firm-period panel and pulls two parallel streams of data for each firm-period: text from Edgar (earnings calls, DEF 14A, 8-K, 10-K/20-F, 10-Q) and numeric data (XBRL, prices). These two streams are processed independently and only rejoin at the fusion step.
 
-1. **Deduplication removes boilerplate before it can distort anything.** Every scorable paragraph is hashed, which collapses 8.73 million paragraph instances into 4.98 million unique texts; scoring and LLM extraction run once per unique text, and results are then joined back to every document that repeats it. This keeps a recycled legal disclaimer from being counted, and scored, more than once.
-2. **The LLM judge doubles as a second filter, not just an extractor.** The machine-learning prefilter is tuned for high recall ($\ge 0.92$) so it does not miss rare AI mentions in non-technical sectors, which means it also lets through some false positives. The LLM judge catches most of these: 13.4% of prefilter-flagged texts (4,110 of them) get zero semantic frames and are dropped, rising to 17.5% in earnings calls and 39.6% in Form 8-K, the noisiest venues.
-3. **The model is told whose filing it is reading.** When extracting disclosed activities, the prompt includes the firm's name and ticker, so the model can tell a firm's own product from a vendor's. AMD's "Instinct accelerators" are coded as its own product (`own`); an insurance firm's use of NVIDIA GPUs and OpenAI APIs is coded as third-party (`third_party`).
+#### Cleaning and prefiltering
+
+Every scorable paragraph is hashed on its normalized text, which collapses 8.73 million paragraph instances into 4.98 million unique texts. Everything downstream runs once per unique hash rather than once per document, and results are joined back afterward to every filing that repeats that paragraph. This keeps a recycled legal disclaimer from being counted, and scored, once per firm that happens to repeat it.
+
+#### Embeddings and lexical features
+
+Text embeddings and lexical signals are computed for each unique paragraph and feed directly into the classifier below.
+
+#### AI-related paragraph classifier
+
+A machine-learning model trained against the golden sets, tuned for high recall ($\ge 0.92$): it is built to over-flag rather than risk missing a rare AI mention in a non-technical sector, so a meaningful share of what it passes through isn't actually about AI. That's by design — precision is recovered downstream, not here.
+
+#### Disclosure and extractor LLM passes
+
+Flagged paragraphs go through two separate LLM passes:
+
+- **Disclosure pass** asks what the paragraph is semantically saying and outputs semantic frames. A paragraph the prefilter flagged but that isn't really AI-related simply yields no frame, which does the precision work the classifier left undone — 13.4% of prefilter-flagged texts (4,110 of them) get zero semantic frames this way, rising to 17.5% in earnings calls and 39.6% in Form 8-K, the noisiest venues.
+- **Extractor pass** asks whose technology is being described and outputs activity frames. Because that judgment depends on the filer's identity, its prompt includes the firm's name and ticker alongside the paragraph — without that, there is no way to tell a firm's own product from a vendor's. AMD's "Instinct accelerators" are coded as its own product (`own`); an insurance firm's use of NVIDIA GPUs and OpenAI APIs is coded as third-party (`third_party`).
+
+Semantic and activity frames together form the **processed qualitative data**.
+
+#### Numeric branch
+
+XBRL and price data are cleaned and normalized in parallel, with no LLM involved, into the **processed quantitative data**.
+
+#### Point-in-time fusion and aggregation
+
+The two processed streams are joined point-in-time — each firm-period's qualitative frames matched to the numeric data as it stood at that date, avoiding look-ahead — producing the panel that feeds the analyses and visualizations in the chapters that follow.
 
 ## Units of analysis
 

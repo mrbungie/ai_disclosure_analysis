@@ -340,17 +340,24 @@ def resize_oversized_images(document: Document, max_width_emu: int) -> None:
     whichever box is now the odd one out."""
     body = document.element.body
     for extent in body.iter(qn("wp:extent")):
-        cx = int(extent.get("cx"))
+        cx_str = extent.get("cx")
+        if not cx_str:
+            continue
+        cx = int(cx_str)
         if cx <= max_width_emu:
             continue
-        cy = int(extent.get("cy"))
+        cy_str = extent.get("cy")
+        if not cy_str:
+            continue
+        cy = int(cy_str)
         scale = max_width_emu / cx
         new_cx, new_cy = max_width_emu, round(cy * scale)
         extent.set("cx", str(new_cx))
         extent.set("cy", str(new_cy))
         drawing = extent.getparent().getparent()  # wp:inline or wp:anchor -> w:drawing
         for xfrm_ext in drawing.iter(qn("a:ext")):
-            if int(xfrm_ext.get("cx")) == cx:
+            xfrm_cx = xfrm_ext.get("cx")
+            if xfrm_cx and int(xfrm_cx) == cx:
                 xfrm_ext.set("cx", str(new_cx))
                 xfrm_ext.set("cy", str(new_cy))
 

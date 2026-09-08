@@ -162,7 +162,7 @@ def _filing_manifest_selects(countries: list[tuple[str, dict]], dirs) -> list[st
         parts = [f"SELECT '{country}' AS country_code, * FROM {base_path}"]
         for extra in ("filing_manifest_proxy", "filing_manifest_8k",
                       "filing_manifest_earnings_calls", "filing_manifest_earnings_calls_equibles",
-                      "filing_manifest_20f"):
+                      "filing_manifest_earnings_calls_stockanalysis", "filing_manifest_20f"):
             source = _manifest_source(f"{manifests_dir}/{extra}")
             if source:
                 # scripts/us/earnings_calls/01_fetch_transcripts.py writes
