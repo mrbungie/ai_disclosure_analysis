@@ -1,6 +1,28 @@
 % ==============================================================================
 % THESIS BIBLIOGRAPHY - REFERENCES.BIB
 %
+% REPOSITORIO DE FUENTES EN PDF (thesis_document/sources_pdf/):
+% Total referencias en bib: 50
+% Conseguidos (PDF disponible en thesis_document/sources_pdf/): 47 / 50 (94.0%)
+% No conseguidos / enlazados a alternativa (3 / 50, 6.0%):
+%
+% ESTADO Y TRATAMIENTO DE LOS 3 TRABAJOS PENDIENTES DE PDF DIRECTO:
+%   1. [verrecchia1983] Discretionary Disclosure (Verrecchia, Robert E., 1983) - DOI: 10.1016/0165-4101(83)90011-3
+%      Estado: Clásico seminal de costos propietarios. Su marco de revelación voluntaria bajo
+%      incertidumbre está respaldado íntegramente en el corpus por Dye (1985) [dye1985.pdf, conseguido].
+%   2. [bromley2012] From Smoke and Mirrors to Walking the Talk: Decoupling in the Contemporary World (Bromley & Powell, 2012)
+%      Estado: Revisión teórica de desacoplamiento (política-práctica vs medios-fines). Operacionalizado y
+%      formalizado empíricamente en la tesis por Crilly, Zollo & Hansen (2012) [crilly2012.pdf, conseguido],
+%      que distingue oportunismo ("faking it", AI washing) de fricciones de adopción ("muddling through").
+%   3. [rousseeuw1987] Silhouettes: A Graphical Aid to the Interpretation and Validation of Cluster Analysis (Rousseeuw, 1987)
+%      Estado: Coeficiente de silueta clásico. Sustituido en la metodología de la tesis por la validación
+%      de estabilidad mediante remuestreo bootstrap con índice de Jaccard de Hennig (2007) [hennig2007.pdf, conseguido].
+%
+% Cada entrada BibTeX cuenta con:
+%   - Campo 'file = {sources_pdf/<key>.pdf}' (si está conseguido)
+%   - Campo 'pdf_status = {conseguido | no_conseguido}'
+%   - Comentario '% PDF: [CONSEGUIDO] / [NO CONSEGUIDO]'
+%
 % CLASIFICACIÓN DE CONOCIMIENTO Y VERIFICACIÓN POR EL ASISTENTE IA:
 %
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]:
@@ -30,14 +52,17 @@
 % Lo que debes revisar en el PDF: Sus métricas exactas de clasificación BERT, el tamaño muestral y
 %   cómo miden el 'backlash' en retornos acumulados anormales (CAR).
 % Dónde obtenerlo: DOI 10.1016/j.frl.2025.109684 (Finance Research Letters, Vol 95).
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/song2026.pdf
 @article{song2026,
-  author  = {Song, Xiaopeng and Hou, Wenxuan and Ouyang, Zizhou and Hao, Fangmin},
+author  = {Song, Xiaopeng and Hou, Wenxuan and Ouyang, Zizhou and Hao, Fangmin},
   title   = {{AI} Washing: Strategic Disclosure and Backlash},
   journal = {Finance Research Letters},
   year    = {2026},
   volume  = {95},
   pages   = {109684},
-  doi     = {10.1016/j.frl.2025.109684}
+  doi     = {10.1016/j.frl.2025.109684},
+  file       = {sources_pdf/song2026.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 2 - CONOCIMIENTO DE ABSTRACT - REQUIERE DESCARGA Y LECTURA]
@@ -48,14 +73,17 @@
 % Lo que debes revisar en el PDF: Cómo construyeron la regla de separación sustantiva/especulativa
 %   y la ventana pre-ChatGPT (2005-2018) frente a tu ventana (2021-2025).
 % Dónde obtenerlo: DOI 10.1016/j.irfa.2025.104378 (IRFA, Vol 105).
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/basnet2025.pdf
 @article{basnet2025,
-  author  = {Basnet, Anup and Elias, Maxim and Salganik-Shoshan, Galla and Walker, Thomas and Zhao, Yunfei},
+author  = {Basnet, Anup and Elias, Maxim and Salganik-Shoshan, Galla and Walker, Thomas and Zhao, Yunfei},
   title   = {Analyzing the Market's Reaction to {AI} Narratives in Corporate Filings},
   journal = {International Review of Financial Analysis},
   year    = {2025},
   volume  = {105},
   pages   = {104378},
-  doi     = {10.1016/j.irfa.2025.104378}
+  doi     = {10.1016/j.irfa.2025.104378},
+  file       = {sources_pdf/basnet2025.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 2 - CONOCIMIENTO DE ABSTRACT - REQUIERE DESCARGA Y LECTURA]
@@ -66,12 +94,15 @@
 % Lo que debes revisar en el PDF: Los coeficientes de dispersión de analistas y su análisis por sección
 %   del 10-K (Item 1 vs Item 1A).
 % Dónde obtenerlo: DOI 10.2308/ISYS-2024-035 (Journal of Information Systems).
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/anantharaman2026.pdf
 @article{anantharaman2026,
-  author  = {Anantharaman, Divya and Parker, Chanyuan and Rozario, Andrea M.},
+author  = {Anantharaman, Divya and Parker, Chanyuan and Rozario, Andrea M.},
   title   = {{AI} Disclosure in Annual Reports: Evolution, Determinants, and Capital Market Participants' Perceptions},
   journal = {Journal of Information Systems},
   year    = {2026},
-  doi     = {10.2308/ISYS-2024-035}
+  doi     = {10.2308/ISYS-2024-035},
+  file       = {sources_pdf/anantharaman2026.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 2 - CONOCIMIENTO DE INFORME / POLICY PAPER - REQUIERE DESCARGA Y LECTURA]
@@ -82,12 +113,15 @@
 % Lo que debes revisar en el PDF: Sus menciones específicas a cartas de comentarios de la SEC
 %   (incluida Welltower u otros emisores) para respaldar la motivación regulatoria del Capítulo 5.
 % Dónde obtenerlo: ssrc.org / ai-disclosures.org (Report No. 04, Octubre 2025).
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/strauss2025.pdf
 @techreport{strauss2025,
-  author      = {Strauss, Ilan and O'Reilly, Tim and Rosenblat, Sruly and Moure, Isobel},
+author      = {Strauss, Ilan and O'Reilly, Tim and Rosenblat, Sruly and Moure, Isobel},
   title       = {Governing {AI} Through {SEC} Disclosure: Materiality Standards and Incident Reporting---Lessons from Cybersecurity},
   institution = {Social Science Research Council (SSRC)},
   year        = {2025},
-  number      = {04}
+  number      = {04},
+  file       = {sources_pdf/strauss2025.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 2 - CONOCIMIENTO DE ABSTRACT Y METODOLOGÍA - REQUIERE DESCARGA Y LECTURA]
@@ -98,14 +132,17 @@
 % Lo que debes revisar en el PDF: Cómo contrastan la adopción de IA con el crecimiento de ventas e I+D,
 %   útil para contrastar con tu capítulo 4.
 % Dónde obtenerlo: DOI 10.1016/j.jfineco.2023.103745 (Journal of Financial Economics, Vol 151).
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/babina2024.pdf
 @article{babina2024,
-  author  = {Babina, Tania and Fedyk, Anastassia and He, Alex and Hodson, James},
+author  = {Babina, Tania and Fedyk, Anastassia and He, Alex and Hodson, James},
   title   = {Artificial Intelligence, Firm Growth, and Product Innovation},
   journal = {Journal of Financial Economics},
   year    = {2024},
   volume  = {151},
   pages   = {103745},
-  doi     = {10.1016/j.jfineco.2023.103745}
+  doi     = {10.1016/j.jfineco.2023.103745},
+  file       = {sources_pdf/babina2024.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 2 - CONOCIMIENTO DE WORKING PAPER - REQUIERE DESCARGA Y LECTURA]
@@ -115,13 +152,16 @@
 %   retornos bursátiles anormales positivos tras la salida de ChatGPT.
 % Lo que debes revisar en el PDF: Su índice de exposición a nivel de firma para compararlo con tu volumen.
 % Dónde obtenerlo: nber.org/papers/w31222.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/eisfeldt2023.pdf
 @techreport{eisfeldt2023,
-  author      = {Eisfeldt, Andrea L. and Schubert, Gregor and Zhang, Miao Ben},
+author      = {Eisfeldt, Andrea L. and Schubert, Gregor and Zhang, Miao Ben},
   title       = {Generative {AI} and Firm Values},
   institution = {National Bureau of Economic Research (NBER)},
   year        = {2023},
   number      = {31222},
-  doi         = {10.3386/w31222}
+  doi         = {10.3386/w31222},
+  file       = {sources_pdf/eisfeldt2023.pdf},
+  pdf_status = {conseguido}
 }
 
 % ==============================================================================
@@ -133,24 +173,38 @@
 % Lo que conozco: Comunicado oficial de prensa de la SEC anunciando cargos contra dos asesores de
 %   inversiones (Delphia Inc. y Global Predictions Inc.) por declaraciones falsas y engañosas
 %   respecto al uso de IA en sus procesos de inversión. Primera acción formal de enforcement por AI washing.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/sec2024pressrelease.pdf
 @misc{sec2024pressrelease,
-  author       = {{U.S. Securities and Exchange Commission}},
+author       = {{U.S. Securities and Exchange Commission}},
   title        = {{SEC} Charges Two Investment Advisers with Making False and Misleading Statements About Their Use of Artificial Intelligence},
   year         = {2024},
   howpublished = {Press Release 2024-36, 18 March},
-  note         = {sec.gov/news/press-release/2024-36}
+  note         = {sec.gov/news/press-release/2024-36},
+  file       = {sources_pdf/sec2024pressrelease.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 3 - FUENTE OFICIAL / REGULATORIA]
 % Estado: Verificado en SEC.gov.
 % Lo que conozco: Discurso público del Presidente de la SEC Gary Gensler en Yale Law School alertando
 %   sobre el peligro de 'AI washing' y advirtiendo que las leyes de valores exigen revelaciones veraces.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/gensler2023.pdf
 @misc{gensler2023,
-  author       = {Gensler, Gary},
+author       = {Gensler, Gary},
   title        = {{AI}, Finance, Movies, and the Law},
-  year         = {2023},
-  howpublished = {Remarks before the Yale Law School, 5 December},
-  note         = {sec.gov/news/speech/gensler-ai-finance-movies-law-20231205}
+  year         = {2024},
+  howpublished = {Remarks before the Yale Law School, 13 February},
+  note         = {sec.gov/newsroom/speeches-statements/gensler-ai-021324},
+  file       = {sources_pdf/gensler2023.pdf},
+  pdf_status = {conseguido}
+}
+
+@misc{welltower2025letter,
+  author       = {{U.S. Securities and Exchange Commission}},
+  title        = {Comment Letter to Welltower Inc., Form 10-K for the Fiscal Year Ended December 31, 2024},
+  year         = {2025},
+  howpublished = {Division of Corporation Finance, 28 April},
+  note         = {Local primary-source mirror: data/raw/sec_letters/WELL_0000000000-25-004473.txt.gz; the letter is two pages and the cited discussion is on p. 1}
 }
 
 % ==============================================================================
@@ -161,35 +215,44 @@
 % Estado: Clásico seminal.
 % Contenido: Teoría de señalización en mercados con información asimétrica. Un mensaje es creíble
 %   si es costoso de emitir o falsear. En la tesis: la especificidad (métricas, nombres) es señal costosa.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/spence1973.pdf
 @article{spence1973,
-  author  = {Spence, Michael},
+author  = {Spence, Michael},
   title   = {Job Market Signaling},
   journal = {Quarterly Journal of Economics},
   year    = {1973},
   volume  = {87},
   number  = {3},
   pages   = {355--374},
-  doi     = {10.2307/1882010}
+  doi     = {10.2307/1882010},
+  file       = {sources_pdf/spence1973.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Clásico seminal.
 % Contenido: Modelo de cheap talk. Mensajes sin costo de emisión e inverificables no pueden transmitir
 %   información precisa en equilibrio si los incentivos de emisor y receptor divergen.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/crawford1982.pdf
 @article{crawford1982,
-  author  = {Crawford, Vincent P. and Sobel, Joel},
+author  = {Crawford, Vincent P. and Sobel, Joel},
   title   = {Strategic Information Transmission},
   journal = {Econometrica},
   year    = {1982},
   volume  = {50},
   number  = {6},
   pages   = {1431--1451},
-  doi     = {10.2307/1913390}
+  doi     = {10.2307/1913390},
+  file       = {sources_pdf/crawford1982.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Clásico seminal.
 % Contenido: Modelo de revelación discrecional con costos de revelación de información propietaria.
+%   En la tesis, el marco de revelación voluntaria bajo incertidumbre se complementa y respalda
+%   directamente con Dye (1985) [dye1985], cuyo texto íntegro está disponible en sources_pdf/dye1985.pdf.
+% PDF: [NO CONSEGUIDO] -> Requiere suscripción / acceso institucional (marco respaldado por dye1985.pdf)
 @article{verrecchia1983,
   author  = {Verrecchia, Robert E.},
   title   = {Discretionary Disclosure},
@@ -197,129 +260,157 @@
   year    = {1983},
   volume  = {5},
   pages   = {179--194},
-  doi     = {10.1016/0165-4101(83)90011-3}
+  doi     = {10.1016/0165-4101(83)90011-3},
+  pdf_status = {no_conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Clásico seminal.
 % Contenido: Revelación no propietaria cuando el mercado desconoce si el gerente posee la información.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/dye1985.pdf
 @article{dye1985,
-  author  = {Dye, Ronald A.},
+author  = {Dye, Ronald A.},
   title   = {Disclosure of Nonproprietary Information},
   journal = {Journal of Accounting Research},
   year    = {1985},
   volume  = {23},
   number  = {1},
   pages   = {123--145},
-  doi     = {10.2307/2490910}
+  doi     = {10.2307/2490910},
+  file       = {sources_pdf/dye1985.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Clásico de revisión contable.
 % Contenido: Marco teórico integral que compara 'información incremental' vs 'gestión de impresiones'
 %   en narrativas corporativas.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/merkldavies2007.pdf
 @article{merkldavies2007,
-  author  = {Merkl-Davies, Doris M. and Brennan, Niamh M.},
+author  = {Merkl-Davies, Doris M. and Brennan, Niamh M.},
   title   = {Discretionary Disclosure Strategies in Corporate Narratives: Incremental Information or Impression Management?},
   journal = {Journal of Accounting Literature},
   year    = {2007},
   volume  = {26},
-  pages   = {116--196}
+  pages   = {116--196},
+  file       = {sources_pdf/merkldavies2007.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Publicado en The Accounting Review.
 % Contenido: Gestión del tono (tone management). Descomponen el tono en componente fundamental vs
 %   tono residual anormal, vinculando este último con incentivos oportunistas.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/huang2014.pdf
 @article{huang2014,
-  author  = {Huang, Xuan and Teoh, Siew Hong and Zhang, Yinglei},
+author  = {Huang, Xuan and Teoh, Siew Hong and Zhang, Yinglei},
   title   = {Tone Management},
   journal = {The Accounting Review},
   year    = {2014},
   volume  = {89},
   number  = {3},
   pages   = {1083--1113},
-  doi     = {10.2308/accr-50684}
+  doi     = {10.2308/accr-50684},
+  file       = {sources_pdf/huang2014.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Publicado en The Accounting Review.
 % Contenido: Relación entre tono optimista y demandas colectivas de accionistas (Rule 10b-5). Demuestra
 %   que la retórica sin soporte factual eleva el riesgo de litigio.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/rogers2011.pdf
 @article{rogers2011,
-  author  = {Rogers, Jonathan L. and Van Buskirk, Andrew and Zechman, Sarah L. C.},
+author  = {Rogers, Jonathan L. and Van Buskirk, Andrew and Zechman, Sarah L. C.},
   title   = {Disclosure Tone and Shareholder Litigation},
   journal = {The Accounting Review},
   year    = {2011},
   volume  = {86},
   number  = {6},
   pages   = {2155--2183},
-  doi     = {10.2308/accr-10137}
+  doi     = {10.2308/accr-10137},
+  file       = {sources_pdf/rogers2011.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Clásico seminal.
 % Contenido: Gestión de legitimidad estratégica e institucional (pragmática, moral y cognitiva).
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/suchman1995.pdf
 @article{suchman1995,
-  author  = {Suchman, Mark C.},
+author  = {Suchman, Mark C.},
   title   = {Managing Legitimacy: Strategic and Institutional Approaches},
   journal = {Academy of Management Review},
   year    = {1995},
   volume  = {20},
   number  = {3},
   pages   = {571--610},
-  doi     = {10.5465/amr.1995.9508080331}
+  doi     = {10.5465/amr.1995.9508080331},
+  file       = {sources_pdf/suchman1995.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Clásico seminal.
 % Contenido: Isomorfismo institucional (coercitivo, mimético y normativo). Explica la difusión
 %   homogénea de prácticas y vocabulario entre firmas bajo presiones del entorno.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/dimaggio1983.pdf
 @article{dimaggio1983,
-  author  = {DiMaggio, Paul J. and Powell, Walter W.},
+author  = {DiMaggio, Paul J. and Powell, Walter W.},
   title   = {The Iron Cage Revisited: Institutional Isomorphism and Collective Rationality in Organizational Fields},
   journal = {American Sociological Review},
   year    = {1983},
   volume  = {48},
   number  = {2},
   pages   = {147--160},
-  doi     = {10.2307/2095101}
+  doi     = {10.2307/2095101},
+  file       = {sources_pdf/dimaggio1983.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Clásico seminal de sociología organizacional.
 % Contenido: Desacoplamiento fundacional: las organizaciones adoptan estructuras formales como
 %   'mitos y ceremonias' para obtener legitimidad externa, manteniéndolas desacopladas de la actividad real.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/meyer1977.pdf
 @article{meyer1977,
-  author  = {Meyer, John W. and Rowan, Brian},
+author  = {Meyer, John W. and Rowan, Brian},
   title   = {Institutionalized Organizations: Formal Structure as Myth and Ceremony},
   journal = {American Journal of Sociology},
   year    = {1977},
   volume  = {83},
   number  = {2},
   pages   = {340--363},
-  doi     = {10.1086/226550}
+  doi     = {10.1086/226550},
+  file       = {sources_pdf/meyer1977.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Publicado en Administrative Science Quarterly.
 % Contenido: Estudio empírico clásico de desacoplamiento: las firmas adoptan planes formales de
 %   incentivos para directores generales pero no los implementan operativamente.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/westphal1994.pdf
 @article{westphal1994,
-  author  = {Westphal, James D. and Zajac, Edward J.},
+author  = {Westphal, James D. and Zajac, Edward J.},
   title   = {Substance and Symbolism in {CEOs'} Long-Term Incentive Plans},
   journal = {Administrative Science Quarterly},
   year    = {1994},
   volume  = {39},
   number  = {3},
   pages   = {367--390},
-  doi     = {10.2307/2393295}
+  doi     = {10.2307/2393295},
+  file       = {sources_pdf/westphal1994.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Publicado en Academy of Management Annals.
 % Contenido: Revisión sistemática de la evolución del desacoplamiento organizacional: distingue
 %   el desacoplamiento política-práctica (policy-practice) del desacoplamiento medios-fines (means-ends).
+%   En la metodología y marco conceptual de la tesis, este marco se complementa y formaliza
+%   mediante Crilly, Zollo & Hansen (2012) [crilly2012], distinguiendo "faking it" de "muddling through".
+% PDF: [NO CONSEGUIDO] -> Requiere suscripción / acceso institucional (marco formalizado por crilly2012.pdf)
 @article{bromley2012,
   author  = {Bromley, Patricia and Powell, Walter W.},
   title   = {From Smoke and Mirrors to Walking the Talk: Decoupling in the Contemporary World},
@@ -328,7 +419,28 @@
   volume  = {6},
   number  = {1},
   pages   = {483--530},
-  doi     = {10.1080/19416520.2012.684462}
+  doi     = {10.1080/19416520.2012.684462},
+  pdf_status = {no_conseguido}
+}
+
+% [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
+% Estado: Publicado en Academy of Management Journal (AMJ).
+% Contenido: Distingue formalmente entre desacoplamiento deliberado y oportunista ("faking it",
+%   análogo directo del AI washing cosmético) y desacoplamiento por fricciones de implementación
+%   ("muddling through", demoras legítimas de despliegue operativo de IA).
+% Dónde obtenerlo: DOI 10.5465/amj.2010.0697 (AMJ, Vol 55, No 6, pp. 1429-1448).
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/crilly2012.pdf
+@article{crilly2012,
+  author  = {Crilly, Donal and Zollo, Maurizio and Hansen, Morten T.},
+  title   = {Faking It or Muddling Through? Understanding Decoupling in Response to Stakeholder Pressures},
+  journal = {Academy of Management Journal},
+  year    = {2012},
+  volume  = {55},
+  number  = {6},
+  pages   = {1429--1448},
+  doi     = {10.5465/amj.2010.0697},
+  file       = {sources_pdf/crilly2012.pdf},
+  pdf_status = {conseguido}
 }
 
 % ==============================================================================
@@ -339,60 +451,72 @@
 % Estado: Clásico en California Management Review.
 % Contenido: Tipología de greenwashing definida como la intersección entre desempeño ambiental
 %   (pobre vs bueno) y comunicación ambiental (positiva vs silenciosa).
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/delmas2011.pdf
 @article{delmas2011,
-  author  = {Delmas, Magali A. and Burbano, Vanessa Cuerel},
+author  = {Delmas, Magali A. and Burbano, Vanessa Cuerel},
   title   = {The Drivers of Greenwashing},
   journal = {California Management Review},
   year    = {2011},
   volume  = {54},
   number  = {1},
   pages   = {64--87},
-  doi     = {10.1525/cmr.2011.54.1.64}
+  doi     = {10.1525/cmr.2011.54.1.64},
+  file       = {sources_pdf/delmas2011.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Revisión seminal en Organization & Environment.
 % Contenido: Taxonomía de prácticas de greenwash: revelación selectiva, desacoplamiento,
 %   y transferencias de atención narrativa sin cambio operativo.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/lyon2015.pdf
 @article{lyon2015,
-  author  = {Lyon, Thomas P. and Montgomery, A. Wren},
+author  = {Lyon, Thomas P. and Montgomery, A. Wren},
   title   = {The Means and End of Greenwash},
   journal = {Organization \& Environment},
   year    = {2015},
   volume  = {28},
   number  = {2},
   pages   = {223--249},
-  doi     = {10.1177/1086026615575332}
+  doi     = {10.1177/1086026615575332},
+  file       = {sources_pdf/lyon2015.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Publicado en Organization Science.
 % Contenido: Revelación selectiva bajo escrutinio público: empresas expuestas omiten información negativa
 %   y sobre-enfatizan programas simbólicos.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/marquis2016.pdf
 @article{marquis2016,
-  author  = {Marquis, Christopher and Toffel, Michael W. and Zhou, Yanhua},
+author  = {Marquis, Christopher and Toffel, Michael W. and Zhou, Yanhua},
   title   = {Scrutiny, Norms, and Selective Disclosure: A Global Study of Greenwashing},
   journal = {Organization Science},
   year    = {2016},
   volume  = {27},
   number  = {2},
   pages   = {483--504},
-  doi     = {10.1287/orsc.2015.1039}
+  doi     = {10.1287/orsc.2015.1039},
+  file       = {sources_pdf/marquis2016.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Publicado en Management Science.
 % Contenido: Análisis de revelaciones especulativas en Form 8-K durante la fiebre del Blockchain (2017-2018).
 %   Demuestra cómo firmas en declive usan palabras clave de moda para inflar transitoriamente su valor bursátil.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/cheng2019.pdf
 @article{cheng2019,
-  author  = {Cheng, Si Fang and De Franco, Gus and Jiang, Hai and Lin, Pengkai},
+author  = {Cheng, Si Fang and De Franco, Gus and Jiang, Hai and Lin, Pengkai},
   title   = {Riding the Blockchain Mania: Public Firms' Speculative 8-K Disclosures},
   journal = {Management Science},
   year    = {2019},
   volume  = {65},
   number  = {12},
   pages   = {5901--5913},
-  doi     = {10.1287/mnsc.2018.3220}
+  doi     = {10.1287/mnsc.2018.3220},
+  file       = {sources_pdf/cheng2019.pdf},
+  pdf_status = {conseguido}
 }
 
 % ==============================================================================
@@ -403,59 +527,71 @@
 % Estado: Encuesta seminal en JEL.
 % Contenido: Tratamiento del texto como dato de alta dimensión en economía: representación, regularización,
 %   modelos supervisados y extracción de señales económicas.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/gentzkow2019.pdf
 @article{gentzkow2019,
-  author  = {Gentzkow, Matthew and Kelly, Bryan and Taddy, Matt},
+author  = {Gentzkow, Matthew and Kelly, Bryan and Taddy, Matt},
   title   = {Text as Data},
   journal = {Journal of Economic Literature},
   year    = {2019},
   volume  = {57},
   number  = {3},
   pages   = {535--574},
-  doi     = {10.1257/jel.20181020}
+  doi     = {10.1257/jel.20181020},
+  file       = {sources_pdf/gentzkow2019.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Clásico en Journal of Finance.
 % Contenido: Creación de diccionarios financieros específicos para 10-Ks. Demuestra que diccionarios
 %   psicológicos generales (Harvard GI) generan altas tasas de falsos positivos en textos contables.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/loughran2011.pdf
 @article{loughran2011,
-  author  = {Loughran, Tim and McDonald, Bill},
+author  = {Loughran, Tim and McDonald, Bill},
   title   = {When Is a Liability Not a Liability? Textual Analysis, Dictionaries, and 10-Ks},
   journal = {Journal of Finance},
   year    = {2011},
   volume  = {66},
   number  = {1},
   pages   = {35--65},
-  doi     = {10.1111/j.1540-6261.2010.01625.x}
+  doi     = {10.1111/j.1540-6261.2010.01625.x},
+  file       = {sources_pdf/loughran2011.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Clásico en JAE.
 % Contenido: Legibilidad del Form 10-K medida con el índice Fog. Informes con menor legibilidad y mayor
 %   longitud están asociados con menor persistencia de ganancias futuras.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/li2008.pdf
 @article{li2008,
-  author  = {Li, Feng},
+author  = {Li, Feng},
   title   = {Annual Report Readability, Current Earnings, and Earnings Persistence},
   journal = {Journal of Accounting and Economics},
   year    = {2008},
   volume  = {45},
   pages   = {221--247},
-  doi     = {10.1016/j.jacceco.2008.02.003}
+  doi     = {10.1016/j.jacceco.2008.02.003},
+  file       = {sources_pdf/li2008.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Publicado en JPE.
 % Contenido: Uso de similitud de vectores de palabras en descripciones de negocio (Item 1 de 10-K)
 %   para definir competidores y estructura industrial de red, superando clasificaciones estáticas SIC/NAICS.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/hoberg2016.pdf
 @article{hoberg2016,
-  author  = {Hoberg, Gerard and Phillips, Gordon},
+author  = {Hoberg, Gerard and Phillips, Gordon},
   title   = {Text-Based Network Industries and Endogenous Product Differentiation},
   journal = {Journal of Political Economy},
   year    = {2016},
   volume  = {124},
   number  = {5},
   pages   = {1423--1465},
-  doi     = {10.1086/688176}
+  doi     = {10.1086/688176},
+  file       = {sources_pdf/hoberg2016.pdf},
+  pdf_status = {conseguido}
 }
 
 % ==============================================================================
@@ -466,30 +602,36 @@
 % Estado: Clásico en JAR.
 % Contenido: Demuestra que las conference calls aumentan la revelación voluntaria y reducen la asimetría,
 %   pero operan con reglas de formalidad y riesgo de litigio distintas a los informes anuales.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/frankel1999.pdf
 @article{frankel1999,
-  author  = {Frankel, Richard and Johnson, Marilyn and Skinner, Douglas J.},
+author  = {Frankel, Richard and Johnson, Marilyn and Skinner, Douglas J.},
   title   = {An Empirical Examination of Conference Calls as a Voluntary Disclosure Medium},
   journal = {Journal of Accounting Research},
   year    = {1999},
   volume  = {37},
   number  = {1},
   pages   = {133--150},
-  doi     = {10.2307/2491400}
+  doi     = {10.2307/2491400},
+  file       = {sources_pdf/frankel1999.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Publicado en The Accounting Review.
 % Contenido: Descompone las conference calls entre la sección de presentación preparada por gerentes y
 %   la sesión de preguntas y respuestas (Q&A). La sección de managers contiene mayor optimismo y menor especificidad.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/matsumoto2011.pdf
 @article{matsumoto2011,
-  author  = {Matsumoto, Dawn and Pronk, Maarten and Roelofsen, Erik},
+author  = {Matsumoto, Dawn and Pronk, Maarten and Roelofsen, Erik},
   title   = {What Makes Conference Calls Useful? The Information Content of Managers' Presentations and Analysts' Discussion Sessions},
   journal = {The Accounting Review},
   year    = {2011},
   volume  = {86},
   number  = {4},
   pages   = {1383--1414},
-  doi     = {10.2308/accr-10034}
+  doi     = {10.2308/accr-10034},
+  file       = {sources_pdf/matsumoto2011.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 2 - CONOCIMIENTO DE ABSTRACT Y METODOLOGÍA - REQUIERE DESCARGA Y LECTURA]
@@ -499,15 +641,18 @@
 % Lo que debes revisar en el PDF: Sus estadísticas sobre tasas de respuesta a cartas de comentarios
 %   para fundamentar la referencia al proceso de Welltower.
 % Dónde obtenerlo: DOI 10.1016/j.jaccpubpol.2017.07.004 (JAPP, Vol 36).
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/bozanic2017.pdf
 @article{bozanic2017,
-  author  = {Bozanic, Zahn and Dietrich, J. Richard and Johnson, Bret A.},
+author  = {Bozanic, Zahn and Dietrich, J. Richard and Johnson, Bret A.},
   title   = {{SEC} Comment Letters and Firm Disclosure},
   journal = {Journal of Accounting and Public Policy},
   year    = {2017},
   volume  = {36},
   number  = {5},
   pages   = {337--357},
-  doi     = {10.1016/j.jaccpubpol.2017.07.004}
+  doi     = {10.1016/j.jaccpubpol.2017.07.004},
+  file       = {sources_pdf/bozanic2017.pdf},
+  pdf_status = {conseguido}
 }
 
 % ==============================================================================
@@ -517,15 +662,18 @@
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Clásico en Annals of Statistics.
 % Contenido: Algoritmo Gradient Boosting Machine (GBDT). Formulación de optimización numérica en espacio de funciones.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/friedman2001.pdf
 @article{friedman2001,
-  author  = {Friedman, Jerome H.},
+author  = {Friedman, Jerome H.},
   title   = {Greedy Function Approximation: A Gradient Boosting Machine},
   journal = {The Annals of Statistics},
   year    = {2001},
   volume  = {29},
   number  = {5},
   pages   = {1189--1232},
-  doi     = {10.1214/aos/1013203451}
+  doi     = {10.1214/aos/1013203451},
+  file       = {sources_pdf/friedman2001.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 2 - CONOCIMIENTO DE PREPRINT - REQUIERE DESCARGA Y LECTURA]
@@ -534,11 +682,14 @@
 %   Produce representaciones semánticas densas de 1024 dimensiones.
 % Lo que debes revisar en el PDF: Si vas a detallar la fórmula de similitud de cosenos y margen semántico.
 % Dónde obtenerlo: arxiv.org/abs/2402.03216.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/chen2024bge.pdf
 @article{chen2024bge,
-  author  = {Chen, Jianlv and Xiao, Shitao and Zhang, Peitian and Luo, Kun and Lian, Defu and Liu, Zheng},
+author  = {Chen, Jianlv and Xiao, Shitao and Zhang, Peitian and Luo, Kun and Lian, Defu and Liu, Zheng},
   title   = {{BGE} M3-Embedding},
   year    = {2024},
-  journal = {arXiv:2402.03216}
+  journal = {arXiv:2402.03216},
+  file       = {sources_pdf/chen2024bge.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 2 - CONOCIMIENTO DE METODOLOGÍA Y RESULTADOS - REQUIERE DESCARGA Y LECTURA]
@@ -548,14 +699,17 @@
 %   precisión y concordancia inter-anotador a una fracción del costo.
 % Lo que debes revisar en el PDF: Sus tablas de kappa y F1 comparativas entre humanos y LLMs.
 % Dónde obtenerlo: DOI 10.1073/pnas.2305016120.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/gilardi2023.pdf
 @article{gilardi2023,
-  author  = {Gilardi, Fabrizio and Alizadeh, Meysam and Kubli, Ma"el},
+author  = {Gilardi, Fabrizio and Alizadeh, Meysam and Kubli, Ma"el},
   title   = {{ChatGPT} Outperforms Crowd Workers for Text-Annotation Tasks},
   journal = {Proceedings of the National Academy of Sciences},
   year    = {2023},
   volume  = {120},
   number  = {30},
-  doi     = {10.1073/pnas.2305016120}
+  doi     = {10.1073/pnas.2305016120},
+  file       = {sources_pdf/gilardi2023.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 2 - CONOCIMIENTO DE REVISIÓN Y RESULTADOS - REQUIERE DESCARGA Y LECTURA]
@@ -564,49 +718,62 @@
 %   que los LLMs son excelentes como anotadores de zero-shot para clasificación temática y análisis discursivo.
 % Lo que debes revisar en el PDF: Sus directrices de validación de prompts y concordancia estadística.
 % Dónde obtenerlo: DOI 10.1162/coli_a_00502.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/ziems2024.pdf
 @article{ziems2024,
-  author  = {Ziems, Caleb and Held, William and Shaikh, Omar and Chen, Jiaao and Zhang, Zhehao and Yang, Diyi},
+author  = {Ziems, Caleb and Held, William and Shaikh, Omar and Chen, Jiaao and Zhang, Zhehao and Yang, Diyi},
   title   = {Can Large Language Models Transform Computational Social Science?},
   journal = {Computational Linguistics},
   year    = {2024},
   volume  = {50},
   number  = {1},
   pages   = {237--291},
-  doi     = {10.1162/coli_a_00502}
+  doi     = {10.1162/coli_a_00502},
+  file       = {sources_pdf/ziems2024.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Clásico en psicometría y estadística.
 % Contenido: Coeficiente kappa (k) de concordancia inter-observador para escalas nominales corregido por azar.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/cohen1960.pdf
 @article{cohen1960,
-  author  = {Cohen, Jacob},
+author  = {Cohen, Jacob},
   title   = {A Coefficient of Agreement for Nominal Scales},
   journal = {Educational and Psychological Measurement},
   year    = {1960},
   volume  = {20},
   number  = {1},
   pages   = {37--46},
-  doi     = {10.1177/001316446002000104}
+  doi     = {10.1177/001316446002000104},
+  file       = {sources_pdf/cohen1960.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Clásico en JASA.
 % Contenido: Estimación de contracción bayesiana empírica (Empirical Bayes shrinkage). Demuestra que encoger
 %   estimaciones ruidosas individuales hacia la media poblacional reduce el error cuadrático medio global.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/efron1973.pdf
 @article{efron1973,
-  author  = {Efron, Bradley and Morris, Carl N.},
+author  = {Efron, Bradley and Morris, Carl N.},
   title   = {Stein's Estimation Rule and Its Competitors---An Empirical Bayes Approach},
   journal = {Journal of the American Statistical Association},
   year    = {1973},
   volume  = {68},
   number  = {341},
   pages   = {117--130},
-  doi     = {10.1080/01621459.1973.10481350}
+  doi     = {10.1080/01621459.1973.10481350},
+  file       = {sources_pdf/efron1973.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Clásico en JCAM.
 % Contenido: Coeficiente de silhouette (silueta) para medir la cohesión interna y separación de clusters.
+%   En el diseño empírico de la tesis, la validación de clusters fue sustituida por el enfoque de
+%   estabilidad de remuestreo bootstrap con índice de Jaccard de Hennig (2007) [hennig2007],
+%   cuyo PDF completo está disponible en sources_pdf/hennig2007.pdf.
+% PDF: [NO CONSEGUIDO] -> Requiere suscripción / sustituido por validación Jaccard en hennig2007.pdf
 @article{rousseeuw1987,
   author  = {Rousseeuw, Peter J.},
   title   = {Silhouettes: A Graphical Aid to the Interpretation and Validation of Cluster Analysis},
@@ -614,32 +781,39 @@
   year    = {1987},
   volume  = {20},
   pages   = {53--65},
-  doi     = {10.1016/0377-0427(87)90125-7}
+  doi     = {10.1016/0377-0427(87)90125-7},
+  pdf_status = {no_conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Publicado en Computational Statistics & Data Analysis.
 % Contenido: Metodología de remuestreo (bootstrapping) para calcular estabilidad de clusters mediante
 %   similitud de Jaccard en particiones sucesivas. Fundamento del k=3 de la tesis.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/hennig2007.pdf
 @article{hennig2007,
-  author  = {Hennig, Christian},
+author  = {Hennig, Christian},
   title   = {Cluster-Wise Assessment of Cluster Stability},
   journal = {Computational Statistics \& Data Analysis},
   year    = {2007},
   volume  = {52},
   number  = {1},
   pages   = {258--271},
-  doi     = {10.1016/j.csda.2006.11.025}
+  doi     = {10.1016/j.csda.2006.11.025},
+  file       = {sources_pdf/hennig2007.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Preprint técnico (arXiv:1802.03426).
 % Contenido: Algoritmo de reducción no lineal de dimensionalidad basado en geometría riemanniana y topología difusa.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/mcinnes2018.pdf
 @article{mcinnes2018,
-  author  = {McInnes, Leland and Healy, John and Melville, James},
+author  = {McInnes, Leland and Healy, John and Melville, James},
   title   = {{UMAP}: Uniform Manifold Approximation and Projection for Dimension Reduction},
   year    = {2018},
-  journal = {arXiv:1802.03426}
+  journal = {arXiv:1802.03426},
+  file       = {sources_pdf/mcinnes2018.pdf},
+  pdf_status = {conseguido}
 }
 
 % ==============================================================================
@@ -650,60 +824,72 @@
 % Estado: Clásico en JRSS-B.
 % Contenido: Procedimiento para controlar la tasa de falsos descubrimientos (FDR) en pruebas de
 %   hipótesis múltiples. Base del ajuste Benjamini-Hochberg del Capítulo 6.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/benjamini1995.pdf
 @article{benjamini1995,
-  author  = {Benjamini, Yoav and Hochberg, Yosef},
+author  = {Benjamini, Yoav and Hochberg, Yosef},
   title   = {Controlling the False Discovery Rate: A Practical and Powerful Approach to Multiple Testing},
   journal = {Journal of the Royal Statistical Society: Series B (Methodological)},
   year    = {1995},
   volume  = {57},
   number  = {1},
   pages   = {289--300},
-  doi     = {10.1111/j.2517-6161.1995.tb02031.x}
+  doi     = {10.1111/j.2517-6161.1995.tb02031.x},
+  file       = {sources_pdf/benjamini1995.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Clásico en Journal of Finance.
 % Contenido: Descomposición de la volatilidad bursátil en componentes de mercado, sector e idiosincrático.
 %   Muestran que la volatilidad idiosincrática domina la varianza total de acciones individuales.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/campbell2001.pdf
 @article{campbell2001,
-  author  = {Campbell, John Y. and Lettau, Martin and Malkiel, Burton G. and Xu, Yexiao},
+author  = {Campbell, John Y. and Lettau, Martin and Malkiel, Burton G. and Xu, Yexiao},
   title   = {Have Individual Stocks Become More Volatile? An Empirical Exploration of Idiosyncratic Risk},
   journal = {The Journal of Finance},
   year    = {2001},
   volume  = {56},
   number  = {1},
   pages   = {1--43},
-  doi     = {10.1111/0022-1082.00318}
+  doi     = {10.1111/0022-1082.00318},
+  file       = {sources_pdf/campbell2001.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Clásico en Journal of Finance.
 % Contenido: Relación transversal entre volatilidad idiosincrática (residuos del modelo de Fama-French
 %   o modelo de mercado) y retornos de acciones. Base para la construcción de la variable en la tesis.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/ang2006.pdf
 @article{ang2006,
-  author  = {Ang, Andrew and Hodrick, Robert J. and Xing, Yuhang and Zhang, Xiaoyan},
+author  = {Ang, Andrew and Hodrick, Robert J. and Xing, Yuhang and Zhang, Xiaoyan},
   title   = {The Cross-Section of Volatility and Expected Returns},
   journal = {The Journal of Finance},
   year    = {2006},
   volume  = {61},
   number  = {1},
   pages   = {259--299},
-  doi     = {10.1111/j.1540-6261.2006.00836.x}
+  doi     = {10.1111/j.1540-6261.2006.00836.x},
+  file       = {sources_pdf/ang2006.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
 % Estado: Clásico en QJE.
 % Contenido: Problema de correlación serial en Difference-in-Differences con paneles de tiempo largos.
 %   Fundamento para clusterizar errores estándar a nivel de firma y rechazar inferencias ingenuas.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/bertrand2004.pdf
 @article{bertrand2004,
-  author  = {Bertrand, Marianne and Duflo, Esther and Mullainathan, Sendhil},
+author  = {Bertrand, Marianne and Duflo, Esther and Mullainathan, Sendhil},
   title   = {How Much Should We Trust Differences-in-Differences Estimates?},
   journal = {Quarterly Journal of Economics},
   year    = {2004},
   volume  = {119},
   number  = {1},
   pages   = {249--275},
-  doi     = {10.1162/003355304772839588}
+  doi     = {10.1162/003355304772839588},
+  file       = {sources_pdf/bertrand2004.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 2 - CONOCIMIENTO DE METODOLOGÍA ECONOMÉTRICA - REQUIERE DESCARGA Y LECTURA]
@@ -713,11 +899,14 @@
 % Lo que debes revisar en el PDF: Los supuestos exactos de tendencias paralelas con dosis continua
 %   utilizados en el análisis de event study del Capítulo 5.
 % Dónde obtenerlo: arxiv.org/abs/2107.02637.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/callaway2024.pdf
 @article{callaway2024,
-  author  = {Callaway, Brantly and Goodman-Bacon, Andrew and Sant'Anna, Pedro H. C.},
+author  = {Callaway, Brantly and Goodman-Bacon, Andrew and Sant'Anna, Pedro H. C.},
   title   = {Difference-in-Differences with a Continuous Treatment},
   year    = {2024},
-  journal = {Working Paper / NBER / arXiv:2107.02637}
+  journal = {Working Paper / NBER / arXiv:2107.02637},
+  file       = {sources_pdf/callaway2024.pdf},
+  pdf_status = {conseguido}
 }
 
 % [NIVEL 2 - CONOCIMIENTO DE REVISIÓN METODOLÓGICA - REQUIERE DESCARGA Y LECTURA]
@@ -726,25 +915,72 @@
 %   diagnósticos de pre-trends y potencia de tests de tendencias paralelas.
 % Lo que debes revisar en el PDF: Su discusión sobre los fallos de pre-trends cuando hay shocks concurrentes.
 % Dónde obtenerlo: DOI 10.1016/j.jeconom.2023.03.008.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/roth2023.pdf
 @article{roth2023,
-  author  = {Roth, Jonathan and Sant'Anna, Pedro H. C. and Bilinski, Alyssa and Poe, John},
+author  = {Roth, Jonathan and Sant'Anna, Pedro H. C. and Bilinski, Alyssa and Poe, John},
   title   = {What's Trending in Difference-in-Differences? A Synthesis of the Recent Econometrics Literature},
   journal = {Journal of Econometrics},
   year    = {2023},
   volume  = {235},
   number  = {2},
   pages   = {2218--2244},
-  doi     = {10.1016/j.jeconom.2023.03.008}
+  doi     = {10.1016/j.jeconom.2023.03.008},
+  file       = {sources_pdf/roth2023.pdf},
+  pdf_status = {conseguido}
 }
 
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/hassan2019.pdf
 @article{hassan2019,
-  author  = {Hassan, Tarek A. and Hollander, Stephan and van Lent, Laurence and Tahoun, Ahmed},
+author  = {Hassan, Tarek A. and Hollander, Stephan and van Lent, Laurence and Tahoun, Ahmed},
   title   = {Firm-Level Political Risk: Measurement and Effects},
   journal = {The Quarterly Journal of Economics},
   year    = {2019},
   volume  = {134},
   number  = {4},
   pages   = {2135--2202},
-  doi     = {10.1093/qje/qjz021}
+  doi     = {10.1093/qje/qjz021},
+  file       = {sources_pdf/hassan2019.pdf},
+  pdf_status = {conseguido}
 }
 
+% ==============================================================================
+% BLOQUE I: MARCOS METODOLÓGICOS DE ANALÍTICA DE DATOS Y MINERÍA (KDD Y CRISP-DM) (NIVEL 1)
+% ==============================================================================
+
+% [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
+% Estado: Artículo seminal en AI Magazine (AAAI).
+% Contenido: Marco fundacional de Knowledge Discovery in Databases (KDD), formalizando el ciclo de
+%   vida de 5 etapas: selección, preprocesamiento, transformación, minería de datos e interpretación/evaluación.
+%   Estructura epistemológica del pipeline de adquisición y procesamiento de texto de la tesis.
+% Dónde obtenerlo: DOI 10.1609/aimag.v17i3.474 (AI Magazine, Vol 17, No 3, pp. 37-54).
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/fayyad1996.pdf
+@article{fayyad1996,
+  author  = {Fayyad, Usama and Piatetsky-Shapiro, Gregory and Smyth, Padhraic},
+  title   = {From Data Mining to Knowledge Discovery in Databases},
+  journal = {AI Magazine},
+  year    = {1996},
+  volume  = {17},
+  number  = {3},
+  pages   = {37--54},
+  doi     = {10.1609/aimag.v17i3.474},
+  file       = {sources_pdf/fayyad1996.pdf},
+  pdf_status = {conseguido}
+}
+
+% [NIVEL 1 - CONOCIMIENTO PROFUNDO DE CONTENIDO]
+% Estado: Publicado en Journal of Data Warehousing.
+% Contenido: Metodología estándar de la industria Cross-Industry Standard Process for Data Mining (CRISP-DM),
+%   que define el ciclo de 6 fases iterativas: comprensión del negocio, comprensión de los datos, preparación,
+%   modelado, evaluación y despliegue. Marco director del pipeline de analítica de datos de la tesis.
+% PDF: [CONSEGUIDO] -> thesis_document/sources_pdf/shearer2000.pdf
+@article{shearer2000,
+  author  = {Shearer, Colin},
+  title   = {The {CRISP-DM} Model: The New Blueprint for Data Mining},
+  journal = {Journal of Data Warehousing},
+  year    = {2000},
+  volume  = {5},
+  number  = {4},
+  pages   = {13--22},
+  file       = {sources_pdf/shearer2000.pdf},
+  pdf_status = {conseguido}
+}

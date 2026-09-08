@@ -96,6 +96,12 @@ DURATION_METRICS: dict[str, list[str]] = {
     "rd_expense": [
         "us-gaap:ResearchAndDevelopmentExpense",
         "us-gaap:ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost",
+        # Mismo gasto corriente de I+D, desagregado para software por algunos
+        # emisores (p. ej. Adobe); no confundir con costos de desarrollo
+        # capitalizados, de petróleo/inmobiliario o I+D en proceso adquirido.
+        "us-gaap:ResearchAndDevelopmentExpenseSoftwareExcludingAcquiredInProcessCost",
+        # Equivalente IFRS para los emisores extranjeros del universo US.
+        "ifrs-full:ResearchAndDevelopmentExpense",
     ],
     "sga_expense": [
         "us-gaap:SellingGeneralAndAdministrativeExpense",

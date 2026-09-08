@@ -19,6 +19,8 @@ Pipeline:
      the moment the file is opened.
   5. Save as compiled/GermanOviedo_FinalThesis_<YYYYmmdd_HHMMSS>.docx
   6. Remove every intermediate file/dir created along the way.
+  7. Convert the final .docx to PDF (headless LibreOffice) and save as
+     compiled_pdf/GermanOviedo_FinalThesis_<YYYYmmdd_HHMMSS>.pdf
 """
 
 from __future__ import annotations
@@ -38,14 +40,17 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.oxml import parse_xml
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
+from docx.table import Table
 from docxcompose.composer import Composer
 
 ROOT = Path(__file__).resolve().parent
 QMD = ROOT / "thesis.qmd"
 COVER = ROOT / "cover.docx"
 COMPILED_DIR = ROOT / "compiled"
+COMPILED_PDF_DIR = ROOT / "compiled_pdf"
 AUTHOR_SLUG = "GermanOviedo"
 VENV_PYTHON = ROOT / ".venv" / "bin" / "python"
+SOFFICE = shutil.which("soffice") or shutil.which("libreoffice")
 
 
 def is_numeric_content(text: str) -> bool:
@@ -77,6 +82,47 @@ def is_numeric_content(text: str) -> bool:
     return False
 
 
+def unwrap_captioned_tables(document: Document) -> None:
+    """Un-nest every captioned table Quarto wraps in a 1x1 layout table.
+
+    Quarto's docx writer puts the caption paragraph and the real data table
+    together inside one cell of an outer, single-row, single-column
+    "layout" table -- purely so the caption stays glued to the table it
+    describes. That nesting is invisible in Word, but LibreOffice's PDF
+    export handles a nested table badly when the outer row does not fit in
+    the remaining page space: it corrupts the inner table's rendering
+    (empty cells, then the same data dumped as loose paragraph text below)
+    instead of just moving the block to the next page. `cantSplit` on the
+    outer row does not fix this -- LibreOffice's layout engine apparently
+    does not honor it for a row whose only content is a nested table.
+
+    The fix is to remove the nesting entirely: pull the caption paragraph
+    and the real table out of the wrapper cell and place them directly in
+    the document body, in the same order, then delete the now-empty
+    wrapper. Word and LibreOffice both lay out "caption paragraph directly
+    followed by a table" correctly without any special-casing.
+    """
+    body = document.element.body
+    for tbl in list(body.iter(qn("w:tbl"))):
+        if tbl.getparent() is not body:
+            continue  # nested tables get promoted to the body when their wrapper is unwrapped
+        rows = tbl.findall(qn("w:tr"))
+        if len(rows) != 1:
+            continue
+        cells = rows[0].findall(qn("w:tc"))
+        if len(cells) != 1:
+            continue
+        cell = cells[0]
+        if len(cell.findall(qn("w:tbl"))) != 1:
+            continue
+        children = [child for child in cell if child.tag != qn("w:tcPr")]
+        parent = tbl.getparent()
+        idx = list(parent).index(tbl)
+        for offset, child in enumerate(children):
+            parent.insert(idx + offset, child)
+        parent.remove(tbl)
+
+
 def style_all_tables(document: Document) -> None:
     """Apply publication-grade, compact booktabs styling to all data tables.
     
@@ -88,9 +134,46 @@ def style_all_tables(document: Document) -> None:
       - Header shading (#F1F5F9) and automatic page-split header repetition (<w:tblHeader/>)
       - Prevent awkward mid-row page splits (<w:cantSplit/>)
       - Right-align numeric columns, left-align textual descriptions
+
+    Quarto wraps every captioned table (docx output) in an outer single-cell,
+    single-column table that holds the caption paragraph plus the real data
+    table nested inside that same cell -- so the actual data table is never a
+    top-level table in the document body. `document.tables` only walks
+    top-level `w:tbl` elements, which means it only ever sees the empty
+    1x1 wrapper (skipped below) and never reaches the nested table that
+    needs this styling. Walking the whole tree for every `w:tbl` element
+    finds the nested tables too.
     """
-    for table in document.tables:
+    no_border_xml = """
+    <w:tblBorders xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:top w:val="none"/>
+        <w:left w:val="none"/>
+        <w:bottom w:val="none"/>
+        <w:right w:val="none"/>
+        <w:insideH w:val="none"/>
+        <w:insideV w:val="none"/>
+    </w:tblBorders>
+    """
+    for tbl_element in document.element.body.iter(qn("w:tbl")):
+        table = Table(tbl_element, document)
         if len(table.rows) <= 1 or len(table.columns) <= 1:
+            # The 1x1 caption wrapper Quarto puts around every captioned
+            # table still inherits the "Table" style's colored grid unless
+            # explicitly cleared -- that grid is what shows up as a colored
+            # box around the caption and the real table nested inside it.
+            table._tbl.tblPr.append(parse_xml(no_border_xml))
+            # That wrapper cell holds the caption AND the real nested table
+            # as siblings. If the wrapper's one row doesn't fit in the
+            # remaining page space, a renderer splitting it mid-row has to
+            # split the nested table along with it -- LibreOffice's PDF
+            # export does this badly and corrupts the nested table's
+            # rendering entirely (empty cells above, its data dumped as
+            # loose paragraph text below). Marking the wrapper row
+            # uncplittable forces the whole caption+table block onto the
+            # next page instead, which is what should happen anyway.
+            for row in table.rows:
+                trPr = row._tr.get_or_add_trPr()
+                trPr.append(parse_xml(r'<w:cantSplit xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>'))
             continue
 
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -181,6 +264,96 @@ def style_all_tables(document: Document) -> None:
                             run.font.bold = True
                             run.font.color.rgb = RGBColor(15, 23, 42)
 
+                    for math_zone in p._p.iter(qn("m:oMath")):
+                        set_math_run_size(math_zone, round(font_size.pt * 2))
+
+
+def set_math_run_size(math_zone, half_points: int) -> None:
+    """Pandoc's LaTeX-to-OMML conversion never writes a `w:sz` on the math
+    runs it emits, so an equation object has no explicit font size of its
+    own -- Word then renders it at its own default math size, which has no
+    reason to match the surrounding text (a table cell's font might be
+    styled down to 6.8-8pt by `style_all_tables`, but the equation sitting
+    right next to it stays at Word's normal default and looks oversized and
+    inconsistent). `paragraph.runs` in python-docx also does not surface
+    `m:r` elements at all (they aren't `w:r`), so the sizing loop just above
+    silently skips them -- this has to run as a separate, explicit pass.
+    Setting `w:sz` directly on each math run's run properties is the fix;
+    the math font itself (Cambria Math) is left alone so symbols still
+    render as symbols instead of falling back to Calibri glyphs."""
+    for m_r in math_zone.iter(qn("m:r")):
+        w_rPr = m_r.find(qn("w:rPr"))
+        if w_rPr is None:
+            w_rPr = m_r.makeelement(qn("w:rPr"), {})
+            m_rPr = m_r.find(qn("m:rPr"))
+            if m_rPr is not None:
+                m_rPr.addnext(w_rPr)
+            else:
+                m_r.insert(0, w_rPr)
+        for existing_sz in w_rPr.findall(qn("w:sz")):
+            w_rPr.remove(existing_sz)
+        sz = w_rPr.makeelement(qn("w:sz"), {qn("w:val"): str(half_points)})
+        w_rPr.append(sz)
+
+
+def fix_prose_math_font_size(document: Document, half_points: int = 22) -> None:
+    """Same fix as inside table cells (see `set_math_run_size`), for every
+    equation that sits in ordinary body text rather than a table -- those
+    never get touched by `style_all_tables` at all, so they're just as
+    liable to render at a mismatched default size. 22 half-points (11pt)
+    matches this template's Normal style."""
+    tbl_tag = qn("w:tbl")
+    body = document.element.body
+    for math_zone in body.iter(qn("m:oMath")):
+        ancestor, in_table = math_zone.getparent(), False
+        while ancestor is not None:
+            if ancestor.tag == tbl_tag:
+                in_table = True
+                break
+            ancestor = ancestor.getparent()
+        if in_table:
+            continue  # already sized to its table's font_size above
+        set_math_run_size(math_zone, half_points)
+
+
+def content_width_emu(document: Document) -> int:
+    """Actual printable width of the page, in EMU (914400 per inch).
+
+    Quarto sizes embedded figures to (page width - left margin - right
+    margin), but this template's section also reserves a binding `gutter`
+    -- extra space added on top of the margins for a bound copy. Quarto's
+    width calculation does not know about the gutter, so every figure comes
+    out `gutter` wider than the page can actually print, and spills past
+    the right margin in Word. Computing the width from the actual section
+    properties (not a hardcoded constant) means this keeps working if the
+    template's page size or margins ever change.
+    """
+    section = document.sections[0]
+    return section.page_width - section.left_margin - section.right_margin - section.gutter
+
+
+def resize_oversized_images(document: Document, max_width_emu: int) -> None:
+    """Scale down (preserving aspect ratio) any embedded drawing wider than
+    the page can actually print. Both `wp:extent` (the drawing's layout
+    box) and the nested `a:ext` (the picture transform inside it) have to
+    be updated together, or Word stretches/distorts the image to fill
+    whichever box is now the odd one out."""
+    body = document.element.body
+    for extent in body.iter(qn("wp:extent")):
+        cx = int(extent.get("cx"))
+        if cx <= max_width_emu:
+            continue
+        cy = int(extent.get("cy"))
+        scale = max_width_emu / cx
+        new_cx, new_cy = max_width_emu, round(cy * scale)
+        extent.set("cx", str(new_cx))
+        extent.set("cy", str(new_cy))
+        drawing = extent.getparent().getparent()  # wp:inline or wp:anchor -> w:drawing
+        for xfrm_ext in drawing.iter(qn("a:ext")):
+            if int(xfrm_ext.get("cx")) == cx:
+                xfrm_ext.set("cx", str(new_cx))
+                xfrm_ext.set("cy", str(new_cy))
+
 
 def render_quarto_content(tmp_dir: Path) -> Path:
     env = os.environ.copy()
@@ -198,7 +371,10 @@ def render_quarto_content(tmp_dir: Path) -> Path:
         raise RuntimeError(f"Expected exactly one rendered docx in {tmp_dir}, found {candidates}")
     
     doc = Document(str(candidates[0]))
+    unwrap_captioned_tables(doc)
     style_all_tables(doc)
+    fix_prose_math_font_size(doc)
+    resize_oversized_images(doc, content_width_emu(doc))
     doc.save(str(candidates[0]))
     
     return candidates[0]
@@ -235,6 +411,87 @@ def mark_fields_dirty_and_save(document: Document, out_path: Path) -> None:
     document.save(str(out_path))
 
 
+def convert_to_pdf_via_word(docx_path: Path, pdf_path: Path) -> None:
+    """Convert via Microsoft Word itself (macOS, AppleScript). Word is the
+    application this document's template and styles are actually built
+    for, and it lays out tables that need to split across a page break
+    correctly. LibreOffice's headless PDF export was tried first and
+    rejected: it has a layout bug where a table that must split across a
+    page boundary sometimes renders the split corrupted (empty cells, the
+    row data dumped afterward as loose paragraph text) instead of just
+    repeating the header row on the next page -- confirmed by generating
+    the same document both ways and finding the same tables broken only in
+    the LibreOffice output."""
+    # A ~100-page document with this many embedded figures takes Word
+    # longer to open, paginate, and export than AppleScript's default
+    # Apple Event timeout (about 120s), which aborts the whole script with
+    # error -1712 partway through -- `with timeout of` raises that ceiling
+    # for events sent to Word specifically.
+    # "save as" needs an actual document reference bound to a variable --
+    # inlining the bare expression "active document" as its direct object
+    # fails outright ("active document doesn't understand save as", -1708).
+    # But the REVERSE substitution, keeping that same bound reference
+    # (theDoc) for the later "close", reliably fails too, with a different
+    # error ("active document doesn't understand close") -- something about
+    # save-as-PDF invalidates the bound reference afterward. So: bind
+    # theDoc once and use it for "save as" (the only place it works), then
+    # re-fetch "active document" fresh for "close" (the only place that
+    # works), wrapped in try/end try so a failure there -- which happens
+    # after the PDF is already written -- can't be mistaken for the export
+    # itself having failed.
+    script = f'''
+    with timeout of 900 seconds
+        tell application "Microsoft Word"
+            set display alerts to false
+            open (POSIX file "{docx_path}" as alias)
+            set theDoc to active document
+            save as theDoc file name (POSIX file "{pdf_path}" as string) file format format PDF
+            try
+                close active document saving no
+            end try
+            try
+                set display alerts to true
+            end try
+        end tell
+    end timeout
+    '''
+    subprocess.run(["osascript", "-e", script], check=True, timeout=960)
+
+
+def convert_to_pdf_via_libreoffice(docx_path: Path, out_dir: Path) -> Path:
+    if SOFFICE is None:
+        raise RuntimeError("soffice (LibreOffice) not found on PATH; cannot convert to PDF")
+    subprocess.run(
+        [SOFFICE, "--headless", "--norestore", "--convert-to", "pdf", "--outdir", str(out_dir), str(docx_path)],
+        check=True,
+        cwd=ROOT,
+    )
+    pdf_path = out_dir / f"{docx_path.stem}.pdf"
+    if not pdf_path.exists():
+        raise RuntimeError(f"Expected {pdf_path} after soffice conversion, not found")
+    return pdf_path
+
+
+def convert_to_pdf(docx_path: Path, out_dir: Path) -> Path:
+    out_dir.mkdir(exist_ok=True)
+    pdf_path = out_dir / f"{docx_path.stem}.pdf"
+    if sys.platform == "darwin" and shutil.which("osascript"):
+        try:
+            convert_to_pdf_via_word(docx_path, pdf_path)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            # Even when the AppleScript call itself raises (e.g. the "close"
+            # step failing after a successful "save as"), the PDF may
+            # already have been written correctly -- only fall back to
+            # LibreOffice if it genuinely was not produced.
+            if pdf_path.exists():
+                return pdf_path
+            print(f"Word PDF export failed ({exc}), falling back to LibreOffice...")
+        else:
+            if pdf_path.exists():
+                return pdf_path
+    return convert_to_pdf_via_libreoffice(docx_path, out_dir)
+
+
 def cleanup_quarto_artifacts() -> None:
     for path in (
         ROOT / ".quarto",
@@ -255,19 +512,23 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="thesis_render_") as tmp:
         tmp_dir = Path(tmp)
 
-        print("[1/4] Rendering Quarto content with inline Python figures...")
+        print("[1/5] Rendering Quarto content with inline Python figures...")
         content_docx = render_quarto_content(tmp_dir)
 
-        print("[2/4] Merging cover + blank page + styled content...")
+        print("[2/5] Merging cover + blank page + styled content...")
         merged_docx = merge_cover_and_content(content_docx, tmp_dir)
 
-        print("[3/4] Marking fields dirty so Word recomputes the TOC on open...")
+        print("[3/5] Marking fields dirty so Word recomputes the TOC on open...")
         mark_fields_dirty_and_save(Document(str(merged_docx)), final_path)
 
-    print("[4/4] Cleaning up intermediates...")
+    print("[4/5] Cleaning up intermediates...")
     cleanup_quarto_artifacts()
 
+    print("[5/5] Converting to PDF...")
+    pdf_path = convert_to_pdf(final_path, COMPILED_PDF_DIR)
+
     print(f"Done: {final_path}")
+    print(f"Done: {pdf_path}")
 
 
 if __name__ == "__main__":

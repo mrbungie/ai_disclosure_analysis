@@ -146,13 +146,25 @@ def main() -> None:
     sections_dir = REPO_ROOT / config["storage"]["interim_sections"]
     sections_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = manifest_dir / "filing_manifest_earnings_calls.parquet"
-    if not manifest_path.exists():
+    equibles_manifest_path = manifest_dir / "filing_manifest_earnings_calls_equibles.parquet"
+    if not manifest_path.exists() and not equibles_manifest_path.exists():
         pipeline_logger.log_event(
             pipeline_step="us_extract_earnings_calls", level="ERROR",
             message="No manifest; run 01_fetch_transcripts.py first", log_dir=manifest_dir)
         return
 
-    manifest = pd.read_parquet(manifest_path)
+    # Two independent sources, two independent manifest files (never one
+    # mutating the other's file): the Hugging Face bulk dataset here, and
+    # 03_fill_gaps_equibles.py's per-ticker gap-filling in its own parquet.
+    # 01_fetch_transcripts.py REWRITES filing_manifest_earnings_calls.parquet
+    # wholesale on every run (`manifest.to_parquet(..., index=False)` with a
+    # freshly-built DataFrame) — concatenating at read time here, rather
+    # than merging the two into one file on disk, is what survives that
+    # rewrite instead of getting silently wiped by it.
+    manifests = [pd.read_parquet(manifest_path)] if manifest_path.exists() else []
+    if equibles_manifest_path.exists():
+        manifests.append(pd.read_parquet(equibles_manifest_path))
+    manifest = pd.concat(manifests, ignore_index=True).drop_duplicates("document_id", keep="first")
     # Already-extracted set comes from the output parts, not a parse_status
     # column — same rule as scripts/it/, so this can run beside a fetch.
     already = set()

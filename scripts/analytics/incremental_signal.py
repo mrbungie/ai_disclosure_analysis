@@ -302,7 +302,12 @@ def coefficients(d: pd.DataFrame, y: str, fe: str, suffix: str) -> dict:
     sd = X.std(axis=0); sd[sd == 0] = 1
     Xs = X / sd; ys = yy / (yy.std() or 1)
     res = sm.OLS(ys, Xs).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(d["ticker"])[0]})
-    return {n: {"beta_std": float(b), "p": float(p)} for n, b, p in zip(names, res.params, res.pvalues) if n in SEMANTIC or n == "volumen"}
+    intervals = res.conf_int(alpha=0.05)
+    return {
+        n: {"beta_std": float(b), "p": float(p), "ci95": [float(lo), float(hi)]}
+        for n, b, p, (lo, hi) in zip(names, res.params, res.pvalues, intervals)
+        if n in SEMANTIC or n == "volumen"
+    }
 
 
 def main() -> None:

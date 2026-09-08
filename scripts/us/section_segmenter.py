@@ -212,6 +212,44 @@ def _item_heading_is_link_wrapped(line: str) -> bool:
     return item_pos == -1 or open_pos < item_pos
 
 
+def _part_line_is_bare_label(line: str) -> bool:
+    """True if the line is JUST "PART I" / "PART II" (or that plus pure
+    punctuation), nothing else — the signature of a lone TOC section
+    divider that introduces its own table right after (BLK, CHD, EG
+    confirmed: "PART I" / "PART II" as standalone lines directly above
+    that Part's own pipe-table TOC), as opposed to a real heading, which
+    always carries a title on the same line ("PART I – FINANCIAL
+    INFORMATION", "Part I - Item 1. Business", "PART I. FINANCIAL
+    INFORMATION" — confirmed on HIG, BLK's/TSN's real headings). Checked
+    by what's left on the line after the "PART N" match itself: a real
+    heading's remainder is a real word or two; a bare label's remainder
+    is empty or pure punctuation/whitespace."""
+    m = _PART_RE.search(line)
+    if not m:
+        return False
+    rest = re.sub(r"[\s\-–—:.,]+", "", line[m.end():])
+    return not rest
+
+
+def _part_heading_is_link_wrapped(line: str) -> bool:
+    """Same signature as `_item_heading_is_link_wrapped`, for `_PART_RE`
+    matches. TSN's 10-Q TOC lists "PART I"/"PART II" as bare markdown links
+    with no surrounding "|" table ("[PART I. FINANCIAL INFORMATION](#a)"),
+    so `_part_windows`' old "no pipe = real heading" rule picked the TOC
+    row as the window boundary, dragging the whole rest of the document
+    (including the real Part I content) into a mislabeled "Part II"
+    window. A real "PART I" heading is bare text, never link-wrapped."""
+    m = _PART_RE.search(line)
+    if not m:
+        return False
+    matched = m.group(0)
+    open_pos = matched.find("[")
+    if open_pos == -1:
+        return False
+    part_pos = matched.upper().find("PART")
+    return part_pos == -1 or open_pos < part_pos
+
+
 def clean_html_to_lines(html_path: Path) -> list[str]:
     """Filing HTML is stored gzip-compressed (.html.gz — iXBRL-era 10-Ks
     compress ~90%+, see scripts/us/10k/01_fetch_filings.py). Transparently
@@ -284,7 +322,55 @@ def _is_toc_formatted_row(line: str) -> bool:
     return len(non_empty_cells) >= 2
 
 
-def _toc_prefix_end(raw: list[tuple[str, int]], lines: list[str]) -> int:
+PROSE_MIN_LEN = 120
+
+# Filers confirmed, by direct inspection, to table-format EVERY real body
+# heading exactly like a TOC row ("| ITEM 1. | | | BUSINESS | | |"), not
+# just the TOC itself — all Workiva-generated iXBRL 10-Ks. For these
+# specific filers only, `_toc_prefix_end` additionally stops the TOC
+# prefix at the first table-formatted candidate immediately followed by
+# real prose (`_is_followed_by_prose`), since shape alone can't tell their
+# real headings from TOC rows. Tried this as a general rule first — it
+# regressed roughly a third of a 80-filing sample (WDC lost all 3 target
+# items outright; MA, INCY, PXD, TDY, CTAS, IR, BXP, JNJ lost most of
+# their Item 1/1A/7 content) — false-positive "prose" lines (a short
+# sub-heading, a page-break artifact) exist elsewhere in this corpus that
+# happen to clear `PROSE_MIN_LEN` with no "|", so the extra check must be
+# scoped to filers that actually need it, not applied corpus-wide.
+WORKIVA_TABLE_HEADING_TICKERS = {"WFC", "SYK", "ADM", "KR", "AIG", "PCAR", "WMT", "UAA", "LHX"}
+
+
+_JUNK_LINE_MAX_LEN = 3  # a lone zero-width space, bullet, or similar filler
+_JUNK_LOOKAHEAD = 5     # how many such junk lines to skip before giving up
+
+
+def _is_followed_by_prose(lines: list[str], line_idx: int, min_len: int = PROSE_MIN_LEN) -> bool:
+    """True if a real paragraph follows `line_idx` within a few lines —
+    long, no "|" table formatting — rather than another TOC row. Some
+    filers (KR confirmed) insert a near-invisible filler line (a lone
+    zero-width space, `\\u200b`) between a real table-formatted heading and
+    its body paragraph; `clean_html_to_lines` keeps it (Python's `.strip()`
+    doesn't treat `\\u200b` as whitespace), so checking only the immediate
+    next line missed the real prose sitting one line further. Skipping a
+    short run of such near-empty junk lines before giving up on "no prose
+    follows" fixes that without weakening the TOC-row rejection: a genuine
+    TOC entry is followed by another TOC entry (another "|" row) however
+    many junk lines separate them, never by a real paragraph.
+    See `WORKIVA_TABLE_HEADING_TICKERS` for why this check exists and why
+    it is NOT applied to every filer."""
+    idx = line_idx + 1
+    skipped = 0
+    while idx < len(lines) and skipped <= _JUNK_LOOKAHEAD:
+        candidate = lines[idx]
+        if len(candidate) <= _JUNK_LINE_MAX_LEN:
+            idx += 1
+            skipped += 1
+            continue
+        return len(candidate) >= min_len and "|" not in candidate
+    return False
+
+
+def _toc_prefix_end(raw: list[tuple[str, int]], lines: list[str], ticker: str | None = None) -> int:
     """Index into `raw` (not a line number) of the first candidate that is
     NOT part of the initial run of TABLE-ROW-FORMATTED candidates starting
     at raw[0] — i.e. where the TOC ends and body content begins. Returns 0
@@ -301,11 +387,19 @@ def _toc_prefix_end(raw: list[tuple[str, int]], lines: list[str]) -> int:
     in the combined TOC are table rows, so the prefix keeps extending
     across the restart; the first candidate that ISN'T a table row is
     unambiguously the first real heading, regardless of what number it
-    is."""
+    is.
+
+    For `ticker in WORKIVA_TABLE_HEADING_TICKERS` only, one more stop
+    condition applies: those filers table-format every real body heading
+    too, so a table-formatted candidate immediately followed by an actual
+    paragraph (`_is_followed_by_prose`) ends the prefix right there."""
+    check_prose = ticker in WORKIVA_TABLE_HEADING_TICKERS
     last_line_idx = None
     prefix_len = 0
     for _item_key, line_idx in raw:
         if not _is_toc_formatted_row(lines[line_idx]):
+            break
+        if check_prose and _is_followed_by_prose(lines, line_idx):
             break
         if last_line_idx is not None and line_idx - last_line_idx > MAX_TOC_GAP:
             break
@@ -404,6 +498,7 @@ def _part_windows(lines: list[str]) -> list[tuple[str, int, int]]:
     trailing_index_start = _trailing_index_start(lines)
     candidates: dict[str, int] = {}
     non_table_candidates: dict[str, int] = {}
+    bare_candidates: dict[str, int] = {}
     for i, line in enumerate(lines):
         if i >= trailing_index_start:
             break  # everything from here on is the trailing cross-reference index
@@ -413,7 +508,17 @@ def _part_windows(lines: list[str]) -> list[tuple[str, int, int]]:
             candidates[label] = i  # last occurrence of any form (fallback)
             if "|" not in line and label not in non_table_candidates:
                 non_table_candidates[label] = i  # FIRST non-table-row occurrence
+            # FIRST non-table, non-link-wrapped occurrence — a bare-text
+            # heading can never be a TOC row (see
+            # `_part_heading_is_link_wrapped`), so this is preferred over
+            # `non_table_candidates` when both exist; IP-style filers whose
+            # real heading IS link-wrapped have no bare occurrence at all,
+            # so they fall through to `non_table_candidates` unaffected.
+            if ("|" not in line and not _part_heading_is_link_wrapped(line)
+                    and not _part_line_is_bare_label(line) and label not in bare_candidates):
+                bare_candidates[label] = i
     candidates.update(non_table_candidates)
+    candidates.update(bare_candidates)
 
     ordered = sorted(candidates.items(), key=lambda kv: kv[1])
     kept = []
@@ -520,7 +625,7 @@ def _segment_window(
     return segments
 
 
-def general_segment(lines: list[str], form: str = "10-K") -> dict[str, str]:
+def general_segment(lines: list[str], form: str = "10-K", ticker: str | None = None) -> dict[str, str]:
     """One segment per recognizable "Item N[A-C]" heading. `form` ("10-K"
     or "10-Q") selects which ITEM_ALIASES apply — see that dict's
     docstring for why the same alias text can mean a different item
@@ -557,7 +662,7 @@ def general_segment(lines: list[str], form: str = "10-K") -> dict[str, str]:
     fixes this without reverting to a pure index-based rule (which would
     wrongly suffix a 10-K's legitimate, non-colliding Part II+ items)."""
     all_raw = _raw_candidates(lines, form=form)
-    toc_prefix_len = _toc_prefix_end(all_raw, lines)
+    toc_prefix_len = _toc_prefix_end(all_raw, lines, ticker=ticker)
     toc_end_line = all_raw[toc_prefix_len - 1][1] if toc_prefix_len > 0 else -1
 
     windows = _part_windows(lines)
