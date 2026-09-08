@@ -7,16 +7,18 @@ data/raw/xbrl_facts/us_by_filing/ (scripts/us/04_extract_inline_xbrl_facts.py).
 Frames (data.sec.gov/api/xbrl/frames) return, for one XBRL tag and one
 calendar period, every filer's value for that exact period across the whole
 SEC universe — the opposite shape from the per-filing extractor, which reads
-each firm's own fiscal-quarter facts filing by filing. Measured in-session
-(2026-09-08) against the 517-ticker/22-quarter (2021Q1-2026Q2) 10-Q panel:
-frames alone covers WORSE than the inline-XBRL extraction for most duration
-metrics (revenue 34.5% vs 91.8%, capex 19.1% vs 81.2%) because frames only
-returns a value when a filer's fiscal period exactly matches the calendar
-quarter boundary — it silently drops every non-December fiscal-year-end
-filer for a given quarter. Used as a fallback/union source instead, it adds
-only 0.1-1.0pp of coverage per metric. Kept as a documented alternative
-(data/raw/xbrl_frames_alt/) rather than a replacement — see
-docs/sources/accounting_data.md for the full comparison.
+each firm's own fiscal-quarter facts filing by filing. Frames alone covers
+WORSE than the inline-XBRL extraction for every duration metric, because
+frames only returns a value when a filer's fiscal period exactly matches
+the calendar quarter boundary — it silently drops every non-December
+fiscal-year-end filer for a given quarter. Used as a fallback/union source
+instead (only where inline-XBRL has nothing, and only rows filed within a
+normal ~120-day quarterly-filing window — frames otherwise frequently
+returns a LATER restated comparative, not the period's original
+disclosure), it adds 0.0-0.8pp of coverage per metric. Kept as a
+documented alternative (data/raw/xbrl_frames_alt/) rather than a
+replacement — see docs/sources/accounting_data.md for the full comparison
+and current numbers (they drift as the corpus grows; not copied here).
 
 Usage:
     uv run python scripts/us/05_fetch_xbrl_frames_alt.py
@@ -34,22 +36,30 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "common"))  # scrip
 import pipeline_logger
 
 # (metric, [XBRL tags in fallback priority order], period_type)
+# Kept in sync with the same widened fallback chains used for inline-XBRL
+# in build_firm_financials.py / build_us_10q_financials_panel.py
+# (2026-09-08) - rd_expense/debt/capex/eps_diluted were narrower here and
+# would have silently missed the same concepts already known to matter.
 METRICS = [
     ("revenue", ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax",
                  "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueNet",
                  "SalesRevenueGoodsNet"], "duration"),
     ("cogs", ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold", "CostOfServices"], "duration"),
-    ("rd_expense", ["ResearchAndDevelopmentExpense"], "duration"),
+    ("rd_expense", ["ResearchAndDevelopmentExpense",
+                     "ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost",
+                     "ResearchAndDevelopmentExpenseSoftwareExcludingAcquiredInProcessCost"], "duration"),
     ("sga_expense", ["SellingGeneralAndAdministrativeExpense", "GeneralAndAdministrativeExpense"], "duration"),
     ("operating_income", ["OperatingIncomeLoss"], "duration"),
     ("net_income", ["NetIncomeLoss", "ProfitLoss"], "duration"),
-    ("eps_diluted", ["EarningsPerShareDiluted"], "duration"),
-    ("capex", ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"], "duration"),
+    ("eps_diluted", ["EarningsPerShareDiluted", "EarningsPerShareBasicAndDiluted"], "duration"),
+    ("capex", ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets",
+               "PaymentsToAcquireOtherPropertyPlantAndEquipment", "PaymentsForCapitalImprovements"], "duration"),
     ("assets", ["Assets"], "instant"),
     ("current_assets", ["AssetsCurrent"], "instant"),
     ("current_liabilities", ["LiabilitiesCurrent"], "instant"),
     ("equity", ["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"], "instant"),
-    ("debt", ["LongTermDebtNoncurrent", "LongTermDebt"], "instant"),
+    ("debt", ["LongTermDebtNoncurrent", "LongTermDebt",
+              "LongTermDebtAndCapitalLeaseObligations", "NotesPayable"], "instant"),
 ]
 
 
