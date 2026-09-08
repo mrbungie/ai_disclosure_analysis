@@ -130,57 +130,77 @@ universe. Stored separately, never merged, at
 `data/raw/xbrl_frames_alt/us_10q_frames.parquet`
 (`configs/us/config.yaml:storage.raw_xbrl_frames_alt`).
 
-**Coverage bug found and fixed (2026-09-08):** an inline-XBRL fact keeps
-every duration context tagged in a filing under one concept, which mixes
-the single-quarter figure with YTD and full-year comparatives under the
-SAME tag (a 10-Q routinely tags both the 3-month and 6-month-YTD
-`Revenues` value). An initial coverage measurement that counted any
-duration fact landing in a calendar quarter as "covering" that quarter
-was therefore counting YTD/annual figures as quarterly ones, inflating
-apparent coverage (e.g. a bogus 91.8% for revenue). Restricting to
-duration facts spanning 75–100 days (one real fiscal quarter) before
-deduping gives the true figure — see
-`scripts/analytics/build_us_10q_financials_panel.py`.
+**Coverage bug #1 (2026-09-08): YTD/annual comparatives miscounted as
+quarterly.** An inline-XBRL fact keeps every duration context tagged in a
+filing under one concept, which mixes the single-quarter figure with YTD
+and full-year comparatives under the SAME tag (a 10-Q routinely tags both
+the 3-month and 6-month-YTD `Revenues` value). Counting any duration fact
+landing in a calendar quarter as "covering" that quarter counted
+YTD/annual figures as quarterly ones, inflating apparent coverage (a
+bogus 91.8% for revenue). Restricting to duration facts spanning 75–100
+days (one real fiscal quarter) before deduping fixed the overcounting —
+but overcorrected into a second, larger bug.
+
+**Coverage bug #2 (2026-09-08): the 75–100-day filter discards firms
+that only ever tag YTD.** Many filers — verified against AAPL, where
+`PaymentsToAcquirePropertyPlantAndEquipment` appears ONLY as 90/181/272/
+363-day cumulative facts across its entire filing history, never as a
+bare ~90-day figure — simply never tag a standalone discrete-quarter
+duration fact for cash-flow-statement lines. The 75-100-day filter caught
+each such firm's Q1 (which happens to equal its own YTD) and silently
+dropped Q2-Q4 entirely, understating true coverage. `discrete_quarters()`
+in `scripts/analytics/build_us_10q_financials_panel.py` recovers them by
+differencing consecutive YTD facts that share the same `period_start`
+(the fiscal-year anchor): `Q2 = YTD_Q2 - YTD_Q1`, `Q3 = YTD_Q3 - YTD_Q2`,
+`Q4 = FY - YTD_Q3`. The differenced AAPL capex series was checked against
+its known quarterly figures and matched (e.g. FY2020: Q2 $1.85B, Q3
+$1.57B, Q4 $1.78B — all economically plausible for Apple's capex run-rate
+in that period).
 
 True coverage against the 517-ticker × 23-quarter (2021Q1–2026Q3, 11,891
 possible firm-quarter cells) 10-Q panel, inline-XBRL only vs. combined
-with the frames fallback (remeasured 2026-09-08 after widening the
-`rd_expense` tag fallback to the same 4-tag chain the 10-K panel uses —
-it had shipped with only `us-gaap:ResearchAndDevelopmentExpense`, missing
-the `...ExcludingAcquiredInProcessCost` / software / IFRS variants):
+with the frames fallback, after both fixes:
 
 | metric | inline-only | combined (+ frames) | gain |
 |---|---|---|---|
-| rd_expense | 23.6% | 25.1% | +1.5pp |
-| capex | 24.7% | 27.2% | +2.5pp |
-| cogs | 42.6% | 43.2% | +0.6pp |
-| sga_expense | 55.6% | 57.9% | +2.2pp |
-| operating_income | 56.0% | 58.9% | +2.9pp |
+| rd_expense | 30.2% | 30.6% | +0.4pp |
+| cogs | 54.0% | 54.1% | +0.1pp |
+| operating_income | 70.9% | 71.8% | +0.9pp |
+| sga_expense | 71.3% | 72.2% | +0.9pp |
+| capex | 76.3% | 77.0% | +0.7pp |
 | debt | 77.6% | 78.3% | +0.7pp |
-| revenue | 69.9% | 70.8% | +1.0pp |
-| eps_diluted | 69.7% | 72.8% | +3.1pp |
-| net_income | 71.4% | 74.3% | +2.9pp |
-| current_assets / current_liabilities | 76.1% | 77.0% | +0.9pp |
+| revenue | 87.4% | 87.7% | +0.3pp |
+| eps_diluted | 87.3% | 88.3% | +1.0pp |
+| net_income | 89.5% | 90.4% | +0.9pp |
 | assets | 90.3% | 91.3% | +0.9pp |
 | equity | 90.9% | 91.7% | +0.9pp |
+| current_assets / current_liabilities | 76.1% | 77.0% | +0.9pp |
 
-Two fallback-chain fixes moved these numbers more than the frames
-fallback does for any single metric:
+The YTD-differencing fix alone moved these numbers far more than any
+tag-fallback widening or the frames fallback: capex 24.7%→76.3% (+52pp),
+revenue 69.9%→87.4%, net_income 71.4%→89.5%, eps_diluted 69.7%→87.3%,
+sga_expense 55.6%→71.3%, operating_income 56.0%→70.9%. (Instant metrics —
+`assets`, `equity`, `current_assets`, `current_liabilities`, `debt` — are
+balance-sheet snapshots, not YTD-accumulated, so differencing doesn't
+apply to them; their numbers are unchanged from the tag-fallback fixes
+above.)
 
-- `rd_expense` widened to the 10-K panel's 4-tag chain (it shipped with
-  only `us-gaap:ResearchAndDevelopmentExpense`) lifted inline-only
-  coverage 20.8%→23.6%.
-- `debt` widened with `us-gaap:LongTermDebtAndCapitalLeaseObligations`
-  and `us-gaap:NotesPayable` — filers that fold finance leases into debt
-  (CSX, Cummins, Cardinal Health, ...) or tag it as notes payable
-  (homebuilders, distributors) — lifted inline-only coverage
-  58.7%→77.6%, a 19-point jump.
+Two metrics stay genuinely low even after differencing:
 
-`rd_expense` and `capex` remain the genuinely low-coverage metrics: most
-filers simply don't break those out as a distinct quarterly line item,
-confirmed by checking the untagged concepts among the missing tickers
-(pension/lease/treasury-cost tags, nothing revenue- or R&D-shaped) — not
-a fixable tag gap.
+- **`rd_expense` (30.2%)** barely moved (23.6%→30.2%) — a filer who omits
+  a discrete R&D figure overwhelmingly also omits R&D from the YTD
+  cash-flow/income-statement breakout, so there's little left to
+  difference. Matches the 10-K panel's 46% and its sector explanation
+  (utilities, insurers, airlines, REITs mostly don't tag R&D at all).
+- **`cogs` (54.0%)** — cost of revenue is disclosed quarterly by product
+  companies but not by the services/finance-heavy share of this universe,
+  the same sector pattern as the 10-K panel's 72%.
+
+A small amount of noise comes with differencing: 17 of 10,392 quarterly
+revenue values and 28 of 9,069 capex values come out negative (<0.3% of
+either), from restated comparatives landing on either side of a
+difference. Left as-is rather than filtered — downstream ratio
+construction already winsorizes at 1/99% (`docs/analytics/10_pipeline.md`).
 
 Frames alone (not as a fallback) are still worse than inline-XBRL for
 every duration metric — a frame only returns a value when a filer's
