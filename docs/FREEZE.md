@@ -16,7 +16,7 @@ humana (`ui-validator/`) revele un problema grave. Todo análisis de
 | actividades de IA | `ai_activities_from_frames.py`, `qwen/qwen3.7-flash`, prompt `v2` (la empresa que presenta el documento va en el prompt; `ai_source` y `named_entities` con rol), sobre los 17.420 textos únicos con frames conductuales de la empresa; 27.583 actividades; partes en `data/interim/ai_activities/` (en B2; las corridas previas en `data/archive/`) |
 | segmentación | `build_segments.py`, k=3 por estabilidad + "sin IA" por regla, semilla 42; no se reclusteriza |
 | grilla | `build_voice_behavior_grid.py`, terciles sobre tasas encogidas, semilla 42 |
-| financieros | XBRL (`data/raw/xbrl_facts/us/`), precios y factores FF3; ERP geométrico 6,48% |
+| financieros | XBRL inline por filing (`data/raw/xbrl_facts/us_by_filing/`, point-in-time, sin colapsar reexpresiones), precios y factores FF3; ERP geométrico 6,48% |
 | código | commit de git que introduce este archivo y posteriores etiquetados como `analytics-final` |
 
 Qué puede cambiar sin romper el congelamiento: figuras, redacción de los

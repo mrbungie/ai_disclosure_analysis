@@ -29,6 +29,23 @@ Stored as one parquet per ticker in `data/raw/xbrl_facts/us/{ticker}.parquet`
 (`configs/us/config.yaml:storage.raw_xbrl_facts`), same
 incremental-fetch/skip-if-exists contract as the market-data collector.
 
+**Not what the 10-K panel is built from.** Company Facts collapses
+restatements: the value it returns for a given `period_end` can be
+whatever the company reported in a LATER filing, not what that specific
+10-K actually disclosed at the time — the same as-of-filing-date problem
+`scripts/us/04_extract_inline_xbrl_facts.py` exists to avoid for the 10-Q
+shock series (see below). `scripts/analytics/build_firm_financials.py`
+(the 10-K panel) reads `data/raw/xbrl_facts/us_by_filing/` — the same
+inline-XBRL-per-filing source as the 10-Q panel — for exactly that reason.
+Switching it from Company Facts to inline-XBRL (2026-09-08) also raised
+coverage: `shares_out` 91%→100%, `long_term_debt` 73%→84%,
+`operating_income` 79%→83%, `sga_expense` 79%→81% (509 tickers, 2,874
+aligned 10-K rows). `rd_expense` stays at 46% either way — genuinely
+sector-driven (utilities, insurers, airlines, REITs mostly don't tag an
+R&D line at all), not a coverage bug. This `us/` company-facts pull
+remains useful on its own as a quick full-history sanity check per firm,
+just not as the panel's source of truth.
+
 ## Chile — `scripts/cl/04_fetch_accounting_data.py`
 
 Two candidate sources were checked directly against the live CMF site
@@ -107,24 +124,34 @@ duration facts spanning 75–100 days (one real fiscal quarter) before
 deduping gives the true figure — see
 `scripts/analytics/build_us_10q_financials_panel.py`.
 
-True coverage against the 517-ticker × 22-quarter (2021Q1–2026Q2, 11,374
+True coverage against the 517-ticker × 23-quarter (2021Q1–2026Q3, 11,891
 possible firm-quarter cells) 10-Q panel, inline-XBRL only vs. combined
-with the frames fallback:
+with the frames fallback (remeasured 2026-09-08 after widening the
+`rd_expense` tag fallback to the same 4-tag chain the 10-K panel uses —
+it had shipped with only `us-gaap:ResearchAndDevelopmentExpense`, missing
+the `...ExcludingAcquiredInProcessCost` / software / IFRS variants):
 
 | metric | inline-only | combined (+ frames) | gain |
 |---|---|---|---|
-| rd_expense | 20.8% | 22.4% | +1.6pp |
-| capex | 25.8% | 28.4% | +2.6pp |
-| cogs | 44.2% | 44.8% | +0.7pp |
-| sga_expense | 57.8% | 60.1% | +2.3pp |
-| operating_income | 58.2% | 61.3% | +3.0pp |
-| debt | 61.1% | 61.8% | +0.8pp |
-| revenue | 72.6% | 73.7% | +1.0pp |
-| eps_diluted | 72.5% | 75.8% | +3.2pp |
-| net_income | 74.3% | 77.3% | +3.1pp |
-| current_assets / current_liabilities | 79.2% | 80.1% | +1.0pp |
-| assets | 94.0% | 95.0% | +1.0pp |
-| equity | 94.6% | 95.5% | +0.9pp |
+| rd_expense | 23.6% | 25.1% | +1.5pp |
+| capex | 24.7% | 27.2% | +2.5pp |
+| cogs | 42.6% | 43.2% | +0.6pp |
+| sga_expense | 55.6% | 57.9% | +2.3pp |
+| operating_income | 56.0% | 58.9% | +2.9pp |
+| debt | 58.7% | 59.4% | +0.7pp |
+| revenue | 69.9% | 70.8% | +0.9pp |
+| eps_diluted | 69.7% | 72.8% | +3.1pp |
+| net_income | 71.4% | 74.3% | +2.9pp |
+| current_assets / current_liabilities | 76.1% | 77.0% | +0.9pp |
+| assets | 90.3% | 91.3% | +1.0pp |
+| equity | 90.9% | 91.7% | +0.8pp |
+
+(The widened `rd_expense` chain alone lifted inline-only coverage from
+20.8% to 23.6% — a bigger gain than the entire frames fallback gives for
+that metric. Absolute levels below this also drifted slightly from the
+prior measurement because the corpus gained a quarter and a few tickers'
+extractions since 2026-09-03/08; the fallback gain per metric — the
+number that matters for the source-selection call — is stable.)
 
 Frames alone (not as a fallback) are still worse than inline-XBRL for
 every duration metric — a frame only returns a value when a filer's

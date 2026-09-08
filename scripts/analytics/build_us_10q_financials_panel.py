@@ -17,9 +17,11 @@ Counting any of those as "covering" the calendar quarter their period_end
 falls in overstates true single-quarter coverage substantially. This
 script keeps only duration facts spanning 75-100 days (one fiscal
 quarter) before deduping — that dropped measured revenue coverage from a
-bogus 91.8% down to a real 72.6% of the 517-ticker x 22-quarter
-(2021Q1-2026Q2) grid. The frames fallback then recovers 0.7-3.2 additional
-percentage points per metric (see docs/sources/accounting_data.md).
+bogus 91.8% to a real figure in the 70% range (grid and per-metric
+numbers drift as the corpus grows; current figures live in
+docs/sources/accounting_data.md, not copied here). The frames fallback
+recovers roughly 1-3 additional percentage points per metric — real but
+modest; inline-XBRL alone stays the primary source.
 
 Output: one row per (ticker, year, quarter, metric), with `source`
 (inline_xbrl | frames_fallback) and `source_ref` (accession number)
@@ -41,7 +43,10 @@ TAGS = {
                 "us-gaap:SalesRevenueGoodsNet"],
     "cogs": ["us-gaap:CostOfRevenue", "us-gaap:CostOfGoodsAndServicesSold", "us-gaap:CostOfGoodsSold",
              "us-gaap:CostOfServices"],
-    "rd_expense": ["us-gaap:ResearchAndDevelopmentExpense"],
+    "rd_expense": ["us-gaap:ResearchAndDevelopmentExpense",
+                   "us-gaap:ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost",
+                   "us-gaap:ResearchAndDevelopmentExpenseSoftwareExcludingAcquiredInProcessCost",
+                   "ifrs-full:ResearchAndDevelopmentExpense"],
     "sga_expense": ["us-gaap:SellingGeneralAndAdministrativeExpense", "us-gaap:GeneralAndAdministrativeExpense"],
     "operating_income": ["us-gaap:OperatingIncomeLoss"],
     "net_income": ["us-gaap:NetIncomeLoss", "us-gaap:ProfitLoss"],

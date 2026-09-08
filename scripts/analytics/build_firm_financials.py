@@ -44,8 +44,20 @@ Diferencias deliberadas respecto de la versión perdida (rige lo nuevo):
      negativo -> ROE/PB/deuda-equity nulos). La versión anterior los dejaba
      entrar y después los winsorizaba al 2-98%.
 
-Determinístico, sin LLM, sin costo de API: lee `data/raw/xbrl_facts/us/` y
-`filing_manifest` y no escribe nada fuera de `data/processed/clusters/`.
+  d. Fuente de los hechos XBRL: `data/raw/xbrl_facts/us_by_filing/`, el
+     inline-XBRL parseado directamente de cada 10-K/10-Q cacheado
+     (`scripts/us/04_extract_inline_xbrl_facts.py`), no el bulk pull de SEC
+     Company Facts (`data/raw/xbrl_facts/us/`, `scripts/us/03_fetch_accounting_data.py`).
+     Company Facts colapsa reexpresiones: el valor que devuelve para un
+     period_end puede ser el que la empresa reportó AÑOS después de ese
+     10-K, no el que ese 10-K efectivamente reveló — filtra el propósito de
+     `disclosed_period_end` (dato conocido al momento del filing). El
+     inline-XBRL, al venir del HTML de cada filing individual, no tiene ese
+     problema. También sube cobertura (shares_out 91%->100%, long_term_debt
+     73%->84%, operating_income 79%->83%, medido 2026-09-08).
+
+Determinístico, sin LLM, sin costo de API: lee `data/raw/xbrl_facts/us_by_filing/`
+y `filing_manifest` y no escribe nada fuera de `data/processed/clusters/`.
 
 Uso:
     uv run python scripts/analytics/build_firm_financials.py
@@ -62,7 +74,7 @@ import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
-XBRL_GLOB = REPO_ROOT / "data" / "raw" / "xbrl_facts" / "us" / "*.parquet"
+XBRL_GLOB = REPO_ROOT / "data" / "raw" / "xbrl_facts" / "us_by_filing" / "*.parquet"
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
 
 ANNUAL_MIN_DAYS, ANNUAL_MAX_DAYS = 340, 380
@@ -171,13 +183,20 @@ def load_facts(con: duckdb.DuckDBPyConnection, glob: Path) -> pd.DataFrame:
     del año anterior), y las repeticiones pueden diferir por reexpresiones.
     Se toma la MEDIANA de las repeticiones, que es robusta a una reexpresión
     aislada — misma regla que documenta 05_senal_incremental.md."""
-    return con.execute(f"""
+    facts = con.execute(f"""
         SELECT ticker, concept, period_type, period_start, period_end,
                median(numeric_value) AS value
         FROM read_parquet('{glob}', union_by_name=True)
         WHERE numeric_value IS NOT NULL AND ticker IS NOT NULL
         GROUP BY 1, 2, 3, 4, 5
     """).fetchdf()
+    # us_by_filing (inline-XBRL) stores period_start/period_end as raw XBRL
+    # context strings, not parsed dates; us (company facts) already returns
+    # them as datetimes. Normalize so downstream day-count arithmetic works
+    # for either source.
+    facts["period_start"] = pd.to_datetime(facts["period_start"], errors="coerce")
+    facts["period_end"] = pd.to_datetime(facts["period_end"], errors="coerce")
+    return facts
 
 
 def pivot_metrics(facts: pd.DataFrame, metrics: dict[str, list[str]],

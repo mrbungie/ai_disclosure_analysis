@@ -38,8 +38,12 @@ python scripts/analytics/<script>.py` o, para el bloque financiero,
 
 ## Decisiones de construcción que afectan cifras
 
-1. **Cadenas de fallback de conceptos XBRL**: cobertura de capex 87%, SG&A
-   80%, `net_margin` 98%, revenue 98%.
+1. **Cadenas de fallback de conceptos XBRL**, sobre inline-XBRL por filing
+   (`data/raw/xbrl_facts/us_by_filing/`, no el bulk de Company Facts, que
+   colapsa reexpresiones): cobertura de capex 88%, SG&A 81%, `net_margin`
+   98%, revenue 99%. `rd_expense` queda en 46% — genuinamente por sector
+   (utilities, aseguradoras, aerolíneas, REITs no taggean una línea de I+D),
+   no por una cadena de fallback incompleta (`docs/sources/accounting_data.md`).
 2. **`next_*_yoy` se anula cuando el gap fiscal sale de [340, 380] días.**
 3. **Denominadores ≤ 0 producen NULL**, no un ratio absurdo (ROE con equity
    negativo, P/E con EPS negativo).
