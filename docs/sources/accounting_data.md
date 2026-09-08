@@ -37,11 +37,6 @@ whatever the company reported in a LATER filing, not what that specific
 shock series (see below). `scripts/analytics/build_firm_financials.py`
 (the 10-K panel) reads `data/raw/xbrl_facts/us_by_filing/` — the same
 inline-XBRL-per-filing source as the 10-Q panel — for exactly that reason.
-Switching it from Company Facts to inline-XBRL (2026-09-08) also raised
-coverage: `shares_out` 91%→100%, `operating_income` 79%→83%,
-`sga_expense` 79%→81% (505 tickers, 2,874 aligned 10-K rows). `rd_expense`
-stays at 46% either way — genuinely sector-driven (utilities, insurers,
-airlines, REITs mostly don't tag an R&D line at all), not a coverage bug.
 This `us/` company-facts pull remains useful on its own as a quick
 full-history sanity check per firm, just not as the panel's source of
 truth.
@@ -54,15 +49,84 @@ CSX, Cummins, Cardinal Health and 19 others fold finance-lease
 obligations into `us-gaap:LongTermDebtAndCapitalLeaseObligations`;
 homebuilders and distributors like D.R. Horton tag theirs
 `us-gaap:NotesPayable`. Adding both as lower-priority fallbacks recovered
-26 of the 45 and lifted `long_term_debt` row-coverage from 84%→93% in the
-10-K panel and from 58.7%→77.6% inline-only in the 10-Q panel (table
-below). Coverage stays below 100% for two reasons that are NOT tag gaps:
-~18% of firm-years have negative book equity (McDonald's, Booking,
-Philip Morris — real, from buybacks, not missing data), which correctly
-NULLs `debt_to_equity` rather than producing a spurious ratio; and ~15%
-of the universe (banks, insurers, REITs) files an unclassified balance
-sheet with no current/non-current split at all, capping `current_assets`
-/ `current_liabilities` at ~85%.
+26 of the 45.
+
+**Dimensional facts corrupting the consolidated total (2026-09-08),
+found and fixed.** Unlike Company Facts, inline-XBRL keeps every context a
+filer tags — including segment/geography breakdowns (`explicitMember`/
+`typedMember` dimensions) that can share the SAME concept and period as
+the consolidated total. Amazon's FY2021 `us-gaap:Revenues` existed ONLY as
+a ~$55M dimensional context (a single business unit); the real ~$470B
+total was tagged under a different concept
+(`RevenueFromContractWithCustomerExcludingAssessedTax`,
+non-dimensional) — but before this fix, the concept-priority fallback
+still preferred `Revenues` and returned the $55M segment figure as
+Amazon's total revenue. `load_facts()` now excludes any fact with
+`has_dimensions = true`. This is the single highest-impact fix in this
+file: it silently corrupted revenue (and every other metric with a
+segment breakdown) for any multi-segment filer using the affected
+concept, which is most of the S&P-sized end of this universe.
+
+**As-of correctness (2026-09-08): "first disclosed" beats both "median"
+and "most recent".** This panel feeds as-of joins — the value assigned to
+a period must be what a reader of THAT filing could have known then,
+never a figure a later filing corrected. XBRL repeats each annual figure
+in 2-3 subsequent filings as prior-year comparatives, and those repeats
+can disagree after a restatement. Two rules were tried and rejected before
+landing on the right one:
+- *Most recent filing wins* — the original rule — actively prefers the
+  restated figure, the opposite of as-of-safe.
+- *Median across filings* — robust to a single outlier IF the vote split
+  favors the original, but not otherwise. Verified against DISH's 2024
+  post-EchoStar-merger 10-K, which retags FY2021 revenue at ~10x what two
+  prior, mutually consistent filings had reported for the exact same
+  period: median happened to get this right (2 votes vs 1), but the rule
+  itself doesn't know why it's right.
+- *Value from the EARLIEST filing_date* — the rule actually used now. It
+  is correct regardless of how later filings vote, because it is the only
+  rule that never looks at a filing later than the one being resolved.
+
+A second, subtler instance of the same bug lived in concept-fallback
+priority itself: `pivot_metrics()` picked the highest-PRIORITY concept
+(e.g. `us-gaap:Revenues` over `RevenueFromContractWithCustomerExcludingAssessedTax`)
+regardless of when each concept was first tagged. Iron Mountain's original
+Q1 2022 10-Q tagged only the contract-revenue concept ($497M); `Revenues`
+for that same quarter first appears over a year later, in 2023, as a
+restated comparative at ~2.5x the figure. Priority-first pulled in that
+later restatement. Fixed by sorting DATE first, priority only as a
+same-date tie-break (needed because some filers, e.g. Capital One, tag
+both concepts in the same original filing at genuinely different
+magnitudes — a bank's non-interest income from customer contracts is a
+small slice of its total revenue).
+
+**Validation:** summed quarterly revenue (10-Q panel, inline-only) against
+independently-built annual revenue (10-K panel) for every ticker-year
+where all 4 quarters came from inline-XBRL. Restricted to calendar-fiscal-
+year firms (non-calendar firms, e.g. NVDA/ORCL/GIS, fail this check
+trivially because "calendar year" quarter grouping doesn't match their
+own fiscal year — a limitation of the check, not the panels): **99.1%
+within 1% of the annual figure, 99.4% within 5%**, n=1,620. The handful of
+remaining outliers (BlackRock, Iron Mountain, Northern Trust) are
+financial institutions/REITs whose own XBRL tagging inconsistently
+switches concept scope across periods within the same fiscal year — a
+data-quality property of those specific filings, not a pipeline defect.
+
+Net coverage effect of all four 10-K-panel fixes together (dimensional
+filter + debt fallback + as-of resolution + priority-tiebreak fix),
+503 tickers, 2,862 aligned 10-K rows: `revenue` 98%, `net_income` 99.7%,
+`total_assets`/`equity` 100%, `capex` 87%, `sga_expense` 80%,
+`operating_income` 80%, `long_term_debt` 88%, `shares_out` 91%,
+`current_assets`/`current_liabilities` 85%, `debt_to_equity` 82%,
+`cost_of_revenue` 60%, `rd_expense` 45%. The lower-coverage metrics are
+sector-driven, not tag gaps — confirmed the same way as the 10-Q section
+below: checking what concepts the "missing" tickers actually use instead
+turns up pension/lease/treasury-cost tags for `rd_expense`, nothing
+revenue- or R&D-shaped. `shares_out` (dei:EntityCommonStockSharesOutstanding)
+is the one metric where the dimensional filter genuinely COSTS coverage
+rather than just correcting it: multi-class-stock filers (dual-class
+share structures) sometimes tag shares outstanding ONLY per class
+(a dimensional fact), with no non-dimensional total — summing the
+per-class dimensional facts would recover it, not yet implemented.
 
 ## Chile — `scripts/cl/04_fetch_accounting_data.py`
 

@@ -79,6 +79,27 @@ INSTANT = {"assets", "current_assets", "current_liabilities", "equity", "debt"}
 ALL_TAGS = sorted({t for v in TAGS.values() for t in v})
 
 
+def first_disclosed(facts: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
+    """Collapse repeated (keys) observations across filings to the value
+    from the EARLIEST filing_date — not the most recent, not the median.
+
+    This panel feeds as-of joins: the value assigned to a period must be
+    what a reader of that period's own filing could have known then, never
+    a figure corrected by a later restatement. Median was tried first
+    (robust to an isolated bad restatement, mirroring build_firm_financials.py's
+    prior approach) and verified against DISH's 2024 post-EchoStar-merger
+    10-K, which retags FY2021 revenue at ~10x what two prior, mutually
+    consistent filings had already reported for the exact same period —
+    median got this right only because the vote split (2 vs 1) happened to
+    favor the original figure. "Earliest filing" is right regardless of
+    the vote count, because it is the only rule that never looks at a
+    filing later than the one whose value is being resolved.
+    """
+    return (facts
+            .sort_values(keys + ["filing_date"])
+            .drop_duplicates(keys, keep="first"))
+
+
 def discrete_quarters(duration_facts: pd.DataFrame) -> pd.DataFrame:
     """One discrete-quarter value per (ticker, concept, period_end).
 
@@ -89,11 +110,11 @@ def discrete_quarters(duration_facts: pd.DataFrame) -> pd.DataFrame:
     later entry is replaced by its difference from the previous one,
     recovering the discrete quarter, but ONLY where the day-count gap
     between consecutive entries is itself 75-100 days (one real quarter,
-    not a skipped filing or a fiscal-year restart).
+    not a skipped filing or a fiscal-year restart). Each derived quarter
+    keeps the filing_date/accession of its LATER endpoint — the moment the
+    quarter's own value first became inferable, never earlier.
     """
-    duration_facts = (duration_facts
-                       .sort_values("filing_date")
-                       .drop_duplicates(["ticker", "concept", "start", "end"], keep="last"))
+    duration_facts = first_disclosed(duration_facts, ["ticker", "concept", "start", "end"])
     out = []
     for (ticker, concept, _start), group in duration_facts.groupby(["ticker", "concept", "start"]):
         group = group.sort_values("end").reset_index(drop=True)
@@ -143,11 +164,41 @@ def main():
     dq["cal_q"] = dq["end"].dt.year * 10 + dq["end"].dt.quarter
     dq = dq[dq["cal_q"].between(cal_q_min, cal_q_max)]
 
+    instant_tags = sorted({t for m, tags in TAGS.items() if m in INSTANT for t in tags})
+    inst = first_disclosed(base[base["concept"].isin(instant_tags)], ["ticker", "concept", "end"])
+
     rows_out = []
     for metric, tags in TAGS.items():
-        sub = (base if metric in INSTANT else dq)
+        sub = (inst if metric in INSTANT else dq)
         sub = sub[sub["concept"].isin(tags)].copy()
-        sub = sub.sort_values("filing_date").drop_duplicates(["ticker", "cal_q"], keep="last")
+        # One value per (ticker, cal_q): collapse repeats of the SAME
+        # concept to its own earliest filing first (a concept can still
+        # produce >1 candidate for the same cal_q — e.g. two different
+        # YTD-anchor groups both landing a discrete quarter on the same
+        # period_end), then resolve remaining cross-concept conflicts by
+        # DATE FIRST, priority only as a same-date tie-break — never
+        # priority regardless of date. Two distinct failure modes taught
+        # this order:
+        #   - Capital One tags BOTH us-gaap:Revenues (true total,
+        #     ~$9-15B/quarter) and RevenueFromContractWithCustomer
+        #     ExcludingAssessedTax (non-interest income subset,
+        #     ~$1.2-1.6B/quarter) in the SAME original filing every
+        #     quarter — priority correctly picks Revenues here because
+        #     both dates tie.
+        #   - Iron Mountain's original Q1 2022 10-Q tagged ONLY
+        #     RevenueFromContractWithCustomerExcludingAssessedTax
+        #     ($497M); us-gaap:Revenues for that same quarter appears for
+        #     the first time over a YEAR later, in 2023, as a restated
+        #     comparative at ~2.5x the original figure. Priority-first
+        #     would have picked the higher-ranked "Revenues" concept and
+        #     pulled in that later restatement even though it postdates
+        #     the quarter by over a year. Date-first correctly keeps the
+        #     $497M value that was actually knowable in 2022.
+        priority = {concept: rank for rank, concept in enumerate(tags)}
+        sub["priority"] = sub["concept"].map(priority)
+        sub = first_disclosed(sub, ["ticker", "concept", "cal_q"])
+        sub = (sub.sort_values(["ticker", "cal_q", "filing_date", "priority"])
+                  .drop_duplicates(["ticker", "cal_q"], keep="first"))
         sub = sub[["ticker", "cal_q", "numeric_value", "accession_number"]].rename(
             columns={"numeric_value": "value", "accession_number": "source_ref"})
         sub["source"] = "inline_xbrl"

@@ -188,16 +188,57 @@ def load_facts(con: duckdb.DuckDBPyConnection, glob: Path) -> pd.DataFrame:
     (ticker, concepto, period_type, period_end).
 
     XBRL repite cada cifra anual en 2-3 filings distintos (los comparativos
-    del año anterior), y las repeticiones pueden diferir por reexpresiones.
-    Se toma la MEDIANA de las repeticiones, que es robusta a una reexpresión
-    aislada — misma regla que documenta 05_senal_incremental.md."""
-    facts = con.execute(f"""
-        SELECT ticker, concept, period_type, period_start, period_end,
-               median(numeric_value) AS value
-        FROM read_parquet('{glob}', union_by_name=True)
-        WHERE numeric_value IS NOT NULL AND ticker IS NOT NULL
-        GROUP BY 1, 2, 3, 4, 5
-    """).fetchdf()
+    del año anterior). Se toma el valor de la PRIMERA vez que se reportó —
+    no la mediana ni el más reciente — porque este panel alimenta joins
+    as-of: el valor asignado a un período tiene que ser el que un lector de
+    ESE filing podía conocer entonces, nunca uno corregido por una
+    reexpresión posterior. Mediana era la regla anterior (robusta a una
+    reexpresión aislada, documentada en 05_senal_incremental.md) pero deja
+    entrar información del futuro — verificado con DISH FY2021 revenue,
+    donde un 10-K de 2024 post-fusión con EchoStar retaggea el período a
+    ~10x lo que dos filings previos y mutuamente consistentes ya habían
+    reportado; la mediana la habría tomado si el voto hubiera sido 2 a 1 al
+    revés. "Primera vez reportado" es correcta pase lo que pase con el
+    conteo de votos, porque es la única regla que nunca mira un filing
+    posterior al que se está alineando.
+
+    `has_dimensions` se excluye cuando existe: un inline-XBRL fact
+    dimensional (contexto con `explicitMember`/`typedMember`, p. ej. el
+    desglose por segmento de negocio o geografía) puede compartir el MISMO
+    concepto y período que el total consolidado — `us-gaap:Revenues` de
+    Amazon FY2021 sólo existía como un contexto dimensional de ~$55M (un
+    segmento), no como el total de ~$470M. Sin este filtro esos hechos
+    entran junto con — o en vez de — el consolidado y lo corrompen.
+    `data/raw/xbrl_facts/us_by_filing/` trae la columna; fuentes que no la
+    traen (p. ej. el bulk de Company Facts) no la necesitan porque ya
+    devuelven un único valor no dimensional por concepto-período — esas
+    mismas fuentes tampoco traen `filing_date` por hecho individual (es un
+    bulk pull, no por filing), así que caen de vuelta a la mediana."""
+    columns = {row[0] for row in con.execute(
+        f"DESCRIBE SELECT * FROM read_parquet('{glob}', union_by_name=True) LIMIT 0").fetchall()}
+    dims_filter = "AND has_dimensions IS NOT TRUE" if "has_dimensions" in columns else ""
+    if "filing_date" in columns:
+        facts = con.execute(f"""
+            SELECT ticker, concept, period_type, period_start, period_end, numeric_value AS value,
+                   filing_date
+            FROM (
+                SELECT ticker, concept, period_type, period_start, period_end, numeric_value, filing_date,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY ticker, concept, period_type, period_start, period_end
+                           ORDER BY filing_date ASC) AS rn
+                FROM read_parquet('{glob}', union_by_name=True)
+                WHERE numeric_value IS NOT NULL AND ticker IS NOT NULL {dims_filter}
+            )
+            WHERE rn = 1
+        """).fetchdf()
+    else:
+        facts = con.execute(f"""
+            SELECT ticker, concept, period_type, period_start, period_end,
+                   median(numeric_value) AS value, NULL AS filing_date
+            FROM read_parquet('{glob}', union_by_name=True)
+            WHERE numeric_value IS NOT NULL AND ticker IS NOT NULL {dims_filter}
+            GROUP BY 1, 2, 3, 4, 5
+        """).fetchdf()
     # us_by_filing (inline-XBRL) stores period_start/period_end as raw XBRL
     # context strings, not parsed dates; us (company facts) already returns
     # them as datetimes. Normalize so downstream day-count arithmetic works
@@ -209,14 +250,27 @@ def load_facts(con: duckdb.DuckDBPyConnection, glob: Path) -> pd.DataFrame:
 
 def pivot_metrics(facts: pd.DataFrame, metrics: dict[str, list[str]],
                   period_type: str) -> pd.DataFrame:
-    """(ticker, period_end) x métrica, resolviendo la cadena de fallback:
-    para cada celda gana el concepto de menor `priority` que tenga dato."""
+    """(ticker, period_end) x métrica, resolviendo la cadena de fallback.
+
+    Orden de desempate: PRIMERO `filing_date` (el concepto disponible más
+    temprano gana), la cadena de prioridad (`DURATION_METRICS`/
+    `INSTANT_METRICS`) sólo rompe empates entre conceptos disponibles el
+    MISMO día. Nunca al revés — el caso que lo exige es Iron Mountain
+    FY2022 Q1: el 10-Q original de 2022 sólo taggeaba
+    `RevenueFromContractWithCustomerExcludingAssessedTax` ($497M);
+    `us-gaap:Revenues` para ese mismo trimestre aparece por primera vez
+    más de un año después, en 2023, como comparativo reexpresado a ~2.5x
+    el valor original. Prioridad-primero habría preferido `Revenues` (más
+    arriba en la cadena) y arrastrado esa reexpresión aunque sea posterior
+    al trimestre por más de un año — exactamente la fuga que este panel
+    existe para evitar. Fecha-primero mantiene el valor que efectivamente
+    se conocía en 2022."""
     priority = _concept_priority(metrics)
     df = facts[facts["period_type"] == period_type].merge(priority, on="concept")
     if period_type == "duration":
         days = (df["period_end"] - df["period_start"]).dt.days
         df = df[(days >= ANNUAL_MIN_DAYS) & (days <= ANNUAL_MAX_DAYS)]
-    df = (df.sort_values(["ticker", "period_end", "metric", "priority"])
+    df = (df.sort_values(["ticker", "period_end", "metric", "filing_date", "priority"])
             .drop_duplicates(["ticker", "period_end", "metric"], keep="first"))
     wide = df.pivot_table(index=["ticker", "period_end"], columns="metric",
                           values="value", aggfunc="first").reset_index()

@@ -40,18 +40,33 @@ python scripts/analytics/<script>.py` o, para el bloque financiero,
 
 1. **Cadenas de fallback de conceptos XBRL**, sobre inline-XBRL por filing
    (`data/raw/xbrl_facts/us_by_filing/`, no el bulk de Company Facts, que
-   colapsa reexpresiones): cobertura de capex 88%, SG&A 81%, `net_margin`
-   98%, revenue 99%, `long_term_debt` 93% (subió de 84% al agregar
-   `LongTermDebtAndCapitalLeaseObligations`/`NotesPayable` a la cadena).
-   `rd_expense` queda en 46% — genuinamente por sector (utilities,
-   aseguradoras, aerolíneas, REITs no taggean una línea de I+D), no por una
-   cadena de fallback incompleta. `debt_to_equity` (76%) y
-   `current_assets`/`current_liabilities` (85%) tampoco son cadenas
+   colapsa reexpresiones), con dos correcciones de fondo (2026-09-08,
+   `docs/sources/accounting_data.md` tiene el detalle completo): (a)
+   excluir hechos dimensionales (`has_dimensions`) — sin esto un desglose
+   por segmento puede compartir concepto y período con el consolidado y
+   corromperlo (Amazon FY2021 `us-gaap:Revenues` sólo existía como un
+   segmento de ~$55M); (b) resolver reexpresiones por FECHA de filing más
+   temprana, no por mediana ni por "el filing más reciente" — este panel
+   alimenta joins as-of, así que el valor de un período tiene que ser el
+   que ese filing efectivamente reveló, nunca uno corregido después.
+   Validado sumando ingresos trimestrales contra el ingreso anual
+   independiente: 99.1% dentro de 1% para empresas de año fiscal
+   calendario (n=1.620).
+
+   Cobertura resultante (503 tickers, 2.862 filas 10-K alineadas): revenue
+   98%, net_income 99.7%, total_assets/equity 100%, capex 87%, SG&A 80%,
+   operating_income 80%, long_term_debt 88% (subió de 84% al agregar
+   `LongTermDebtAndCapitalLeaseObligations`/`NotesPayable` a la cadena),
+   shares_out 91%, current_assets/current_liabilities 85%, debt_to_equity
+   82%, cost_of_revenue 60%, rd_expense 45%. `rd_expense` y
+   `cost_of_revenue` quedan bajos genuinamente por sector (utilities,
+   aseguradoras, aerolíneas, REITs no taggean una línea de I+D o de costo
+   de ventas), no por una cadena de fallback incompleta. `debt_to_equity`
+   y `current_assets`/`current_liabilities` tampoco son cadenas
    incompletas: ~18% de empresas-año tiene equity contable negativo
    (recompras agresivas — McDonald's, Booking, Philip Morris) donde el
    ratio queda NULL a propósito, y ~15% del universo (bancos, aseguradoras,
-   REITs) presenta balance no clasificado sin corte corriente/no corriente
-   (`docs/sources/accounting_data.md`).
+   REITs) presenta balance no clasificado sin corte corriente/no corriente.
 2. **`next_*_yoy` se anula cuando el gap fiscal sale de [340, 380] días.**
 3. **Denominadores ≤ 0 producen NULL**, no un ratio absurdo (ROE con equity
    negativo, P/E con EPS negativo).
