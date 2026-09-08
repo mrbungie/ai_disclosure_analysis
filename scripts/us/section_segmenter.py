@@ -323,8 +323,18 @@ def item_sort_key(item_key: str) -> tuple[int, int]:
 # filter in `_segment_window` then rejects ALL of them as "out of order" —
 # confirmed on INCY: one such mention at line 57 (rank 10) silently wiped
 # out real Items 1 through 7A found hundreds of lines later.
+_LEADING_AND_ITEM_RE = re.compile(r"^and\s+\d{1,2}[A-C]?\.?\s*", re.IGNORECASE)
+
+
 def _match_is_narrative_mention(line: str, match_end: int) -> bool:
     rest = line[match_end:].lstrip(" \t\xa0-–—:.,([|")
+    # A combined heading (FCX: "Items 7. and 7A. Management's Discussion
+    # and Analysis...", NTRS's analogous "Items 2. and 3." — see ITEM_RE's
+    # docstring) continues in lowercase too ("and 7A. Management's...").
+    # Stripping that specific "and N[A-C]?." continuation before the
+    # casing check tells it apart from an actual narrative sentence,
+    # which never has this shape right after the item number.
+    rest = _LEADING_AND_ITEM_RE.sub("", rest, count=1)
     return bool(rest) and rest[0].isalpha() and rest[0].islower()
 
 

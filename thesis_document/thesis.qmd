@@ -340,39 +340,6 @@ Markdown(tabulate(table, headers=["Stage", "Unit of Observation", "Operational F
 
 *Notes: High-level overview of the five-stage inference pipeline. Granular form-by-form decompositions (10-K, 10-Q, DEF 14A, 8-K, and Earnings Calls) and intermediate model acceptance diagnostics are reported in @tbl-a1-funnel-full (Appendix C).*
 
-### How the pipeline works
-
-The pipeline starts from a firm-period panel and pulls two parallel streams of data for each firm-period: text from Edgar (earnings calls, DEF 14A, 8-K, 10-K/20-F, 10-Q) and numeric data (XBRL, prices). These two streams are processed independently and only rejoin at the fusion step.
-
-#### Cleaning and prefiltering
-
-Every scorable paragraph is hashed on its normalized text, which collapses 8.73 million paragraph instances into 4.98 million unique texts. Everything downstream runs once per unique hash rather than once per document, and results are joined back afterward to every filing that repeats that paragraph. This keeps a recycled legal disclaimer from being counted, and scored, once per firm that happens to repeat it.
-
-#### Embeddings and lexical features
-
-Text embeddings and lexical signals are computed for each unique paragraph and feed directly into the classifier below.
-
-#### AI-related paragraph classifier
-
-A machine-learning model trained against the golden sets, tuned for high recall ($\ge 0.92$): it is built to over-flag rather than risk missing a rare AI mention in a non-technical sector, so a meaningful share of what it passes through isn't actually about AI. That's by design — precision is recovered downstream, not here.
-
-#### Disclosure and extractor LLM passes
-
-Flagged paragraphs go through two separate LLM passes:
-
-- **Disclosure pass** asks what the paragraph is semantically saying and outputs semantic frames. A paragraph the prefilter flagged but that isn't really AI-related simply yields no frame, which does the precision work the classifier left undone — 13.4% of prefilter-flagged texts (4,110 of them) get zero semantic frames this way, rising to 17.5% in earnings calls and 39.6% in Form 8-K, the noisiest venues.
-- **Extractor pass** asks whose technology is being described and outputs activity frames. Because that judgment depends on the filer's identity, its prompt includes the firm's name and ticker alongside the paragraph — without that, there is no way to tell a firm's own product from a vendor's. AMD's "Instinct accelerators" are coded as its own product (`own`); an insurance firm's use of NVIDIA GPUs and OpenAI APIs is coded as third-party (`third_party`).
-
-Semantic and activity frames together form the **processed qualitative data**.
-
-#### Numeric branch
-
-XBRL and price data are cleaned and normalized in parallel, with no LLM involved, into the **processed quantitative data**.
-
-#### Point-in-time fusion and aggregation
-
-The two processed streams are joined point-in-time — each firm-period's qualitative frames matched to the numeric data as it stood at that date, avoiding look-ahead — producing the panel that feeds the analyses and visualizations in the chapters that follow.
-
 ## Units of analysis
 
 The pipeline moves across seven nested units, each used where it is the natural denominator:
@@ -387,22 +354,24 @@ The pipeline moves across seven nested units, each used where it is the natural 
 
 A firm-quarter unit is used only for the SEC and DeepSeek event studies, where calendar-quarter alignment is required to define a clean pre/post cut.
 
-## AI prefilter
+## Cleaning, prefiltering, and AI paragraph classifier
 
-Before any LLM reads a paragraph, a cheaper classifier decides whether it is worth reading at all. This gradient-boosted model looks at 39 signals in four groups:
+Before any LLM reads a paragraph, the text processing stack cleans, deduplicates, and classifies every candidate paragraph. Every scorable paragraph is hashed on its normalized text, which collapses 8.73 million paragraph instances into 4.98 million unique texts. Everything downstream runs once per unique hash rather than once per document, and results are joined back afterward to every filing that repeats that paragraph. This keeps recycled boilerplate and legal disclaimers from being scored repeatedly across documents.
+
+Text embeddings and lexical signals are computed for each unique paragraph. A gradient-boosted classifier evaluates 39 signals across four groups:
 
 - keywords (a hand-built list of AI terms and roughly 60 named entities);
-- meaning (how close the text is to known AI language, using sentence embeddings);
+- meaning (cosine similarity to known AI language using dense sentence embeddings);
 - shape (length, capitalization, position in the document); and
 - sentence-level cues.
 
-It is trained on a 9,900-text golden set labeled by two independent LLM judges (@tbl-evaluation-datasets) and scores 0.96 on the standard F1 metric for 10-K filings, meaning it rarely misses a real AI mention and rarely flags something irrelevant, on the document type it was tuned for. No part of this label set is human-annotated; that distinction, and what it means for how much to trust these numbers, is addressed directly in the Conclusions.
+It is trained on a 9,900-text golden set labeled by two independent LLM judges (@tbl-evaluation-datasets) and scores 0.96 on the standard F1 metric for 10-K filings, meaning it rarely misses a real AI mention and rarely flags something irrelevant, on the document type it was tuned for. Precision is recovered downstream in the LLM passes, not here.
 
-It does not do equally well everywhere. On a held-out sample never used in training, precision (the share of flagged texts that are actually about AI) stays at 0.98 for 10-K/10-Q, drops to 0.73 for proxy statements and 8-Ks, and drops further to 0.59 for earnings calls. Recall (the share of true AI mentions the filter catches) stays above 0.92 everywhere, so the filter almost never misses something real; it just lets through more noise on some document types than others.
+On a held-out sample never used in training, precision (the share of flagged texts that are actually about AI) stays at 0.98 for 10-K/10-Q, drops to 0.73 for proxy statements and 8-Ks, and drops further to 0.59 for earnings calls. Recall (the share of true AI mentions the filter catches) stays above 0.92 everywhere, so the filter almost never misses something real; it just lets through more noise on some document types than others.
 
 In total, it flags 30,281 texts as AI-relevant, 0.6% of everything scored. Every downstream number in this thesis counts a document with zero flagged texts as a documented zero, not as a missing observation: a firm that never mentions AI is data, not a gap in the sample.
 
-## Semantic frame extraction
+## Disclosure LLM pass: semantic frames
 
 Every text the prefilter flags is then read once by an LLM. Prior computational social-science work finds that LLM labels can be comparable to human labels in specific, evaluated tasks [@gilardi2023, pp. 1--2]; that evidence does not remove the need for the held-out evaluation reported here. The pass pulls out zero, one, or several separate claims about AI, a "frame." Each frame records eight things about the claim:
 
@@ -464,7 +433,7 @@ table += [
 Markdown(tabulate(table, headers=["Field", "Description", "Observed values"]))
 ```
 
-## Disclosed activity extraction
+## Extractor LLM pass: activity frames
 
 Whenever a claim describes the firm itself doing something concrete (deploying, investing, hiring, measuring a result), it goes through a second pass. This time the model is told which company it's reading, so it can tell "our own product" apart from "a tool we bought." For each such claim it records:
 
@@ -512,7 +481,7 @@ table.append(["named_entities", "Own brand, external provider/model, partner, ac
 Markdown(tabulate(table, headers=["Field", "Description", "Observed values"]))
 ```
 
-## Aggregation
+## Point-in-time fusion and aggregation
 
 The measurement pipeline distinguishes between two complementary concepts of disclosure volume:
 
@@ -535,7 +504,7 @@ Activity grounding is simpler: the average of five yes/no questions per activity
 - is there a number attached; and
 - is the provider named.
 
-## Model validation and training datasets
+## Golden sets and model training
 
 Every automated stage in the measurement pipeline is benchmarked against held-out ground truth and inter-annotator evaluation datasets. @tbl-evaluation-datasets details the evaluation datasets, their sample design, and empirical performance metrics.
 
@@ -553,7 +522,7 @@ Every automated stage in the measurement pipeline is benchmarked against held-ou
 
 *Notes:* All operational labels supporting the empirical chapters derive from zero-shot LLM extraction. The measured inter-judge agreement ($\kappa = 0.81–0.87$) establishes strong reproducibility across distinct foundation model architectures (Google Gemini vs. Alibaba Qwen).
 
-## Financial and market variables
+## Processed quantitative data: financial and market variables
 
 Firm-year financial and market variables are drawn from XBRL and price data, aligned by actual fiscal period end rather than filing date, with documented fallback chains for concept coverage (capex 87%, SG&A 79%, net margin 98%, revenue 98%) and a [340, 380]-day gap rule for validating year-over-year changes. The variable set used throughout Chapters 3–5 comprises market capitalization, R&D-to-sales, gross margin, operating margin, asset turnover, price-to-sales, next-fiscal-year revenue growth, market beta, and idiosyncratic volatility (the annualized standard deviation of one-factor market-model residuals over the 252 trading days preceding the filing). R&D-to-sales has only 45% XBRL coverage and is used as an outcome, not a general control: it identifies firms that separately report comparable current R&D rather than treating non-reporting as zero. Appendix D gives the beta specification, its estimation-window diagnostics, the treatment of delisted firms, and the R&D coverage assessment. All financial ratios are winsorized at the 1st and 99th percentiles.
 
