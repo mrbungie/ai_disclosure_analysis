@@ -156,6 +156,14 @@ INSTANT_METRICS: dict[str, list[str]] = {
     "long_term_debt": [
         "us-gaap:LongTermDebtNoncurrent",
         "us-gaap:LongTermDebt",
+        # Filers that fold finance-lease obligations into the debt line
+        # instead of a separate LongTermDebt concept (e.g. CSX, Cardinal
+        # Health, Cummins) -> 45 tickers (~9%) had zero debt tag without
+        # this pair; adding both recovers 26 of them.
+        "us-gaap:LongTermDebtAndCapitalLeaseObligations",
+        # Some non-financial filers (homebuilders, distributors) tag their
+        # long-term borrowings as NotesPayable rather than LongTermDebt.
+        "us-gaap:NotesPayable",
     ],
     "cash": [
         "us-gaap:CashAndCashEquivalentsAtCarryingValue",

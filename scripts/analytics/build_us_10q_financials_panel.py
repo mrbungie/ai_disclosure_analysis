@@ -56,7 +56,8 @@ TAGS = {
     "current_assets": ["us-gaap:AssetsCurrent"],
     "current_liabilities": ["us-gaap:LiabilitiesCurrent"],
     "equity": ["us-gaap:StockholdersEquity", "us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"],
-    "debt": ["us-gaap:LongTermDebtNoncurrent", "us-gaap:LongTermDebt"],
+    "debt": ["us-gaap:LongTermDebtNoncurrent", "us-gaap:LongTermDebt",
+             "us-gaap:LongTermDebtAndCapitalLeaseObligations", "us-gaap:NotesPayable"],
 }
 INSTANT = {"assets", "current_assets", "current_liabilities", "equity", "debt"}
 ALL_TAGS = sorted({t for v in TAGS.values() for t in v})

@@ -38,13 +38,31 @@ shock series (see below). `scripts/analytics/build_firm_financials.py`
 (the 10-K panel) reads `data/raw/xbrl_facts/us_by_filing/` — the same
 inline-XBRL-per-filing source as the 10-Q panel — for exactly that reason.
 Switching it from Company Facts to inline-XBRL (2026-09-08) also raised
-coverage: `shares_out` 91%→100%, `long_term_debt` 73%→84%,
-`operating_income` 79%→83%, `sga_expense` 79%→81% (509 tickers, 2,874
-aligned 10-K rows). `rd_expense` stays at 46% either way — genuinely
-sector-driven (utilities, insurers, airlines, REITs mostly don't tag an
-R&D line at all), not a coverage bug. This `us/` company-facts pull
-remains useful on its own as a quick full-history sanity check per firm,
-just not as the panel's source of truth.
+coverage: `shares_out` 91%→100%, `operating_income` 79%→83%,
+`sga_expense` 79%→81% (505 tickers, 2,874 aligned 10-K rows). `rd_expense`
+stays at 46% either way — genuinely sector-driven (utilities, insurers,
+airlines, REITs mostly don't tag an R&D line at all), not a coverage bug.
+This `us/` company-facts pull remains useful on its own as a quick
+full-history sanity check per firm, just not as the panel's source of
+truth.
+
+**`long_term_debt` tag fallback widened (2026-09-08):** the original
+2-tag chain (`LongTermDebtNoncurrent`, `LongTermDebt`) left 45 of 510
+tickers with zero debt tag entirely — not debt-free firms, but filers
+that disclose long-term borrowings under a different primary concept:
+CSX, Cummins, Cardinal Health and 19 others fold finance-lease
+obligations into `us-gaap:LongTermDebtAndCapitalLeaseObligations`;
+homebuilders and distributors like D.R. Horton tag theirs
+`us-gaap:NotesPayable`. Adding both as lower-priority fallbacks recovered
+26 of the 45 and lifted `long_term_debt` row-coverage from 84%→93% in the
+10-K panel and from 58.7%→77.6% inline-only in the 10-Q panel (table
+below). Coverage stays below 100% for two reasons that are NOT tag gaps:
+~18% of firm-years have negative book equity (McDonald's, Booking,
+Philip Morris — real, from buybacks, not missing data), which correctly
+NULLs `debt_to_equity` rather than producing a spurious ratio; and ~15%
+of the universe (banks, insurers, REITs) files an unclassified balance
+sheet with no current/non-current split at all, capping `current_assets`
+/ `current_liabilities` at ~85%.
 
 ## Chile — `scripts/cl/04_fetch_accounting_data.py`
 
@@ -136,22 +154,33 @@ the `...ExcludingAcquiredInProcessCost` / software / IFRS variants):
 | rd_expense | 23.6% | 25.1% | +1.5pp |
 | capex | 24.7% | 27.2% | +2.5pp |
 | cogs | 42.6% | 43.2% | +0.6pp |
-| sga_expense | 55.6% | 57.9% | +2.3pp |
+| sga_expense | 55.6% | 57.9% | +2.2pp |
 | operating_income | 56.0% | 58.9% | +2.9pp |
-| debt | 58.7% | 59.4% | +0.7pp |
-| revenue | 69.9% | 70.8% | +0.9pp |
+| debt | 77.6% | 78.3% | +0.7pp |
+| revenue | 69.9% | 70.8% | +1.0pp |
 | eps_diluted | 69.7% | 72.8% | +3.1pp |
 | net_income | 71.4% | 74.3% | +2.9pp |
 | current_assets / current_liabilities | 76.1% | 77.0% | +0.9pp |
-| assets | 90.3% | 91.3% | +1.0pp |
-| equity | 90.9% | 91.7% | +0.8pp |
+| assets | 90.3% | 91.3% | +0.9pp |
+| equity | 90.9% | 91.7% | +0.9pp |
 
-(The widened `rd_expense` chain alone lifted inline-only coverage from
-20.8% to 23.6% — a bigger gain than the entire frames fallback gives for
-that metric. Absolute levels below this also drifted slightly from the
-prior measurement because the corpus gained a quarter and a few tickers'
-extractions since 2026-09-03/08; the fallback gain per metric — the
-number that matters for the source-selection call — is stable.)
+Two fallback-chain fixes moved these numbers more than the frames
+fallback does for any single metric:
+
+- `rd_expense` widened to the 10-K panel's 4-tag chain (it shipped with
+  only `us-gaap:ResearchAndDevelopmentExpense`) lifted inline-only
+  coverage 20.8%→23.6%.
+- `debt` widened with `us-gaap:LongTermDebtAndCapitalLeaseObligations`
+  and `us-gaap:NotesPayable` — filers that fold finance leases into debt
+  (CSX, Cummins, Cardinal Health, ...) or tag it as notes payable
+  (homebuilders, distributors) — lifted inline-only coverage
+  58.7%→77.6%, a 19-point jump.
+
+`rd_expense` and `capex` remain the genuinely low-coverage metrics: most
+filers simply don't break those out as a distinct quarterly line item,
+confirmed by checking the untagged concepts among the missing tickers
+(pension/lease/treasury-cost tags, nothing revenue- or R&D-shaped) — not
+a fixable tag gap.
 
 Frames alone (not as a fallback) are still worse than inline-XBRL for
 every duration metric — a frame only returns a value when a filer's
@@ -160,12 +189,6 @@ fiscal period exactly matches the calendar-quarter boundary
 fiscal-year-end filer for that quarter. Used as a gap-filler instead
 (only where inline-XBRL has nothing for that firm-quarter), it adds a
 real, if modest, 0.7–3.2pp per metric.
-
-`rd_expense` and `capex` remain genuinely low-coverage (~20-28%) even
-combined — most filers simply don't break those out as a distinct
-line item every quarter, which no additional XBRL source fixes; a
-tighter tag-fallback list or industry-conditional imputation would be
-the next lever, not another data source.
 
 Consolidated panel (one row per ticker/year/quarter/metric, `source`
 column tracing inline_xbrl vs. frames_fallback, `source_ref` the

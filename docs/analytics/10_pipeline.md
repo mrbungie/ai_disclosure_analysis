@@ -41,9 +41,17 @@ python scripts/analytics/<script>.py` o, para el bloque financiero,
 1. **Cadenas de fallback de conceptos XBRL**, sobre inline-XBRL por filing
    (`data/raw/xbrl_facts/us_by_filing/`, no el bulk de Company Facts, que
    colapsa reexpresiones): cobertura de capex 88%, SG&A 81%, `net_margin`
-   98%, revenue 99%. `rd_expense` queda en 46% — genuinamente por sector
-   (utilities, aseguradoras, aerolíneas, REITs no taggean una línea de I+D),
-   no por una cadena de fallback incompleta (`docs/sources/accounting_data.md`).
+   98%, revenue 99%, `long_term_debt` 93% (subió de 84% al agregar
+   `LongTermDebtAndCapitalLeaseObligations`/`NotesPayable` a la cadena).
+   `rd_expense` queda en 46% — genuinamente por sector (utilities,
+   aseguradoras, aerolíneas, REITs no taggean una línea de I+D), no por una
+   cadena de fallback incompleta. `debt_to_equity` (76%) y
+   `current_assets`/`current_liabilities` (85%) tampoco son cadenas
+   incompletas: ~18% de empresas-año tiene equity contable negativo
+   (recompras agresivas — McDonald's, Booking, Philip Morris) donde el
+   ratio queda NULL a propósito, y ~15% del universo (bancos, aseguradoras,
+   REITs) presenta balance no clasificado sin corte corriente/no corriente
+   (`docs/sources/accounting_data.md`).
 2. **`next_*_yoy` se anula cuando el gap fiscal sale de [340, 380] días.**
 3. **Denominadores ≤ 0 producen NULL**, no un ratio absurdo (ROE con equity
    negativo, P/E con EPS negativo).
