@@ -53,8 +53,11 @@ Diferencias deliberadas respecto de la versión perdida (rige lo nuevo):
      10-K, no el que ese 10-K efectivamente reveló — filtra el propósito de
      `disclosed_period_end` (dato conocido al momento del filing). El
      inline-XBRL, al venir del HTML de cada filing individual, no tiene ese
-     problema. También sube cobertura (shares_out 91%->100%, long_term_debt
-     73%->84%, operating_income 79%->83%, medido 2026-09-08).
+     problema. `docs/sources/accounting_data.md` tiene la cobertura vigente
+     y el detalle de los bugs de fondo encontrados y corregidos en esta
+     fuente (hechos dimensionales corrompiendo el consolidado, fugas de
+     reexpresión) — no se repite aquí para no tener el número en dos
+     lugares que se puedan desincronizar.
 
 Determinístico, sin LLM, sin costo de API: lee `data/raw/xbrl_facts/us_by_filing/`
 y `filing_manifest` y no escribe nada fuera de `data/processed/clusters/`.
@@ -281,6 +284,42 @@ def pivot_metrics(facts: pd.DataFrame, metrics: dict[str, list[str]],
     return wide.sort_values(["ticker", "period_end"]).reset_index(drop=True)
 
 
+def load_dual_class_shares(con: duckdb.DuckDBPyConnection, glob: Path) -> pd.DataFrame:
+    """Fallback `shares_out` for dual/multi-class filers (GOOGL, META,
+    BRK.B, F, CMCSA, ...) that tag `dei:EntityCommonStockSharesOutstanding`
+    ONLY per share class — one dimensional context per class, no
+    non-dimensional total — so `load_facts()`'s has_dimensions filter
+    (needed to keep segment breakdowns out of revenue/etc., see
+    `load_facts` docstring) correctly excludes them, but then has nothing
+    to fall back to. 40 of 510 tickers had zero shares_out without this.
+
+    Verified against GOOGL: exactly 3 dimensional contexts per filing
+    (its 3 share classes), summing to a plausible total (~665M pre-split
+    2021, ~12.6B post 20:1 split from mid-2022 on — matches GOOGL's known
+    share count both sides of the split). Summed per (ticker, period_end,
+    accession_number) — never across filings, so a share count is never
+    double-counted with a stale prior-filing class figure — then resolved
+    to the EARLIEST filing_date per (ticker, period_end), same as-of rule
+    as `load_facts`."""
+    columns = {row[0] for row in con.execute(
+        f"DESCRIBE SELECT * FROM read_parquet('{glob}', union_by_name=True) LIMIT 0").fetchall()}
+    if "has_dimensions" not in columns:
+        return pd.DataFrame(columns=["ticker", "period_end", "shares_out"])
+    per_filing = con.execute(f"""
+        SELECT ticker, period_end, accession_number, filing_date, sum(numeric_value) AS value
+        FROM read_parquet('{glob}', union_by_name=True)
+        WHERE concept = 'dei:EntityCommonStockSharesOutstanding'
+          AND period_type = 'instant' AND has_dimensions AND numeric_value IS NOT NULL
+        GROUP BY 1, 2, 3, 4
+    """).fetchdf()
+    per_filing["period_end"] = pd.to_datetime(per_filing["period_end"], errors="coerce")
+    per_filing["filing_date"] = pd.to_datetime(per_filing["filing_date"], errors="coerce")
+    resolved = (per_filing
+                .sort_values(["ticker", "period_end", "filing_date"])
+                .drop_duplicates(["ticker", "period_end"], keep="first"))
+    return resolved.rename(columns={"value": "shares_out"})[["ticker", "period_end", "shares_out"]]
+
+
 def align_to_filings(filings: pd.DataFrame, annual: pd.DataFrame,
                      metrics: list[str]) -> pd.DataFrame:
     """El corazón del script: para cada 10-K, el FY que reporta y el que
@@ -376,6 +415,7 @@ def main() -> None:
             WHERE country_code = 'us' AND ticker IS NOT NULL
         """).fetchdf()
         facts = load_facts(con, args.xbrl_glob)
+        dual_class_shares = load_dual_class_shares(con, args.xbrl_glob)
     finally:
         con.close()
     filings["filing_date"] = pd.to_datetime(filings["filing_date"])
@@ -385,6 +425,10 @@ def main() -> None:
     duration = pivot_metrics(facts, DURATION_METRICS, "duration")
     instants = pivot_metrics(facts, INSTANT_METRICS, "instant")
     shares = pivot_metrics(facts, SHARES_METRIC, "instant")
+    shares = (shares.merge(dual_class_shares, on=["ticker", "period_end"],
+                           how="outer", suffixes=("", "_dual_class"))
+                     .assign(shares_out=lambda d: d["shares_out"].fillna(d["shares_out_dual_class"]))
+                     .drop(columns=["shares_out_dual_class"]))
     print(f"anuales: {len(duration):,} (ticker, period_end) | "
           f"instantáneos: {len(instants):,} | shares: {len(shares):,}")
 

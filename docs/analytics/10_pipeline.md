@@ -54,11 +54,15 @@ python scripts/analytics/<script>.py` o, para el bloque financiero,
    calendario (n=1.620).
 
    Cobertura resultante (503 tickers, 2.862 filas 10-K alineadas): revenue
-   98%, net_income 99.7%, total_assets/equity 100%, capex 87%, SG&A 80%,
-   operating_income 80%, long_term_debt 88% (subió de 84% al agregar
-   `LongTermDebtAndCapitalLeaseObligations`/`NotesPayable` a la cadena),
-   shares_out 91%, current_assets/current_liabilities 85%, debt_to_equity
-   82%, cost_of_revenue 60%, rd_expense 45%. `rd_expense` y
+   98%, net_income 99.7%, total_assets/equity/shares_out 100%, capex 87%,
+   SG&A 80%, operating_income 80%, long_term_debt 88% (subió de 84% al
+   agregar `LongTermDebtAndCapitalLeaseObligations`/`NotesPayable` a la
+   cadena), current_assets/current_liabilities 85%, debt_to_equity 82%,
+   cost_of_revenue 60%, rd_expense 45%. `shares_out` llegó a 100% sumando
+   los hechos dimensionales por clase de acción para emisores de doble
+   clase (GOOGL, META, BRK.B, ...) que sólo taggean `EntityCommonStockSharesOutstanding`
+   por clase, no como total consolidado (`docs/sources/accounting_data.md`).
+   `rd_expense` y
    `cost_of_revenue` quedan bajos genuinamente por sector (utilities,
    aseguradoras, aerolíneas, REITs no taggean una línea de I+D o de costo
    de ventas), no por una cadena de fallback incompleta. `debt_to_equity`

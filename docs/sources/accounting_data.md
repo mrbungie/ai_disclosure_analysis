@@ -114,19 +114,30 @@ data-quality property of those specific filings, not a pipeline defect.
 Net coverage effect of all four 10-K-panel fixes together (dimensional
 filter + debt fallback + as-of resolution + priority-tiebreak fix),
 503 tickers, 2,862 aligned 10-K rows: `revenue` 98%, `net_income` 99.7%,
-`total_assets`/`equity` 100%, `capex` 87%, `sga_expense` 80%,
-`operating_income` 80%, `long_term_debt` 88%, `shares_out` 91%,
+`total_assets`/`equity` 100%, `shares_out` 100%, `capex` 87%,
+`sga_expense` 80%, `operating_income` 80%, `long_term_debt` 88%,
 `current_assets`/`current_liabilities` 85%, `debt_to_equity` 82%,
 `cost_of_revenue` 60%, `rd_expense` 45%. The lower-coverage metrics are
 sector-driven, not tag gaps — confirmed the same way as the 10-Q section
 below: checking what concepts the "missing" tickers actually use instead
 turns up pension/lease/treasury-cost tags for `rd_expense`, nothing
-revenue- or R&D-shaped. `shares_out` (dei:EntityCommonStockSharesOutstanding)
-is the one metric where the dimensional filter genuinely COSTS coverage
-rather than just correcting it: multi-class-stock filers (dual-class
-share structures) sometimes tag shares outstanding ONLY per class
-(a dimensional fact), with no non-dimensional total — summing the
-per-class dimensional facts would recover it, not yet implemented.
+revenue- or R&D-shaped.
+
+`shares_out` (`dei:EntityCommonStockSharesOutstanding`) needed one more
+fix on top of the dimensional filter, not just the filter itself:
+multi-class-stock filers (GOOGL, META, BRK.B, F, CMCSA, and 36 others —
+40 of 510 tickers) tag shares outstanding ONLY per share class, as
+dimensional facts, with no non-dimensional total at all — so excluding
+`has_dimensions` correctly protected revenue/etc. from segment
+contamination but left these 40 tickers with zero shares_out.
+`load_dual_class_shares()` in `build_firm_financials.py` sums the
+per-class dimensional facts within each filing (never across filings, so
+a share count never mixes with a stale prior filing's class figure),
+resolved to the earliest filing_date per period like everything else.
+Verified against GOOGL: exactly 3 dimensional contexts per filing (its 3
+share classes), summing to ~665M pre-split (2021-2022) and ~12.6B
+post-20:1-split (mid-2022 on) — both match GOOGL's actual known share
+counts. Took `shares_out` from 91%→100%.
 
 ## Chile — `scripts/cl/04_fetch_accounting_data.py`
 
