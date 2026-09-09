@@ -1605,11 +1605,11 @@ The core thesis of this chapter is straightforward:
 
 > **A claim should become more credible when it is backed by substance, survives movement into a more formal disclosure venue, and strengthens when regulatory scrutiny increases. The evidence shows that firms pass these tests unevenly.**
 
-Rather than treating credibility as an unobservable moral state or equates promotional language with deceit, this chapter tracks how corporate AI claims behave across increasing degrees of commitment and verification cost.
+Rather than treating credibility as an unobservable moral state or equating promotional language with deceit, this chapter tracks how corporate AI claims behave across increasing degrees of commitment and verification cost.
 
 ## A Credibility Framework: From Talk to Commitment
 
-Under institutional reality, corporate communication is structured by differential legal liability and disclosure friction. Credibility is revealed not by unvarnished claims of internal capability, but by what survives as disclosure becomes progressively more costly to commit to.
+Under institutional reality, corporate communication is structured by differential legal liabilities and verification frictions. Credibility is revealed not by unvarnished claims of internal capability, but by what survives as disclosure becomes progressively more costly to commit to.
 
 ```{python}
 #| label: fig-credibility-ladder
@@ -1656,341 +1656,261 @@ plt.tight_layout()
 plt.show()
 ```
 
-This framework establishes three foundational principles for our analysis:
+This framework establishes three foundational principles for our empirical strategy:
 
 - **We do not observe "truth":** We observe disclosed commitments, verifiable details, and cross-venue consistency. An ungrounded disclosure is not legal proof of absence, but a failure to provide falsifiable evidence where such evidence could exist.
 - **Commitment increases across reporting venues:** Executives face minimal statutory liability for forward-looking statements in voluntary oral discussions, but face Section 11 and Section 18 civil liability for material misstatements or omissions in signed SEC filings.
 - **Washing is an empirical hypothesis of decoupling:** In this thesis, AI washing does not denote legal fraud; it represents an observable, enduring wedge between narrative intensity and grounded, verifiable operational substance.
 
-## When Talk Runs Ahead of Substance
+## Where Disclosure Runs Ahead of Substance
 
-The first test of credibility examines whether a firm's volume of AI discourse scales with its disclosed operational substance. We compare two independently extracted metrics across 1,449 firm-years disclosing AI (474 S&P 500 firms, 2021–2025):
+The initial test of credibility evaluates whether a firm's volume of AI discourse scales with its concrete operational substance. Across 1,449 firm-years disclosing AI (474 S&P 500 firms, 2021–2025), we compare two independent quantities:
 
 - **Disclosure Intensity ($\text{Disclosure}_{it}$):** Semantic AI frames per 1,000 words of narrative text.
 - **Disclosed Substance ($\text{Substance}_{it}$):** Disclosed activity volume scaled by empirical-Bayes grounding: $\log(1 + n_{\text{activities},it}) \times \text{Grounding}_{it}$.
 
-Plotting both metrics in percentile rank space compresses both distributions to $[0, 1]$, preventing large technology firms with naturally expansive activity inventories from mechanically appearing as outliers (@fig-talk-vs-substance).
+To measure the gap between rhetoric and substance without imposing parametric assumptions, we define the **AI-washing index ($W_{it}$)** as the signed difference between their percentile ranks:
+
+$$
+W_{it} = \text{pct\_rank}(\text{Disclosure}_{it}) - \text{pct\_rank}(\text{Substance}_{it})
+$$
+
+By construction, $W_{it}$ has a mean of zero and ranges from $-1$ to $+1$. A value of $W = 0$ reflects commensurate communication. Positive values ($W > 0$) indicate that narrative volume runs ahead of grounded operational substance, while negative values ($W < 0$) capture "quiet substance."
 
 ```{python}
-#| label: fig-talk-vs-substance
-#| fig-cap: "Corporate AI disclosure intensity vs. disclosed substance (n = 1,449 firm-years disclosing AI, 474 firms). The 45° line represents commensurate communication; firms below the diagonal exhibit narrative volume running ahead of substance."
+#| label: fig-washing-distribution
+#| fig-cap: "Distribution of corporate AI disclosure–substance decoupling (W) across 1,449 firm-years. Values of W > 0 represent narrative intensity running ahead of disclosed substance; values of W < 0 denote quiet substance. The top 5% decoupled tail (W ≥ 0.38) is highlighted in red."
 #| echo: false
-#| fig-width: 6.8
-#| fig-height: 5.0
+#| fig-width: 7.5
+#| fig-height: 4.0
 from pathlib import Path
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.stats import gaussian_kde
 
 data_path = Path("../data/processed/clusters/firm_year_washing_score.parquet")
 if not data_path.exists():
     data_path = Path("data/processed/clusters/firm_year_washing_score.parquet")
 
 df = pd.read_parquet(data_path)
+w = df['w'].dropna()
 
-fig, ax = plt.subplots(figsize=(6.8, 5.0), dpi=300)
+fig, ax = plt.subplots(figsize=(7.5, 4.0), dpi=300)
 
-# Soft general background points
-ax.scatter(df['pct_substance'] * 100, df['pct_disclosure'] * 100,
-           color='#94A3B8', alpha=0.35, s=20, label='Firm-year observations (n = 1,449)', zorder=2)
+# Histogram with bins
+n_bins = 45
+counts, bins, patches = ax.hist(w, bins=n_bins, density=True, alpha=0.45, color='#94A3B8', edgecolor='white', lw=0.8)
 
-# 45 degree diagonal baseline
-ax.plot([0, 100], [0, 100], color='#0F172A', linestyle='--', linewidth=1.4, zorder=3, label='Commensurate baseline (Talk = Substance)')
+# Color the top 5% bins in red
+cutoff = w.quantile(0.95)
+for p, b in zip(patches, bins[:-1]):
+    if b >= cutoff:
+        p.set_facecolor('#DC2626')
+        p.set_alpha(0.85)
+        p.set_edgecolor('#7F1D1D')
 
-# Highlight top decoupling tail (W > 95th percentile)
-top_tail = df[df['washing']]
-ax.scatter(top_tail['pct_substance'] * 100, top_tail['pct_disclosure'] * 100,
-           color='#DC2626', alpha=0.85, s=32, edgecolors='black', linewidth=0.5,
-           label='Decoupled tail: Top 5% W (n = 73)', zorder=4)
+# KDE curve
+kde = gaussian_kde(w, bw_method=0.15)
+x_grid = np.linspace(w.min() - 0.05, w.max() + 0.05, 300)
+ax.plot(x_grid, kde(x_grid), color='#0F172A', lw=2.0, label='Kernel density estimate')
 
-# 3 example firms
-examples = [('Q', 2024), ('BLK', 2024), ('WRB', 2024)]
-for ticker, yr in examples:
-    match = top_tail[(top_tail['ticker'] == ticker) & (top_tail['year'] == yr)]
-    if not match.empty:
-        r = match.iloc[0]
-        ax.annotate(f"{r['ticker']} '{str(r['year'])[-2:]}",
-                    (r['pct_substance'] * 100, r['pct_disclosure'] * 100),
-                    xytext=(5, 3), textcoords='offset points', fontsize=8, fontweight='bold', color='#991B1B')
+# Vertical line at zero
+ax.axvline(0, color='#0F172A', lw=1.2, ls='--')
 
-# Vertical distance illustration for one point
-ex_pt = top_tail[top_tail['ticker'] == 'Q'].iloc[0]
-ax.plot([ex_pt['pct_substance']*100, ex_pt['pct_substance']*100],
-        [ex_pt['pct_substance']*100, ex_pt['pct_disclosure']*100],
-        color='#DC2626', linestyle=':', linewidth=1.8, zorder=5)
-ax.text(ex_pt['pct_substance']*100 + 1.5, (ex_pt['pct_substance']*100 + ex_pt['pct_disclosure']*100)/2,
-        'W = vertical distance', fontsize=7.8, fontweight='bold', color='#DC2626')
+# Vertical line at 95th percentile
+ax.axvline(cutoff, color='#DC2626', lw=1.2, ls=':')
+ax.text(cutoff + 0.02, ax.get_ylim()[1] * 0.75, f'Top 5% decoupled tail\n(W \u2265 {cutoff:.2f})',
+        fontsize=8.0, fontweight='bold', color='#991B1B')
 
-# Persistence callout box inside plot
-callout_text = (
-    'Persistence metrics:\n'
-    '• YoY Spearman ρ = +0.594 (p < 0.001)\n'
-    '• Split-half ρ = +0.514 (p < 0.001)\n'
-    'Decoupling acts as an enduring posture,\n'
-    'not episodic reporting noise.'
+# Directional zone headers
+ax.text(-0.35, ax.get_ylim()[1] * 0.90, '\u2190 Substance ahead of talk\n(Quiet substance)',
+        ha='center', va='center', fontsize=8.8, fontweight='bold', color='#1E40AF',
+        bbox=dict(boxstyle='round,pad=0.3', facecolor='#EFF6FF', edgecolor='#93C5FD', alpha=0.9))
+
+ax.text(0.40, ax.get_ylim()[1] * 0.90, 'Talk ahead of substance \u2192\n(Decoupling / Washing)',
+        ha='center', va='center', fontsize=8.8, fontweight='bold', color='#991B1B',
+        bbox=dict(boxstyle='round,pad=0.3', facecolor='#FEF2F2', edgecolor='#FCA5A5', alpha=0.9))
+
+# Persistence note inside
+stats_text = (
+    'Distribution & Persistence:\n'
+    '\u2022 n = 1,449 firm-years (474 firms)\n'
+    '\u2022 YoY Spearman \u03c1 = +0.594 (p < 0.001)\n'
+    '\u2022 Split-half \u03c1 = +0.514 (p < 0.001)'
 )
-ax.text(0.04, 0.72, callout_text, transform=ax.transAxes, fontsize=8.0,
-        bbox=dict(boxstyle='round,pad=0.4', facecolor='#F8FAFC', edgecolor='#CBD5E1', alpha=0.92))
+ax.text(0.04, 0.50, stats_text, transform=ax.transAxes, fontsize=8.0,
+        bbox=dict(boxstyle='round,pad=0.35', facecolor='#F8FAFC', edgecolor='#CBD5E1', alpha=0.92))
 
-ax.set_xlabel('Disclosed Substance Percentile Rank', fontsize=9.0, fontweight='bold')
-ax.set_ylabel('Disclosure Intensity Percentile Rank', fontsize=9.0, fontweight='bold')
-ax.set_title('Figure 16: Corporate AI Disclosure Intensity vs. Disclosed Substance', fontsize=10.0, fontweight='bold')
-ax.legend(loc='lower right', fontsize=8.0, framealpha=0.9)
-ax.grid(True, linestyle=':', alpha=0.5)
+ax.set_xlabel('Disclosure\u2013Substance Decoupling Index (W = pct_rank(Disclosure) \u2212 pct_rank(Substance))',
+              fontsize=9.0, fontweight='bold')
+ax.set_ylabel('Density', fontsize=9.0, fontweight='bold')
+ax.set_title('Figure 16: Distribution of Corporate AI Disclosure\u2013Substance Decoupling (W)',
+             fontsize=10.2, fontweight='bold')
+ax.set_xlim(-0.75, 0.95)
+ax.grid(True, linestyle=':', alpha=0.45)
 ax.spines[['top', 'right']].set_visible(False)
 plt.tight_layout()
 plt.show()
 ```
 
-The 45° line defines commensurate communication:
+As demonstrated in @fig-washing-distribution, the empirical distribution of $W$ exhibits substantial cross-sectional dispersion ($\text{standard deviation} = 0.22$). A descriptive cut at the 95th percentile ($W \ge 0.38$) flags 73 firm-years in the decoupled tail. These are not firms with zero AI interest; rather, they are companies that feature AI heavily in outward communications while disclosing negligible verifiable operational substance.
 
-- **Near the diagonal:** A firm's narrative volume is commensurate with its disclosed, grounded activity.
-- **Above the diagonal:** Firms disclosing concrete operational deployments while maintaining restrained rhetorical volume ("quiet substance").
-- **Below the diagonal:** Firms whose narrative positioning runs far ahead of their concrete operational footprint.
+> **Persistence of the Decoupling Posture:**
+> 
+> Tracking consecutive firm-years across 942 pairs reveals a strong rank correlation: **year-over-year Spearman $\rho = +0.594$ ($p < 0.001$)**, and a split-half reliability of **$\rho = +0.514$ ($p < 0.001$, $n = 406$)**. Decoupling is persistent enough to resemble an enduring communication posture rather than isolated annual reporting noise.
 
-Under this geometry, the **AI-washing index ($W_{it}$)** is not an arbitrary, opaque composite score:
+## What Changes from Filing to Call?
 
-$$
-W_{it} = \text{pct\_rank}(\text{Disclosure}_{it}) - \text{pct\_rank}(\text{Substance}_{it})
-$$
+If decoupling constitutes an enduring communication posture, what happens when the same firm discusses AI across disclosure venues with contrasting legal liabilities?
 
-It is literally the signed vertical distance between talk and substance. A descriptive cut at the 95th percentile ($W > 0.40$) flags 73 firm-years in the decoupled tail (such as Q, BLK, and WRB in fiscal 2024). These are not firms disclosing zero AI, but companies that place AI prominently in promotional communications while attaching negligible concrete operational activity.
-
-Furthermore, this gap is not episodic. Tracking consecutive firm-years across 942 pairs reveals a strong rank correlation: **year-over-year Spearman $\rho = +0.594$ ($p < 0.001$)**, and a split-half correlation of **$\rho = +0.514$ ($p < 0.001$)**. 
-
-> **Finding:** Disclosure–substance decoupling exists and is persistent enough to resemble an enduring communication posture rather than isolated annual noise.
-
-## Same Firm. Same Year. Different Commitment.
-
-If decoupling represents an enduring communication posture, what happens when the same firm discusses AI across institutional environments with differing legal liabilities?
-
-We examine this question using a **Firm × Fiscal-Year fixed effects design** ($\alpha_{i,t}$) across 2,281 firm-year cells (459 cells containing $\ge 3$ activities in both channels):
+We evaluate this using a **Firm × Fiscal-Year fixed effects design** ($\alpha_{i,t}$) across 2,281 firm-year cells (459 balanced cells containing $\ge 3$ activities in both channels):
 
 $$
 Y_{i,t,\text{venue}} = \alpha_{i,t} + \beta \, \mathbf{1}[\text{venue} = \text{Call}] + \varepsilon_{i,t,\text{venue}}
 $$
 
-Because each cell contains exactly two observations—the firm's earnings conference call and its statutory SEC filing (10-K/10-Q) for the exact same fiscal period—the estimator collapses to a within-firm, within-period difference: $\text{Call}_{i,t} - \text{Filing}_{i,t}$. This controls for all firm-specific unobservables, business models, managerial capabilities, and macroeconomic conditions.
+Because each cell contains exactly two observations—the firm's voluntary earnings call and its mandatory statutory SEC filing (10-K/10-Q) for the exact same fiscal year—the estimator isolates the pure within-firm, within-period channel difference ($\text{Call}_{i,t} - \text{Filing}_{i,t}$). This sweeps out all time-invariant firm unobservables, business models, and macroeconomic conditions.
 
-The initial baseline produces an unexpected result: **the underlying mix of activities is practically identical across venues** (@fig-venue-activity-mix).
+The results reveal a stark contrast between what firms claim to do and the evidence they attach to those claims (@fig-venue-call-filing-differences).
 
 ```{python}
-#| label: fig-venue-activity-mix
-#| fig-cap: "Activity composition across disclosure venues within the same firm and fiscal year (n = 459 balanced cells). Core activity shares are statistically indistinguishable across venues."
+#| label: fig-venue-call-filing-differences
+#| fig-cap: "Call-minus-filing differences in activity composition and evidentiary grounding within the same firm and fiscal year (n = 459 balanced cells, 95% confidence intervals). Panel A demonstrates that core activity shares are preserved across venues. Panel B shows that verifiable operational proof is systematically dropped in statutory filings."
 #| echo: false
-#| fig-width: 7.5
-#| fig-height: 2.6
-from pathlib import Path
-import pandas as pd
-import numpy as np
+#| fig-width: 8.0
+#| fig-height: 5.0
 import matplotlib.pyplot as plt
+import numpy as np
 
-data_path = Path("../data/processed/clusters/channel_activity_cells.parquet")
-if not data_path.exists():
-    data_path = Path("data/processed/clusters/channel_activity_cells.parquet")
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8.0, 5.0), dpi=300, sharex=True,
+                               gridspec_kw={'height_ratios': [1, 1.8]})
 
-df = pd.read_parquet(data_path)
-wide = df.pivot_table(index=['ticker', 'fy'], columns='channel',
-                      values=['customer_facing_deployment', 'internal_deployment', 'proprietary_ai', 'n_activities']).dropna()
-wide = wide[(wide[('n_activities', 'call')] >= 3) & (wide[('n_activities', 'filing')] >= 3)]
+labels1 = [
+    'Proprietary AI / infrastructure',
+    'Internal operational deployment',
+    'Customer-facing deployment',
+]
+diffs1 = [1.4, 0.5, 2.3]
+ci_lo1 = [-1.3, -1.7, -0.1]
+ci_hi1 = [4.2, 2.7, 4.7]
+y1 = np.arange(len(labels1))
 
-c_cust = (wide[('customer_facing_deployment', 'call')] / wide[('n_activities', 'call')]).mean()
-c_int = (wide[('internal_deployment', 'call')] / wide[('n_activities', 'call')]).mean()
-c_other = 1.0 - (c_cust + c_int)
+ax1.errorbar(diffs1, y1, xerr=[np.array(diffs1)-np.array(ci_lo1), np.array(ci_hi1)-np.array(diffs1)],
+             fmt='o', color='#475569', ecolor='#94A3B8', elinewidth=2.0, capsize=4, ms=6.5)
+ax1.axvline(0, color='#0F172A', lw=1.2, ls='--')
 
-f_cust = (wide[('customer_facing_deployment', 'filing')] / wide[('n_activities', 'filing')]).mean()
-f_int = (wide[('internal_deployment', 'filing')] / wide[('n_activities', 'filing')]).mean()
-f_other = 1.0 - (f_cust + f_int)
+for i, d in enumerate(diffs1):
+    ax1.text(d, i + 0.28, f'{d:+.1f} pp', ha='center', va='bottom', fontsize=8.0, fontweight='bold', color='#475569')
 
-c_shares = np.array([c_cust, c_int, c_other]) / (c_cust + c_int + c_other) * 100
-f_shares = np.array([f_cust, f_int, f_other]) / (f_cust + f_int + f_other) * 100
+ax1.set_yticks(y1)
+ax1.set_yticklabels(labels1, fontsize=8.5, fontweight='bold')
+ax1.set_title('Panel A: Activity Composition (Core narrative is preserved across venues)', fontsize=9.2, fontweight='bold', loc='left')
+ax1.grid(True, axis='x', linestyle=':', alpha=0.5)
+ax1.spines[['top', 'right']].set_visible(False)
+ax1.set_ylim(-0.5, 2.7)
 
-fig, ax = plt.subplots(figsize=(7.5, 2.6), dpi=300)
-labels = ['Statutory Filing', 'Earnings Call']
-categories = ['Customer-facing activities', 'Internal operational deployment', 'Infrastructure, proprietary & other']
-colors = ['#2563EB', '#60A5FA', '#94A3B8']
+labels2 = [
+    'Infrastructure or risk factor',
+    'Governance or restriction',
+    'Named product or process',
+    'Named third-party provider',
+    'Quantified outcome or metric',
+    'Named business function',
+]
+diffs2 = [-2.0, -2.0, 3.9, 5.1, 10.8, 11.5]
+ci_lo2 = [-3.3, -2.6, 1.4, 3.9, 9.2, 8.9]
+ci_hi2 = [-0.7, -1.4, 6.3, 6.4, 12.4, 14.1]
+y2 = np.arange(len(labels2))
 
-data = np.vstack([f_shares, c_shares])
-left = np.zeros(2)
+colors2 = ['#DC2626' if d < 0 else '#2563EB' for d in diffs2]
+for i, d, lo, hi, c in zip(y2, diffs2, ci_lo2, ci_hi2, colors2):
+    ax2.errorbar(d, i, xerr=[[d - lo], [hi - d]], fmt='o', color=c, ecolor=c, elinewidth=2.0, capsize=4, ms=6.5)
 
-for cat_idx in range(3):
-    vals = data[:, cat_idx]
-    bars = ax.barh(labels, vals, left=left, color=colors[cat_idx], height=0.45, label=categories[cat_idx], edgecolor='white', lw=1.2)
-    for b_idx, rect in enumerate(bars):
-        w = rect.get_width()
-        x_pos = rect.get_x() + w / 2
-        ax.text(x_pos, rect.get_y() + rect.get_height()/2, f'{w:.1f}%', ha='center', va='center',
-                fontsize=8.5, fontweight='bold', color='white' if cat_idx < 2 else '#1E293B')
-    left += vals
+ax2.axvline(0, color='#0F172A', lw=1.2, ls='--')
 
-ax.set_xlim(0, 100)
-ax.set_xlabel('Proportion of Disclosed AI Activities (%)', fontsize=8.8, fontweight='bold')
-ax.set_title('Figure 17: Activity Composition Across Disclosure Venues (Within-Firm, Within-Year)', fontsize=9.8, fontweight='bold')
-ax.legend(loc='lower center', bbox_to_anchor=(0.5, -0.45), ncol=3, fontsize=7.8, frameon=False)
-ax.text(50, 0.5, 'Same activities: Differences across venues are economically trivial (< 2 pp) and statistically null',
-        ha='center', va='center', fontsize=8.0, style='italic', color='#334155',
-        bbox=dict(boxstyle='round,pad=0.2', facecolor='#F1F5F9', edgecolor='#CBD5E1', alpha=0.9))
-ax.spines[['top', 'right']].set_visible(False)
+for i, d in enumerate(diffs2):
+    c = '#1E40AF' if d >= 0 else '#991B1B'
+    ax2.text(d, i + 0.28, f'{d:+.1f} pp', ha='center', va='bottom', fontsize=8.0, fontweight='bold', color=c)
+
+ax2.set_yticks(y2)
+ax2.set_yticklabels(labels2, fontsize=8.5, fontweight='bold')
+ax2.set_title('Panel B: Evidentiary Grounding (Verifiable proof dropped in formal filings)', fontsize=9.2, fontweight='bold', loc='left')
+ax2.set_xlabel('Call Minus Filing Difference (Percentage Points, 95% Confidence Interval)', fontsize=8.8, fontweight='bold')
+ax2.set_xlim(-6, 16)
+ax2.set_ylim(-0.5, 5.7)
+ax2.grid(True, axis='x', linestyle=':', alpha=0.5)
+ax2.spines[['top', 'right']].set_visible(False)
+
+plt.suptitle('Figure 17: The Activity Story Survives; the Evidence Changes', fontsize=10.2, fontweight='bold', y=0.98)
 plt.tight_layout()
 plt.show()
 ```
 
-Across customer-facing deployment (43.5% in calls vs. 41.1% in filings), internal operational integration (24.4% vs. 23.9%), and infrastructure or proprietary development (32.1% vs. 35.0%), the differences never exceed 2.3 percentage points and are statistically indistinguishable from zero. When managers move from oral conversations to formal filings, **they tell the same high-level operational story**.
+In Panel A, the fundamental composition of disclosed activities is virtually identical: differences across customer-facing deployment (+2.3 pp, $p = 0.06$), internal operational deployment (+0.5 pp, $p = 0.64$), and proprietary development (+1.4 pp, $p = 0.31$) are economically trivial and fail to reach conventional statistical significance. Across venues, **firms report the same broad categories of AI use**.
 
-## Same Activity, Different Evidence
-
-If the activity mix survives the transition into formal filings, where does the credibility gap reside?
-
-The answer lies in the **evidentiary grounding** attached to those claims (@fig-venue-gap-coefficients). When discussing the exact same operations in voluntary earnings calls, executives attach names, numbers, and operational anchors. When signing statutory filings, they systematically remove those verifiable details:
+In Panel B, however, the evidentiary backing attached to those activities diverges dramatically:
 
 - **Named business function:** $\downarrow 11.5$ percentage points in filings ($p < 0.001$).
 - **Quantified outcome or performance metric:** $\downarrow 10.8$ percentage points in filings ($p < 0.001$).
-- **Named third-party provider or partner:** $\downarrow 5.1$ percentage points in filings ($p < 0.001$).
-- **Named product or process:** $\downarrow 3.9$ percentage points in filings ($p < 0.01$).
-- **Governance and regulatory caveats:** $\uparrow 2.0$ percentage points in filings ($p < 0.05$).
-- **Infrastructure or risk factors:** $\uparrow 2.0$ percentage points in filings ($p < 0.05$).
+- **Named third-party provider or vendor:** $\downarrow 5.1$ percentage points in filings ($p < 0.001$).
+- **Named product or process:** $\downarrow 3.9$ percentage points in filings ($p = 0.002$).
+- **Governance caveats and risk factors:** $\uparrow 2.0$ percentage points in filings ($p < 0.01$).
+
+> **The Central Finding:** The activity story survives; the evidence changes. Public firms pitch concrete operational metrics, named software partners, and functional deployments to equity analysts in earnings calls, but sanitize those same disclosures when signing statutory SEC filings.
+
+## Promotion is Not the Opposite of Evidence
+
+A common assumption in corporate communication research is that promotional tone is inversely related to credibility: that high promotion reflects empty hype, whereas low promotion signifies authentic operational grounding.
+
+Our cross-venue data directly reject this trade-off. When measuring narrative density per 1,000 words of disclosure across venues, earnings conference calls contain **9.9× more promotional statements** than statutory filings (rising from 0.005 to 0.054 claims per 1,000 words). Crucially, however, calls amplify observable quantification even more: conference calls contain **17.1× more quantified outcome claims** than formal filings (rising from 0.003 to 0.052 claims per 1,000 words, @fig-promotion-and-evidence).
 
 ```{python}
-#| label: fig-venue-gap-coefficients
-#| fig-cap: "What gets lost in the statutory filing: call-minus-filing difference in the proportion of disclosed activities carrying verifiable evidence attributes (percentage points, n = 459 balanced cells)."
+#| label: fig-promotion-and-evidence
+#| fig-cap: "Earnings calls amplify both promotional framing and quantified evidence relative to statutory filings. The relative amplification in quantified evidence (17.1×) exceeds that of promotional claims (9.9×), demonstrating that conference calls are the primary venue for operational quantification."
 #| echo: false
-#| fig-width: 7.8
-#| fig-height: 3.8
+#| fig-width: 7.2
+#| fig-height: 2.5
 import matplotlib.pyplot as plt
 import numpy as np
 
-labels = [
-    'Named business function',
-    'Quantified outcome or metric',
-    'Named third-party provider',
-    'Named product or process',
-    'Governance or restriction',
-    'Infrastructure or risk factor'
+fig, ax = plt.subplots(figsize=(7.2, 2.5), dpi=300)
+
+categories = ['Quantified evidence', 'Promotional claims']
+ratios = [17.1, 9.9]
+abs_text = [
+    '0.003 → 0.052 claims / 1,000 words',
+    '0.005 → 0.054 claims / 1,000 words'
 ]
+colors = ['#1D4ED8', '#64748B']
 
-diffs = [11.5, 10.8, 5.1, 3.9, -2.0, -2.0]
+y = np.arange(len(categories))[::-1]
+height = 0.38
 
-fig, ax = plt.subplots(figsize=(7.8, 3.8), dpi=300)
-y = np.arange(len(labels))[::-1]
-colors = ['#2563EB' if d > 0 else '#DC2626' for d in diffs]
+bars = ax.barh(y, ratios, height=height, color=colors, edgecolor='none')
 
-bars = ax.barh(y, diffs, color=colors, height=0.55, edgecolor='white', lw=0.8)
-ax.axvline(0, color='#0F172A', lw=1.2)
-
-for i, (bar, d) in enumerate(zip(bars, diffs)):
-    offset = 0.4 if d >= 0 else -0.4
-    ha = 'left' if d >= 0 else 'right'
-    ax.text(d + offset, bar.get_y() + bar.get_height()/2, f'{d:+.1f} pp',
-            va='center', ha=ha, fontsize=8.8, fontweight='bold',
-            color='#1E40AF' if d > 0 else '#991B1B')
-
-ax.set_yticks(y)
-ax.set_yticklabels(labels, fontsize=8.8, fontweight='bold')
-ax.set_xlabel('Within-Cell Call Minus Filing Difference (Percentage Points)', fontsize=8.8, fontweight='bold')
-ax.set_xlim(-6, 16)
-ax.set_title('Figure 18: What Gets Lost in the Statutory Filing? Evidentiary Grounding Across Venues', fontsize=10.0, fontweight='bold')
-
-ax.text(0.5, 0.90, 'The activity survives. The evidence does not.',
-        transform=ax.transAxes, ha='center', va='center', fontsize=9.2, fontweight='bold', color='#0F172A',
-        bbox=dict(boxstyle='round,pad=0.3', facecolor='#F8FAFC', edgecolor='#94A3B8', alpha=0.9))
-
-ax.text(12, 1.2, '← More in Filings\n(Formal caveats)', ha='center', fontsize=7.5, color='#991B1B')
-ax.text(12, 4.2, 'More in Calls →\n(Verifiable proof)', ha='center', fontsize=7.5, color='#1E40AF')
-
-ax.grid(True, axis='x', linestyle=':', alpha=0.5)
-ax.spines[['top', 'right']].set_visible(False)
-plt.tight_layout()
-plt.show()
-```
-
-> **The Headline Finding:** The activity survives. The evidence does not.
-
-Public corporations readily pitch quantifiable returns, commercial software partners, and specific departmental deployments to equity analysts during interactive conference calls. But when facing statutory liability for material misstatements in SEC filings, they drop these falsifiable operational anchors and substitute defensive risk disclosures.
-
-## Promotion is Not the Opposite of Credibility
-
-A conventional intuition in disclosure studies assumes that promotional rhetoric and credibility are inversely related: that heavy promotion denotes "cheap talk," whereas low-promotion disclosures reflect genuine substance.
-
-Our empirical evidence directly rejects this simplistic trade-off. Measuring narrative density per 1,000 words reveals that earnings calls are **9.9× more promotional** than statutory filings (0.054 vs. 0.006 per 1,000 words), but they are simultaneously **17.1× more quantified** (0.052 vs. 0.003 per 1,000 words, @fig-promotion-evidence-map, Panel A).
-
-```{python}
-#| label: fig-promotion-evidence-map
-#| fig-cap: "Promotion and evidence move upward together across venues. Panel A: Grouped claims per 1,000 words by reporting venue. Panel B: Two-dimensional credibility space mapping the shift from generic statutory boilerplate to grounded oral communication."
-#| echo: false
-#| fig-width: 10.0
-#| fig-height: 4.2
-import matplotlib.pyplot as plt
-import numpy as np
-
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10.0, 4.2), dpi=300, gridspec_kw={'width_ratios': [1.1, 1]})
-
-# Panel A: Grouped horizontal bars
-categories = ['Promotional claims', 'Quantified claims']
-filing_vals = [0.0055, 0.0030]
-call_vals = [0.0543, 0.0519]
-ratios = ['9.9×', '17.1×']
-
-y = np.arange(len(categories))
-height = 0.28
-
-ax1.barh(y - height/2, filing_vals, height=height, label='Statutory Filing', color='#64748B')
-ax1.barh(y + height/2, call_vals, height=height, label='Earnings Call', color='#2563EB')
+ax.axvline(1.0, color='#94A3B8', linestyle='--', lw=1.0, alpha=0.7)
+ax.text(1.0, 1.45, '1.0× (Parity)', color='#64748B', fontsize=8.0, ha='center', va='bottom')
 
 for i in range(len(categories)):
-    ax1.text(filing_vals[i] + 0.001, y[i] - height/2, f'{filing_vals[i]:.3f}', va='center', fontsize=8, color='#334155')
-    ax1.text(call_vals[i] + 0.001, y[i] + height/2, f'{call_vals[i]:.3f} ({ratios[i]})', va='center', fontsize=8.5, fontweight='bold', color='#1E40AF')
+    ax.text(ratios[i] + 0.4, y[i] + 0.07, f'{ratios[i]:.1f}×', va='center', fontsize=10.5, fontweight='bold', color=colors[i])
+    ax.text(ratios[i] + 0.4, y[i] - 0.13, abs_text[i], va='center', fontsize=8.2, color='#64748B')
 
-ax1.set_yticks(y)
-ax1.set_yticklabels(categories, fontsize=9.2, fontweight='bold')
-ax1.set_xlabel('Claims per 1,000 words', fontsize=8.8)
-ax1.set_xlim(0, 0.075)
-ax1.set_title('Panel A: Claims per 1,000 words by venue', fontsize=9.5, fontweight='bold')
-ax1.legend(loc='lower right', fontsize=8.2)
-ax1.grid(True, axis='x', linestyle='--', alpha=0.3)
-ax1.spines[['top', 'right']].set_visible(False)
+ax.set_yticks(y)
+ax.set_yticklabels(categories, fontsize=9.5, fontweight='bold')
+ax.set_xlabel('Call / Filing Amplification Ratio (Fold-Change)', fontsize=9.0, fontweight='bold')
+ax.set_xlim(0, 24)
+ax.set_ylim(-0.5, 1.6)
+ax.grid(True, axis='x', linestyle=':', alpha=0.5)
+ax.spines[['top', 'right']].set_visible(False)
+ax.spines['left'].set_visible(False)
+ax.tick_params(left=False)
 
-# Panel B: 2x2 Credibility Space
-ax2.axhline(0, color='#94A3B8', lw=1.2, ls='--')
-ax2.axvline(0, color='#94A3B8', lw=1.2, ls='--')
-
-ax2.text(-0.85, 0.82, 'Quiet\nsubstance', ha='center', va='center', fontsize=8.5, color='#475569', style='italic')
-ax2.text(0.85, 0.82, 'Promotional\nbut grounded', ha='center', va='center', fontsize=8.5, color='#1E40AF', fontweight='bold')
-ax2.text(-0.85, -0.82, 'Generic /\nboilerplate', ha='center', va='center', fontsize=8.5, color='#64748B', fontweight='bold')
-ax2.text(0.85, -0.82, 'Hype\ncandidate', ha='center', va='center', fontsize=8.5, color='#DC2626', style='italic')
-
-p_filing = (-0.6, -0.6)
-p_call = (0.7, 0.65)
-
-ax2.scatter(*p_filing, color='#64748B', s=120, zorder=5)
-ax2.annotate('FILING\n(low promo, low evidence)', p_filing, xytext=(-10, -28), textcoords='offset points',
-             fontsize=7.8, fontweight='bold', color='#334155', ha='center')
-
-ax2.scatter(*p_call, color='#2563EB', s=120, zorder=5)
-ax2.annotate('CALL\n(high promo, high evidence)', p_call, xytext=(0, 12), textcoords='offset points',
-             fontsize=7.8, fontweight='bold', color='#1E40AF', ha='center')
-
-ax2.annotate('', xy=p_call, xytext=p_filing,
-             arrowprops=dict(arrowstyle='->', lw=2.0, color='#2563EB', mutation_scale=15))
-
-ax2.set_xlim(-1.3, 1.3)
-ax2.set_ylim(-1.3, 1.3)
-ax2.set_xlabel('Promotional Tone →', fontsize=8.8, fontweight='bold')
-ax2.set_ylabel('Observable Evidence →', fontsize=8.8, fontweight='bold')
-ax2.set_xticks([])
-ax2.set_yticks([])
-ax2.set_title('Panel B: The venue credibility shift', fontsize=9.5, fontweight='bold')
-
-plt.suptitle('Figure 19: Promotion is not the opposite of evidence: calls move both upward', fontsize=10.5, fontweight='bold')
 plt.tight_layout()
 plt.show()
 ```
 
-This dynamic positions the two disclosure channels in opposing quadrants of the credibility matrix (@fig-promotion-evidence-map, Panel B):
-
-- **Statutory filings gravitate toward Generic / Boilerplate:** Low in promotional tone, but low in falsifiable operational evidence.
-- **Earnings calls move toward Promotional but Grounded:** Executives use promotional language to frame AI initiatives, but simultaneously provide the verifiable metrics and operational details that analysts demand.
-
-> **Finding:** The earnings call is not simply looser communication; it moves toward both more promotion and more observable evidence. Rhetorical tone alone is an inadequate proxy for credibility.
+This establishes an essential empirical insight: **promotion and evidence rise together rather than trade off across venues**. Because the relative amplification in quantified evidence exceeds that of promotional claims ($17.1\times > 9.9\times$), oral conference calls do not merely inflate hype—they serve as the primary venue where managers provide concrete operational metrics to the market. Conversely, formal SEC filings are unpromotional not because they possess superior operational grounding, but because their language gravitates toward generic, unanchored legal boilerplate. Rhetorical tone alone is therefore an inadequate proxy for corporate credibility.
 
 ## Regulatory Scrutiny as a Stress Test
 
@@ -2004,7 +1924,7 @@ $$
 Y_{it} = \alpha_i + \lambda_t + \sum_{k \neq -1} \beta_k \left( \widetilde{W}_i^{\text{pre}} \times \mathbf{1}[t = k] \right) + \mathbf{X}_{it}'\boldsymbol{\gamma} + \varepsilon_{it}
 $$
 
-where $\widetilde{W}_i^{\text{pre}}$ is the standardized pre-event decoupling intensity computed strictly prior to 2024Q1, $\alpha_i$ and $\lambda_t$ are firm and quarter fixed effects, $\mathbf{X}_{it}$ controls for document mix and filing length, and standard errors are clustered by firm. Each $\beta_k$ represents the differential outcome change in quarter $k$ per 1 standard deviation increase in pre-event decoupling.
+where $\widetilde{W}_i^{\text{pre}}$ is the continuous standardized pre-event decoupling intensity computed strictly prior to 2024Q1, $\alpha_i$ and $\lambda_t$ are firm and quarter fixed effects, $\mathbf{X}_{it}$ controls for document mix and filing length, and standard errors are clustered by firm. Each $\beta_k$ measures the differential outcome change in quarter $k$ per 1 standard deviation increase in pre-event decoupling.
 
 Our primary outcome is **operational specificity** (`spec_per_1k`), the rate of specific, concrete AI disclosures per 1,000 words (@fig-sec-dynamic-did).
 
@@ -2042,7 +1962,7 @@ ax.plot([-1], [0], marker='D', color='#2563EB', markersize=6)
 
 ax.set_xlabel('Quarters from 2024Q1 SEC Scrutiny Shock (t = −1 is 2023Q4 Reference)', fontsize=8.8, fontweight='bold')
 ax.set_ylabel('Specific AI Frames / 1k Words per 1-SD W̃ᵢᵖʳᵉ', fontsize=8.8, fontweight='bold')
-ax.set_title('Figure 20: Dynamic DiD Response to SEC Scrutiny on Specific AI Disclosures', fontsize=10.0, fontweight='bold')
+ax.set_title('Figure 19: Dynamic DiD Response to SEC Scrutiny on Specific AI Disclosures', fontsize=10.0, fontweight='bold')
 ax.legend(loc='lower left', fontsize=8.2)
 ax.grid(True, linestyle='--', alpha=0.3)
 
@@ -2056,10 +1976,10 @@ plt.tight_layout()
 plt.show()
 ```
 
-The econometric results provide a clear verdict:
+The econometric estimates provide an unambiguous verdict:
 
-- **Parallel pre-trends hold cleanly:** Prior to 2024Q1, the pre-trend test shows no differential trajectory across firms with differing prior decoupling ($F = 1.25, p = 0.289$).
-- **No differential increase in operational grounding:** Following the SEC sweep, dynamic coefficients $\beta_k$ remain statistically zero across all post-event quarters (joint post-event test $F = 0.36, p = 0.905$; average post effect $+0.0003$ per 1-SD $\widetilde{W}_i^{\text{pre}}$). Quantified evidence exhibits the identical null pattern ($F = 0.95, p = 0.462$).
+- **Parallel pre-trends hold cleanly:** Prior to 2024Q1, the pre-trend test confirms no differential trajectory across firms with differing prior decoupling ($F = 1.25, p = 0.289$).
+- **No differential increase in operational grounding:** Following the SEC sweep, dynamic coefficients $\beta_k$ remain statistically indistinguishable from zero across all post-event quarters (joint post-event test $F = 0.36, p = 0.905$; average post effect $+0.0003$ per 1-SD $\widetilde{W}_i^{\text{pre}}$). Quantified evidence exhibits the identical null pattern ($F = 0.95, p = 0.462$).
 - **No promotional retrenchment:** Promotional claims show no differential decline ($F = 1.01, p = 0.416$).
 - **Risk language rises, but pre-trends prevent causal attribution:** The only series displaying an increase around the event is risk factor disclosure (average post effect $+0.0010$). However, risk language already violates parallel trends prior to the event ($F = 2.92, p = 0.021$). The observed rise reflects broad legal caution rather than a targeted response to pre-existing decoupling.
 
@@ -2075,7 +1995,7 @@ Synthesizing the empirical evidence across our escalating commitment tests yield
 
 These findings delineate the exact conceptual boundary of our work:
 
-> **AI washing in this thesis means observable decoupling between narrative intensity and disclosed, grounded substance—not proof that underlying AI activity is false or nonexistent.**
+> **AI washing in this thesis therefore means observable decoupling between narrative intensity and disclosed, grounded substance—not proof that underlying AI activity is false or nonexistent.**
 
 By establishing how credibility behaves across increasing disclosure commitments, the thesis transitions naturally to the capital market: do investors see through this decoupling, or does the market reward rhetoric over substance? Chapter 6 addresses this question directly.
 

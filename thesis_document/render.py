@@ -156,7 +156,11 @@ def style_all_tables(document: Document) -> None:
     """
     for tbl_element in document.element.body.iter(qn("w:tbl")):
         table = Table(tbl_element, document)
-        if len(table.rows) <= 1 or len(table.columns) <= 1:
+        try:
+            n_cols = len(table.columns)
+        except Exception:
+            n_cols = 1
+        if len(table.rows) <= 1 or n_cols <= 1:
             # The 1x1 caption wrapper Quarto puts around every captioned
             # table still inherits the "Table" style's colored grid unless
             # explicitly cleared -- that grid is what shows up as a colored
