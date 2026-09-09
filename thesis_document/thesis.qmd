@@ -908,22 +908,22 @@ plt.show()
 - **Communications** (2.08×), **Business Services** (1.39×), **Retail & Wholesale** (1.33×), and **Industrials & Manufacturing** (1.24×) are heavily overrepresented in **Defensive Disclosers**. In these sectors, AI presents competitive threats or internal process adjustments rather than core revenue products.
 - **Energy & Mining** (2.97× overrepresented) and **Industrials** (1.81×) account for the vast majority of **No AI** firms, where digital transformation remains secondary to physical operations.
 
-| Archetype | Centroid-Closest Firms | Major Prominent Corporations | Dominant Strategic Sector |
-|---|---|---|---|
-| **Vocal Substantives** | GE HealthCare (`GEHC`), HPE (`HPE`), Verisk (`VRSK`), Trimble (`TRMB`) | NVIDIA (`NVDA`), Microsoft (`MSFT`), Adobe (`ADBE`), Alphabet (`GOOGL`) | Technology & Electronics (61.4%) |
-| **Governance-Led Disclosers** | Biogen (`BIIB`), Avery Dennison (`AVY`), 3M (`MMM`), Corteva (`CTVA`) | JPMorgan Chase (`JPM`), Apple (`AAPL`), UnitedHealth (`UNH`), Walmart (`WMT`) | Financials (30.4%), Healthcare (21.0%) |
-| **Defensive Disclosers** | Constellation Brands (`STZ`), Bio-Rad (`BIO`), Constellation Energy (`CEG`) | Nike (`NKE`), Goldman Sachs (`GS`), Caterpillar (`CAT`), ExxonMobil (`XOM`) | Industrials, Retail, Communications |
-| **No AI** | Boundary threshold | Berkshire Hathaway (`BRK.B`), Costco (`COST`), Marathon Petroleum (`MPC`), Valero (`VLO`) | Energy & Mining, Physical Industrials |
+| Archetype | Closest-to-Centroid Examples | Dominant Sectors |
+|---|---|---|
+| **Vocal Substantives** | GE HealthCare (`GEHC`), HPE (`HPE`), Verisk (`VRSK`), Trimble (`TRMB`), Akamai (`AKAM`) | Technology & Electronics (61.4%) |
+| **Governance-Led Disclosers** | Biogen (`BIIB`), Avery Dennison (`AVY`), 3M (`MMM`), Corteva (`CTVA`), PPL Corp (`PPL`) | Financial Services (30.4%), Healthcare & Pharma (21.0%), Utilities (10.1%) |
+| **Defensive Disclosers** | Constellation Brands (`STZ`), Bio-Rad (`BIO`), Constellation Energy (`CEG`), Nike (`NKE`), Illumina (`ILMN`) | Industrials & Mfg (16.8%), Retail & Wholesale (10.2%), Communications (4.1%) |
+| **No AI** | Boundary threshold ($< 5$ frames) | Energy & Mining (8.2%), Physical Industrials (24.5%) |
 
-: Representative corporations across AI disclosure archetypes. {#tbl-representative-firms}
+: Representative corporations across AI disclosure archetypes based on centroid distance and sectoral concentration. {#tbl-representative-firms}
 
-As illustrated in @tbl-representative-firms, examining individual firms demonstrates the face validity of the taxonomy: technology leaders like Microsoft and NVIDIA anchor Vocal Substantives; heavily regulated giants like JPMorgan Chase, Apple, and UnitedHealth anchor Governance-Led Disclosers; mature consumer and industrial brands like Nike, Goldman Sachs, and Caterpillar fall into Defensive Disclosers; and resource-focused companies like Berkshire Hathaway and Valero Energy omit AI disclosure entirely.
+As illustrated in @tbl-representative-firms, examining individual firms provides concrete face validity for the empirical taxonomy. Beyond the centroid-closest firms, high-profile members of Vocal Substantives include technology-focused corporations such as Microsoft, NVIDIA, Adobe, and Alphabet; Governance-Led Disclosers includes large financial institutions and conglomerates such as JPMorgan Chase, Apple, and UnitedHealth; while Defensive Disclosers counts established consumer and industrial corporations such as Goldman Sachs, Caterpillar, and ExxonMobil among its members. Resource-focused and capital-intensive firms with minimal digital transformation discourse, such as Berkshire Hathaway, Costco, and Valero Energy, populate the No AI group.
 
-### From communication posture to operational reality
+### From communication posture to disclosed conduct
 
 This chapter has established how S&P 500 corporations communicate about artificial intelligence once the topic becomes ubiquitous: they separate into three robust, stable disclosure archetypes. 
 
-Yet an essential question remains: **are these communication postures mere corporate rhetoric, or do they correspond to fundamentally different operational commitments?** To determine whether a firm's disclosure posture reflects real-world differences in how AI is utilized, Chapter 4 transitions from communication strategy to the concrete activities firms claim to perform.
+Yet an essential question remains: **do these communication postures correspond to systematically different patterns of disclosed AI activity?** To determine whether a firm's disclosure posture reflects observable differences in what it reports doing, Chapter 4 transitions from communication strategy to the concrete activities firms claim to perform.
 
 # From Disclosure Strategy to Disclosed Activity
 
@@ -1164,9 +1164,9 @@ Markdown(tabulate(rows, headers=headers))
 
 Across all six behavioral dimensions, the archetypes separate cleanly:
 
-- **Vocal Substantives** report a median of **94.0 activities per firm**—more than five times the volume of Governance-Led Disclosers (17.0) and eleven times Defensive Disclosers (8.5). Furthermore, 80.0% of their activities claim proprietary technology, 40.7% name a specific corporate brand or product, and 74.7% are deployed in active production.
-- **Governance-Led Disclosers** display an intermediate profile: a median of 17.0 activities per firm, with 51.7% claiming proprietary AI and 61.6% reaching deployment.
-- **Defensive Disclosers** report only 8.5 activities per firm, with the lowest deployed share (59.5%) and only 18.1% naming a specific product.
+- **Vocal Substantives** report a median of **94.0 activities per firm**—more than five times the volume of Governance-Led Disclosers (17.0) and eleven times Defensive Disclosers (8.5). Furthermore, 79.8% of their activities claim proprietary technology, 40.4% name a specific corporate brand or product, 53.4% are customer-facing, and 74.7% are deployed in active production.
+- **Governance-Led Disclosers** display an intermediate profile: a median of 17.0 activities per firm, with 51.0% claiming proprietary AI, 16.6% naming a specific own brand, 28.9% customer-facing, and 68.9% reaching deployment.
+- **Defensive Disclosers** report only 8.5 activities per firm, with 50.6% claiming proprietary AI, 16.8% naming an own brand, 33.6% customer-facing, and the lowest deployed share (59.6%).
 
 **Controlling for disclosure volume.** Because both semantic frames and activities are extracted from the same corporate text, could this behavioral gap be a trivial artifact of verbosity? To rule out this shared-source confound, we estimate a negative binomial regression of disclosed activity counts on disclosure archetypes while explicitly conditioning on total AI disclosure volume ($\log(1 + \text{AI frames})$):
 
@@ -1199,7 +1199,7 @@ rows.append(["log(1 + AI frames)", "-", "-", f"{reg['log_frames_coef']:+.2f} (co
 Markdown(tabulate(rows, headers=[f"Archetype vs. {reg['reference']}", "Raw ratio", "p", "Volume-adjusted ratio", "p"]))
 ```
 
-Total AI disclosure volume explains most of the raw gap (log frame count alone reaches $R^2 = 0.74$ in the adjusted model), exactly as the shared-source-text concern predicts. But a real difference survives conditioning on it: at the same total disclosure volume, Vocal Substantives still report **2.44 times as many activities** as Defensive Disclosers ($p < 0.001$) and Governance-Led Disclosers report **1.41 times as many** ($p < 0.001$). Communication posture is not merely verbosity; it reflects fundamentally different intensities of disclosed operational execution.
+Total AI disclosure volume explains most of the raw gap (log frame count alone reaches $R^2 = 0.74$ in the adjusted model), exactly as the shared-source-text concern predicts. But a real difference survives conditioning on it: at the same total disclosure volume, Vocal Substantives still report **2.33 times as many activities** as Defensive Disclosers ($p < 0.001$) and Governance-Led Disclosers report **1.38 times as many** ($p < 0.001$). Communication posture is not merely verbosity; it reflects different intensities of disclosed operational activity.
 
 ## What are firms actually doing differently?
 
@@ -1289,7 +1289,7 @@ The 100% stacked distribution in @fig-archetype-activity-mix reveals stark strat
 
 ## Not all activity is equally substantive
 
-While firms disclose thousands of AI activities, a critical empirical question is whether these claims represent verifiable operational reality or vague corporate aspirations. To evaluate claim substance, we benchmark all 27,883 activities against an empirical **ladder of disclosed substance** that imposes increasing informational standards:
+While firms disclose thousands of AI activities, a critical empirical question is how concretely and specifically these activities are articulated in corporate text. To evaluate claim substance, we benchmark all 27,883 activities against an empirical **ladder of disclosed substance** that imposes increasing informational standards:
 
 $$\text{Activity Claim} \;\longrightarrow\; \text{Specific Business Function} \;\longrightarrow\; \text{Deployed Stage} \;\longrightarrow\; \text{Named Product/Process} \;\longrightarrow\; \text{Quantified Outcome Metric}$$
 
@@ -1522,7 +1522,7 @@ When external vendors are identified, the ecosystem is highly concentrated aroun
 
 Corporate disclosures disproportionately foreground proprietary brands while identifying the external technology stack far less frequently.
 
-## External validation: do disclosure and activity profiles correspond to different firms?
+## External economic characterization: do profiles correspond to distinct firms?
 
 Unlike the activity cross-tabulation above, the financial and market variables used here never passed through the LLM extraction pipeline at all; they come from XBRL filings and market prices, an entirely separate data source from the text the archetypes are built on. This is genuine external evidence, but it answers a narrower question than "are the archetypes real": it asks whether the archetypes correspond to economically distinct *firms*, not whether the posture dimensions themselves are valid. An archetype with no economic footprint would still be a real, reproducible communication strategy; it would just mean that strategy is not one that shows up in fundamentals, which is itself an informative finding, not a failure of the clustering.
 
@@ -1591,9 +1591,9 @@ plt.show()
 Together, Chapters 3 and 4 provide a comprehensive empirical map of corporate AI disclosure:
 
 1. **Strategic Differentiation:** In an era of universal AI mention, firms separate into three stable communication postures—Vocal Substantives, Governance-Led Disclosers, and Defensive Disclosers (Chapter 3).
-2. **Behavioral Realism:** These postures correspond to distinct operational activities: Vocal Substantives build customer products, Governance-Led firms automate internal workflows with governance guardrails, and Defensive firms focus on risk avoidance (Chapter 4).
-3. **The Substance Deficit:** Grounding has lagged disclosure volume: only 7.7% of claims report quantified outcomes, marginal concreteness deteriorated after ChatGPT, and firms obscure vendor dependencies under proprietary branding.
-4. **Economic Reality:** Vocal Substantives possess the fundamental R&D and margin profile to support aggressive technological positioning.
+2. **Disclosed Conduct:** These postures correspond to distinct operational activities: Vocal Substantives disproportionately report customer-product activity, Governance-Led firms automate internal workflows with governance guardrails, and Defensive firms focus on risk avoidance (Chapter 4).
+3. **The Substance Deficit:** Grounding has lagged disclosure volume: only 7.7% of claims report quantified outcomes, marginal concreteness deteriorated after ChatGPT, and external technology attribution remains sparse relative to proprietary branding.
+4. **Economic Distinctiveness:** Vocal Substantives possess the fundamental R&D and margin profile to support aggressive technological positioning.
 
 Different firms communicate with different postures, disclose different mixes of AI activities, and possess distinct economic profiles. Moreover, corporate AI claims vary wildly in their degree of grounding, and the GenAI boom has widened the gap between claim volume and verifiable substance. But when does this divergence between discourse and substance become a credibility problem? Chapter 5 turns directly to testing the credibility of corporate AI disclosure.
 
