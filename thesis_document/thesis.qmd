@@ -1770,13 +1770,13 @@ $$
 Y_{i,t,\text{venue}} = \alpha_{i,t} + \beta \, \mathbf{1}[\text{venue} = \text{Call}] + \varepsilon_{i,t,\text{venue}}
 $$
 
-Because each cell contains exactly two observations—the firm's voluntary earnings call and its mandatory statutory SEC filing (10-K/10-Q) for the exact same fiscal year—the estimator isolates the pure within-firm, within-period channel difference ($\text{Call}_{i,t} - \text{Filing}_{i,t}$). This sweeps out all time-invariant firm unobservables, business models, and macroeconomic conditions.
+Because each cell contains exactly two observations—the firm's voluntary earnings call and its mandatory statutory SEC filing (10-K/10-Q) for the exact same fiscal year—the estimator measures the within-firm, within-period venue-associated difference ($\text{Call}_{i,t} - \text{Filing}_{i,t}$). This sweeps out all time-invariant firm unobservables, business models, and macroeconomic conditions.
 
 The results reveal a stark contrast between what firms claim to do and the evidence they attach to those claims (@fig-venue-call-filing-differences).
 
 ```{python}
 #| label: fig-venue-call-filing-differences
-#| fig-cap: "Call-minus-filing differences in activity composition and evidentiary grounding within the same firm and fiscal year (n = 459 balanced cells, 95% confidence intervals). Panel A demonstrates that core activity shares are preserved across venues. Panel B shows that verifiable operational proof is systematically dropped in statutory filings."
+#| fig-cap: "Call-minus-filing differences in activity composition and evidentiary grounding within the same firm and fiscal year (n = 459 balanced cells, 95% confidence intervals). Panel A demonstrates that core activity shares are preserved across venues. Panel B shows that statutory filings contain substantially fewer verifiable operational details."
 #| echo: false
 #| fig-width: 8.0
 #| fig-height: 5.0
@@ -1857,7 +1857,7 @@ In Panel B, however, the evidentiary backing attached to those activities diverg
 - **Named product or process:** $\downarrow 3.9$ percentage points in filings ($p = 0.002$).
 - **Governance caveats and risk factors:** $\uparrow 2.0$ percentage points in filings ($p < 0.01$).
 
-> **The Central Finding:** The activity story survives; the evidence changes. Public firms pitch concrete operational metrics, named software partners, and functional deployments to equity analysts in earnings calls, but sanitize those same disclosures when signing statutory SEC filings.
+> **The Central Finding:** The activity story survives; the evidence changes. Public firms report concrete operational metrics, named software partners, and functional deployments to equity analysts in earnings calls, whereas their statutory SEC filings contain substantially fewer evidentiary details.
 
 ## Promotion is Not the Opposite of Evidence
 
@@ -1983,15 +1983,15 @@ The econometric estimates provide an unambiguous verdict:
 - **No promotional retrenchment:** Promotional claims show no differential decline ($F = 1.01, p = 0.416$).
 - **Risk language rises, but pre-trends prevent causal attribution:** The only series displaying an increase around the event is risk factor disclosure (average post effect $+0.0010$). However, risk language already violates parallel trends prior to the event ($F = 2.92, p = 0.021$). The observed rise reflects broad legal caution rather than a targeted response to pre-existing decoupling.
 
-> **Finding:** There is no evidence that firms with greater prior decoupling differentially increased grounded disclosure or reined in promotional talk following regulatory scrutiny. Scrutiny triggered defensive boilerplate rather than verified substance.
+> **Finding:** There is no evidence that firms with greater prior decoupling differentially increased grounded disclosure or reined in promotional talk following regulatory scrutiny. Risk boilerplate increased around the scrutiny period, but the pre-trend violation prevents attributing that increase to SEC scrutiny.
 
 ## What Credibility Means in This Thesis
 
 Synthesizing the empirical evidence across our escalating commitment tests yields three core conclusions:
 
 1. **Talk and substance decouple:** A significant subset of firms communicates with high promotional intensity while reporting negligible grounded operational activity ($W > 0$). This gap is persistent ($\rho \approx 0.60$), reflecting an enduring corporate communication posture rather than annual noise.
-2. **Formalization removes evidence, not activities:** When moving from oral earnings calls to statutory filings, firms preserve the overall narrative of their AI activities, but systematically strip away verifiable details—omitting business functions, metrics, and partner attributions.
-3. **Regulatory scrutiny did not close the credibility gap:** The 2024 SEC warnings prompted an expansion of generic risk warnings, but produced no differential increase in operational grounding among previously decoupled firms.
+2. **Cross-venue differences reflect evidence, not activity composition:** When comparing oral earnings calls to statutory filings, firms describe a similar activity mix, but formal filings contain substantially fewer evidentiary details—reporting fewer specific business functions, quantitative metrics, and partner attributions.
+3. **Regulatory scrutiny did not close the credibility gap:** Risk warnings expanded around the 2024 SEC scrutiny period without a causal attribution, while operational grounding and specific disclosures among previously decoupled firms showed a precisely estimated null response.
 
 These findings delineate the exact conceptual boundary of our work:
 
@@ -2001,7 +2001,7 @@ By establishing how credibility behaves across increasing disclosure commitments
 
 # Economic and Market Relevance of AI Disclosure
 
-This chapter investigates whether capital markets reprice the *volume* of corporate AI rhetoric or the *substance* of operational execution around earnings calls. Tracking communication call-by-call across S&P 500 firms from 2021 to 2025, we test how post-call market beta responds to established disclosure postures, call-specific narrative surprises, and concrete operational activities.
+This chapter investigates whether capital markets reflect the *volume* of corporate AI rhetoric or the *substance* of operational execution around earnings calls. Tracking communication call-by-call across S&P 500 firms from 2021 to 2025, we evaluate how post-call market beta correlates with established disclosure postures, call-specific narrative surprises, and concrete operational activities, conditioning on pre-call beta.
 
 ## Empirical Strategy and Research Design
 
@@ -2120,10 +2120,10 @@ The baseline estimation covers 6,794 calls across 447 firms (262 industry-by-yea
 
 Two main patterns emerge:
 
-1. **Voice matters:** Historical disclosure intensity is positive and significant ($\beta = 0.070, p = 0.005$; unstandardized $0.103$ per 1 SD increase), as is call-specific surprise disclosure ($\beta = 0.029, p = 0.020$; unstandardized $0.030$). Both established rhetorical posture and unexpected narrative spikes raise subsequent systematic risk.
+1. **Voice matters:** Historical disclosure intensity is positive and significant ($\beta = 0.070, p = 0.005$; unstandardized $0.103$ per 1 SD increase), as is call-specific surprise disclosure ($\beta = 0.029, p = 0.020$; unstandardized $0.030$). Both established rhetorical posture and unexpected narrative spikes are positively associated with subsequent systematic risk conditional on pre-call beta.
 2. **Substance does not:** Historical substance ($\beta = 0.008, p = 0.759$) and surprise substance ($\beta = 0.003, p = 0.783$) are indistinguishable from zero. Joint tests confirm this contrast: the disclosure block ($\text{HistD} + \text{SurpriseD}$) is strongly significant ($F = 5.15, p = 0.006; \Delta R^2 = +0.0051$), whereas the substance block is null ($F = 0.05, p = 0.952$).
 
-The market prices executive disclosure volume, but remains indifferent to grounded operational activities.
+Executive disclosure volume is positively associated with post-call market beta conditional on pre-call risk, while grounded operational activities show no incremental association.
 
 ## Robustness and Sensitivity Analysis
 
@@ -2184,7 +2184,7 @@ Markdown(tabulate(rows, headers=["Variable", "Baseline", "+ Accounting", "Firm F
 
 ### Estimation Window Dynamics
 
-To evaluate whether this repricing reflects transient post-announcement volatility or a persistent risk adjustment, we re-estimate the model across alternative post-call windows (`[+21, +63]`, `[+21, +126]`, `[+21, +252]`) and pre-call windows (`[-126, -21]`, `[-252, -42]`).
+To evaluate whether this statistical association reflects transient post-announcement volatility or a persistent risk difference, we re-estimate the model across alternative post-call windows (`[+21, +63]`, `[+21, +126]`, `[+21, +252]`) and pre-call windows (`[-126, -21]`, `[-252, -42]`).
 
 @tbl-call-beta-windows reports standardized coefficients across all five horizons.
 
@@ -2239,8 +2239,8 @@ Markdown(tabulate(rows, headers=headers))
 
 Three dynamics stand out:
 
-- **Historical posture persists:** $\text{HistDisclosure}$ remains positive and significant across all five windows ($\beta \in [0.071, 0.094], p \le 0.004$), sustaining its pricing impact through a full trading year.
-- **Surprise disclosure compounds:** $\text{SurpriseDisclosure}$ strengthens monotonically from $+63$ days ($\beta = 0.027, p = 0.089$) to $+126$ days ($\beta = 0.028, p = 0.026$) and $+252$ days ($\beta = 0.036, p = 0.005$). Narrative shocks are not transient noise; they are gradually integrated into forward risk expectations.
+- **Historical posture persists:** $\text{HistDisclosure}$ remains positive and significant across all five windows ($\beta \in [0.071, 0.094], p \le 0.004$), maintaining a stable association through a full trading year.
+- **Surprise disclosure compounds:** $\text{SurpriseDisclosure}$ strengthens monotonically from $+63$ days ($\beta = 0.027, p = 0.089$) to $+126$ days ($\beta = 0.028, p = 0.026$) and $+252$ days ($\beta = 0.036, p = 0.005$). Narrative surprises are not transient noise; they correlate with systematically higher risk levels across extended post-call windows.
 - **Substance is uniformly null:** Both historical and surprise substance stay near zero across all horizons ($p > 0.49$).
 
 ### Model Specifications and Identification
@@ -2323,7 +2323,7 @@ Controlling for liabilities-to-assets results in only minor coefficient shifts (
 
 ## Critical Limitations
 
-1. **Temporal concentration in the 2024 AI bubble:** Leave-one-year-out regressions remain significant when dropping 2021, 2022, 2023, or 2025 ($p < 0.03$). However, excluding 2024 collapses the result: $\text{HistDisclosure}$ drops to 0.026 ($p = 0.136$) and $\text{SurpriseDisclosure}$ to 0.004 ($p = 0.732$). The repricing of call disclosures is historically anchored in the 2024 generative AI wave.
+1. **Temporal concentration in the 2024 AI bubble:** Leave-one-year-out regressions remain significant when dropping 2021, 2022, 2023, or 2025 ($p < 0.03$). However, excluding 2024 collapses the result: $\text{HistDisclosure}$ drops to 0.026 ($p = 0.136$) and $\text{SurpriseDisclosure}$ to 0.004 ($p = 0.732$). The positive association between call disclosures and market beta is historically anchored in the 2024 generative AI wave.
 2. **Pre-call beta placebo failure:** Regressing pre-call beta ($\beta^{\text{pre}}_{[-252, -21]}$) on contemporaneous call disclosure yields $\beta = 0.176$ ($p < 0.001$), while substance is null ($p = 0.196$). Firms that talk heavily about AI were already high-beta firms prior to the call. $\text{HistDisclosure}$ therefore reflects a persistent corporate posture adopted by high-beta, growth-oriented firms seeking market attention, rather than an exogenous shock to systematic risk.
 
 
@@ -2374,13 +2374,13 @@ Third, semantic content and disclosed activity relate to economic and market out
 
 The methodological contribution is a five-layer, largely reproducible extraction pipeline that recovers structured, falsifiable claims and grounded activities from over nine million paragraphs at a cost no purely human-coded design could match, with venue-specific measurement error documented rather than assumed away. The managerial contribution is a concrete disclosure checklist for issuers and a cross-venue credibility framework for investors, both grounded in what the measurement shows carries information.
 
-Theoretically, the results are most consistent with a signalling account of specificity, a legitimacy/institutional-diffusion account of the "no AI" segment's disappearance, and a cheap-talk account of earnings calls as a more discretionary, lower-formality disclosure venue. The main claims of this thesis are measurement and association rather than causal effects: the most tightly identified design isolates a venue-associated disclosure difference, not the causal effect of legal liability, and the SEC regulatory scrutiny test demonstrates that enforcement threats discipline cautionary boilerplate rather than operational grounding.
+Theoretically, the results are most consistent with a signalling account of specificity, a legitimacy/institutional-diffusion account of the "no AI" segment's disappearance, and a cheap-talk account of earnings calls as a more discretionary, lower-formality disclosure venue. The main claims of this thesis are measurement and association rather than causal effects: the most tightly identified design isolates a venue-associated disclosure difference, not the causal effect of legal liability. Furthermore, the regulatory scrutiny design yields no identifiable causal response: primary operational outcomes show acceptable pre-trends but null post-effects, while risk disclosure exhibits pre-trend violations that preclude a causal attribution.
 
 Four limitations are carried through every chapter:
 
 1. Every frame and activity label comes from an LLM judge: the measured reliability (κ 0.81–0.87) is agreement between two LLM judges, not accuracy against an independent ground truth.
 2. "Disclosed behaviour" and "disclosed activity" measure what a firm says it does, not what an audited operational record would confirm.
-3. Regulatory scrutiny operates as a compliance discipline rather than a substantive truth-telling mechanism: the SEC 2024 enforcement shock led firms with high pre-existing decoupling to expand cautionary and risk language, while leaving concrete grounding and operational specificity statistically unchanged.
+3. The regulatory scrutiny design yields no identifiable causal response: primary SEC outcomes show acceptable pre-trends but null post-effects, while risk boilerplate increased around the scrutiny period with pre-trend violations that prevent attributing that increase to SEC scrutiny.
 4. The AI-washing index has no external benchmark: it compares a firm's own disclosure to its own disclosed activity, both extracted from the same corpus, and cannot check either against an audited operational record.
 
 Cross-venue results are robust to using words rather than paragraphs as the denominator and to denominator-free activity comparisons.
