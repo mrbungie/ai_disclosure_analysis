@@ -1908,15 +1908,35 @@ Earnings calls frequently operate in the "Promotional but Grounded" quadrant, wh
 
 ## Test III — Does scrutiny change credibility?
 
-The third and most demanding test of credibility asks: **if regulatory scrutiny increases the potential cost of ungrounded claims, do firms adjust their disclosure posture to become more grounded or more consistent?**
+The third and most demanding test of credibility asks: **if regulatory scrutiny increases the potential cost of ungrounded claims, do firms adjust their disclosure posture to become more grounded or more substantiated?**
 
-In February 2024, SEC Chair Gensler issued an explicit public warning on "AI washing," followed by enforcement actions against investment advisers in March 2024 and comment letters to public registrants (2024Q1 cutoff). We test whether firms with higher pre-event decoupling ($W$) responded to this scrutiny.
+In February 2024, SEC Chair Gary Gensler issued an explicit public warning on "AI washing," followed by enforcement actions against registered advisers in March 2024 and comment letters to public registrants (anchoring the 2024Q1 cutoff). We test whether firms with higher pre-event decoupling responded to this scrutiny.
 
-In the continuous event-study specification (5,376 firm-quarters across 490 firms), pre-trends for promotional intensity ($F = 1.73, p = 0.142$) and specificity ($F = 1.25, p = 0.289$) remain flat prior to 2024Q1. However, post-event coefficients reveal no significant differential change in promotional language (+0.0025, $p = 0.416$) or specificity (+0.0022, $p = 0.905$), while risk disclosure rises (+0.0070, $p = 0.021$).
+### Continuous Dynamic DiD Specification
+
+Rather than imposing an arbitrary discrete cutoff (such as a median or top-quartile split into "high" versus "low" washers)—which discards continuous cross-sectional variation and risks sensitivity to threshold choices—we use the continuous pre-event decoupling intensity $W_i^{\text{pre}}$ as our baseline exposure:
+
+$$
+Y_{it} = \alpha_i + \lambda_t + \sum_{k \neq -1} \beta_k \left( \widetilde{W}_i^{\text{pre}} \times \mathbf{1}[t = k] \right) + \mathbf{X}_{it}'\boldsymbol{\gamma} + \varepsilon_{it}
+$$
+
+where:
+
+- $W_i^{\text{pre}} = \frac{1}{|T^{\text{pre}}|} \sum_{t < \text{2024Q1}} W_{it}$ is the firm's average disclosure–substance decoupling index ($W$) computed strictly over periods prior to 2024Q1.
+- $\widetilde{W}_i^{\text{pre}} = \frac{W_i^{\text{pre}} - \bar{W}^{\text{pre}}}{\text{sd}(W^{\text{pre}})}$ is the standardized pre-event exposure ($\text{mean} = 0, \text{sd} = 1$).
+- $\alpha_i$ and $\lambda_t$ denote firm and quarter fixed effects, absorbing time-invariant firm unobservables and aggregate time shocks (including the macro wave of generative AI).
+- $\mathbf{X}_{it}$ controls for document mix (proportions of DEF 14A and 10-K filings) and filing length ($\log(\text{words})$).
+- Standard errors $\varepsilon_{it}$ are clustered at the firm level across 5,376 firm-quarters (490 firms).
+
+Under this design, each coefficient $\beta_k$ represents the **differential change in outcome $Y_{it}$ in quarter $k$ (relative to the reference quarter $t = -1$, 2023Q4) associated with a 1 standard deviation increase in pre-event decoupling.**
+
+### Empirical Results across Substantiation Margins
+
+Our headline outcome captures operational grounding and concrete detail: the frequency of specific AI disclosures per 1,000 words (`spec_per_1k`), alongside quantified evidence (`quant_per_1k`), promotional intensity (`promo_per_1k`), and risk disclosures (`risk_per_1k`).
 
 ```{python}
-#| label: fig-sec-event-study
-#| fig-cap: "Diagnostic event study: SEC regulatory sweep around AI disclosures across event quarters, using pre-event AI-washing index (W) as treatment exposure."
+#| label: fig-sec-dynamic-did
+#| fig-cap: "Dynamic difference-in-differences estimates of the response to SEC scrutiny by continuous pre-event decoupling intensity. Panel A displays the headline grounding outcome (specific AI disclosures per 1,000 words); Panel B displays quantified metrics. Coefficients reflect the differential quarterly change per 1 standard deviation increase in pre-event decoupling relative to 2023Q4 (t = -1). Error bars show 95% confidence intervals with firm-clustered standard errors."
 #| echo: false
 #| fig-width: 9.8
 #| fig-height: 3.8
@@ -1925,91 +1945,61 @@ import json
 import pandas as pd
 import matplotlib.pyplot as plt
 
-data_path = Path("../data/processed/clusters/shock_analysis.json")
+data_path = Path("../data/processed/clusters/sec_did_continuous.json")
 if not data_path.exists():
-    data_path = Path("data/processed/clusters/shock_analysis.json")
+    data_path = Path("data/processed/clusters/sec_did_continuous.json")
 
 with open(data_path) as f:
     d = json.load(f)
 
-fig, axes = plt.subplots(1, 2, figsize=(9.8, 3.8), sharey=False, dpi=300)
-titles = [
-    ("promo_per_1k", "Promotional frames per 1,000 words"),
-    ("risk_per_1k", "Risk frames per 1,000 words")
+fig, axes = plt.subplots(1, 2, figsize=(9.8, 3.8), dpi=300)
+panels = [
+    ("spec_per_1k", "Panel A: Specific AI disclosure intensity (headline)", "Specific frames / 1k words per 1-SD W^pre"),
+    ("quant_per_1k", "Panel B: Quantified AI evidence intensity", "Quantified frames / 1k words per 1-SD W^pre")
 ]
-for ax, (outcome, title) in zip(axes, titles):
-    o = d["sec"]["outcomes"][outcome]
-    t = pd.DataFrame(o["coefficients"]).sort_values("event_time")
-    pre = t.event_time < 0
-    ax.errorbar(t.event_time[pre], t.coef[pre], yerr=1.96 * t.se[pre], fmt="o", color="#4c72b0", capsize=3, label="Before")
-    ax.errorbar(t.event_time[~pre], t.coef[~pre], yerr=1.96 * t.se[~pre], fmt="s", color="#c44e52", capsize=3, label="After")
-    ax.axhline(0, color="grey", lw=1, ls="-")
-    ax.axvline(-0.5, color="black", ls=":", lw=1.2)
-    ax.set_title(f"{title}\nPre-trend test: p = {o['pretrend_p']:.3f}", fontsize=9.2, fontweight="bold")
-    ax.set_xlabel("Quarters from 2024Q1 (t−1 = ref.)", fontsize=8.8)
-    ax.set_ylabel("Washing index (W) × Quarter coefficient", fontsize=8.8)
-    ax.legend(fontsize=8, loc="upper left")
+
+for ax, (out, title, ylabel) in zip(axes, panels):
+    df = pd.DataFrame(d[out]["coeffs"]).sort_values("event_time")
+    x = df["event_time"].to_numpy(dtype=float)
+    y = df["coef"].to_numpy(dtype=float)
+    se = df["se"].to_numpy(dtype=float)
+    pre = x < 0
+    
+    ax.errorbar(x[pre], y[pre], yerr=1.96 * se[pre], fmt="o", color="#2b5c8f", capsize=3, lw=1.4, label="Pre-scrutiny (t < 0)")
+    ax.errorbar(x[~pre], y[~pre], yerr=1.96 * se[~pre], fmt="s", color="#d95f02", capsize=3, lw=1.4, label="Post-scrutiny (t \u2265 0)")
+    ax.axhline(0, color="grey", lw=0.9, ls="-")
+    ax.axvline(-0.5, color="#475569", ls=":", lw=1.2)
+    ax.plot([-1], [0], marker="D", color="#2b5c8f", markersize=5)
+    
+    pre_p = d[out]["pre_p"]
+    post_p = d[out]["post_p"]
+    ax.set_title(f"{title}\nPre-trend: p = {pre_p:.3f} | Post joint: p = {post_p:.3f}", fontsize=8.8, fontweight="bold")
+    ax.set_xlabel("Quarters from 2024Q1 (t = \u22121 is 2023Q4 reference)", fontsize=8.2)
+    ax.set_ylabel(ylabel, fontsize=7.8)
+    ax.legend(fontsize=7.8, loc="upper left")
     ax.grid(True, linestyle="--", alpha=0.3)
 
-fig.suptitle("SEC event study: disclosure response by pre-event AI-washing exposure (W)", fontsize=10.5, fontweight="bold")
+fig.suptitle("Dynamic DiD: Corporate AI disclosure response to SEC scrutiny by continuous pre-event decoupling", fontsize=10.0, fontweight="bold")
 plt.tight_layout()
 plt.show()
 ```
 
-A difference-in-differences design splitting firms by pre-2024 washing score (132 high-washing treated firms vs. 358 controls) shows that high-washing firms differentially increased specific AI disclosures (+0.0103 per 1,000 words, $p < 0.001$) and quantified metrics (+0.0060, $p = 0.017$; pre-trend $p = 0.250$, @fig-shock-did-spec).
+As demonstrated in @fig-sec-dynamic-did, pre-trends for both specificity ($F = 1.25, p = 0.289$) and quantified metrics ($F = 0.70, p = 0.594$) remain flat and statistically indistinguishable from zero prior to 2024Q1, validating the parallel trends assumption.
 
-```{python}
-#| label: fig-shock-did-spec
-#| fig-cap: "Difference-in-differences dynamic trajectory: specific disclosure intensity per 1,000 words following SEC regulatory scrutiny, comparing high vs. low pre-event AI-washing firms."
-#| echo: false
-#| fig-width: 7.2
-#| fig-height: 3.8
-from pathlib import Path
-import json
-import pandas as pd
-import matplotlib.pyplot as plt
+Following the SEC scrutiny shock, however, dynamic coefficients $\beta_k$ for specific disclosures remain statistically indistinguishable from zero across all post-event quarters (joint post-event test $F = 0.36, p = 0.905$; average post-event effect $+0.0003$ per 1-SD $\widetilde{W}_i^{\text{pre}}$). Quantified evidence exhibits the same null response ($F = 0.95, p = 0.462$; average post-event effect $+0.0005$). Similarly, promotional intensity displays no retrenchment ($F = 1.01, p = 0.416$). The only margin responding significantly to regulatory scrutiny is generic risk disclosure, which spiked immediately at $t = 0$ ($\beta_0 = +0.0072, p = 0.003$; average post-effect $+0.0010, p = 0.021$).
 
-data_path = Path("../data/processed/clusters/shock_did_simple.json")
-if not data_path.exists():
-    data_path = Path("data/processed/clusters/shock_did_simple.json")
+| Outcome variable | Pre-trend $F$-statistic | Pre-trend $p$-value | Post joint $p$-value | Post mean ($\bar{\beta}_{\text{post}}$) | Verdict |
+|---|---|---|---|---|---|
+| Specificity (`spec_per_1k`) [Headline] | 1.25 | 0.289 | 0.905 | +0.0003 | Parallel trends hold; null differential substantiation |
+| Quantified metrics (`quant_per_1k`) | 0.70 | 0.594 | 0.462 | +0.0005 | Parallel trends hold; null differential substantiation |
+| Promotional intensity (`promo_per_1k`) | 1.73 | 0.142 | 0.416 | +0.0004 | Parallel trends hold; no promotional retrenchment |
+| Risk disclosure (`risk_per_1k`) | 2.92 | 0.021 | 0.021 | +0.0010 | Immediate expansion of boilerplate risk factors |
 
-with open(data_path) as f:
-    d = json.load(f)
+: Dynamic difference-in-differences estimates of SEC scrutiny on corporate AI disclosures by continuous pre-event decoupling ($\widetilde{W}_i^{\text{pre}}$). {#tbl-sec-did}
 
-study = pd.DataFrame(d["spec_per_1k"]["event_study"]).sort_values("event_time")
-pretrend_p = d["spec_per_1k"]["pretrend_p"]
+**Identification verdict: Regulatory scrutiny expanded defensive risk boilerplate, but did not increase operational grounding.** Firms with higher pre-event decoupling did not substantiate their claims or tone down promotional rhetoric in response to regulatory warnings. Rather, the observable compliance response was confined to adding legalistic cautionary language in formal filings.
 
-fig, ax = plt.subplots(figsize=(7.2, 3.8), dpi=300)
-x = study["event_time"].to_numpy(dtype=float)
-y = study["coef"].to_numpy(dtype=float)
-error = 1.96 * study["se"].to_numpy(dtype=float)
-pre = x < 0
-ax.errorbar(x[pre], y[pre], yerr=error[pre], fmt="o", color="#4c72b0", capsize=3, lw=1.5, label="Before SEC scrutiny")
-ax.errorbar(x[~pre], y[~pre], yerr=error[~pre], fmt="s", color="#c44e52", capsize=3, lw=1.5, label="After SEC scrutiny")
-ax.axhline(0, color="grey", lw=1)
-ax.axvline(-0.5, color="black", ls=":", lw=1.2)
-ax.annotate("SEC scrutiny (2024Q1)", xy=(-0.4, max(y + error) * 0.88), fontsize=8.2, color="#334155")
-ax.set_xlabel("Quarters from event (t = 0 is 2024Q1; t−1 = reference)", fontsize=8.8)
-ax.set_ylabel("Specific frames / 1k: high vs. low washing", fontsize=8.8)
-ax.set_title(f"Dynamic DiD: Specific AI disclosure intensity (pre-trend p = {pretrend_p:.3f})", fontsize=10.0, fontweight="bold")
-ax.legend(fontsize=8.2, loc="lower left")
-ax.grid(True, linestyle="--", alpha=0.3)
-plt.tight_layout()
-plt.show()
-```
 
-Furthermore, testing the cross-venue gap itself reveals that the promotional gap widened from 0.019 in 2021–2022 to 0.077 in 2024 and 0.080 in 2025. Pre-trend tests fail ($p < 0.01$) because the gap was already expanding in fiscal 2023, well before SEC enforcement.
-
-**Identification verdict: there is no credible evidence that regulatory scrutiny closed the credibility gap.** While high-washing firms added more specificity and governance after December 2023, the shift concentrates heavily in the 2024 annual filing season rather than tracking enforcement dates. What is observed in the filings is equally consistent with industry-wide generative AI maturation.
-
-| Design | Pre-trend test | Verdict |
-|---|---|---|
-| Event study, continuous washing index exposure ($W$), firm + quarter FE | Passes for promo ($p=0.142$) and spec ($p=0.289$) | Null differential post shift ($p > 0.40$) |
-| Simple DiD, pre-event washing index split ($W > \text{median}$) | Passes for promo ($p=0.230$) and quant ($p=0.250$) | Specificity jump concentrated in 2024 10-K season |
-| Within-firm channel gap (call − filing), post-2024 | Fails ($p < 0.01$); gap was already widening in FY2023 | Gap persists; no closure after scrutiny |
-| DeepSeek event study (Appendix G) | Passes for promo ($p=0.715$) and spec ($p=0.638$) | Null post effect ($p > 0.20$) |
-
-: SEC identification verdict. {#tbl-sec-verdict}
 
 ## What can — and cannot — be called AI washing?
 

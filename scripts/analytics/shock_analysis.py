@@ -84,8 +84,8 @@ GROUP_WINDOW_END = "2023-01-01"
 # Intensidades por 1.000 palabras sobre TODOS los filings, con cero cuando el
 # documento no habla de IA (ai_intensity.py). No condiciona a hablar de IA: la
 # empresa que deja de hablar cuenta como cero, no sale del panel.
-OUTCOMES = ("promo_per_1k", "spec_per_1k", "risk_per_1k", "hyp_per_1k", "frames_per_1k")
-MAIN_OUTCOME = "promo_per_1k"
+OUTCOMES = ("spec_per_1k", "quant_per_1k", "promo_per_1k", "risk_per_1k", "hyp_per_1k", "frames_per_1k")
+MAIN_OUTCOME = "spec_per_1k"
 CONTROLS = "mix_proxy + mix_10k + np.log(n_words)"
 
 
@@ -110,6 +110,9 @@ def build_panel(con) -> tuple[pd.DataFrame, pd.DataFrame]:
         pre_w = wy[wy["year"] < 2024].groupby("ticker")["w"].mean().rename("exposure")
         treatment = pd.DataFrame({"ticker": panel["ticker"].unique()}).merge(
             pre_w.reset_index(), on="ticker", how="left").fillna({"exposure": 0.0}).set_index("ticker")
+        std_val = treatment["exposure"].std()
+        if std_val > 0:
+            treatment["exposure"] = (treatment["exposure"] - treatment["exposure"].mean()) / std_val
     else:
         pre = docs[docs["fecha"] < pd.Timestamp(GROUP_WINDOW_END)].groupby("ticker").agg(
             frames=("n_frames", "sum"), words=("n_words", "sum"))
@@ -201,7 +204,7 @@ def report_event(panel: pd.DataFrame, treatment: pd.DataFrame, event_name: str) 
         print(f"  tendencias previas: F={pre_F:.2f} p={pre_p:.3f} -> {verdict}"
               f"   |   cambio post: {post_mean:+.4f} (p conjunto {post_p:.3f})")
         out[outcome] = {"pretrend_F": pre_F, "pretrend_p": pre_p, "usable": verdict != "FALLA",
-                        "post_mean": post_mean, "post_p": post_p,
+                        "post_mean": post_mean, "post_F": post_F, "post_p": post_p,
                         "coefficients": table.drop(columns="term").to_dict("records")}
     return out
 
@@ -262,6 +265,27 @@ def main() -> None:
                               "segments": report_segments(panel, treatment, event_name)}
     args.output.write_text(json.dumps(report, indent=2, default=float))
     print(f"\n-> {args.output}")
+
+    if "sec" in report:
+        sec_out = {
+            out: {
+                "pre_F": report["sec"]["outcomes"][out]["pretrend_F"],
+                "pre_p": report["sec"]["outcomes"][out]["pretrend_p"],
+                "post_F": report["sec"]["outcomes"][out]["post_F"],
+                "post_p": report["sec"]["outcomes"][out]["post_p"],
+                "post_mean": report["sec"]["outcomes"][out]["post_mean"],
+                "coeffs": [
+                    c for c in report["sec"]["outcomes"][out]["coefficients"]
+                ] + ([{"event_time": REFERENCE_OFFSET, "coef": 0.0, "se": 0.0, "p": 1.0}]
+                     if not any(c["event_time"] == REFERENCE_OFFSET for c in report["sec"]["outcomes"][out]["coefficients"]) else [])
+            }
+            for out in ("spec_per_1k", "quant_per_1k", "promo_per_1k", "risk_per_1k")
+            if out in report["sec"]["outcomes"]
+        }
+        for k in sec_out:
+            sec_out[k]["coeffs"].sort(key=lambda x: x["event_time"])
+        (OUT_DIR / "sec_did_continuous.json").write_text(json.dumps(sec_out, indent=2, default=float))
+        print(f"-> {OUT_DIR / 'sec_did_continuous.json'}")
 
 
 if __name__ == "__main__":
