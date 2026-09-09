@@ -355,7 +355,7 @@ The pipeline moves across seven nested units, each used where it is the natural 
 - the pooled firm (the unit of the cross-sectional segmentation and washing score); and
 - the firm × fiscal-year × venue cell (the unit of the cross-venue comparison).
 
-A firm-quarter unit is used only for the SEC and DeepSeek event studies, where calendar-quarter alignment is required to define a clean pre/post cut.
+A firm-quarter unit is used only for the SEC dynamic difference-in-differences analysis in Chapter 5, where calendar-quarter alignment is required to define a clean pre/post cut.
 
 ## Cleaning, prefiltering, and AI paragraph classifier
 
@@ -527,7 +527,7 @@ Every automated stage in the measurement pipeline is benchmarked against held-ou
 
 ## Processed quantitative data: financial and market variables
 
-Firm-year financial and market variables are drawn from XBRL and price data, aligned by actual fiscal period end rather than filing date, with documented fallback chains for concept coverage (capex 91%, SG&A 81%, net margin 99%, revenue 99%) and a [340, 380]-day gap rule for validating year-over-year changes. The variable set used throughout Chapters 3–6 comprises market capitalization, R&D-to-sales, gross margin, operating margin, asset turnover, price-to-sales, next-fiscal-year revenue growth, market beta, and idiosyncratic volatility (the annualized standard deviation of one-factor market-model residuals over the 252 trading days preceding the filing). R&D-to-sales has only 46% XBRL coverage and is used as an outcome, not a general control: it identifies firms that separately report comparable current R&D rather than treating non-reporting as zero. Appendix D gives the beta specification, its estimation-window diagnostics, the treatment of delisted firms, and the R&D coverage assessment. All financial ratios are winsorized at the 1st and 99th percentiles.
+Firm-year financial and market variables are drawn from XBRL and price data, aligned by actual fiscal period end rather than filing date, with documented fallback chains for concept coverage (capex 91%, SG&A 81%, net margin 99%, revenue 99%) and a [340, 380]-day gap rule for validating year-over-year changes. The variable set used throughout Chapters 3–6 comprises market capitalization, R&D-to-sales, gross margin, operating margin, asset turnover, price-to-sales, next-fiscal-year revenue growth, market beta, and idiosyncratic volatility (the annualized standard deviation of one-factor market-model residuals over the 252 trading days preceding the filing). R&D-to-sales has only 46% XBRL coverage and is used as an outcome, not a general control: it identifies firms that separately report comparable current R&D rather than treating non-reporting as zero. Appendix F gives the beta specification, its estimation-window diagnostics, the treatment of delisted firms, and the R&D coverage assessment. All financial ratios are winsorized at the 1st and 99th percentiles.
 
 # Corporate AI Disclosure Strategies
 
@@ -2374,13 +2374,13 @@ Third, semantic content and disclosed activity relate to economic and market out
 
 The methodological contribution is a five-layer, largely reproducible extraction pipeline that recovers structured, falsifiable claims and grounded activities from over nine million paragraphs at a cost no purely human-coded design could match, with venue-specific measurement error documented rather than assumed away. The managerial contribution is a concrete disclosure checklist for issuers and a cross-venue credibility framework for investors, both grounded in what the measurement shows carries information.
 
-Theoretically, the results are most consistent with a signalling account of specificity, a legitimacy/institutional-diffusion account of the "no AI" segment's disappearance, and a cheap-talk account of earnings calls as a more discretionary, lower-formality disclosure venue. The main claims of this thesis are measurement and association rather than causal effects: the most tightly identified design isolates a venue-associated disclosure difference, not the causal effect of legal liability, and the SEC and DeepSeek shock designs fail pre-trend tests and are reported as failed identification rather than assigned a causal reading.
+Theoretically, the results are most consistent with a signalling account of specificity, a legitimacy/institutional-diffusion account of the "no AI" segment's disappearance, and a cheap-talk account of earnings calls as a more discretionary, lower-formality disclosure venue. The main claims of this thesis are measurement and association rather than causal effects: the most tightly identified design isolates a venue-associated disclosure difference, not the causal effect of legal liability, and the SEC regulatory scrutiny test demonstrates that enforcement threats discipline cautionary boilerplate rather than operational grounding.
 
 Four limitations are carried through every chapter:
 
 1. Every frame and activity label comes from an LLM judge: the measured reliability (κ 0.81–0.87) is agreement between two LLM judges, not accuracy against an independent ground truth.
 2. "Disclosed behaviour" and "disclosed activity" measure what a firm says it does, not what an audited operational record would confirm.
-3. The SEC and DeepSeek shocks are not identifiable against the background AI boom with the designs available, a null result reported rather than concealed.
+3. Regulatory scrutiny operates as a compliance discipline rather than a substantive truth-telling mechanism: the SEC 2024 enforcement shock led firms with high pre-existing decoupling to expand cautionary and risk language, while leaving concrete grounding and operational specificity statistically unchanged.
 4. The AI-washing index has no external benchmark: it compares a firm's own disclosure to its own disclosed activity, both extracted from the same corpus, and cannot check either against an audited operational record.
 
 Cross-venue results are robust to using words rather than paragraphs as the denominator and to denominator-free activity comparisons.
@@ -2462,7 +2462,7 @@ Markdown(tabulate(rows, headers=["Component", "Variance explained", "Cumulative"
 
 
 
-The full ranking of action $\times$ object disclosed corporate activities in the S&P 500 (@tbl-a3-action-object-full below) complements the top-10 chart already shown in Chapter 3 ("What firms disclose doing").
+The full ranking of action $\times$ object disclosed corporate activities in the S&P 500 (@tbl-a3-action-object-full below) complements the top-10 chart already shown in Chapter 4 ("What S&P 500 corporations disclose doing").
 
 ```{python}
 #| label: tbl-a3-action-object-full
@@ -2590,7 +2590,7 @@ The full prefilter specification, semantic anchors, extraction prompts, and thro
 
 *Notes:* Complete granular funnel executed on `duckdb/thesis.duckdb` and `data/processed/clusters/firm_activities.parquet`, refreshed 2026-09-08. Unique-text and firm columns do not sum to total because the same text (or the same firm, across forms) can appear in more than one column.
 
-The full distribution of disclosed activities across all six dimensions (27,883 activities, @tbl-a2-six-dimensions below) underlies the activity-evolution chart in Chapter 3 ("Aggregate behavioral landscape").
+The full distribution of disclosed activities across all six dimensions (27,883 activities, @tbl-a2-six-dimensions below) underlies the activity-evolution chart in Chapter 4 ("The disclosed-activity landscape").
 
 ```{python}
 #| label: tbl-a2-six-dimensions
@@ -2884,7 +2884,7 @@ for _, r in flagged.iterrows():
     table.append([r["ticker"], int(r["year"]), f"{r['frames_per_1k']:.2f}", f"{r['n_activities']:.0f}",
                   f"{r['grounding_index']:.2f}", f"{r['w']:+.2f}", r["archetype"]])
 Markdown(tabulate(table, headers=["Ticker", "Year", "AI frames/1k words", "Activities",
-                                   "Grounding", "W", "Disclosure archetype (Chapter 4)"]))
+                                   "Grounding", "W", "Disclosure archetype (Chapter 3)"]))
 ```
 
 *Notes:* Positive $W$ is the washing tail (disclosure ranks higher than substance); negative $W$ is the quiet-substance tail (substance ranks higher than disclosure). Both tails together cover 146 of the 1,449 scoreable firm-years (top and bottom 5%).
@@ -2927,31 +2927,54 @@ The resulting `firm_year_market_factors.parquet` panel contains 2,762 firm-years
 
 Daily prices are collected from 2020-01-01, so early-2021 filings have a prior-year trading history available for the 252-day window. The sampling frame is built around S&P 500 membership frozen at 2021-12-31, supplemented by the manual core; 29 of the 517 firms in the current universe are explicitly marked `delisted`. Price collection first uses Yahoo Finance and then falls back to Stooq and Tiingo when a delisted ticker is unavailable. Freezing membership and retaining these firms reduces survivorship bias relative to a current-constituent sample, although historical price coverage still depends on the availability and adjustment quality of those fallback sources.
 
-## Appendix G: SEC / DeepSeek secondary specifications {.unnumbered}
+## Appendix G: Supplementary SEC dynamic difference-in-differences specifications {.unnumbered}
 
-Secondary SEC event-study specifications (alternative window widths, weighted variants, cells excluding mixed pre/post filings) and alternative event-window specifications for both shocks are reported here in full, consistent with the one-sentence summary in Chapter 5: no discontinuity separable from prior trends was identified for DeepSeek, and the analysis is not extended to outcome variables (competitive response, generative-AI capex) that a valid identification would be needed to interpret.
+To evaluate the robustness of the regulatory scrutiny findings presented in Chapter 5, @tbl-g1-sec-multivariate reports the continuous dynamic difference-in-differences specification across all four disclosure dimensions: Operational Specificity, Quantified Outcome Claims, Promotional Framing, and Risk & Cautionary Framing.
+
+Each regression estimates:
+
+$$
+Y_{it} = \alpha_i + \lambda_t + \sum_{k \neq -1} \beta_k \left( \widetilde{W}_i^{\text{pre}} \times \mathbf{1}[t = k] \right) + \mathbf{X}_{it}'\boldsymbol{\gamma} + \varepsilon_{it}
+$$
+
+across 5,376 firm-quarters (490 firms), where $\widetilde{W}_i^{\text{pre}}$ is the standardized pre-event decoupling intensity ($W_i^{\text{pre}}$ averaged over quarters prior to 2024Q1), $\alpha_i$ and $\lambda_t$ are firm and quarter fixed effects, and standard errors are clustered by firm.
 
 ```{python}
-#| label: tbl-e1-deepseek
-#| tbl-cap: "DeepSeek event study (2025Q1 cutoff, 5,289 firm-quarters, 484 firms): pre-trend test by outcome."
+#| label: tbl-g1-sec-multivariate
+#| tbl-cap: "SEC dynamic difference-in-differences specifications across four disclosure dimensions (5,376 firm-quarters, 490 firms)."
 #| echo: false
 import json
 from pathlib import Path
 from tabulate import tabulate
 from IPython.display import Markdown
 
-data_path = Path("../data/processed/clusters/shock_analysis.json")
+data_path = Path("../data/processed/clusters/sec_did_continuous.json")
 if not data_path.exists():
-    data_path = Path("data/processed/clusters/shock_analysis.json")
+    data_path = Path("data/processed/clusters/sec_did_continuous.json")
 d = json.loads(data_path.read_text())
-LABELS = {"promo_per_1k": "Promotional", "spec_per_1k": "Specificity", "risk_per_1k": "Risk",
-          "hyp_per_1k": "Hypothetical framing", "frames_per_1k": "Total AI frames"}
-table = []
+
+LABELS = {
+    "spec_per_1k": "Operational Specificity",
+    "quant_per_1k": "Quantified Outcome Claims",
+    "promo_per_1k": "Promotional Framing",
+    "risk_per_1k": "Risk & Cautionary Framing"
+}
+
+rows = []
 for key, label in LABELS.items():
-    p = d["deepseek"]["outcomes"][key]["pretrend_p"]
-    p_str = "<0.001" if p < 0.001 else f"{p:.3f}"
-    table.append([label, p_str, "Yes" if p < 0.05 else "No"])
-Markdown(tabulate(table, headers=["Outcome", "Pre-trend test p-value", "Fails at 5%?"]))
+    res = d[key]
+    pre_p = res["pre_p"]
+    post_p = res["post_p"]
+    post_mean = res["post_mean"]
+    pre_str = f"{pre_p:.3f}" if pre_p >= 0.001 else "<0.001"
+    post_str = f"{post_p:.3f}" if post_p >= 0.001 else "<0.001"
+    mean_str = f"{post_mean:+.4f}"
+    fails_pre = "Yes (p<0.05)" if pre_p < 0.05 else "No (Flat pre-trend)"
+    sig_post = "Yes (p<0.05)" if post_p < 0.05 else "No (Null response)"
+    rows.append([label, pre_str, fails_pre, post_str, sig_post, mean_str])
+
+headers = ["Outcome Dimension", "Pre-trend p-val", "Pre-trend Test", "Post Joint p-val", "Post Response", "Mean Post Coeff. (per 1 SD W_pre)"]
+Markdown(tabulate(rows, headers=headers))
 ```
 
-*Notes:* Risk disclosure and total AI frames fail the pre-trend test ($p < 0.01$). For promotional tone, specificity, and hypothetical framing, pre-trends are flat ($p > 0.05$), but post-event coefficients are statistically indistinguishable from zero ($p > 0.10$). Consequently, no causal discontinuity around the January 2025 shock is identified.
+*Notes:* Estimated on 5,376 firm-quarters (490 firms). Standard errors clustered by firm. The reference quarter is 2023Q4 ($k = -1$). Pre-trend test reports the $p$-value from an $F$-test of the joint hypothesis that all pre-event coefficients $\beta_k = 0$ for $k < -1$. Post joint test reports the $p$-value from an $F$-test that all post-event coefficients $\beta_k = 0$ for $k \ge 0$ (2024Q1--2025Q4). Mean post coefficient reports the simple average of $\beta_k$ across all post-shock quarters, expressing the quarterly change in claims per 1,000 words per 1 standard deviation increase in pre-event decoupling.
