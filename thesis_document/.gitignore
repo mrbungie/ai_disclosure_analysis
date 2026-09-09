@@ -1,5 +1,6 @@
 .DS_Store
 compiled/
+compiled_pdf/
 *.docx.tmp
 .quarto/
 _book/
