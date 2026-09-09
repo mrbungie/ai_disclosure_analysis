@@ -814,6 +814,23 @@ As shown in @fig-archetype-stability, $k = 3$ is the largest number of clusters 
 
 **PCA diagnostic.** A principal components analysis on the seven standardized dimensions confirms that this space cannot be reduced to a single score without severe information loss. The first two components account for 63.3% of the variance (PC1: 43.2%, PC2: 20.2%), while PC3 adds an additional 12.1% (full diagnostic in @tbl-a3-pca-diagnostic, Appendix C). Because variance is distributed across multiple orthogonal factors, preserving the seven interpretable managerial dimensions provides far clearer strategic guidance than collapsing communication into abstract latent factors.
 
+### Out-of-sample temporal validation
+
+A central methodological question for any empirical taxonomy is whether clusters discovered on a retrospective sample generalize out of sample or merely overfit historical data. Because the generative AI commercialization wave accelerated dramatically in 2024, did the three disclosure archetypes represent durable corporate strategies, or were they fleeting configurations of the initial boom?
+
+To test this directly, we freeze the clustering model on pre-2025 disclosures and evaluate its predictive stability out of sample:
+
+1. **Model Estimation (2021–2024):** We standardize the seven posture dimensions and train the $k = 3$ K-means model strictly on firms disclosing prior to 2025 ($n = 309$).
+2. **Out-of-Sample Projection (2025):** We freeze both the empirical feature scalers and the cluster centroids, assigning fiscal-year-2025 disclosures ($n = 388$) to the nearest frozen centroid without any parameter re-estimation or recalibration.
+
+The frozen model validates the structural stability of the taxonomy out of sample:
+
+- **High Out-of-Sample Concordance:** Comparing frozen-model projections against an unconstrained, fresh K-means re-fit on 2025 disclosures alone yields an Adjusted Rand Index (ARI) of **0.793**.
+- **Cluster Recovery Across Regimes:** Jaccard recovery rates for the frozen clusters reach **90.5%** for Defensive Disclosers, **84.5%** for Vocal Substantives, and **79.7%** for Governance-Led Disclosers.
+- **Persistent Behavioral Differentiation:** Even when classified by pre-2025 centroids, 2025 Vocal Substantives continue to exhibit substantially higher operational specificity (0.163 vs. 0.113 for Defensive firms) and customer-facing positioning (0.435 vs. 0.188), while Defensive firms continue to lead heavily in cautionary risk disclosure (0.568 vs. 0.265).
+
+Even under a more demanding split training strictly before the generative AI inflection (2021–2023, $n = 179$) and testing across the commercialization wave (2024–2025, $n = 392$), the frozen model achieves an ARI of **0.508**, with Vocal Substantives recovered at a 68.2% Jaccard rate. Corporate disclosure strategies discovered prior to the full commercialization wave thus generalize out of sample into the subsequent market regime.
+
 ## Who are these firms?
 
 Do these communication archetypes map onto specific sectors, or do firms within the same industry adopt divergent disclosure postures? 
@@ -2769,6 +2786,101 @@ Markdown(tabulate(rows, headers=["Sector", "Firms", "Median activities/firm", "P
 The human coding protocol for the pending validation round (300 frame-labeled paragraphs / 434 frames, 300 prefilter-stratified paragraphs, 120 activity-labeled paragraphs / 267 activities, coded in the `ui-validator/` tool), per-field agreement statistics once collected, confusion matrices for the promotional and temporal fields, an error taxonomy distinguishing prefilter false positives from judge misclassification, and a sensitivity analysis for collapsing or dropping fields with weak human agreement are reported here as they become available; at the time of writing, only LLM-to-LLM agreement is measured (κ 0.81–0.87, `docs/analytics/00_funnel_del_corpus.md`).
 
 ## Appendix E: Statistical robustness {.unnumbered}
+
+### Incremental value of NLP layers over simple mention counts
+
+A foundational methodological question for this thesis is: **what do we gain by constructing a multi-stage NLP pipeline over nine million paragraphs rather than simply counting keyword mentions?**
+
+To answer this question empirically, @fig-nlp-horse-race evaluates a sequential horse race across all five firm-level economic and market outcomes, tracking incremental explanatory power ($\Delta R^2$) over financial fundamentals (Model 0: sector-by-year fixed effects, market capitalization, profit margins, and asset turnover):
+
+1. **Model 1 (+ Raw AI Mention Counts / Volume):** Adds total AI disclosure intensity ($\log(1 + \text{AI frames})$ or mentions per 1,000 words).
+2. **Model 2 (+ Semantic Frame Posture):** Adds the full multi-dimensional communication posture (risk, governance, temporal, positioning, and specificity).
+3. **Model 3 (+ Disclosed Activity Inventory):** Adds concrete operational claims and grounded behavioral features (named business functions, deployed stages, product/process citations).
+4. **Model 4 (+ Decoupling / Washing Index $W$):** Adds the within-disclosure rank gap between talk and disclosed substance.
+
+```{python}
+#| label: fig-nlp-horse-race
+#| fig-cap: "Incremental explanatory power (ΔR² over financial fundamentals) across sequential NLP modeling layers for five corporate outcomes. Raw mention counts explain volume-related risk but fail on valuation; semantic posture and grounded activities add substantial explanatory power; the decoupling index adds near-zero incremental information."
+#| echo: false
+#| fig-width: 7.5
+#| fig-height: 3.6
+import json
+from pathlib import Path
+import matplotlib.pyplot as plt
+import numpy as np
+
+data_path = Path("../data/processed/clusters/incremental_signal.json")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/incremental_signal.json")
+d = json.loads(data_path.read_text())
+
+outcomes_map = [
+    ("price_to_sales", "Valuation\n(P/S Ratio)"),
+    ("crecimiento_ingresos_t1", "Next-Year\nRevenue Growth"),
+    ("beta", "Market Beta\n(Systematic Risk)"),
+    ("rd_sobre_ventas", "R&D\nIntensity"),
+    ("volatilidad_idiosincratica", "Idiosyncratic\nVolatility")
+]
+
+labels = [name for _, name in outcomes_map]
+y = np.arange(len(labels))[::-1]
+
+delta_vol = []
+delta_sem = []
+delta_act = []
+delta_wash = []
+
+for key, _ in outcomes_map:
+    o = d["outcomes"][key]
+    r0 = o["r2_M0"]
+    r1 = o["r2_M1"]
+    r2 = o["r2_M2"]
+    r3 = o.get("r2_M2AB", o.get("r2_M3"))
+    dw = o.get("delta_r2_washing", 0.0)
+    
+    delta_vol.append(max(0.0, r1 - r0))
+    delta_sem.append(max(0.0, r2 - r1))
+    delta_act.append(max(0.0, r3 - r2))
+    delta_wash.append(max(0.0, dw))
+
+fig, ax = plt.subplots(figsize=(7.5, 3.6), dpi=300)
+height = 0.55
+
+c_vol = "#94A3B8"
+c_sem = "#3B82F6"
+c_act = "#1D4ED8"
+c_wash = "#F59E0B"
+
+b1 = ax.barh(y, delta_vol, height=height, label="1. Raw AI Mention Counts (Volume)", color=c_vol, edgecolor="white", lw=0.6)
+b2 = ax.barh(y, delta_sem, left=delta_vol, height=height, label="2. + Semantic Frame Posture", color=c_sem, edgecolor="white", lw=0.6)
+left_act = [v + s for v, s in zip(delta_vol, delta_sem)]
+b3 = ax.barh(y, delta_act, left=left_act, height=height, label="3. + Disclosed Activity Inventory", color=c_act, edgecolor="white", lw=0.6)
+left_wash = [l + a for l, a in zip(left_act, delta_act)]
+b4 = ax.barh(y, delta_wash, left=left_wash, height=height, label="4. + Decoupling / Washing Index (W)", color=c_wash, edgecolor="white", lw=0.6)
+
+for i in range(len(labels)):
+    total = left_wash[i] + delta_wash[i]
+    ax.text(total + 0.002, y[i], f"+{total*100:.1f} pp", va="center", fontsize=8.5, fontweight="bold", color="#0F172A")
+
+ax.set_yticks(y)
+ax.set_yticklabels(labels, fontsize=9.0, fontweight="bold")
+ax.set_xlabel("Incremental Explanatory Power (ΔR² over Financial Fundamentals)", fontsize=9.0, fontweight="bold")
+ax.set_xlim(0, 0.135)
+ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x*100:.0f}%"))
+ax.legend(loc="lower right", fontsize=8.2, framealpha=0.95)
+ax.grid(True, axis="x", linestyle=":", alpha=0.5)
+ax.spines[["top", "right"]].set_visible(False)
+
+plt.tight_layout()
+plt.show()
+```
+
+Four empirical findings emerge from this decomposition:
+
+1. **Mention counts fail on valuation:** Raw keyword mentions add zero explanatory power to Price-to-Sales ($\Delta R^2 = +0.0000$). High-multiple firms do not systematically mention AI more frequently; rather, valuation responds to *how* AI is deployed—adding semantic posture and disclosed activities increases $R^2$ by $+3.6$ percentage points.
+2. **Semantic posture captures strategic intent:** The multi-dimensional posture block adds substantial predictive power for next-year revenue growth ($\Delta R^2 = +0.0450$, exceeding the $+0.0423$ from mention counts) and market beta ($\Delta R^2 = +0.0140$).
+3. **Disclosed activities isolate concrete execution:** Extracting specific, action-level claims adds material explanatory power across all outcomes (+1.8 pp on R&D intensity, +2.3 pp on revenue growth, +1.5 pp on valuation, +1.2 pp on beta).
+4. **Decoupling carries near-zero incremental market information:** Once underlying semantic posture and concrete activities are controlled for, adding the AI-washing index ($W$) yields virtually zero incremental explanatory power across all five outcomes ($\Delta R^2 \le 0.0017$; $p = 0.725$ on beta). The market prices narrative volume and operational conduct, but does not independently price the within-disclosure decoupling gap.
 
 ```{python}
 #| label: tbl-c1-m0m3
