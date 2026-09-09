@@ -162,7 +162,8 @@ def _filing_manifest_selects(countries: list[tuple[str, dict]], dirs) -> list[st
         parts = [f"SELECT '{country}' AS country_code, * FROM {base_path}"]
         for extra in ("filing_manifest_proxy", "filing_manifest_8k",
                       "filing_manifest_earnings_calls", "filing_manifest_earnings_calls_equibles",
-                      "filing_manifest_earnings_calls_stockanalysis", "filing_manifest_20f"):
+                      "filing_manifest_earnings_calls_stockanalysis", "filing_manifest_20f",
+                      "filing_manifest_6k"):
             source = _manifest_source(f"{manifests_dir}/{extra}")
             if source:
                 # scripts/us/earnings_calls/01_fetch_transcripts.py writes
@@ -817,6 +818,22 @@ def main(with_text_tables: bool = False):
             if _existing(f"{dirs(cfg)[1]}/filing_sections_20f__run=*__part=*.parquet")
         ]),
         "filing_sections_20f": "SELECT * FROM extraction_trace_20f WHERE found",
+        # 6-K — foreign private issuers' current/interim report (same 5
+        # tickers as 20-F, plus TEAM before its own redomiciliation to a
+        # 10-K filer), same "whole document as one section" choice as
+        # 20-F/proxy/8-K (see scripts/us/6k/segmenter_6k.py). Added
+        # alongside 20-F to close the interim-disclosure blind spot 20-F
+        # alone left (annual only, no current/interim FPI coverage).
+        "extraction_trace_6k": _union([
+            f"""
+            SELECT '{country}' AS country_code, *
+            FROM read_parquet('{dirs(cfg)[1]}/filing_sections_6k__run=*__part=*.parquet', union_by_name=True)
+            QUALIFY row_number() OVER (PARTITION BY accession_number, item_key ORDER BY run_date DESC) = 1
+            """
+            for country, cfg in countries
+            if _existing(f"{dirs(cfg)[1]}/filing_sections_6k__run=*__part=*.parquet")
+        ]),
+        "filing_sections_6k": "SELECT * FROM extraction_trace_6k WHERE found",
         # 8-K — same "whole document as one section" choice, see
         # scripts/us/8k/segmenter_8k.py. Also not a separate instrument,
         # just another form type sharing the filing_manifest lookup.
@@ -902,6 +919,12 @@ def main(with_text_tables: bool = False):
             )
         else:
             print("  skipping 20-F paragraphs (no filing_sections_20f files yet)")
+        if "filing_sections_6k" in views:
+            paragraph_stage_specs.append(
+                ("_paragraphs_stage_6k", _paragraph_select_sql("6-K", "filing_sections_6k"))
+            )
+        else:
+            print("  skipping 6-K paragraphs (no filing_sections_6k files yet)")
         if "filing_sections_8k" in views:
             paragraph_stage_specs.append(
                 ("_paragraphs_stage_8k", _paragraph_select_sql("8-K", "filing_sections_8k"))
