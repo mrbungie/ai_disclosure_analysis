@@ -231,11 +231,19 @@ def _fetch_one_company(row, form, start_date, end_date, allow_amendments, html_d
         report_date_raw = getattr(f, "period_of_report", None)
         report_date = pd.to_datetime(report_date_raw).date() if report_date_raw else None
 
-        # form.replace(" ", "") -- "DEF 14A" has a space, which is otherwise
-        # a valid (if annoying) filename character; sanitized so every form
-        # gets a clean single-token filename, not just the hyphenated ones
-        # (10-K/10-Q) this originally shipped with.
-        filename = f"{ticker}_{year}_{form.replace(' ', '')}_{acc_num}.html.gz"
+        # f.form, not the outer `form` param -- `form` may be a list (e.g.
+        # ["DEF 14A", "DEFC14A"]) when a query covers form-code variants of
+        # the same underlying document (a contested-proxy year reclassifies
+        # DEF 14A to DEFC14A); each filing keeps its OWN actual form code,
+        # both in the manifest and in the filename, or every DEFC14A row
+        # would misreport itself as "DEF 14A".
+        filing_form = f.form
+
+        # filing_form.replace(" ", "") -- "DEF 14A" has a space, which is
+        # otherwise a valid (if annoying) filename character; sanitized so
+        # every form gets a clean single-token filename, not just the
+        # hyphenated ones (10-K/10-Q) this originally shipped with.
+        filename = f"{ticker}_{year}_{filing_form.replace(' ', '')}_{acc_num}.html.gz"
         local_path = html_dir / filename
 
         existing_row = None
@@ -279,7 +287,7 @@ def _fetch_one_company(row, form, start_date, end_date, allow_amendments, html_d
             "ticker": ticker,
             "country": row.get("country", "US"),
             "source": row.get("source", "SEC_EDGAR"),
-            "form_type": form,
+            "form_type": filing_form,
             "filing_date": filing_date,
             "period_end_date": report_date,
             "accession_number": acc_num,
@@ -336,6 +344,12 @@ def fetch_filings(universe_df, form, start_date, end_date, allow_amendments, htm
     html_dir.mkdir(parents=True, exist_ok=True)
     full_universe_df = universe_df.copy()  # see _safe_write_universe
 
+    # `form` may be a single form code or a list of form-code variants of the
+    # same document (e.g. ["DEF 14A", "DEFC14A"] -- a contested-proxy year
+    # reclassifies the form code). Normalize once so the "already done"
+    # checks below can match on membership, not equality.
+    form_list = [form] if isinstance(form, str) else list(form)
+
     # _fully_done(ticker) below matches manifest rows by TICKER alone (not
     # CIK) — if universe_df ever contains the same ticker twice (found once,
     # for real: XOM listed under two different CIKs in configs/us/universe.csv
@@ -378,7 +392,7 @@ def fetch_filings(universe_df, form, start_date, end_date, allow_amendments, htm
         if existing_manifest_df is None:
             return False
         rows = existing_manifest_df[
-            (existing_manifest_df["ticker"] == ticker) & (existing_manifest_df["form_type"] == form)
+            (existing_manifest_df["ticker"] == ticker) & (existing_manifest_df["form_type"].isin(form_list))
         ]
         if rows.empty:
             return False
@@ -396,7 +410,7 @@ def fetch_filings(universe_df, form, start_date, end_date, allow_amendments, htm
                 updated_universe.append(row.to_dict())
                 manifest_data.extend(
                     existing_manifest_df[
-                        (existing_manifest_df["ticker"] == ticker) & (existing_manifest_df["form_type"] == form)
+                        (existing_manifest_df["ticker"] == ticker) & (existing_manifest_df["form_type"].isin(form_list))
                     ].to_dict("records")
                 )
                 continue
