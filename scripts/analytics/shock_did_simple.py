@@ -53,16 +53,16 @@ REFERENCE = -1
 MIN_QUARTERS_EACH_SIDE = 2
 # El primero comparte dimensión con la definición del grupo: va como control
 # interno, no como resultado.
-OUTCOMES = ("promo_per_1k", "quant_per_1k", "gov_per_1k", "spec_per_1k")
+OUTCOMES = ("promo_per_1k", "quant_per_1k", "gov_per_1k", "spec_per_1k", "risk_per_1k")
 GROUP_OUTCOME = "promo_per_1k"     # la dimensión que define el grupo: control interno
 CONTROLS = "mix_proxy + np.log(n_words)"
 
 
 def build(con) -> pd.DataFrame:
     """Todos los filings por empresa-trimestre con intensidades por 1.000
-    PALABRAS y ceros (ver ai_intensity.py). Grupo = mitad más promocional
-    ANTES del evento medida en promocionales por 1.000 palabras, sobre todas
-    las empresas con filings pre."""
+    PALABRAS y ceros (ver ai_intensity.py). Grupo = mitad superior del índice
+    de AI-washing W_it ANTES del evento (ejercicios < 2024), con las demás empresas
+    (bajo washing o sin IA) como grupo de control."""
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from ai_intensity import document_table, aggregate, FILING_FORMS
@@ -72,12 +72,22 @@ def build(con) -> pd.DataFrame:
     mix = (docs.assign(is_proxy=(docs.form == "DEF 14A") * docs.n_words)
            .groupby(["ticker", "quarter"]).agg(p=("is_proxy", "sum"), n=("n_words", "sum")))
     panel = panel.merge((mix.p / mix.n).rename("mix_proxy").reset_index(), on=["ticker", "quarter"])
-    pre = docs[docs["fecha"] < pd.Timestamp(GROUP_END)].groupby("ticker").agg(
-        promo=("n_promo", "sum"), words=("n_words", "sum"))
-    pre = pre[pre["words"] > 0]
-    rate = 1000.0 * pre["promo"] / pre["words"]
-    high_risk = (rate > rate.median()).astype(float).rename("alto_riesgo")
-    panel = panel.merge(high_risk.reset_index(), on="ticker", how="inner")
+
+    wy_path = OUT_DIR / "firm_year_washing_score.parquet"
+    if wy_path.exists():
+        wy = pd.read_parquet(wy_path)
+        pre_w = wy[wy["year"] < 2024].groupby("ticker")["w"].mean()
+        high_risk = (pre_w > pre_w.median()).astype(float).rename("alto_riesgo")
+        panel = panel.merge(high_risk.reset_index(), on="ticker", how="left")
+        panel["alto_riesgo"] = panel["alto_riesgo"].fillna(0.0)
+    else:
+        pre = docs[docs["fecha"] < pd.Timestamp(GROUP_END)].groupby("ticker").agg(
+            promo=("n_promo", "sum"), words=("n_words", "sum"))
+        pre = pre[pre["words"] > 0]
+        rate = 1000.0 * pre["promo"] / pre["words"]
+        high_risk = (rate > rate.median()).astype(float).rename("alto_riesgo")
+        panel = panel.merge(high_risk.reset_index(), on="ticker", how="inner")
+
     panel["event_time"] = (panel["quarter"].astype("period[Q]") - EVENT).apply(lambda x: x.n)
     panel = panel[panel["event_time"].abs() <= WINDOW]
     sides = panel.groupby("ticker")["event_time"].agg(

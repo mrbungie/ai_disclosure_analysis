@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "secedgar-mcp-server": {
+      "type": "stdio",
+      "command": "bunx",
+      "args": ["@cyanheads/secedgar-mcp-server@latest"],
+      "env": {
+        "EDGAR_USER_AGENT": "GermanOviedoThesis german.oviedo.b@gmail.com",
+        "MCP_TRANSPORT_TYPE": "stdio"
+      }
+    }
+  }
+}

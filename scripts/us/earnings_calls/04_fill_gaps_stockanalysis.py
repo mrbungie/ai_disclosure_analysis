@@ -74,7 +74,7 @@ existing_periods = _equibles.existing_periods
 
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 BASE_URL = "https://stockanalysis.com"
-FROM_YEAR, TO_YEAR = 2021, 2025
+FROM_YEAR, TO_YEAR = 2021, 2026
 FORM_TYPE = "Earnings call transcript"
 SOURCE = "stockanalysis.com:headless-chrome"
 #: seconds between page fetches — same host, so this is politeness, not a
@@ -90,6 +90,20 @@ _SPEAKER_RE = re.compile(r'<div class="text-lg font-bold text-default[^"]*">([^<
 _SENTENCE_RE = re.compile(r'<span class="transcript-sentence[^"]*"[^>]*>([^<]*)</span>')
 _TITLE_RE = re.compile(r"<title>([^<]*)</title>")
 _COMPANY_NAME_RE = re.compile(r'og:title" content="([^(]+)\(')
+#: A renamed/rebranded ticker's OLD slug listing page (`/stocks/<old>/
+#: transcripts/`) redirects server-side to the CURRENT company's content,
+#: but that redirect only applies to the listing — a SPECIFIC quarter's
+#: detail URL built from the old slug (`/stocks/<old>/transcripts/<id>/`)
+#: does not resolve the same way and silently yields a transcript page
+#: with zero speaker turns. Verified against SQ: Block's ticker changed
+#: from SQ to XYZ; `/stocks/sq/transcripts/` renders with
+#: `<title>Block (XYZ) Earnings Call Transcripts</title>` — the CURRENT
+#: ticker is right there in the title even though the URL still says
+#: "sq" — but every `/stocks/sq/transcripts/<old-detail-id>/` fetch
+#: returns 0 turns. Using the canonical ticker from the title for all
+#: subsequent list/fetch calls (not the originally-probed slug) fixes it;
+#: confirmed XYZ's listing carries SQ's full history (Q1/Q2 2025 present).
+_CANONICAL_TICKER_RE = re.compile(r"\(([A-Z]{1,6}(?:\.[A-Z])?)\)")
 
 
 class FetchError(RuntimeError):
@@ -134,6 +148,9 @@ def resolve_slug(ticker: str) -> str | None:
         dom = _dump_dom(f"{BASE_URL}/stocks/{slug}/transcripts/")
         title_m = _TITLE_RE.search(dom)
         if title_m and "404" not in title_m.group(1):
+            canonical_m = _CANONICAL_TICKER_RE.search(title_m.group(1))
+            if canonical_m and canonical_m.group(1).lower() != slug:
+                return canonical_m.group(1).lower()
             return slug
         time.sleep(RATE_LIMIT_SECONDS)
     return None
@@ -219,7 +236,9 @@ def main() -> None:
 
     new_rows = []
     n_tickers_with_gaps = 0
-    for ticker in universe["ticker"]:
+    n_total_tickers = len(universe)
+    for i, ticker in enumerate(universe["ticker"], start=1):
+        print(f"[{i}/{n_total_tickers}] {ticker}...", flush=True)
         norm = str(ticker).upper().strip().replace(".", "-")
         try:
             slug = resolve_slug(ticker)

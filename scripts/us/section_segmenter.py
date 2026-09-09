@@ -338,6 +338,30 @@ def _match_is_narrative_mention(line: str, match_end: int) -> bool:
     return bool(rest) and rest[0].isalpha() and rest[0].islower()
 
 
+#: A 10-Q's own items never exceed 6 (Part I: 1-4; Part II: 1,1A,2-6) — a
+#: matched number past that is with near-certainty a cross-reference to
+#: the ANNUAL 10-K's numbering (which does go past 6), not a real 10-Q
+#: heading (TAP confirmed: "—Item\xa08 Financial Statements, Note\xa018,
+#: \"Commitments and Contingencies\" in our Annual Report..." — a citation,
+#: not Item 8 of THIS filing, since no such item exists on a 10-Q at
+#: all). Left unfiltered, such a mention ranks ahead of the real, later
+#: Item 2/3/4 headings and the strictly-increasing `kept` filter in
+#: `_segment_window` rejects them all as "out of order" — the same
+#: failure shape `_match_is_narrative_mention` targets, but this one's
+#: title text ("Financial Statements") happens to still be capitalized,
+#: so the casing signal alone doesn't catch it.
+_MAX_10Q_ITEM = 6
+
+#: O (Realty Income) restates its 10-Q's MD&A section as "Item\xa07:" —
+#: a filer-specific numbering quirk (confirmed by direct inspection: the
+#: real heading text is unambiguously the MD&A section, just mislabeled
+#: with the 10-K's item number instead of the 10-Q's own "Item 2").
+#: Since ITEM_RE already matches it (as item "7", which the guard above
+#: would otherwise reject on a 10-Q), it's relabeled to "2" instead of
+#: dropped — recovering real content a plain reject would just discard.
+_O_MDA_MISLABEL_RE = re.compile(r"^Management.S\s+Discussion", re.IGNORECASE)
+
+
 def _raw_candidates(lines: list[str], form: str = "10-K") -> list[tuple[str, int]]:
     """Every line that looks like an Item heading, TOC or real, in document
     order — no filtering yet. `form` selects which ITEM_ALIASES apply."""
@@ -346,8 +370,14 @@ def _raw_candidates(lines: list[str], form: str = "10-K") -> list[tuple[str, int
     for i, line in enumerate(lines):
         m = ITEM_RE.search(line)
         if m:
+            key = _item_key(m)
+            base_num = int(m.group(1))
+            if form == "10-Q" and base_num > _MAX_10Q_ITEM:
+                if _O_MDA_MISLABEL_RE.match(line[m.end():].lstrip(" \t\xa0-–—:.,")):
+                    found.append(("2", i))
+                continue
             if not _match_is_narrative_mention(line, m.end()):
-                found.append((_item_key(m), i))
+                found.append((key, i))
             continue
         for item_key, alias_re in aliases.items():
             if alias_re.search(line):

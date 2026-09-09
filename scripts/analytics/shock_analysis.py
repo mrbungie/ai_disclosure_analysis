@@ -104,10 +104,17 @@ def build_panel(con) -> tuple[pd.DataFrame, pd.DataFrame]:
            .groupby(["ticker", "quarter"]).agg(p=("is_proxy", "sum"), k=("is_10k", "sum"), n=("n_words", "sum")))
     panel = panel.merge((mix.p / mix.n).rename("mix_proxy").reset_index(), on=["ticker", "quarter"])
     panel = panel.merge((mix.k / mix.n).rename("mix_10k").reset_index(), on=["ticker", "quarter"])
-    pre = docs[docs["fecha"] < pd.Timestamp(GROUP_WINDOW_END)].groupby("ticker").agg(
-        frames=("n_frames", "sum"), words=("n_words", "sum"))
-    pre = pre[pre["words"] > 0]
-    treatment = pd.DataFrame({"exposure": np.log1p(1000.0 * pre["frames"] / pre["words"])})
+    wy_path = OUT_DIR / "firm_year_washing_score.parquet"
+    if wy_path.exists():
+        wy = pd.read_parquet(wy_path)
+        pre_w = wy[wy["year"] < 2024].groupby("ticker")["w"].mean().rename("exposure")
+        treatment = pd.DataFrame({"ticker": panel["ticker"].unique()}).merge(
+            pre_w.reset_index(), on="ticker", how="left").fillna({"exposure": 0.0}).set_index("ticker")
+    else:
+        pre = docs[docs["fecha"] < pd.Timestamp(GROUP_WINDOW_END)].groupby("ticker").agg(
+            frames=("n_frames", "sum"), words=("n_words", "sum"))
+        pre = pre[pre["words"] > 0]
+        treatment = pd.DataFrame({"exposure": np.log1p(1000.0 * pre["frames"] / pre["words"])})
     segments_path = OUT_DIR / "firm_segments.parquet"
     if segments_path.exists():
         segments = pd.read_parquet(segments_path)[["ticker", "segmento"]]
