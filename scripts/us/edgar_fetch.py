@@ -33,6 +33,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
+import re
+
 import edgar
 import pandas as pd
 from tqdm import tqdm
@@ -57,6 +59,128 @@ def configure(user_agent: str, local_storage_dir: Path):
     edgar.set_local_storage_path(str(local_storage_dir))
     edgar.use_local_storage(True)
     _configured = True
+
+
+#: Below this many `<ix:nonFraction>` tags, a primary document is treated as
+#: "thin" — some filers (mostly banks: BNY, and others filing the same way)
+#: incorporate their actual financial statements BY REFERENCE into a
+#: secondary exhibit (EX-13, EX-99.1, filed as `<stem>_d2.htm` alongside the
+#: primary `<stem>.htm`) instead of tagging them inline in the primary 10-K
+#: document itself. Verified against BNY's FY2025 10-K: the primary document
+#: (`bk-20251231.htm`) has 11 nonFraction tags (cover-page items only); the
+#: companion `bk-20251231_d2.htm` ("Certain Portions of 2025 Annual Report to
+#: Shareholders") has 5,441. Same pattern confirmed for CLX (EX-99.1) and IBM
+#: (EX-13). A normal filer with real inline-tagged statements (WMT) has
+#: 1,198 in its primary document alone — 50 is well below any real filing's
+#: count and well above the handful of cover-page facts a wrapper-only
+#: primary document carries.
+THIN_PRIMARY_THRESHOLD = 50
+_NONFRACTION_RE = re.compile(r"<ix:nonFraction", re.IGNORECASE)
+
+
+_EXHIBIT_DESC_RE = re.compile(r"^EX(?:HIBIT)?[\s.-]*(13|99(?:\.1)?)\b")
+
+
+def _find_incorporated_financials(f, primary_document: str) -> "edgar.Attachment | None":
+    """Look for the companion exhibit that carries the real financial
+    statements when `primary_document` is a thin wrapper (see
+    THIN_PRIMARY_THRESHOLD). Naming is NOT consistent across filers, so two
+    independent signals are checked, either sufficient:
+
+    1. Same `<ticker>-<date>` stem with/without a trailing `_d2`, whichever
+       document ISN'T the primary. Verified against BNY/CLX/IBM (primary
+       `bk-20251231.htm`, exhibit `bk-20251231_d2.htm`) AND against WFC,
+       where the naming is INVERTED — the primary document ITSELF is
+       `wfc-20251231_d2.htm` and the exhibit is the bare `wfc-20251231.htm`.
+       Matching by stem symmetry (strip `_d2` from whichever side has it)
+       catches both directions.
+    2. An EX-13 / EX-99(.1) description — but filers spell this two ways:
+       Also verified against WFC, whose exhibit is described "EXHIBIT 13"
+       (spelled out) where BNY/CLX/IBM/USB use "EX-13" — the regex accepts
+       both."""
+    def core_stem(document: str) -> str:
+        stem = document.rsplit(".", 1)[0]
+        return stem[:-3] if stem.endswith("_d2") else stem
+
+    primary_stem = core_stem(primary_document)
+    for a in f.attachments:
+        doc = a.document or ""
+        if not doc.endswith(".htm") or doc == primary_document:
+            continue
+        description = (getattr(a, "description", "") or "").upper()
+        if core_stem(doc) == primary_stem or _EXHIBIT_DESC_RE.match(description):
+            return a
+    return None
+
+
+#: Between the primary/exhibit HTML and a traditional (non-inline) XBRL
+#: instance document, when both end up in the same cached file — the
+#: extractor splits on this to run the right parser
+#: (`filing_xbrl_facts.parse_inline_xbrl` vs `.parse_xbrl_instance`) on
+#: each side, never both on the same content (an XBRL instance XML isn't
+#: valid HTML and vice versa, and each dialect tags facts completely
+#: differently — see `parse_xbrl_instance`'s docstring).
+XBRL_INSTANCE_BOUNDARY = "<!--EDGAR_FETCH_XBRL_INSTANCE_BOUNDARY-->"
+
+
+def _find_xbrl_instance_document(f) -> "edgar.Attachment | None":
+    """A handful of filers (verified: DDOG's and PLTR's first post-IPO
+    10-Ks) file traditional, non-inline XBRL: `f.is_inline_xbrl` is False,
+    and the numeric facts live in a standalone `<ticker>-<date>.xml`
+    "XBRL INSTANCE DOCUMENT" attachment instead of `<ix:nonFraction>` tags
+    in the primary HTML."""
+    for a in f.attachments:
+        doc = a.document or ""
+        description = (getattr(a, "description", "") or "").upper()
+        if doc.endswith(".xml") and "INSTANCE" in description:
+            return a
+    return None
+
+
+def _fetch_primary_html(f) -> str:
+    """The primary document's HTML, plus — whenever a companion
+    incorporated-financials exhibit exists AND itself carries real content —
+    that exhibit CONCATENATED onto the same cached file, to be parsed as
+    ONE document.
+
+    Verified against BNY's FY2025 10-K: the supplement
+    (`bk-20251231_d2.htm`, "Certain Portions of 2025 Annual Report to
+    Shareholders") has thousands of `<ix:nonFraction>` facts but ZERO
+    `<xbrli:context>` definitions of its own — every `contextRef` on its
+    facts (e.g. `c-1`) resolves only against context ids defined in the
+    PRIMARY document. The two documents are not independently-authored
+    XBRL instances that happen to share short ids; they are ONE XBRL
+    instance split across two HTML renderings by the filer's tagging
+    software, and have to be parsed together for the supplement's facts to
+    resolve to a period at all (parsed separately, the supplement yields
+    zero facts — every one of its `contextRef`s is unresolvable on its
+    own). `filing_xbrl_facts.parse_inline_xbrl` is called once over the
+    combined content.
+
+    Deliberately NOT gated on the primary document looking "thin" first
+    (an earlier version required the primary to be under
+    THIN_PRIMARY_THRESHOLD before even looking for a supplement): verified
+    against IBM's FY2021-2025 10-Ks, whose primary document has 62
+    nonFraction tags each — enough to clear a naive low threshold, but
+    still only cover-page/summary items, not the real statements, which
+    IBM also splits into an EX-13 exhibit. The supplement is fetched and
+    used whenever it exists and clears the threshold on its own, regardless
+    of what the primary document already has."""
+    html = f.html()
+    primary_document = getattr(f, "primary_document", None) or getattr(f, "document", None)
+    if primary_document:
+        supplement = _find_incorporated_financials(f, primary_document)
+        if supplement is not None:
+            supplement_html = supplement.download()
+            if isinstance(supplement_html, str) and len(_NONFRACTION_RE.findall(supplement_html)) >= THIN_PRIMARY_THRESHOLD:
+                html = html + "\n" + supplement_html
+    if not getattr(f, "is_inline_xbrl", True):
+        instance = _find_xbrl_instance_document(f)
+        if instance is not None:
+            instance_xml = instance.download()
+            if isinstance(instance_xml, str) and instance_xml.strip():
+                html = html + "\n" + XBRL_INSTANCE_BOUNDARY + "\n" + instance_xml
+    return html
 
 
 def _fetch_one_company(row, form, start_date, end_date, allow_amendments, html_dir, existing_manifest_df):
@@ -131,7 +255,7 @@ def _fetch_one_company(row, form, start_date, end_date, allow_amendments, html_d
             download_status = "completed"
         else:
             try:
-                html = f.html()
+                html = _fetch_primary_html(f)
                 with gzip.open(local_path, "wt", encoding="utf-8") as out:
                     out.write(html)
                 download_status = "completed"

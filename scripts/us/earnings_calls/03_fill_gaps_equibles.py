@@ -66,7 +66,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
 import pipeline_logger  # noqa: E402
 
 MCP_URL = "https://mcp.equibles.com/mcp"
-FROM_YEAR, TO_YEAR = 2021, 2025
+FROM_YEAR, TO_YEAR = 2021, 2026
 TURN_LIMIT = 200  # server max per GetEarningsCallTranscript call
 RATE_LIMIT_SECONDS = 0.5
 MAX_RETRIES = 4
@@ -269,7 +269,9 @@ def main() -> None:
 
     new_rows = []
     n_tickers_with_gaps = 0
-    for ticker in universe["ticker"]:
+    n_total_tickers = len(universe)
+    for i, ticker in enumerate(universe["ticker"], start=1):
+        print(f"[{i}/{n_total_tickers}] {ticker}...", flush=True)
         norm = str(ticker).upper().strip().replace(".", "-")
         try:
             events = list_earnings_events(api_key, ticker)
