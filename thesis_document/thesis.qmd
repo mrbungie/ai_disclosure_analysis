@@ -1679,6 +1679,7 @@ plt.show()
 ```
 
 The 45° dashed line defines commensurate communication:
+
 - **Near the diagonal:** A firm's narrative intensity roughly matches its disclosed operational substance.
 - **Above the diagonal:** Firms that disclose substantial concrete activity while maintaining a relatively muted narrative intensity ("quiet substance").
 - **Below the diagonal:** Firms whose narrative volume runs substantially ahead of their concrete disclosed activities.
@@ -1749,6 +1750,7 @@ This provides a vital empirical finding: **disclosure–substance decoupling is 
 The second credibility test evaluates informational persistence across institutional venues. When the same firm communicates about the same fiscal period under two different regulatory regimes, what parts of its AI narrative survive?
 
 We compare corporate communication across the two primary disclosure venues:
+
 1. **Earnings Conference Calls:** Voluntary, flexible, interactive communication directed at market analysts, governed primarily by general anti-fraud provisions [@frankel1999, pp. 133--34; @matsumoto2011, pp. 1383--84].
 2. **Statutory SEC Filings (10-K / 10-Q):** Highly structured, formal reports carrying statutory liability for material omissions and misstatements under Section 11 and Section 18 of the Exchange Act.
 
@@ -2014,12 +2016,14 @@ Furthermore, testing the cross-venue gap itself reveals that the promotional gap
 Synthesizing the three credibility tests establishes the empirical boundary of what can—and cannot—be called AI washing:
 
 ### What our data empirically establish:
+
 1. **Decoupling exists:** In a meaningful subset of firms, disclosure intensity runs substantially ahead of concrete, disclosed operational substance ($W > 0$).
 2. **Decoupling is persistent:** A firm's position in the washing index is stable over time ($\rho \approx 0.60$), reflecting an enduring communication posture rather than episodic noise.
 3. **Evidence does not survive across venues:** Public firms attach quantifiable metrics, business functions, and partner attributions to earnings calls, but omit them from monitored statutory filings.
 4. **Scrutiny did not eliminate the gap:** Regulatory warnings prompted risk factor expansion and selective specificity in annual reports, but the 9.9× promotional cross-venue gap remains wide open.
 
 ### What our data cannot establish:
+
 - We cannot claim that any individual corporate statement is legally fraudulent or intentionally misleading.
 - We cannot prove that an ungrounded activity is non-existent in reality, because firms may deploy proprietary algorithms without disclosing technical details.
 - We cannot interpret third-party vendor opacity as deliberate concealment.
@@ -2043,6 +2047,7 @@ The unit of observation is a firm-date earnings call event. Multiple transcripts
 - **Substance:** $\log(1 + \text{Activities} / 1{,}000\ \text{words}) \times \text{Grounding}$, where grounding is the proportion of activities tied to concrete business operations.
 
 Pre- and post-call market betas are estimated over non-overlapping windows to avoid look-ahead bias and earnings-announcement drift:
+
 - $\beta^{\text{pre}}_{i,t}$ over $[-252, -21]$ trading days before the call.
 - $\beta^{\text{post}}_{i,t}$ over $[+21, +126]$ trading days after the call.
 
