@@ -1170,6 +1170,10 @@ Across all six behavioral dimensions, the archetypes separate cleanly:
 
 **Controlling for disclosure volume.** Because both semantic frames and activities are extracted from the same corporate text, could this behavioral gap be a trivial artifact of verbosity? To rule out this shared-source confound, we estimate a negative binomial regression of disclosed activity counts on disclosure archetypes while explicitly conditioning on total AI disclosure volume ($\log(1 + \text{AI frames})$):
 
+$$
+\log \mathbb{E}[\text{Activities}_i] = \alpha + \beta_1 \text{VocalSubstantives}_i + \beta_2 \text{GovernanceLed}_i + \gamma \log(1 + \text{Frames}_i)
+$$
+
 ```{python}
 #| label: tbl-4-1b-volume-adjusted
 #| tbl-cap: "Disclosed activity count by archetype, before and after conditioning on total AI disclosure volume (log frame count). Reference category: Defensive Disclosers."
@@ -1287,7 +1291,7 @@ The 100% stacked distribution in @fig-archetype-activity-mix reveals stark strat
 
 While firms disclose thousands of AI activities, a critical empirical question is whether these claims represent verifiable operational reality or vague corporate aspirations. To evaluate claim substance, we benchmark all 27,883 activities against an empirical **ladder of disclosed substance** that imposes increasing informational standards:
 
-$$\text{Activity Claim} \longrightarrow \text{Specific Business Function} \longrightarrow \text{Deployed Stage} \longrightarrow \text{Named Product/Process} \longrightarrow \text{Quantified Outcome Metric}$$
+$$\text{Activity Claim} \;\longrightarrow\; \text{Specific Business Function} \;\longrightarrow\; \text{Deployed Stage} \;\longrightarrow\; \text{Named Product/Process} \;\longrightarrow\; \text{Quantified Outcome Metric}$$
 
 ```{python}
 #| label: fig-ladder-substance
@@ -1615,8 +1619,8 @@ Under this framework, "AI washing" ceases to be an arbitrary label assigned to i
 
 The first test of credibility asks whether the volume of corporate AI rhetoric is commensurate with the volume of concrete, grounded activity a firm reports. We examine the joint distribution of two separately extracted quantities across 1,449 firm-years disclosing AI (474 firms, 2021–2025):
 
-1. **Disclosure Intensity ($	ext{Disclosure}_{it}$):** Semantic AI frames per 1,000 words of scorable narrative text.
-2. **Disclosed Substance ($	ext{Substance}_{it}$):** Disclosed activity volume scaled by empirical-Bayes grounding: $\log(1 + n_{	ext{activities},it}) 	imes 	ext{Grounding}_{it}$.
+1. **Disclosure Intensity ($\text{Disclosure}_{it}$):** Semantic AI frames per 1,000 words of scorable narrative text.
+2. **Disclosed Substance ($\text{Substance}_{it}$):** Disclosed activity volume scaled by empirical-Bayes grounding: $\log(1 + n_{\text{activities},it}) \times \text{Grounding}_{it}$.
 
 Plotting the percentile ranks of both measures against each other reveals the baseline relationship (@fig-talk-vs-substance). Percentile ranks compress both distributions to $[0, 1]$, ensuring that technology conglomerates with hundreds of activities (e.g., Microsoft, NVIDIA) are not mechanically flagged as outliers simply due to scale.
 
@@ -1681,7 +1685,7 @@ The 45° dashed line defines commensurate communication:
 
 The **AI-washing index ($W$)** is the signed distance from this diagonal:
 
-$$W_{it} = 	ext{pctrank}(	ext{Disclosure}_{it}) - 	ext{pctrank}(	ext{Substance}_{it})$$
+$$W_{it} = \text{pctrank}(\text{Disclosure}_{it}) - \text{pctrank}(\text{Substance}_{it})$$
 
 A descriptive cut at the top 5% flags 73 firm-years in the washing tail (e.g., Q, BLK, SWKS, WRB). These are not firms with the highest AI volume in absolute terms, but firms reporting heavy promotional rhetoric with zero or near-zero grounded activities in that fiscal year.
 
@@ -1735,9 +1739,8 @@ plt.tight_layout()
 plt.show()
 ```
 
-Across 942 consecutive firm-year pairs, the rank correlation is strongly positive: **Spearman $
-ho = +0.594$ ($p < 0.001$)**. A split-half check (averaging $W$ across random halves of each firm's history) yields Spearman $
-ho = +0.514$ ($p < 0.001$, $n = 406$). 
+Across 942 consecutive firm-year pairs, the rank correlation is strongly positive: **Spearman $\rho = +0.594$ ($p < 0.001$)**. A split-half check (averaging $W$ across random halves of each firm's history) yields Spearman $\rho = +0.514$ ($p < 0.001$, $n = 406$).
+
 
 This provides a vital empirical finding: **disclosure–substance decoupling is not merely an episodic artifact of a single reporting season; it exhibits meaningful persistence within firms**. At the same time, the correlation is well below unity, confirming that $W$ is not a static firm trait but a dynamic reporting posture that evolves over time.
 
@@ -1759,10 +1762,10 @@ If the mix of disclosed activities is essentially unchanged across venues, where
 
 The answer lies in the **evidentiary grounding** attached to those activities (@fig-venue-gap-coefficients). The earnings conference call systematically incorporates specific, falsifiable evidence that disappears when the same firm signs its statutory filing:
 
-- **Named business function:** $\downarrow 11.7	ext{ percentage points}$ in filings.
-- **Quantified outcome or performance metric:** $\downarrow 11.0	ext{ percentage points}$ in filings (calls state the numbers; filings omit them).
-- **Named third-party provider or partner:** $\downarrow 5.3	ext{ percentage points}$ in filings (nearly tripled in calls).
-- **Named proprietary product or platform:** $\downarrow 3.8	ext{ percentage points}$ in filings.
+- **Named business function:** $\downarrow 11.7$ percentage points in filings.
+- **Quantified outcome or performance metric:** $\downarrow 11.0$ percentage points in filings (calls state the numbers; filings omit them).
+- **Named third-party provider or partner:** $\downarrow 5.3$ percentage points in filings (nearly tripled in calls).
+- **Named proprietary product or platform:** $\downarrow 3.8$ percentage points in filings.
 
 Conversely, statutory filings retain relatively more boilerplate governance language, regulatory caveats, and unanchored risk factors.
 
@@ -2034,8 +2037,8 @@ This chapter investigates whether capital markets reprice the *volume* of corpor
 
 The unit of observation is a firm-date earnings call event. Multiple transcripts occurring on the same day are aggregated, and calls with zero mentions are retained as valid empirical zeros. The call date anchors the timeline:
 
-- **Historical Posture ($\text{HistD}_{i,t^-}, \text{HistS}_{i,t^-}$):** Expanding mean of disclosure and substance across calls strictly prior to date $t$.
-- **Call-Specific Surprise ($\text{SurpriseD}_{i,t}, \text{SurpriseS}_{i,t}$):** Current call value minus the firm's historical mean ($\text{Value}_{i,t} - \text{Hist}_{i,t^-}$).
+- **Historical Posture ($\text{HistD}_{i,t^{-}}, \text{HistS}_{i,t^{-}}$):** Expanding mean of disclosure and substance across calls strictly prior to date $t$.
+- **Call-Specific Surprise ($\text{SurpriseD}_{i,t}, \text{SurpriseS}_{i,t}$):** Current call value minus the firm's historical mean ($\text{Value}_{i,t} - \text{Hist}_{i,t^{-}}$).
 - **Disclosure Intensity:** AI frames per 1,000 words.
 - **Substance:** $\log(1 + \text{Activities} / 1{,}000\ \text{words}) \times \text{Grounding}$, where grounding is the proportion of activities tied to concrete business operations.
 
@@ -2043,7 +2046,7 @@ Pre- and post-call market betas are estimated over non-overlapping windows to av
 - $\beta^{\text{pre}}_{i,t}$ over $[-252, -21]$ trading days before the call.
 - $\beta^{\text{post}}_{i,t}$ over $[+21, +126]$ trading days after the call.
 
-Predetermined controls ($X^{\text{pre}}_{i,t}$) include log market cap, 60-day return momentum ($\text{Return60}$), and pre-call idiosyncratic volatility. Point-in-time accounting fundamentals (ROA, leverage) are linked from the most recent 10-K or 10-Q filed strictly before the call ($\text{filing\_date} < \text{call\_date}$), extracted from XBRL accession facts.
+Predetermined controls ($X^{\text{pre}}_{i,t}$) include log market cap, 60-day return momentum ($\text{Return}_{60}$), and pre-call idiosyncratic volatility. Point-in-time accounting fundamentals (ROA, leverage) are linked from the most recent 10-K or 10-Q filed strictly before the call ($\text{filing\_date} < \text{call\_date}$), extracted from XBRL accession facts.
 
 ## Incremental Information of AI Decoupling
 
@@ -2056,10 +2059,10 @@ While the credibility gap is persistent and managerially interpretable within Ch
 We estimate an ANCOVA specification conditioning on pre-call beta:
 
 $$
-\beta^{\text{post}}_{i,t} = \alpha + \beta_1 \text{HistD}_{i,t^-} + \beta_2 \text{HistS}_{i,t^-} + \beta_3 \text{SurpriseD}_{i,t} + \beta_4 \text{SurpriseS}_{i,t} + \gamma \beta^{\text{pre}}_{i,t} + \delta X^{\text{pre}}_{i,t} + \text{FE}_{\text{SIC2} \times \text{CallYear}} + \epsilon_{i,t},
+\beta^{\text{post}}_{i,t} = \alpha + \beta_1 \text{HistD}_{i,t^{-}} + \beta_2 \text{HistS}_{i,t^{-}} + \beta_3 \text{SurpriseD}_{i,t} + \beta_4 \text{SurpriseS}_{i,t} + \gamma \beta^{\text{pre}}_{i,t} + \delta X^{\text{pre}}_{i,t} + \alpha_{s,y} + \epsilon_{i,t},
 $$
 
-with industry-by-year fixed effects ($\text{SIC2} \times \text{Year}$) and standard errors clustered by firm. Continuous regressors are standardized to zero mean and unit variance.
+with industry-by-year fixed effects ($\alpha_{s,y} \equiv \text{SIC2} \times \text{Year}$) and standard errors clustered by firm. Continuous regressors are standardized to zero mean and unit variance.
 
 @tbl-call-beta-baseline and @fig-call-beta-baseline report the baseline estimates.
 
@@ -2287,7 +2290,12 @@ Three dynamics stand out:
 
 To test whether capital structure confounds the disclosure signal, Models 0 and 1 are estimated on the exact subsamples with observed point-in-time XBRL leverage ratios:
 
-$$ M0:\ \beta^{\text{post}} \sim \text{HistD} + \text{HistS} + \text{SurpriseD} + \text{SurpriseS} + \beta^{\text{pre}} + X + \text{FE}, \qquad M1:\ M0 + \text{Leverage} $$
+$$
+\begin{aligned}
+\text{Model 0: } \beta^{\text{post}}_{i,t} &= \alpha + \beta_1 \text{HistD}_{i,t^{-}} + \beta_2 \text{HistS}_{i,t^{-}} + \beta_3 \text{SurpriseD}_{i,t} + \beta_4 \text{SurpriseS}_{i,t} + \gamma \beta^{\text{pre}}_{i,t} + \delta X^{\text{pre}}_{i,t} + \alpha_{s,y} + \epsilon_{i,t} \\
+\text{Model 1: } \beta^{\text{post}}_{i,t} &= \text{Model 0} + \theta \text{Leverage}_{i,t} + \epsilon_{i,t}
+\end{aligned}
+$$
 
 
 ### Long-Term Debt / Equity
@@ -2936,13 +2944,13 @@ For that reason, R&D-to-sales is not imputed and is excluded from the common set
 
 ### Market beta and estimation-window diagnostics
 
-For each firm-year, market beta is estimated from a one-factor market model over the 252 trading days strictly before the actual filing date of the 10-K. Let $R_{i,t}$ denote the daily return on the firm's adjusted close, $R_{f,t}$ the daily risk-free rate, and $MKT-RF_t$ the daily market excess return from the Ken French Fama--French three-factor file (`ff3_daily.parquet`). The estimated regression is
+For each firm-year, market beta is estimated from a one-factor market model over the 252 trading days strictly before the actual filing date of the 10-K. Let $R_{i,t}$ denote the daily return on the firm's adjusted close, $R_{f,t}$ the daily risk-free rate, and $(\text{MKT} - \text{RF})_t$ the daily market excess return from the Ken French Fama--French three-factor file (`ff3_daily.parquet`). The estimated regression is
 
 $$
-R_{i,t} - R_{f,t} = \alpha_i + \beta_i(MKT-RF_t) + \varepsilon_{i,t}.
+R_{i,t} - R_{f,t} = \alpha_i + \beta_i (\text{MKT} - \text{RF})_t + \varepsilon_{i,t}.
 $$
 
-`build_market_factors.py` identifies the first trading day on or after the filing date and takes the preceding 252 price observations. It then retains only dates for which the firm return, $MKT-RF_t$, and $R_{f,t}$ are all available, and estimates the intercept and slope by OLS. The code requires at least 120 valid daily observations (`BETA_MIN_OBS = 120`); otherwise beta is recorded as missing. The idiosyncratic-volatility measure uses the standard deviation of residuals from the same fitted model, annualized by $\sqrt{252}$.
+`build_market_factors.py` identifies the first trading day on or after the filing date and takes the preceding 252 price observations. It then retains only dates for which the firm return, $(\text{MKT} - \text{RF})_t$, and $R_{f,t}$ are all available, and estimates the intercept and slope by OLS. The code requires at least 120 valid daily observations (`BETA_MIN_OBS = 120`); otherwise beta is recorded as missing. The idiosyncratic-volatility measure uses the standard deviation of residuals from the same fitted model, annualized by $\sqrt{252}$.
 
 The resulting `firm_year_market_factors.parquet` panel contains 2,762 firm-years for 477 tickers in 2021--2026. Beta is available for 2,739 observations (99.2%). The estimation-window diagnostic has a mean of 249.8 return days and a median of 252; 98.0% of estimates use at least 240 trading days. The remaining 23 firm-years have fewer than 120 valid observations and are retained with beta missing rather than receiving a short-window estimate. Among valid estimates, beta has mean 0.91, median 0.88, standard deviation 0.47, interquartile range 0.59--1.18, and range $[-0.31, 2.96]$.
 
