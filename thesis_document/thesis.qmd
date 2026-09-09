@@ -2368,6 +2368,31 @@ Investors should read earnings-call AI claims against what the same firm has fil
 
 The within-disclosure index is best read through decoupling theory: formal disclosure can run ahead of the concrete activity a firm discloses, without establishing what the firm actually does. The cross-venue gap is the closer analogue to the mechanism the SEC has enforced. Neither measure has an external operational benchmark, and the SEC design does not identify a causal effect of scrutiny.
 
+## From archetypes to firms: illustrative comparisons
+
+To ground the statistical archetypes in recognizable corporate practice, @tbl-firm-comparisons examines two pairs of direct peers operating within the same sectors: **JPMorgan Chase vs. Goldman Sachs** in global investment banking, and **Microsoft vs. Apple** in mega-cap technology.
+
+| Feature / Dimension | JPMorgan Chase (JPM) | Goldman Sachs (GS) | Microsoft (MSFT) | Apple (AAPL) |
+|---|---|---|---|---|
+| **Disclosure Archetype** | Governance-Led Disclosers | Defensive Disclosers | Vocal Substantives | Governance-Led Disclosers |
+| **Dominant Posture** | Governance, internal deployment | Legal caution, risk avoidance | Promotional + high specificity | Privacy, ethical governance |
+| **Disclosure Intensity** | 69th percentile (0.053 frames/1k) | 57th percentile (0.040 frames/1k) | 100th percentile (0.816 frames/1k) | 87th percentile (0.131 frames/1k) |
+| **Disclosed Activities** | 32 activities | 20 activities | 989 activities | 95 activities |
+| **Grounding Index** | 0.322 | 0.187 | 0.351 | 0.310 |
+| **Deployed / Scaled Share** | 75.0% | 40.0% | 81.7% | 62.1% |
+| **Internal vs. Customer Focus** | 65.6% internal / 21.9% customer | 85.0% internal / 5.0% customer | 27.7% internal / 47.6% customer | 21.1% internal / 69.5% customer |
+| **Proprietary Tech Share** | 53.1% | 15.0% | 81.7% | 81.1% |
+| **Representative AI Claim** | *"Models and estimations that JPMorgan Chase uses, including those incorporating machine learning, are periodically reviewed and modified under firmwide governance."* (10-K) | *"The emergence and adoption of new technologies, including AI, require us to invest resources to adapt... and present operational and competitive risks."* (10-K Item 1A) | *"Microsoft Cloud gross margin percentage decreased to 68% driven by scaling AI infrastructure and usage, offset by efficiency gains in Azure."* (10-Q) | *"Apple has been and will continue to be deliberate and thoughtful in deployment... guided by our privacy principles and on-device processing."* (DEF 14A) |
+| **What Investors Should Notice** | High operational grounding masked by moderate disclosure volume; internal workflow integration with quantified metrics. | High risk orientation; low grounding; zero quantified metrics; disclosures serve primarily as liability protection. | Aggressive promotional tone matched by industry-leading operational evidence and quantified commercial traction. | Restrained narrative volume in formal filings; heavy focus on on-device privacy governance rather than enterprise monetization. |
+
+: Illustrative peer comparisons within Financials and Technology. {#tbl-firm-comparisons}
+
+The contrast between JPMorgan Chase and Goldman Sachs illustrates how disclosure archetypes operate within the same sector among technologically sophisticated global investment banks. Despite operating comparable market-making, trading, and advisory franchises, the two institutions adopt fundamentally divergent communication policies. JPMorgan Chase exhibits a classic **Governance-Led** posture: its disclosures emphasize institutional oversight, internal process automation (65.6% of activities), and proprietary model development (53.1%), with 75.0% of claims reaching deployed or scaled status alongside verified operational metrics. Goldman Sachs, by contrast, adopts a **Defensive** posture: its AI communication is dominated by risk warnings (61.5% risk orientation), reporting fewer activities with substantially lower grounding (0.187 vs. 0.322), zero quantified outcomes, and heavy concentration in generic Item 1A legal boilerplate. An investor evaluating only mention frequency would miss this contrast: JPMorgan reports structured operational adoption, whereas Goldman Sachs discloses primarily to insulate against regulatory liability.
+
+The comparison between Microsoft and Apple reveals an equally stark divergence among Big Tech market leaders. While both are multi-trillion-dollar platform leaders with immense engineering resources, their public communication strategies reflect opposite strategic postures. Microsoft embodies the **Vocal Substantive** archetype: it communicates with maximum narrative intensity (100th percentile), high promotional framing ($0.193$), and extraordinary operational specificity ($0.193$), disclosing 989 concrete activities spanning enterprise tools, massive data center capex, commercial partnerships with OpenAI, and quantified productivity metrics (81.7% deployed or scaled). Apple, conversely, occupies the **Governance-Led** archetype ($0.517$ governance orientation): it speaks with far greater restraint in formal SEC filings (95 activities), avoiding speculative commercial claims and framing AI strictly around user privacy, ethical boundaries, and on-device machine learning architecture. Rather than hyping enterprise models, Apple's disclosures emphasize consumer feature integration guarded by strict privacy governance.
+
+These comparisons are illustrative rather than additional statistical tests; they show how the aggregate archetypes translate into recognizable corporate disclosure strategies.
+
 | Dimension | Issuer guidance | Investor read |
 |---|---|---|
 | Named activity | State the specific action-object, not "AI capabilities" | Absence is the single most common gap (86% of firms) |
