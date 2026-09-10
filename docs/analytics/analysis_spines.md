@@ -41,9 +41,15 @@ tiene un valor de revenue).
 **Grano:** una fila por `(ticker, call)`. **Ancla:** `fecha` = fecha
 efectiva del call (no la fecha de un filing relacionado).
 
-**Ya materializado:** `data/processed/clusters/call_beta_main_panel_10k10q_asof.parquet`
-— no lo reconstruyas desde cero; si necesitas una columna que no tiene,
-agrégala con un `attach_*` nuevo sobre ese panel.
+**Materializado por `scripts/analytics/build_call_beta_panel.py`** (`make analytics-call-beta`):
+`data/processed/clusters/call_beta_main_panel_10k10q_asof.parquet`. Este spine
+vivió como artefacto congelado sin script durante un tiempo (última vez sin
+reconstruir: terminaba en 2025-05-15, nunca vio 2026); ese script lo
+reconstruye desde `ai_intensity.document_table()` + `firm_activities.parquet`
++ precios/factores/contables, con una validación fila-a-fila contra la
+corrida anterior (`build_call_beta_panel.py::validate`) antes de
+sobrescribirla. Si necesitas una columna que no tiene, agrégala con un
+`attach_*` nuevo en ese script, no por fuera.
 
 **Qué se le pega y cómo:**
 

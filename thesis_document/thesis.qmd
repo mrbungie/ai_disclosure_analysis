@@ -2226,14 +2226,40 @@ plt.tight_layout()
 plt.show()
 ```
 
-The baseline estimation covers 6,794 calls across 447 firms (262 industry-by-year cells, $R^2 = 0.692$). The median firm has 9.0 prior calls in the panel, ensuring well-anchored historical averages.
+```{python}
+#| echo: false
+#| output: false
+import json
+
+_baseline_sample = samples[samples["model"] == "beta_post_126_baseline"].iloc[0]
+_formal = json.loads(find_path("data/processed/clusters/call_beta_robustness_formal_tests.json").read_text())
+
+def _bp(var):
+    row = base_ai.set_index("variable").loc[var]
+    p_str = "< 0.001" if row["p"] < 0.001 else f"= {row['p']:.3f}"
+    return row["beta_std"], row["p"], p_str
+
+hd_b, hd_p, hd_pstr = _bp("hist_disclosure")
+hs_b, hs_p, hs_pstr = _bp("hist_substance")
+sd_b, sd_p, sd_pstr = _bp("surprise_disclosure")
+ss_b, ss_p, ss_pstr = _bp("surprise_substance")
+
+def _sig(p):
+    return "positive and significant" if p < 0.05 else "not statistically significant"
+
+_disc_joint = _formal["joint_disclosure_terms"]
+_sub_joint = _formal["joint_substance_terms"]
+_partial_r2 = _formal["partial_r2_ai_block"]
+```
+
+The baseline estimation covers `{python} f"{int(_baseline_sample['n_calls']):,}"` calls across `{python} int(_baseline_sample['n_firms'])` firms (`{python} int(_baseline_sample['n_fe_cells'])` industry-by-year cells, $R^2 =$ `{python} f"{_baseline_sample['r2']:.3f}"`). The median firm has `{python} f"{_baseline_sample['median_prior_calls']:.1f}"` prior calls in the panel, ensuring well-anchored historical averages.
 
 Two main patterns emerge:
 
-1. **Voice matters:** Historical disclosure intensity is positive and significant ($\beta = 0.070, p = 0.005$; unstandardized $0.103$ per 1 SD increase), as is call-specific surprise disclosure ($\beta = 0.029, p = 0.020$; unstandardized $0.030$). Both established rhetorical posture and unexpected narrative spikes are positively associated with subsequent systematic risk conditional on pre-call beta.
-2. **Substance does not:** Historical substance ($\beta = 0.008, p = 0.759$) and surprise substance ($\beta = 0.003, p = 0.783$) are indistinguishable from zero. Joint tests confirm this contrast: the disclosure block ($\text{HistD} + \text{SurpriseD}$) is strongly significant ($F = 5.15, p = 0.006; \Delta R^2 = +0.0051$), whereas the substance block is null ($F = 0.05, p = 0.952$).
+1. **Disclosure is `{python} _sig(sd_p)` at the call-specific margin:** Historical disclosure intensity is `{python} _sig(hd_p)` ($\beta =$ `{python} f"{hd_b:.3f}"`, $p$ `{python} hd_pstr`); call-specific surprise disclosure is $\beta =$ `{python} f"{sd_b:.3f}"` ($p$ `{python} sd_pstr`). Established rhetorical posture carries a robust association with subsequent systematic risk conditional on pre-call beta; a single call's disclosure surprise on its own does not.
+2. **Substance does not:** Historical substance ($\beta =$ `{python} f"{hs_b:.3f}"`, $p$ `{python} hs_pstr`) and surprise substance ($\beta =$ `{python} f"{ss_b:.3f}"`, $p$ `{python} ss_pstr`) are indistinguishable from zero. Joint tests confirm this contrast: the disclosure block ($\text{HistD} + \text{SurpriseD}$) is significant ($F =$ `{python} f"{_disc_joint['F']:.2f}"`, $p =$ `{python} f"{_disc_joint['p']:.3f}"`; partial $R^2 =$ `{python} f"{_partial_r2:.4f}"`), whereas the substance block is null ($F =$ `{python} f"{_sub_joint['F']:.2f}"`, $p =$ `{python} f"{_sub_joint['p']:.3f}"`).
 
-Executive disclosure volume is positively associated with post-call market beta conditional on pre-call risk, while grounded operational activities show no incremental association.
+Executive disclosure volume, anchored in a firm's historical rhetorical posture, is associated with post-call market beta conditional on pre-call risk, while grounded operational activities show no incremental association.
 
 ## Robustness and Identification
 
@@ -2292,7 +2318,14 @@ rows.append(["Market controls", "✓", "✓", "✓", "✓", "✓", "✓"])
 rows.append(["Accounting (ROA, Lev)", "—", "✓", "—", "—", "—", "—"])
 rows.append(["SIC2 × CallYear FE", "✓", "✓", "✓", "✓", "—", "✓"])
 rows.append(["Firm FE", "—", "—", "—", "—", "✓", "—"])
-rows.append(["N", "6,794", "4,580", "6,794", "6,794", "6,794", "6,794"])
+_acct_n = int(samples.set_index("model").loc["beta_post_126_accounting_M1", "n_calls"])
+rows.append(["N",
+             f"{int(base_win.loc['hist_disclosure', 'n_calls']):,}" if "n_calls" in win.columns else "—",
+             f"{_acct_n:,}",
+             f"{int(ff3_df.loc['hist_disclosure', 'n_calls']):,}" if "n_calls" in ff.columns else "—",
+             f"{int(win252.loc['hist_disclosure', 'n_calls']):,}" if "n_calls" in win.columns else "—",
+             f"{int(fe_df.loc['hist_disclosure', 'n_calls']):,}" if "n_calls" in fe.columns else "—",
+             f"{int(delta_df.loc['hist_disclosure', 'n_calls']):,}" if "n_calls" in delta.columns else "—"])
 
 headers = ["Variable", "Baseline", "+ Acct.", "FF3", "[+21,+252]", "Firm FE", "Delta Beta"]
 Markdown(tabulate(rows, headers=headers))
@@ -2300,10 +2333,32 @@ Markdown(tabulate(rows, headers=headers))
 
 The baseline result survives accounting controls (ROA and liabilities/assets), alternative post-call estimation horizons (up to a full trading year, $[+21, +252]$), and the Fama–French three-factor benchmark, but attenuates and disappears under within-firm (firm fixed effects) and first-difference ($\Delta\beta$) specifications. This identifies the association as predominantly cross-sectional sorting rather than a call-induced change in systematic risk: firms that talk heavily about AI systematically carry higher market risk than peers, but high-frequency quarterly shifts in disclosure do not exogenously alter firm risk. Full diagnostics, leverage specifications (Debt/Equity and Liabilities/Assets), and influence tests are reported in Appendix E.
 
+```{python}
+#| echo: false
+#| output: false
+loyo = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_leave_one_year_out.csv"))
+placebo = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_placebo.csv")).set_index("variable")
+
+loyo_hd = loyo[loyo["variable"] == "hist_disclosure"].set_index("block")
+_min_hd = loyo_hd.loc[loyo_hd["beta_std"].idxmin()]
+_min_hd_year = _min_hd.name.replace("excl_", "")
+_max_p_hd = loyo_hd["p"].max()
+_all_hd_sig = bool((loyo_hd["p"] < 0.05).all())
+_hd_sig_text = "significant across every excluded year" if _all_hd_sig else f"significant in every excluded year except {_min_hd_year}"
+_hd_detail_text = "" if _all_hd_sig else f", where it drops to $\\beta = {_min_hd['beta_std']:.3f}$ (p = {_min_hd['p']:.3f})"
+
+loyo_sd = loyo[loyo["variable"] == "surprise_disclosure"].set_index("block")
+_any_sd_sig = bool((loyo_sd["p"] < 0.05).any())
+
+pb_disc, pb_sub = placebo.loc["disclosure"], placebo.loc["substance"]
+_pb_disc_p = "< 0.001" if pb_disc["p"] < 0.001 else f"= {pb_disc['p']:.3f}"
+_pb_sub_p = "< 0.001" if pb_sub["p"] < 0.001 else f"= {pb_sub['p']:.3f}"
+```
+
 ## Critical Limitations
 
-1. **Temporal concentration in the 2024 AI bubble:** Leave-one-year-out regressions remain significant when dropping 2021, 2022, 2023, or 2025 ($p < 0.03$). However, excluding 2024 collapses the result: $\text{HistDisclosure}$ drops to 0.026 ($p = 0.136$) and $\text{SurpriseDisclosure}$ to 0.004 ($p = 0.732$). The positive association between call disclosures and market beta is historically anchored in the 2024 generative AI wave.
-2. **Pre-call beta placebo failure:** Regressing pre-call beta ($\beta^{\text{pre}}_{[-252, -21]}$) on contemporaneous call disclosure yields $\beta = 0.176$ ($p < 0.001$), while substance is null ($p = 0.196$). Firms that talk heavily about AI were already high-beta firms prior to the call. $\text{HistDisclosure}$ therefore reflects a persistent corporate posture adopted by high-beta, growth-oriented firms seeking market attention, rather than an exogenous shock to systematic risk.
+1. **HistDisclosure is not concentrated in a single year, but SurpriseDisclosure never reaches significance on its own:** Leave-one-year-out regressions keep $\text{HistDisclosure}$ `{python} _hd_sig_text` ($p \le$ `{python} f"{_max_p_hd:.3f}"``{python} _hd_detail_text`). $\text{SurpriseDisclosure}$, by contrast, `{python} "reaches p < 0.05 in at least one excluded-year specification" if _any_sd_sig else "never reaches conventional significance in any single-year exclusion"`, consistent with its null result in the baseline specification: the association between call disclosures and post-call market beta runs through a firm's persistent historical disclosure posture, not through the surprise content of any one call.
+2. **Pre-call beta placebo failure:** Regressing pre-call beta ($\beta^{\text{pre}}_{[-252, -21]}$) on contemporaneous call disclosure yields $\beta =$ `{python} f"{pb_disc['beta_std']:.3f}"` ($p$ `{python} _pb_disc_p`), while substance is null ($p$ `{python} _pb_sub_p`). Firms that talk heavily about AI were already high-beta firms prior to the call. $\text{HistDisclosure}$ therefore reflects a persistent corporate posture adopted by high-beta, growth-oriented firms seeking market attention, rather than an exogenous shock to systematic risk.
 
 # From Measurement to Managerial Application
 
@@ -3224,7 +3279,7 @@ w_n_firms_total = len(pd.read_parquet(_p("firm_segments.parquet")))
 
 **AI-washing index, full specification.** $\text{Substance}_{it} = \log(1 + n_{\text{activities},it}) \times \text{Grounding}_{it}$, where $\text{Grounding}_{it}$ averages, with empirical-Bayes shrinkage per component, five concreteness markers over that firm-year's disclosed activities (named function, deployed/scaled stage, named product or process, quantified outcome, named provider). $W_{it} = \text{pctrank}(\text{Disclosure}_{it}) - \text{pctrank}(\text{Substance}_{it})$, where $\text{Disclosure}_{it}$ is AI frames per 1,000 words and both percentile ranks are computed within the analytical sample (firm-years with $\text{Disclosure}_{it} > 0$: `{python} w_n_panel` of `{python} w_n_firmyears_total` firm-years, `{python} w_n_firms` of `{python} w_n_firms_total` firms pooled 2021–2026). No regression, no fixed effects, no fitted residual: it is a rank-based gap between two independently extracted quantities.
 
-Percentile rank rather than z-score standardization: with z-scores, $\text{Disclosure}_{it}$'s distribution has a far heavier right tail than $\text{Substance}_{it}$'s (maximum z of 13.7 against 3.7), which put firms with the *most* grounded activity in absolute terms (Microsoft, NVIDIA) in the washing tail whenever their disclosure happened to be an even bigger outlier than their already-large substance — Spearman between the z-score and percentile-rank versions of $W$ is 0.988, but the specific firm-years in the top 5% differ, and only the percentile version keeps the tail composed of firms with no grounded activity behind unusually heavy disclosure.
+Percentile rank rather than z-score standardization: with z-scores, $\text{Disclosure}_{it}$'s distribution has a far heavier right tail than $\text{Substance}_{it}$'s (maximum z of 18.5 against 4.3), which put firms with the *most* grounded activity in absolute terms (Microsoft, NVIDIA) in the washing tail whenever their disclosure happened to be an even bigger outlier than their already-large substance — Spearman between the z-score and percentile-rank versions of $W$ is only 0.723, and only 43 of the 102 firm-years in each version's top-5% tail are shared (Jaccard = 0.267); only the percentile version keeps the tail composed of firms with no grounded activity behind unusually heavy disclosure.
 
 **Substance functional form.** An additive form, $z(\log(1+n_{\text{activities}})) + z(\text{Grounding})$, and a grounded-count form, $\log(1 + n_{\text{activities}} \times \text{Grounding})$, were both compared against the multiplicative form used here. Substance under the multiplicative and grounded-count forms correlates at Spearman = 0.991 (n = `{python} w_n_panel`), and the resulting $W$ at Spearman = 0.986, with 89 of 102 top-5%-tail firm-years shared between the two (Jaccard = 0.774). The multiplicative form is used because it does not reward raw activity count over grounding quality when the two trade off directly against each other (a firm with many but poorly grounded activities does not automatically outscore one with fewer but well-grounded activities, at typical values in this sample), while the grounded-count form's arithmetic can favor the larger, less-grounded firm in exactly that comparison.
 
@@ -3331,40 +3386,57 @@ Markdown(tabulate(rows, headers=["Outcome", "n", "ΔR² (median rollup)", "ΔR²
 To evaluate whether capital structure confounds the earnings-call disclosure signal, the baseline ANCOVA model (Model 0) is compared against specifications adding point-in-time XBRL leverage ratios (Model 1) on the exact matched subsamples (@tbl-call-beta-leverage-de and @tbl-call-beta-leverage-la).
 
 ```{python}
+#| echo: false
+#| output: false
+from pathlib import Path
+import pandas as pd
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+_lev = pd.read_csv(_p("call_beta_regressions.csv")).set_index(["model", "variable"])
+_lev_samples = pd.read_csv(_p("call_beta_regression_samples.csv")).set_index("model")
+
+def _lev_row(prefix, var, r2_row_label):
+    m0 = _lev.loc[(f"{prefix}_M0", var)]
+    m1 = _lev.loc[(f"{prefix}_M1", var)]
+    return [r2_row_label, f"{m0['beta_std']:.4f}", f"{m1['beta_std']:.4f}"], [f"{r2_row_label}, p", f"{m0['p']:.3f}", f"{m1['p']:.3f}"]
+
+def _lev_table(prefix, lev_var, lev_label):
+    hist_row, hist_p = _lev_row(prefix, "hist_disclosure", "HistDisclosure, beta est.")
+    surp_row, surp_p = _lev_row(prefix, "surprise_disclosure", "SurpriseDisclosure, beta est.")
+    lev_m1 = _lev.loc[(f"{prefix}_M1", lev_var)]
+    r2_m0 = _lev_samples.loc[f"{prefix}_M0", "r2"]
+    r2_m1 = _lev_samples.loc[f"{prefix}_M1", "r2"]
+    n_m0 = int(_lev_samples.loc[f"{prefix}_M0", "n_calls"])
+    n_m1 = int(_lev_samples.loc[f"{prefix}_M1", "n_calls"])
+    return [hist_row, hist_p, surp_row, surp_p,
+            ["Leverage, beta est.", "—", f"{lev_m1['beta_std']:.4f}"],
+            ["Leverage, p", "—", f"{lev_m1['p']:.3f}"],
+            ["R²", f"{r2_m0:.4f}", f"{r2_m1:.4f}"],
+            ["N", f"{n_m0:,}", f"{n_m1:,}"]]
+```
+
+```{python}
 #| label: tbl-call-beta-leverage-de
-#| tbl-cap: "Matched-sample leverage robustness: Long-Term Debt / Equity (N = 3,223)."
+#| tbl-cap: "Matched-sample leverage robustness: Long-Term Debt / Equity."
 #| echo: false
 from tabulate import tabulate
 from IPython.display import Markdown
 
-table_de = [
-    ["HistDisclosure, beta est.", "0.0532", "0.0533"],
-    ["HistDisclosure, p", "0.111", "0.111"],
-    ["SurpriseDisclosure, beta est.", "0.0344", "0.0344"],
-    ["SurpriseDisclosure, p", "0.074", "0.074"],
-    ["Leverage, beta est.", "—", "0.0027"],
-    ["Leverage, p", "—", "0.599"],
-    ["R²", "0.7290", "0.7290"]
-]
+table_de = _lev_table("debt_to_equity", "debt_to_equity", "Debt / equity")
 Markdown(tabulate(table_de, headers=["Variable", "M0", "M1"]))
 ```
 
 ```{python}
 #| label: tbl-call-beta-leverage-la
-#| tbl-cap: "Matched-sample leverage robustness: Total Liabilities / Total Assets (N = 3,255)."
+#| tbl-cap: "Matched-sample leverage robustness: Total Liabilities / Total Assets."
 #| echo: false
 from tabulate import tabulate
 from IPython.display import Markdown
 
-table_la = [
-    ["HistDisclosure, beta est.", "0.0624", "0.0577"],
-    ["HistDisclosure, p", "0.045", "0.060"],
-    ["SurpriseDisclosure, beta est.", "0.0313", "0.0298"],
-    ["SurpriseDisclosure, p", "0.072", "0.082"],
-    ["Leverage, beta est.", "—", "-0.0383"],
-    ["Leverage, p", "—", "0.008"],
-    ["R²", "0.7103", "0.7113"]
-]
+table_la = _lev_table("liabilities_to_assets", "liabilities_to_assets", "Liabilities / assets")
 Markdown(tabulate(table_la, headers=["Variable", "M0", "M1"]))
 ```
 
