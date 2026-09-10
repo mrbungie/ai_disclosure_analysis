@@ -147,7 +147,14 @@ def scores_relation() -> str:
     so after retuning the anchors the directory holds several COMPLETE
     populations of the same texts at incompatible score scales. The newest
     run's configuration wins and older ones are ignored — the same rule,
-    and the same SQL, as build_duckdb.py's `ai_prefilter_scores` view."""
+    and the same SQL, as build_duckdb.py's `ai_prefilter_scores` view.
+
+    Within one configuration the additive assumption can still break: runs
+    20260906T035359Z and 20260906T040259Z re-scored the same 483,214 texts
+    ten minutes apart under identical anchors, so a plain union counted each
+    of them twice and inflated every downstream funnel. The last row per
+    `text_hash` wins, which keeps the whole accumulated population — every
+    text, exactly once, at its most recent score."""
     return f"""(
         WITH all_scores AS (
             SELECT * FROM read_parquet('{PREFILTER_SCORES_GLOB}', union_by_name=True)
@@ -159,6 +166,7 @@ def scores_relation() -> str:
           ON s.model = c.model
          AND s.anchors_fingerprint = c.anchors_fingerprint
          AND s.dtype = c.dtype
+        QUALIFY row_number() OVER (PARTITION BY s.text_hash ORDER BY s.run_id DESC) = 1
     )"""
 
 # Deterministic override, independent of the learned model and of the
