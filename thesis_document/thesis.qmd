@@ -429,17 +429,27 @@ main, ytd = y.loc[y.index <= 2025], y.loc[y.index >= 2025]
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9.5, 3.8), dpi=300)
 
 years = [2021, 2022, 2023, 2024, 2025]
+all_years = sorted(list(set(main.index.tolist() + ytd.index.tolist())))
+x_pad = 0.65
+x_min, x_max = min(all_years) - x_pad, max(all_years) + x_pad
 
 # Panel A: Diffusion (% of firms)
-ax1.plot(main.index, main.any_ai * 100, "o-", color="#1D4ED8", lw=2.4, ms=6, label="Historical panel")
+all_ai = pd.concat([main.any_ai, ytd.any_ai]) * 100
+min_ai, max_ai = all_ai.min(), all_ai.max()
+y_range_a = max_ai - min_ai
+offset_a = y_range_a * 0.045
+
+ax1.plot(main.index, main.any_ai * 100, "o-", color="#1D4ED8", lw=2.4, ms=6, label="Historical panel (2021–2025)")
 ax1.plot(ytd.index, ytd.any_ai * 100, "o:", color="#1D4ED8", lw=2.0, ms=5, label="2026 YTD")
 for yr in years:
     val = main.loc[yr, "any_ai"] * 100
-    ax1.text(yr, val + 2.5, f"{val:.1f}%", ha="center", fontsize=8.2, fontweight="bold", color="#1E293B")
+    ax1.text(yr, val + offset_a, f"{val:.1f}%", ha="center", fontsize=8.2, fontweight="bold", color="#1E293B")
+val_26 = ytd.loc[2026, "any_ai"] * 100
+ax1.text(2026, val_26 + offset_a, f"{val_26:.1f}%", ha="center", fontsize=8.2, fontweight="bold", color="#1D4ED8")
 
 ax1.axvline(2023.5, color="#DC2626", linestyle=":", lw=1.3, alpha=0.8)
 ax1.axvspan(2023.0, 2024.0, color="#FEE2E2", alpha=0.35)
-ax1.annotate("GenAI boom\n(2023–2024)", xy=(2023.5, 55), xytext=(2021.8, 68),
+ax1.annotate("GenAI boom\n(2023–2024)", xy=(2023.5, 55), xytext=(2021.6, 68),
              arrowprops=dict(arrowstyle="->", color="#DC2626", lw=1.1),
              fontsize=8.0, fontweight="bold", color="#991B1B",
              bbox=dict(boxstyle="round,pad=0.2", facecolor="#FEF2F2", edgecolor="#FCA5A5", alpha=0.9))
@@ -447,21 +457,40 @@ ax1.annotate("GenAI boom\n(2023–2024)", xy=(2023.5, 55), xytext=(2021.8, 68),
 ax1.set_title("Panel A: Broadening Participation\nShare of S&P 500 Firms Disclosing AI (%)", fontsize=9.8, fontweight="bold")
 ax1.set_ylabel("% of S&P 500 Firms", fontsize=8.8, fontweight="bold")
 ax1.set_xlabel("Filing Year", fontsize=8.8, fontweight="bold")
-ax1.set_xticks(years + [2026])
-ax1.set_ylim(20, 105)
+ax1.set_xticks(all_years)
+ax1.set_xlim(x_min, x_max)
+ax1.set_ylim(max(0, min_ai - y_range_a * 0.25), min(100, max_ai) + y_range_a * 0.25)
 ax1.grid(True, linestyle="--", alpha=0.3)
+ax1.legend(loc="upper left", fontsize=7.5, framealpha=0.9)
 ax1.spines[["top", "right"]].set_visible(False)
 
 # Panel B: Narrative Density (frames / 1k words)
+all_frames = pd.concat([main.frames, ytd.frames])
+max_f = all_frames.max()
+offset_f = max_f * 0.045
+
 ax2.plot(main.index, main.frames, "s-", color="#059669", lw=2.4, ms=6, label="Historical panel")
 ax2.plot(ytd.index, ytd.frames, "s:", color="#059669", lw=2.0, ms=5, label="2026 YTD")
-for yr in years:
+
+for yr in [2021, 2022, 2023]:
     val = main.loc[yr, "frames"]
-    ax2.text(yr, val + 0.005, f"{val:.3f}", ha="center", fontsize=8.2, fontweight="bold", color="#1E293B")
+    ax2.text(yr, val + offset_f, f"{val:.3f}", ha="center", fontsize=8.2, fontweight="bold", color="#1E293B")
+
+val_24 = main.loc[2024, "frames"]
+ax2.text(2024.08, val_24 - offset_f * 1.6, f"{val_24:.3f}", ha="left", fontsize=8.2, fontweight="bold", color="#1E293B")
+
+val_25 = main.loc[2025, "frames"]
+ax2.text(2024.90, val_25 + offset_f, f"{val_25:.3f}", ha="right", fontsize=8.2, fontweight="bold", color="#1E293B")
+
+val_26_f = ytd.loc[2026, "frames"]
+ax2.text(2026, val_26_f + offset_f, f"{val_26_f:.3f}", ha="center", fontsize=8.2, fontweight="bold", color="#059669")
 
 ax2.axvline(2023.5, color="#DC2626", linestyle=":", lw=1.3, alpha=0.8)
 ax2.axvspan(2023.0, 2024.0, color="#FEE2E2", alpha=0.35)
-ax2.annotate("6.9× intensity growth\n(0.016 → 0.111)", xy=(2024.5, 0.095), xytext=(2022.0, 0.09),
+
+ratio = main.loc[2025, "frames"] / main.loc[2021, "frames"]
+ax2.annotate(f"{ratio:.1f}× panel growth\n({main.loc[2021, 'frames']:.3f} → {main.loc[2025, 'frames']:.3f})",
+             xy=(2024.0, 0.065), xytext=(2021.5, 0.125),
              arrowprops=dict(arrowstyle="->", color="#047857", lw=1.1),
              fontsize=8.0, fontweight="bold", color="#065F46",
              bbox=dict(boxstyle="round,pad=0.2", facecolor="#ECFDF5", edgecolor="#A7F3D0", alpha=0.9))
@@ -469,8 +498,9 @@ ax2.annotate("6.9× intensity growth\n(0.016 → 0.111)", xy=(2024.5, 0.095), xy
 ax2.set_title("Panel B: Deepening Narrative Intensity\nAI Frames per 1,000 Narrative Words", fontsize=9.8, fontweight="bold")
 ax2.set_ylabel("AI Frames / 1,000 Words", fontsize=8.8, fontweight="bold")
 ax2.set_xlabel("Filing Year", fontsize=8.8, fontweight="bold")
-ax2.set_xticks(years + [2026])
-ax2.set_ylim(0, 0.14)
+ax2.set_xticks(all_years)
+ax2.set_xlim(x_min, x_max)
+ax2.set_ylim(0, max_f * 1.25)
 ax2.grid(True, linestyle="--", alpha=0.3)
 ax2.spines[["top", "right"]].set_visible(False)
 
@@ -1224,7 +1254,7 @@ The evidence indicates the exact opposite: **activity volume surged, but margina
 
 ```{python}
 #| label: fig-volume-vs-grounding
-#| fig-cap: "The paradox of the GenAI boom: activity volume surged 3.2-fold (Panel A), while marginal concreteness and grounding indicators deteriorated (Panel B), 2021–2025 (2026 shown as year-to-date)."
+#| fig-cap: "The paradox of the GenAI boom: activity volume surged 4.9-fold (Panel A), while marginal concreteness and grounding indicators deteriorated (Panel B), 2021–2025 (2026 shown as year-to-date)."
 #| echo: false
 #| fig-width: 9.8
 #| fig-height: 4.0
@@ -1266,24 +1296,47 @@ gen_ev = both.groupby("year")["evidence_strength"].apply(lambda s: (s == "generi
 named_prod = both.groupby("year")["evidence_strength"].apply(lambda s: (s == "named_product_or_process").mean() * 100)
 ident_func = both.groupby("year")["function_family"].apply(lambda s: (s != "unspecified").mean() * 100)
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9.8, 4.0), dpi=300)
+# Dynamic projection for 2026 based on observed elapsed filing months
+latest_date_2026 = act_f[act_f["year"] == 2026]["filing_date"].max()
+months_observed = latest_date_2026.month if pd.notnull(latest_date_2026) else 8
+annual_factor = 12.0 / months_observed
+vol_2026_obs = vol[2026]
+vol_2026_proj_total = int(round(vol_2026_obs * annual_factor))
+vol_2026_proj_adj = vol_2026_proj_total - vol_2026_obs
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10.0, 4.2), dpi=300)
 
 years = sorted(vol.index.tolist())
 main_years = [y for y in years if y <= 2025]
 ytd_years = [y for y in years if y >= 2025]
-bar_colors = ["#3B82F6" if y <= 2025 else "#93C5FD" for y in years]
-bars = ax1.bar(years, [vol[y] for y in years], color=bar_colors, width=0.55, edgecolor="#1E40AF", lw=1.2)
-for b, y in zip(bars, years):
+
+# Panel A: Total Disclosed Corporate Activities with Stacked Year-End Projection
+bars_hist = ax1.bar(main_years, [vol[y] for y in main_years], color="#2563EB", width=0.55, edgecolor="#1D4ED8", lw=1.2, label="Observed full-year")
+bar_26_obs = ax1.bar([2026], [vol_2026_obs], color="#60A5FA", width=0.55, edgecolor="#2563EB", lw=1.2, label="2026 YTD observed")
+bar_26_proj = ax1.bar([2026], [vol_2026_proj_adj], bottom=[vol_2026_obs], color="#DBEAFE", width=0.55,
+                      edgecolor="#1D4ED8", lw=1.2, linestyle="--", hatch="///", label="Projected year-end adjustment")
+
+max_v = max(max(vol[y] for y in main_years), vol_2026_proj_total)
+ax1.set_ylim(0, max_v * 1.20)
+
+for y in main_years:
     v = vol[y]
-    lbl = f"{v:,}" + (" (YTD)" if y == 2026 else "")
-    ax1.text(b.get_x() + b.get_width() / 2, v + 150, lbl, ha="center", fontsize=8.5, fontweight="bold", color="#1E293B")
-ax1.set_ylim(0, 9000)
+    ax1.text(y, v + max_v * 0.02, f"{v:,}", ha="center", fontsize=8.2, fontweight="bold", color="#1E293B")
+
+ax1.text(2026, vol_2026_obs * 0.55, f"{vol_2026_obs:,}\n(YTD)", ha="center", va="center", fontsize=7.8, fontweight="bold", color="#1E3A8A")
+ax1.text(2026, vol_2026_proj_total + max_v * 0.02, f"{vol_2026_proj_total:,}\n(FY Proj.)", ha="center", fontsize=8.0, fontweight="bold", color="#1D4ED8")
+
 ax1.set_ylabel("Number of Disclosed Activities", fontsize=9.0, fontweight="bold")
 ax1.set_xlabel("Year", fontsize=9.0, fontweight="bold")
-ax1.set_title("Panel A: Activity Volume Surges (3.2×)\nTotal Disclosed Corporate Activities", fontsize=9.8, fontweight="bold")
+ax1.set_xticks(years)
+ax1.legend(loc="upper left", fontsize=7.2, framealpha=0.9)
+growth_ratio = vol[2025] / vol[2021]
+proj_ratio = vol_2026_proj_total / vol[2021]
+ax1.set_title(f"Panel A: Activity Volume Surges ({growth_ratio:.1f}× panel, {proj_ratio:.1f}× proj.)\nTotal Disclosed Corporate Activities", fontsize=9.5, fontweight="bold")
 ax1.grid(True, axis="y", linestyle="--", alpha=0.3)
 ax1.spines[["top", "right"]].set_visible(False)
 
+# Panel B: Marginal Concreteness Weakens
 def _trend_label(base, series):
     return f"{base} ({series[main_years[0]]:.0f}% → {series[main_years[-1]]:.0f}%)"
 
@@ -1296,12 +1349,15 @@ ax2.plot(ytd_years, [named_prod[y] for y in ytd_years], "^:", color="#6366F1", l
 ax2.plot(main_years, [gen_ev[y] for y in main_years], "d--", color="#DC2626", lw=2.2, ms=5, label=_trend_label("Generic, unanchored evidence", gen_ev))
 ax2.plot(ytd_years, [gen_ev[y] for y in ytd_years], "d:", color="#DC2626", lw=1.8, ms=5)
 
-ax2.set_ylim(20, 85)
+all_shares = pd.concat([dep_share, ident_func, named_prod, gen_ev])
+min_s, max_s = all_shares.min(), all_shares.max()
+s_range = max_s - min_s
+ax2.set_ylim(max(0, min_s - s_range * 0.15), min(100, max_s + s_range * 0.40))
 ax2.set_ylabel("Share of Disclosed Activities (%)", fontsize=9.0, fontweight="bold")
 ax2.set_xlabel("Year", fontsize=9.0, fontweight="bold")
 ax2.set_xticks(years)
-ax2.legend(fontsize=7.5, loc="center left", framealpha=0.9)
-ax2.set_title("Panel B: Marginal Concreteness Weakens\nGrounding and Specificity Indicators Over Time", fontsize=9.8, fontweight="bold")
+ax2.legend(fontsize=7.2, loc="upper right", framealpha=0.92)
+ax2.set_title("Panel B: Marginal Concreteness Weakens\nGrounding and Specificity Indicators Over Time", fontsize=9.5, fontweight="bold")
 ax2.grid(True, linestyle="--", alpha=0.3)
 ax2.spines[["top", "right"]].set_visible(False)
 
@@ -2958,6 +3014,31 @@ Markdown(tabulate(table, headers=["External technology provider / model family",
 ```
 
 *Notes:* Vendor citations include entities tagged as `external_provider`, `external_model`, or `partner`. Entities appear in this table only when cited by *other* firms as an external technology source (e.g., Microsoft citing OpenAI, or Lowe's citing Palantir and NVIDIA), excluding self-promotional brand mentions.
+
+### Regional taxonomy: term coverage and excluded generic collisions {.unnumbered}
+
+The regional taxonomy underlying @fig-geo-provenance (`configs/geo_provenance.yaml`) maps named technology entities -- foundation models, hyperscalers, chipmakers, enterprise platforms -- and, for every region except the United States, literal country and demonym terms, to one of four regions.
+
+```{python}
+#| label: tbl-geo-taxonomy
+#| tbl-cap: "Regional taxonomy term counts, by region."
+#| echo: false
+from pathlib import Path
+import yaml
+from tabulate import tabulate
+from IPython.display import Markdown
+
+_geo_path = Path("../configs/geo_provenance.yaml")
+if not _geo_path.exists():
+    _geo_path = Path("configs/geo_provenance.yaml")
+_geo_cfg = yaml.safe_load(_geo_path.read_text())
+_eco = _geo_cfg["ecosystems"]
+_rows = [[region, len(terms), "Named entities only (no literal country term)" if region == "United States" else "Named entities + literal country/demonym terms"]
+         for region, terms in _eco.items()]
+Markdown(tabulate(_rows, headers=["Region", "Terms in taxonomy", "Matching basis"]))
+```
+
+Every term is matched with word-boundary anchoring (not substring containment), so a short term cannot match inside an unrelated longer word. Word-boundary matching alone does not guarantee semantic precision: several company names that are also common English words or generic business phrases produce matches that are overwhelmingly unrelated to the company even with boundaries enforced. Five such terms are deliberately excluded from the taxonomy for this reason: bare "stability" (intended for Stability AI; in this corpus, over 95% of boundary-matched instances are phrases like "financial stability" or "systems stability"), bare "reliance" (intended for Reliance Industries; over 95% of instances are risk-factor language such as "reliance on third-party vendors"), bare "flux" (intended for Black Forest Labs' Flux model; nearly all instances are "market/supply chain in flux"), bare "inception" (intended for the UAE lab Inception; almost all instances are "since/from inception," and the sole AI-related instance in the corpus refers to NVIDIA's Inception startup program, a U.S. entity), and bare "ascend" (intended for Huawei's Ascend chip line; every instance in the corpus is an unrelated product name, organization, or the verb). Each excluded term's genuine referent, where it appears in the corpus at all, is still captured by an unambiguous companion term already in the taxonomy (e.g., "stability ai", "huawei").
 
 ### Cross-sector disclosure and activity distributions {.unnumbered}
 
