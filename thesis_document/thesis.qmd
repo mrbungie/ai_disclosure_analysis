@@ -793,7 +793,7 @@ To make these activities managerially interpretable, we categorize them into six
 
 ```{python}
 #| label: fig-activity-map
-#| fig-cap: "Corporate AI activity map: heatmap of disclosed activities across business purpose and operational action type (n = 21,399 categorized activities across 476 firms)."
+#| fig-cap: "Corporate AI activity map: heatmap of disclosed activities across business purpose and operational action type."
 #| echo: false
 #| fig-width: 9.0
 #| fig-height: 4.2
@@ -888,7 +888,7 @@ cbar = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.04)
 cbar.ax.tick_params(labelsize=8)
 cbar.set_label("Number of disclosed activities", fontsize=8.5, fontweight="bold")
 
-ax.set_title("Corporate AI Activity Map: Business Purpose × Action Type (n = 21,399 activities)",
+ax.set_title(f"Corporate AI Activity Map: Business Purpose × Action Type (n = {int(total_acts):,} activities)",
              fontsize=10.5, fontweight="bold", pad=12)
 plt.tight_layout()
 plt.show()
@@ -2045,7 +2045,7 @@ This establishes an essential empirical insight: **promotion and evidence rise t
 
 ## Regulatory Scrutiny as an External Stress Test
 
-When regulatory scrutiny directly questions a firm's AI claims, does the issuer correct the specific deficiency, and does it alter its broader disclosure posture? We examine nine S&P 500 corporations receiving formal SEC comment letters regarding artificial intelligence between 2022 and 2025. Each treated issuer is evaluated against three trajectory-matched industry peers in a stacked cohort event study centered on the first Form 10-K filed post-scrutiny ($k = 0$), comparing overall AI disclosure intensity ($D$) against the specific operational dimension scrutinized by staff (matching procedures and the 9-firm inventory are detailed in Appendix F, @tbl-g1-sec-letters).
+When regulatory scrutiny directly questions a firm's AI claims, does the issuer correct the specific deficiency, and does it alter its broader disclosure posture? We examine nine S&P 500 corporations receiving formal SEC comment letters regarding artificial intelligence between 2022 and 2025 — the most recent, Welltower, on 2025-04-28; a keyword re-scan of all SEC correspondence filed since then through 2026-05-27 finds no additional AI-related letter. Each treated issuer is evaluated against three trajectory-matched industry peers in a stacked cohort event study centered on the first Form 10-K filed post-scrutiny ($k = 0$), comparing overall AI disclosure intensity ($D$) against the specific operational dimension scrutinized by staff (matching procedures and the 9-firm inventory are detailed in Appendix F, @tbl-g1-sec-letters).
 
 ```{python}
 #| label: fig-sec-targeted-did
@@ -2578,9 +2578,12 @@ The full operational yields, instance counts, and acceptance ratios across docum
 | Documents with $\ge 1$ frame | Document join | Documents | 1,779 | 1,491 | 1,246 | 226 | 4,731 | 29 | 9,496 |
 | Share of form documents | Document share | % | 58.5% | 17.1% | 40.9% | 0.6% | 41.5% | 90.6% | 14.9% |
 | **D. Disclosed Activities** | | | | | | | | | |
+| Texts with firm action | Rule: subject = firm | Unique texts | 5,681 | 1,701 | 2,096 | 124 | 12,706 | 63 | 22,274 |
+| Share of framed texts | Activity share | % | 52.2% | 64.0% | 35.7% | 49.4% | 79.1% | 44.7% | 62.7% |
 | Unique activities | LLM pass 2 (firm ID), deduplicated per ticker × text × activity index | Activities | 8,791 | 2,233 | 2,956 | 170 | 28,586 | 89 | 42,835 |
-| Activities per text | Activity density | Ratio | 1.55 | 1.45 | 1.42 | 1.39 | 2.25 | 1.33 | 1.55 |
-| Documents with $\ge 1$ activity | Document join | Documents | 1,324 | 722 | 646 | 91 | 4,275 | 24 | 7,082 |
+| Activities per text | Activity density | Ratio | 1.55 | 1.31 | 1.41 | 1.37 | 2.25 | 1.41 | 1.92 |
+| Document instances | Exact hash join | Instances | 6,160 | 2,322 | 2,139 | 126 | 12,854 | 66 | 23,679 |
+| Documents with $\ge 1$ activity | Document join | Documents | 1,380 | 985 | 652 | 95 | 4,307 | 23 | 7,451 |
 | Firms with $\ge 1$ activity | Ticker join | Firms | 432 | 166 | 288 | 58 | 493 | 6 | 524 (of 543) |
 
 : Complete granular inference funnel by document form. {#tbl-a1-funnel-full}
@@ -2734,7 +2737,7 @@ rows = rows[:20]
 Markdown(tabulate(rows, headers=["Action x Object family", "% Firms (Pooled)", "% Firms (Filings only)", "Literal textual examples"]))
 ```
 
-*Notes:* Pooled sample covers 510 S&P 500 firms with filings and call transcripts. "Filings only" restricts the denominator to statutory SEC filings (10-K, 10-Q, DEF 14A, 8-K), illustrating the significant contribution of earnings calls to corporate disclosure of commercial tools, partnerships, and quantified metrics.
+*Notes:* Pooled sample covers `{python} n_firms` S&P 500 firms with filings and call transcripts. "Filings only" restricts the denominator to statutory SEC filings (10-K, 10-Q, DEF 14A, 8-K), illustrating the significant contribution of earnings calls to corporate disclosure of commercial tools, partnerships, and quantified metrics.
 
 The full 14-variable disclosed activity profile by disclosure archetype is in @tbl-a4-full-archetype-profile below; the 6 headline variables are shown as @tbl-4-1-archetype-profile in Chapter 4.
 
@@ -3202,15 +3205,32 @@ Markdown(tabulate(table, headers=["Content dimension", "Beta"]))
 
 ### Decoupling index construction and sensitivity {.unnumbered}
 
-**AI-washing index, full specification.** $\text{Substance}_{it} = \log(1 + n_{\text{activities},it}) \times \text{Grounding}_{it}$, where $\text{Grounding}_{it}$ averages, with empirical-Bayes shrinkage per component, five concreteness markers over that firm-year's disclosed activities (named function, deployed/scaled stage, named product or process, quantified outcome, named provider). $W_{it} = \text{pctrank}(\text{Disclosure}_{it}) - \text{pctrank}(\text{Substance}_{it})$, where $\text{Disclosure}_{it}$ is AI frames per 1,000 words and both percentile ranks are computed within the analytical sample (firm-years with $\text{Disclosure}_{it} > 0$: 1,449 of 2,475 firm-years, 474 of 510 firms pooled 2021–2025). No regression, no fixed effects, no fitted residual: it is a rank-based gap between two independently extracted quantities.
+```{python}
+#| echo: false
+#| output: false
+import json
+from pathlib import Path
+import pandas as pd
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+_wv = json.loads(_p("washing_score_validation.json").read_text())
+w_n_panel, w_n_firms = _wv["n_panel"], _wv["n_firms"]
+w_n_firmyears_total = len(pd.read_parquet(_p("firm_year_master_v2.parquet")))
+w_n_firms_total = len(pd.read_parquet(_p("firm_segments.parquet")))
+```
+
+**AI-washing index, full specification.** $\text{Substance}_{it} = \log(1 + n_{\text{activities},it}) \times \text{Grounding}_{it}$, where $\text{Grounding}_{it}$ averages, with empirical-Bayes shrinkage per component, five concreteness markers over that firm-year's disclosed activities (named function, deployed/scaled stage, named product or process, quantified outcome, named provider). $W_{it} = \text{pctrank}(\text{Disclosure}_{it}) - \text{pctrank}(\text{Substance}_{it})$, where $\text{Disclosure}_{it}$ is AI frames per 1,000 words and both percentile ranks are computed within the analytical sample (firm-years with $\text{Disclosure}_{it} > 0$: `{python} w_n_panel` of `{python} w_n_firmyears_total` firm-years, `{python} w_n_firms` of `{python} w_n_firms_total` firms pooled 2021–2026). No regression, no fixed effects, no fitted residual: it is a rank-based gap between two independently extracted quantities.
 
 Percentile rank rather than z-score standardization: with z-scores, $\text{Disclosure}_{it}$'s distribution has a far heavier right tail than $\text{Substance}_{it}$'s (maximum z of 13.7 against 3.7), which put firms with the *most* grounded activity in absolute terms (Microsoft, NVIDIA) in the washing tail whenever their disclosure happened to be an even bigger outlier than their already-large substance — Spearman between the z-score and percentile-rank versions of $W$ is 0.988, but the specific firm-years in the top 5% differ, and only the percentile version keeps the tail composed of firms with no grounded activity behind unusually heavy disclosure.
 
-**Substance functional form.** An additive form, $z(\log(1+n_{\text{activities}})) + z(\text{Grounding})$, and a grounded-count form, $\log(1 + n_{\text{activities}} \times \text{Grounding})$, were both compared against the multiplicative form used here. Substance under the multiplicative and grounded-count forms correlates at Spearman = 0.993 (n = 1,449), and the resulting $W$ at Spearman = 0.988, with 66 of 73 top-5%-tail firm-years shared between the two (Jaccard = 0.825). The multiplicative form is used because it does not reward raw activity count over grounding quality when the two trade off directly against each other (a firm with many but poorly grounded activities does not automatically outscore one with fewer but well-grounded activities, at typical values in this sample), while the grounded-count form's arithmetic can favor the larger, less-grounded firm in exactly that comparison.
+**Substance functional form.** An additive form, $z(\log(1+n_{\text{activities}})) + z(\text{Grounding})$, and a grounded-count form, $\log(1 + n_{\text{activities}} \times \text{Grounding})$, were both compared against the multiplicative form used here. Substance under the multiplicative and grounded-count forms correlates at Spearman = 0.991 (n = `{python} w_n_panel`), and the resulting $W$ at Spearman = 0.986, with 89 of 102 top-5%-tail firm-years shared between the two (Jaccard = 0.774). The multiplicative form is used because it does not reward raw activity count over grounding quality when the two trade off directly against each other (a firm with many but poorly grounded activities does not automatically outscore one with fewer but well-grounded activities, at typical values in this sample), while the grounded-count form's arithmetic can favor the larger, less-grounded firm in exactly that comparison.
 
 ```{python}
 #| label: tbl-c4-washing-validation
-#| tbl-cap: "AI-washing index validation summary (firm-year panel, n = 1,449 firm-years disclosing AI)."
+#| tbl-cap: "AI-washing index validation summary (firm-year panel, firm-years disclosing AI)."
 #| echo: false
 import json
 from pathlib import Path
@@ -3243,7 +3263,7 @@ for var, label in [("rd_intensity", "R&D intensity"), ("log_market_cap", "Log ma
 Markdown(tabulate(rows, headers=["Check", "Sample", "Spearman", "p"]))
 ```
 
-*Notes:* Construct consistency against Grounding is restricted to firm-years with at least one disclosed activity (n = 1,074); Grounding is a direct component of Substance, so this is not an independent validity check, only confirmation the score moves as its construction implies. The five economic-coherence rows test whether $W$ tracks R&D intensity (expected negative) without also tracking size, valuation, or risk (expected flat) — the pattern that survives is a small, correctly signed R&D relationship and no material size or risk relationship.
+*Notes:* Construct consistency against Grounding is restricted to firm-years with at least one disclosed activity (n = `{python} mc['n']`); Grounding is a direct component of Substance, so this is not an independent validity check, only confirmation the score moves as its construction implies. The five economic-coherence rows test whether $W$ tracks R&D intensity (expected negative) without also tracking size, valuation, or risk (expected flat) — the pattern that survives is a small, correctly signed R&D relationship and no material size or risk relationship.
 
 ### Extreme washing tails {.unnumbered}
 
@@ -3281,9 +3301,30 @@ Markdown(tabulate(table, headers=["Tail", "Ticker", "Year", "AI frames/1k", "Act
                                    "Grounding", "W", "Disclosure archetype"]))
 ```
 
-*Notes:* Positive $W$ represents the washing tail (disclosure ranks substantially higher than substance); negative $W$ represents the quiet-substance tail (disclosed concrete activities rank substantially higher than narrative intensity). For presentation clarity, this table displays the top 10 most decoupled firm-years from each tail; the complete panel of all 146 extreme firm-years (top and bottom 5% cutoffs) is archived in `data/processed/clusters/firm_year_washing_score.parquet`.
+*Notes:* Positive $W$ represents the washing tail (disclosure ranks substantially higher than substance); negative $W$ represents the quiet-substance tail (disclosed concrete activities rank substantially higher than narrative intensity). For presentation clarity, this table displays the top 10 most decoupled firm-years from each tail; the complete panel of all `{python} len(flagged)` extreme firm-years (top and bottom 5% cutoffs) is archived in `data/processed/clusters/firm_year_washing_score.parquet`.
 
-**Alternative firm-year aggregation.** Results are unchanged when firm-year intensity is constructed as an aggregate-numerator-over-aggregate-denominator ratio rather than the median document rate: the two rollups are numerically identical across all seven content dimensions and 2,475 firm-years (max absolute difference below 1e-9), because a firm-year's AI content comes from a single dominant filing often enough that the rollup rule carries no weight in practice.
+**Alternative firm-year aggregation.** Results are unchanged when firm-year intensity is constructed as an aggregate-numerator-over-aggregate-denominator ratio rather than the median document rate, because a firm-year's AI content comes from a single dominant filing often enough that the rollup rule carries little weight in practice (@tbl-a5-altagg-comparison).
+
+```{python}
+#| label: tbl-a5-altagg-comparison
+#| tbl-cap: "Incremental semantic-posture ΔR² (Model 2 vs. Model 1): median-of-documents (main text) vs. aggregate-numerator-over-aggregate-denominator (alternative rollup), same sample sizes."
+#| echo: false
+import json
+from pathlib import Path
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+_altagg = json.loads(_p("firm_year_aggregation_robustness.json").read_text())
+_outcome_labels = {"beta": "Beta", "volatilidad_idiosincratica": "Idiosyncratic volatility", "price_to_sales": "Price-to-sales",
+                    "rd_sobre_ventas": "R&D intensity", "crecimiento_ingresos_t1": "Revenue growth (t+1)"}
+rows = [[label, o["main_n"], f"{o['main_delta_r2']:+.4f}", f"{o['altagg_delta_r2']:+.4f}"]
+        for key, label in _outcome_labels.items() for o in [_altagg["outcomes"][key]]]
+Markdown(tabulate(rows, headers=["Outcome", "n", "ΔR² (median rollup)", "ΔR² (alt-agg rollup)"]))
+```
 
 ### Matched-sample leverage specifications: Debt / Equity and Liabilities / Assets {.unnumbered}
 
@@ -3367,7 +3408,7 @@ headers = ["Ticker", "Company", "Letter Date", "Filing", "SEC Scrutiny Subject",
 Markdown(tabulate(rows, headers=headers))
 ```
 
-*Notes:* Comment letters identified via an exhaustive text-search of SEC EDGAR correspondence filings (`UPLOAD` and `CORRESP`) across all S&P 500 constituents between 2021 and 2025. Matched control peers are selected within the same two-digit SIC industry using nearest-neighbor Mahalanobis distance matching on pre-treatment market capitalization ($\log \text{MCap}_{-1}$), baseline AI claim density ($\text{ClaimDensity}_{-1}$), promotional density ($\text{PromoDensity}_{-1}$), and pre-treatment disclosure growth ($\Delta \text{ClaimDensity}_{-2 \to -1}$).
+*Notes:* Comment letters identified via an exhaustive text-search of SEC EDGAR correspondence filings (`UPLOAD` and `CORRESP`) across all S&P 500 constituents, covering filings from 2021 through 2026-05-27; the last AI-related letter found is Welltower's, dated 2025-04-28. Matched control peers are selected within the same two-digit SIC industry using nearest-neighbor Mahalanobis distance matching on pre-treatment market capitalization ($\log \text{MCap}_{-1}$), baseline AI claim density ($\text{ClaimDensity}_{-1}$), promotional density ($\text{PromoDensity}_{-1}$), and pre-treatment disclosure growth ($\Delta \text{ClaimDensity}_{-2 \to -1}$).
 
 ### Econometric Specification and Stacked Cohort Design {.unnumbered}
 
