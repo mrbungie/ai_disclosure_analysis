@@ -1018,6 +1018,12 @@ def main(with_text_tables: bool = False):
         # silently duplicate every key and mix score scales. The newest run's
         # configuration wins; older parts stay on disk for comparison and are
         # reachable by reading the parquet directly.
+        #
+        # Two runs of the SAME configuration can also overlap (20260906T035359Z
+        # and 20260906T040259Z re-scored the same 483,214 texts ten minutes
+        # apart), so the last row per `text_hash` wins as well: the whole
+        # accumulated population, every text once, at its most recent score.
+        # Same rule, same SQL, as ai_prefilter_classify.scores_relation().
         views["ai_prefilter_scores"] = f"""
             WITH all_scores AS (
                 SELECT * FROM read_parquet('{score_glob}', union_by_name=True)
@@ -1029,6 +1035,7 @@ def main(with_text_tables: bool = False):
               ON a.model = c.model
              AND a.anchors_fingerprint = c.anchors_fingerprint
              AND a.dtype = c.dtype
+            QUALIFY row_number() OVER (PARTITION BY a.text_hash ORDER BY a.run_id DESC) = 1
         """
     else:
         print("  skipping ai_prefilter_scores (run scripts/common/ai_prefilter.py first)")
