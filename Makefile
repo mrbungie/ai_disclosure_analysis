@@ -1,4 +1,4 @@
-.PHONY: test install-deps tickers-tui build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market duckdb duckdb-text prefilter analytics analytics-text analytics-financials analytics-panels analytics-activities b2-check refresh-stale help
+.PHONY: test install-deps tickers-tui build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market duckdb duckdb-text prefilter analytics analytics-text analytics-financials analytics-panels analytics-activities analytics-call-beta b2-check refresh-stale help
 
 # Default target
 all: test
@@ -121,7 +121,16 @@ analytics-activities:
 	@echo "Perfiles de actividad por empresa desde gold_ai_frames (activity_profiles)..."
 	.venv/bin/python scripts/analytics/activity_profiles.py $(ARGS)
 
-analytics: analytics-text analytics-financials analytics-panels analytics-activities
+# El spine A (call) que leen call_car_regressions.py / call_beta_regressions.py /
+# call_beta_robustness.py. Depende de firm_activities.parquet (analytics-activities)
+# y firm_year_financials_ratios.parquet (analytics-financials), así que corre
+# después de ambos. Se auto-valida contra la corrida anterior (ver
+# build_call_beta_panel.py::validate) antes de sobrescribirla.
+analytics-call-beta:
+	@echo "Panel de calls para las regresiones de beta post-call (build_call_beta_panel)..."
+	.venv/bin/python scripts/analytics/build_call_beta_panel.py $(ARGS)
+
+analytics: analytics-text analytics-financials analytics-panels analytics-activities analytics-call-beta
 
 # ---- 10_fusion: merging the 10-K text pipeline with market data — not built yet ----
 
@@ -175,6 +184,7 @@ help:
 	@echo "  make duckdb-text              Also (re)build paragraphs/sentences tables (~52s, regex-heavy)"
 	@echo ""
 	@echo "  make analytics-activities     Perfiles de actividad por empresa (activity_profiles.py)"
+	@echo "  make analytics-call-beta      Panel de calls para regresiones de beta post-call (build_call_beta_panel.py)"
 	@echo "  make b2-check                 Reporta si B2 tiene data que este checkout local no bajó (no descarga nada)"
 	@echo "  make refresh-stale            b2-check -> duckdb-text -> analytics (todo lo que cita thesis.qmd, desde el disco local actual)"
 	@echo ""

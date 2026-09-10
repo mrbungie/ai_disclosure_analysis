@@ -86,7 +86,7 @@ from scipy import stats
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
-YEARS = (2021, 2022, 2023, 2024, 2025)  # mismo panel que incremental_signal.py
+YEARS = (2021, 2022, 2023, 2024, 2025, 2026)  # mismo panel que incremental_signal.py
 GROUNDING_COMPONENTS = ["named_function", "deployed_or_scaled", "named_product_or_process",
                         "quantified_outcome", "third_party_named_provider"]
 TAIL_Q = 0.05  # cola descriptiva: 5% superior/inferior de la distribución de W, no un test de hipótesis

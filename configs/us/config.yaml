@@ -9,9 +9,6 @@ corpus:
       from: '2021-01-01'
       to: '2026-09-01'
     amendments: false
-  # 10-Q shock series — a SEPARATE instrument from the 10-K panel above,
-  # never pooled (see data-scope decision). Its own filing_date window so
-  # it can be widened/narrowed independently of the 10-K panel.
   filings_10q:
     forms:
     - 10-Q
@@ -19,11 +16,6 @@ corpus:
       from: '2021-01-01'
       to: '2026-09-01'
     amendments: false
-  # Emisores privados extranjeros (ASML, HMC, TM, TSM, UL) no presentan
-  # 10-K/DEF 14A/8-K — reportan vía 20-F (anual) en su lugar. Sin esto,
-  # esas 5 firmas del universo quedan con cero filings, no por ausencia
-  # real de disclosure sino porque el pipeline solo pedía formularios
-  # domésticos.
   filings_20f:
     forms:
     - 20-F
@@ -31,8 +23,13 @@ corpus:
       from: '2021-01-01'
       to: '2026-09-01'
     amendments: false
-  # docs/document_expansion_plan.md Fase 3 — gobernanza (Board Committees,
-  # Risk Oversight, CD&A), un DEF 14A por empresa por año, volumen bajo.
+  filings_6k:
+    forms:
+    - 6-K
+    filing_date:
+      from: '2021-01-01'
+      to: '2026-09-01'
+    amendments: false
   filings_proxy:
     forms:
     - DEF 14A
@@ -40,8 +37,6 @@ corpus:
       from: '2021-01-01'
       to: '2026-09-01'
     amendments: false
-  # docs/document_expansion_plan.md Fase 1 — comunicados/anuncios, mucho
-  # mayor volumen por empresa que 10-K/10-Q/proxy (decenas por año).
   filings_8k:
     forms:
     - 8-K
@@ -49,9 +44,6 @@ corpus:
       from: '2021-01-01'
       to: '2026-09-01'
     amendments: false
-  # docs/document_expansion_plan.md Fase 2 — cartas de comentario de la SEC
-  # (UPLOAD) y respuestas de la empresa (CORRESP). Volumen muy bajo,
-  # ground truth externo de que la SEC cuestionó una divulgación.
   filings_correspondence:
     forms:
     - UPLOAD
@@ -88,6 +80,7 @@ corpus:
     - ALK
     - ALL
     - ALLE
+    - ALXN
     - AMAT
     - AMCR
     - AMD
@@ -119,6 +112,7 @@ corpus:
     - BAC
     - BALL
     - BAX
+    - BBWI
     - BBY
     - BDX
     - BEN
@@ -137,6 +131,7 @@ corpus:
     - BWA
     - BXP
     - C
+    - CAG
     - CAH
     - CARR
     - CAT
@@ -187,6 +182,7 @@ corpus:
     - CTXS
     - CVS
     - CVX
+    - CXO
     - CZR
     - D
     - DAL
@@ -200,6 +196,7 @@ corpus:
     - DHR
     - DIS
     - DISCA
+    - DISCK
     - DISH
     - DLR
     - DLTR
@@ -213,9 +210,11 @@ corpus:
     - DUK
     - DVA
     - DVN
+    - DXC
     - DXCM
     - EA
     - EBAY
+    - ECHO
     - ECL
     - ED
     - EFX
@@ -223,6 +222,7 @@ corpus:
     - EIX
     - EL
     - ELV
+    - EMN
     - EMR
     - ENPH
     - EOG
@@ -251,11 +251,14 @@ corpus:
     - FIS
     - FISV
     - FITB
+    - FLIR
+    - FLS
     - FLT
     - FMC
     - FOX
     - FRC
     - FRT
+    - FTI
     - FTNT
     - FTV
     - GD
@@ -272,15 +275,18 @@ corpus:
     - GOOGL
     - GPC
     - GPN
+    - GPS
     - GRMN
     - GS
     - GWW
     - HAL
     - HAS
     - HBAN
+    - HBI
     - HCA
     - HD
     - HES
+    - HFC
     - HIG
     - HII
     - HLT
@@ -331,10 +337,13 @@ corpus:
     - KLAC
     - KMB
     - KMI
+    - KMX
     - KO
     - KR
+    - KSU
     - L
     - LDOS
+    - LEG
     - LEN
     - LH
     - LHX
@@ -388,6 +397,7 @@ corpus:
     - MTCH
     - MTD
     - MU
+    - MXIM
     - NCLH
     - NDAQ
     - NEE
@@ -398,6 +408,7 @@ corpus:
     - NKE
     - NLSN
     - NOC
+    - NOV
     - NOW
     - NRG
     - NSC
@@ -420,6 +431,7 @@ corpus:
     - OTIS
     - OXY
     - PANW
+    - PARA
     - PAYC
     - PAYX
     - PBCT
@@ -443,6 +455,7 @@ corpus:
     - POOL
     - PPG
     - PPL
+    - PRGO
     - PRU
     - PSA
     - PSKY
@@ -481,6 +494,7 @@ corpus:
     - SIVB
     - SJM
     - SLB
+    - SLG
     - SNA
     - SNOW
     - SNPS
@@ -512,6 +526,7 @@ corpus:
     - TFC
     - TFX
     - TGT
+    - TIF
     - TJX
     - TM
     - TMO
@@ -530,6 +545,7 @@ corpus:
     - TXN
     - TXT
     - TYL
+    - UA
     - UAA
     - UAL
     - UDR
@@ -537,15 +553,20 @@ corpus:
     - UL
     - ULTA
     - UNH
+    - UNM
     - UNP
     - UPS
     - URI
     - USB
     - V
+    - VAR
+    - VFC
     - VLO
     - VLTO
     - VMC
     - VMRK
+    - VNO
+    - VNT
     - VRSK
     - VRSN
     - VRTX
@@ -566,12 +587,16 @@ corpus:
     - WMB
     - WMT
     - WRB
+    - WRK
     - WST
+    - WU
     - WY
     - WYNN
     - XEL
     - XLNX
     - XOM
+    - XRAY
+    - XRX
     - XYL
     - YUM
     - ZBH
@@ -580,23 +605,78 @@ corpus:
     - ZS
     - ZTS
 classification:
-  # sector -> SIC major-group codes (first two digits). Keyed on the code and
-  # not on `industry_group`: that field is empty for all 517 firms because
-  # edgar_fetch fills it from `company.sic_description`, an attribute
-  # edgartools renamed to `industry` in 5.55. `sic` is populated 516/517.
   sector_groups:
-    software_it: ['73']
-    computing_hardware: ['35', '36']
-    instruments_devices: ['38']
-    pharma_chemicals: ['28']
-    health_services: ['80']
-    financials: ['60', '61', '62', '67']
-    insurance_real_estate: ['63', '64', '65']
-    energy: ['13', '29', '46']
-    utilities_telecom: ['48', '49']
-    industrials: ['01', '10', '14', '15', '16', '17', '24', '25', '30', '31', '32', '33', '34', '37', '39', '40', '41', '42', '44', '45', '47', '87']
-    consumer_retail: ['20', '21', '22', '23', '26', '27', '50', '51', '52', '53', '54', '55', '56', '57', '58', '59']
-    media_leisure: ['70', '78', '79']
+    software_it:
+    - '73'
+    computing_hardware:
+    - '35'
+    - '36'
+    instruments_devices:
+    - '38'
+    pharma_chemicals:
+    - '28'
+    health_services:
+    - '80'
+    financials:
+    - '60'
+    - '61'
+    - '62'
+    - '67'
+    insurance_real_estate:
+    - '63'
+    - '64'
+    - '65'
+    energy:
+    - '13'
+    - '29'
+    - '46'
+    utilities_telecom:
+    - '48'
+    - '49'
+    industrials:
+    - '01'
+    - '10'
+    - '14'
+    - '15'
+    - '16'
+    - '17'
+    - '24'
+    - '25'
+    - '30'
+    - '31'
+    - '32'
+    - '33'
+    - '34'
+    - '37'
+    - '39'
+    - '40'
+    - '41'
+    - '42'
+    - '44'
+    - '45'
+    - '47'
+    - '87'
+    consumer_retail:
+    - '20'
+    - '21'
+    - '22'
+    - '23'
+    - '26'
+    - '27'
+    - '50'
+    - '51'
+    - '52'
+    - '53'
+    - '54'
+    - '55'
+    - '56'
+    - '57'
+    - '58'
+    - '59'
+    media_leisure:
+    - '70'
+    - '78'
+    - '79'
   overrides:
     FRC: financials
     SHW: pharma_chemicals
@@ -609,6 +689,7 @@ storage:
   raw_html: data/raw/filings_html
   raw_html_proxy: data/raw/filings_proxy
   raw_html_20f: data/raw/filings_20f
+  raw_html_6k: data/raw/filings_6k
   raw_html_8k: data/raw/filings_8k
   raw_sec_letters: data/raw/sec_letters
   raw_xbrl_facts: data/raw/xbrl_facts/us
