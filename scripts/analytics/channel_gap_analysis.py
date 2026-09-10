@@ -67,8 +67,26 @@ import statsmodels.api as sm
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
-CALLS_MANIFEST = REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls.parquet"
+# Tres fuentes de transcripciones (ver ai_intensity.py para el detalle): la
+# base de Hugging Face (2005-2025, no se actualiza) más dos rellenos de
+# huecos que sí cubren 2026.
+CALLS_MANIFESTS = [
+    REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls.parquet",
+    REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls_equibles.parquet",
+    REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls_stockanalysis.parquet",
+]
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
+
+
+def _calls_manifest_sql() -> str:
+    parts = [f"SELECT document_id, ticker, filing_date FROM read_parquet('{p}')" for p in CALLS_MANIFESTS if p.exists()]
+    union = " UNION ALL BY NAME ".join(parts)
+    return f"""
+        SELECT document_id, ticker, TRY_CAST(filing_date AS DATE) AS filing_date FROM (
+            SELECT *, row_number() OVER (PARTITION BY document_id ORDER BY 1) AS rn
+            FROM ({union})
+        ) WHERE rn = 1
+    """
 FILING_FORMS = ("10-K", "10-Q", "DEF 14A", "8-K")
 MIN_FRAMES = 3
 EVENT = {"fy": 2024, "quarter": pd.Period("2024Q2", freq="Q")}
@@ -111,7 +129,7 @@ def load_frames(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
                f.temporal, f.concepts
         FROM gold_ai_frames f
         JOIN (SELECT document_id, ticker, filing_date
-              FROM read_parquet('{CALLS_MANIFEST}') WHERE ticker IS NOT NULL) m
+              FROM ({_calls_manifest_sql()}) WHERE ticker IS NOT NULL) m
           ON m.document_id = f.accession_number
         WHERE f.country_code = 'us' AND f.has_frame AND f.form = 'Earnings call'
     """).df()
@@ -166,9 +184,9 @@ def load_documents(con: duckdb.DuckDBPyConnection, frames: pd.DataFrame) -> pd.D
         FROM manifest m JOIN paras p USING (country_code, accession_number)
         WHERE m.country_code = 'us' AND m.ticker IS NOT NULL AND m.filing_date IS NOT NULL AND m.form IN {FILING_FORMS}
         UNION ALL
-        SELECT 'call', 'Earnings call', m.ticker, CAST(m.filing_date AS DATE), NULL::DATE,
+        SELECT 'call', 'Earnings call', m.ticker, m.filing_date, NULL::DATE,
                CAST(regexp_extract(m.document_id, '_([0-9]{{4}})Q', 1) AS INTEGER), m.document_id, p.n_paragraphs, p.n_words
-        FROM read_parquet('{CALLS_MANIFEST}') m
+        FROM ({_calls_manifest_sql()}) m
         JOIN paras p ON p.accession_number = m.document_id AND p.country_code = 'us'
         WHERE m.ticker IS NOT NULL
     """).df()

@@ -132,8 +132,12 @@ def coef_row(result, variable: str) -> dict:
             "ci95_high": beta + 1.96 * se, "p": result.pvalues[variable]}
 
 
-def ai_coef_table(result, block: str, variables: list[str]) -> pd.DataFrame:
-    return pd.DataFrame([{"block": block, **coef_row(result, v)} for v in variables if v in AI])
+def ai_coef_table(result, block: str, variables: list[str], n_calls: int | None = None) -> pd.DataFrame:
+    rows = [{"block": block, **coef_row(result, v)} for v in variables if v in AI]
+    if n_calls is not None:
+        for row in rows:
+            row["n_calls"] = n_calls
+    return pd.DataFrame(rows)
 
 
 def wald_diff(result, a: str, b: str) -> dict:
@@ -164,13 +168,13 @@ def block_windows(panel: pd.DataFrame) -> pd.DataFrame:
     for post in ["post_63", "post_126", "post_252"]:
         outcome = f"beta_{post}"
         variables = AI + ["beta_pre_default", *CONTROLS]
-        result, _ = fit_fe(panel, variables, outcome)
-        rows.append(ai_coef_table(result, f"beta_window[{post}]", AI))
+        result, d = fit_fe(panel, variables, outcome)
+        rows.append(ai_coef_table(result, f"beta_window[{post}]", AI, n_calls=len(d)))
     for pre in ["pre_default", "pre_126_21", "pre_252_42"]:
         outcome = "beta_post_126"
         variables = AI + [f"beta_{pre}", *CONTROLS]
-        result, _ = fit_fe(panel, variables, outcome)
-        rows.append(ai_coef_table(result, f"beta_pre_window[{pre}]", AI))
+        result, d = fit_fe(panel, variables, outcome)
+        rows.append(ai_coef_table(result, f"beta_pre_window[{pre}]", AI, n_calls=len(d)))
     return pd.concat(rows, ignore_index=True)
 
 
@@ -178,14 +182,14 @@ def block_delta_beta(panel: pd.DataFrame) -> pd.DataFrame:
     d = panel.copy()
     d["delta_beta"] = d["beta_post_126"] - d["beta_pre_default"]
     variables = AI + CONTROLS
-    result, _ = fit_fe(d, variables, "delta_beta")
-    return ai_coef_table(result, "delta_beta", AI)
+    result, d2 = fit_fe(d, variables, "delta_beta")
+    return ai_coef_table(result, "delta_beta", AI, n_calls=len(d2))
 
 
 def block_firm_fe(panel: pd.DataFrame) -> pd.DataFrame:
     variables = AI + ["beta_pre_default", *CONTROLS]
-    result, _ = fit_fe(panel, variables, "beta_post_126", fe_col="ticker", min_fe_size=2)
-    return ai_coef_table(result, "firm_fe_within", AI)
+    result, d = fit_fe(panel, variables, "beta_post_126", fe_col="ticker", min_fe_size=2)
+    return ai_coef_table(result, "firm_fe_within", AI, n_calls=len(d))
 
 
 def block_ai_subsets(panel: pd.DataFrame) -> pd.DataFrame:
@@ -243,8 +247,8 @@ def block_market_model(panel_capm: pd.DataFrame, panel_ff3: pd.DataFrame) -> pd.
     rows = []
     for name, panel in [("capm", panel_capm), ("ff3", panel_ff3)]:
         variables = AI + ["beta_pre_default", *CONTROLS]
-        result, _ = fit_fe(panel, variables, "beta_post_126")
-        rows.append(ai_coef_table(result, name, AI))
+        result, d = fit_fe(panel, variables, "beta_post_126")
+        rows.append(ai_coef_table(result, name, AI, n_calls=len(d)))
     return pd.concat(rows, ignore_index=True)
 
 

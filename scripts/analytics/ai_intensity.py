@@ -29,8 +29,31 @@ import numpy as np
 import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CALLS_MANIFEST = REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls.parquet"
+# Tres fuentes de transcripciones, cada una con su propio manifest: la base
+# de Hugging Face (01_fetch_transcripts.py, 2005-2025, no se actualiza) más
+# dos rellenos de huecos (03/04, scripts/us/earnings_calls/) que sí cubren
+# 2026. Leer sólo la base deja fuera cualquier call que exista únicamente en
+# un relleno -- todo 2026 y parte de 2025.
+CALLS_MANIFESTS = [
+    REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls.parquet",
+    REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls_equibles.parquet",
+    REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls_stockanalysis.parquet",
+]
 FILING_FORMS = ("10-K", "10-Q", "DEF 14A", "8-K")
+
+
+def _calls_manifest_sql() -> str:
+    """UNION ALL BY NAME de las tres fuentes de calls, una fila por
+    document_id (la primera fuente que lo tenga gana, mismo criterio que
+    build_duckdb.py aplica en la vista `filing_manifest`)."""
+    parts = [f"SELECT document_id, ticker, filing_date FROM read_parquet('{p}')" for p in CALLS_MANIFESTS if p.exists()]
+    union = " UNION ALL BY NAME ".join(parts)
+    return f"""
+        SELECT document_id, ticker, TRY_CAST(filing_date AS DATE) AS filing_date FROM (
+            SELECT *, row_number() OVER (PARTITION BY document_id ORDER BY 1) AS rn
+            FROM ({union})
+        ) WHERE rn = 1
+    """
 COUNT_COLUMNS = ["n_frames", "n_promo", "n_quant", "n_spec", "n_risk", "n_gov", "n_hyp", "n_realized",
                  "n_deployed", "n_revenue_outcome", "n_cost_outcome", "n_ai_investment", "n_ai_infrastructure"]
 
@@ -80,9 +103,9 @@ def document_table(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
         FROM manifest m JOIN paras p USING (country_code, accession_number)
         WHERE m.country_code = 'us' AND m.ticker IS NOT NULL AND m.filing_date IS NOT NULL AND m.form IN {FILING_FORMS}
         UNION ALL
-        SELECT 'call', 'Earnings call', m.ticker, NULL, CAST(m.filing_date AS DATE), NULL::DATE,
+        SELECT 'call', 'Earnings call', m.ticker, NULL, m.filing_date, NULL::DATE,
                CAST(regexp_extract(m.document_id, '_([0-9]{{4}})Q', 1) AS INTEGER), m.document_id, p.n_paragraphs, p.n_words
-        FROM read_parquet('{CALLS_MANIFEST}') m
+        FROM ({_calls_manifest_sql()}) m
         JOIN paras p ON p.accession_number = m.document_id AND p.country_code = 'us'
         WHERE m.ticker IS NOT NULL
     """).df()

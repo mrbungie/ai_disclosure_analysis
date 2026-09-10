@@ -243,6 +243,29 @@ BANK_REVENUE_COMPONENTS = {
     "bank_noninterest_income": ["us-gaap:NoninterestIncome"],
 }
 
+# Per-ticker concept exclusions: a specific (ticker, concept) combination
+# known to be wrong for that filer, dropped BEFORE pivot_metrics so its
+# normal same-day priority tiebreak falls through to the next concept in
+# the chain instead of reordering the chain globally (which would risk
+# the Iron Mountain / General Mills / Mastercard / Philip Morris cases
+# `pivot_metrics`'s docstring already worked out).
+#
+# BLK: starting with its FY2023-filed 10-K (accession 0000950170-24-019271,
+# filed 2024-02-23), BlackRock began ALSO tagging a much smaller
+# `us-gaap:Revenues` non-dimensionally alongside its established
+# `us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax` (same
+# filing, same period, both non-dimensional) — e.g. FY2024: Revenues
+# $12.794B vs RevenueFromContractWithCustomer... $20.407B. Verified against
+# BlackRock's actual reported FY2021-2025 revenue (~$17-24B every year):
+# RevenueFromContractWithCustomer... matches every year including the five
+# years BEFORE the second tag appeared; Revenues does not match any year
+# it's present for. `us-gaap:Revenues` has priority 0 in DURATION_METRICS
+# (checked first), so without this exclusion it silently wins the same-day
+# tiebreak and understates BLK's revenue by ~35-40% for FY2023 onward.
+TICKER_CONCEPT_EXCLUSIONS: dict[str, set[str]] = {
+    "BLK": {"us-gaap:Revenues"},
+}
+
 
 def _concept_priority(metrics: dict[str, list[str]]) -> pd.DataFrame:
     rows = [(concept, metric, rank)
@@ -587,6 +610,8 @@ def main() -> None:
     finally:
         con.close()
     facts = facts[~(facts["concept"].isin(NEVER_NEGATIVE_CONCEPTS) & (facts["value"] < 0))]
+    for ticker, excluded_concepts in TICKER_CONCEPT_EXCLUSIONS.items():
+        facts = facts[~((facts["ticker"] == ticker) & (facts["concept"].isin(excluded_concepts)))]
     filings["filing_date"] = pd.to_datetime(filings["filing_date"])
     print(f"{len(filings):,} filings 10-K | {len(facts):,} hechos XBRL "
           f"({facts['ticker'].nunique():,} tickers)")

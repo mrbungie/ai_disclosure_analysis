@@ -3,10 +3,20 @@ scripts/us/proxy/01_fetch_filings.py — builds the DEF 14A (proxy statement)
 manifest AND fetches primary documents, via the shared edgar_fetch module.
 See docs/document_expansion_plan.md Fase 3.
 
-DEF 14A only, into its own storage (data/raw/filings_proxy/,
+DEF 14A + DEFC14A only, into its own storage (data/raw/filings_proxy/,
 data/interim/manifests/filing_manifest_proxy.parquet) — a separate
 instrument from 10-K/10-Q/8-K, same "never pooled" pattern as the 10-Q
 shock series.
+
+DEFC14A is the company's OWN definitive proxy in a contested solicitation
+(activist/proxy-fight years) — SEC reclassifies the form code away from
+plain DEF 14A for that year only, so a `form="DEF 14A"`-only fetch silently
+skips the company's real annual-meeting proxy in exactly the years an
+activist campaign makes it most substantively interesting (found via XOM
+2021/Engine No. 1, DIS 2023-2024/Trian, MCD 2022, KR 2022, HAS 2022 all
+missing a year under DEF 14A alone). DEFN14A (a dissident's OWN proxy, not
+the company's) is deliberately excluded — including it would attribute an
+activist's disclosure to the company.
 
 Usage:
     uv run python scripts/us/proxy/01_fetch_filings.py
@@ -42,7 +52,7 @@ def main():
     filing_date = config["corpus"]["filings_proxy"]["filing_date"]
     edgar_fetch.fetch_filings(
         universe_df=universe_df,
-        form="DEF 14A",
+        form=["DEF 14A", "DEFC14A"],
         start_date=filing_date["from"],
         end_date=filing_date["to"],
         allow_amendments=config["corpus"]["filings_proxy"].get("amendments", False),

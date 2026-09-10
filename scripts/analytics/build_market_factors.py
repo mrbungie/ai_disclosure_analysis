@@ -99,7 +99,7 @@ def window_metrics(prices: pd.DataFrame, factors: pd.DataFrame,
     idx = int(np.searchsorted(dates, np.datetime64(filing_date), side="left"))
     result = {"beta": np.nan, "idio_vol_252d": np.nan, "vol_pre_60d": np.nan, "vol_post_60d": np.nan,
               "momentum_12_1": np.nan, "ret_m1_p5": np.nan, "car_m1_p5": np.nan,
-              "price_pre": np.nan}
+              "price_pre": np.nan, "beta_n_obs": np.nan}
     if idx - EVENT_PRE < 0 or idx >= len(prices):
         return result
     result["price_pre"] = float(prices["close"].iloc[idx - EVENT_PRE])
@@ -112,6 +112,7 @@ def window_metrics(prices: pd.DataFrame, factors: pd.DataFrame,
 
     pre = prices.iloc[max(0, idx - BETA_WINDOW):idx]
     merged = pre.merge(factors, on="date", how="inner").dropna(subset=["ret", "mktrf", "rf"])
+    result["beta_n_obs"] = len(merged)
     if len(merged) >= BETA_MIN_OBS:
         excess = merged["ret"] - merged["rf"]
         design = np.column_stack([np.ones(len(merged)), merged["mktrf"].values])
@@ -197,7 +198,7 @@ def main() -> None:
 
     columns = ["ticker", "year", "market_cap", "pe_ratio", "ps_ratio", "pb_ratio",
                "ev_revenue", "ev_ebitda", "beta", "idio_vol_252d", "vol_pre_60d", "vol_post_60d",
-               "momentum_12_1", "car_m1_p5"]
+               "momentum_12_1", "car_m1_p5", "beta_n_obs"]
     market_factors = panel[columns].sort_values(["ticker", "year"])
 
     args.clusters_dir.mkdir(parents=True, exist_ok=True)
