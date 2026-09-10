@@ -30,6 +30,7 @@ de `03`, que para la empresa sin frames valen "sin IA".
 | `evolution_figures.py` | `fig_evolucion_*.png`, `fig_sec_event_study.png` | `01`, `07` |
 | `scripts/common/ai_activities_from_frames.py` (LLM) → `activity_profiles.py` | `data/interim/ai_activities/` (27.583 actividades) → `firm_activities`, `firm_activity_profiles`, `firm_year_activities`, `channel_activity_cells`, `activity_profiles.json` | `09`, `02`, `05` |
 | `activity_grounding.py` | `activity_grounding.json`, `fig_brecha_actividades.png` (concreción por esquina, respaldo del exceso, brecha de actividades por canal) | `03`, `06`, `08` |
+| `build_geo_provenance.py` | `geo_provenance_summary.json`: orientación regional de la divulgación de IA. Escaneo léxico (no basado en rol) con límites de palabra sobre párrafos que ya tienen un frame de IA (`gold_ai_frames.has_frame`), contra los términos por región de `configs/geo_provenance.yaml` (entidades nombradas + literales de país/gentilicio, salvo Estados Unidos, que sólo usa entidades nombradas para no saturarse a ~100%) | `04` |
 | `report_crosscheck_stats.py` | `crosscheck_stats.json` (correlaciones, FDR, perfiles por nivel de IA) | `apendice/` |
 
 Ninguno llama a un LLM salvo `ai_activities_from_frames.py` (segunda pasada sobre los frames conductuales, una vez; se reanuda por `text_hash`). Todo corre en CPU con `uv run --frozen --no-sync

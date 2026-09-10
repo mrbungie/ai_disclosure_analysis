@@ -1406,15 +1406,15 @@ When external vendors are identified, the ecosystem is highly concentrated aroun
 
 Corporate disclosures disproportionately foreground proprietary brands while identifying the external technology stack far less frequently.
 
-### Geographic Orientation of the Disclosed External Stack
+### Regional Orientation of AI Disclosure
 
-Beyond the broad divide between proprietary branding and external attribution, a related strategic dimension concerns the **geographic provenance of disclosed external AI technology**: when S&P 500 corporations identify external foundation models, cloud infrastructure providers, or commercial partners, which regional ecosystems do they rely upon?
+Beyond the broad divide between proprietary branding and external attribution, a related strategic dimension concerns the **regional orientation of AI disclosure**: when S&P 500 corporations discuss artificial intelligence, which geographic ecosystems -- named technology providers, but also markets, competitors, and regulatory regimes -- do they orient that discussion around?
 
-To measure this without conflating general market commentary with technical integration, we apply a rule-based geographic taxonomy strictly to named entities bearing external operational roles (`external_provider`, `external_model`, or `partner`) within disclosed activity claims, excluding entities cited purely as competitors. Entities are classified across the United States, Europe, China, and Other (the complete taxonomy is documented in `configs/geo_provenance.yaml` and Appendix C).
+We measure this with a lexical taxonomy applied strictly within AI-context text: paragraphs that already carry an extracted AI disclosure frame. A mention is any word-boundary match, inside such a paragraph, of a term mapped to a region in `configs/geo_provenance.yaml` -- named technology entities (foundation models, hyperscalers, chipmakers, enterprise platforms) together with literal country and demonym terms (e.g. "China," "Chinese," "Japan"). Because the scan is confined to paragraphs already tied to AI content, a mention never comes from an unrelated supply-chain or tariff risk-factor paragraph that happens to name a country. Regions are United States, Europe, China, and Other (the complete term list is documented in `configs/geo_provenance.yaml` and Appendix C). United States is measured asymmetrically: it is matched only by named technology entities (e.g. "OpenAI," "NVIDIA"), never by the literal country name, because every U.S.-domiciled filer routinely names its own jurisdiction and a literal match there would trivially saturate the United States share; every other region is matched by both named entities and literal country/demonym terms. This means the United States share below is, if anything, understated relative to the other three regions' measurement.
 
 ```{python}
 #| label: fig-geo-provenance
-#| fig-cap: "Geographic provenance of disclosed external AI technology across S&P 500 firms (2021–2025, with 2026 shown as year-to-date). Panel A tracks regional shares of geographically classified external entity mentions over time; Panel B breaks down external stack composition across disclosure archetypes. Applied strictly to entities with role in {external_provider, external_model, partner}."
+#| fig-cap: "Regional orientation of AI disclosure across S&P 500 firms (2021–2025, with 2026 shown as year-to-date). Panel A tracks regional shares of AI-context mentions over time; Panel B breaks down regional orientation across disclosure archetypes. A mention is any word-boundary match of a named entity or country/demonym term (`configs/geo_provenance.yaml`) inside a paragraph that already carries an extracted AI disclosure frame."
 #| echo: false
 #| fig-width: 9.6
 #| fig-height: 3.8
@@ -1470,8 +1470,8 @@ ax1.text(years[-1], cn_s[-1] + 1.5, f"{cn_s[-1]:.1f}%", ha="center", fontsize=7.
 ax1.set_ylim(-3, 106)
 ax1.set_xticks(years)
 ax1.set_xlabel("Filing / Call Year", fontsize=8.8, fontweight="bold")
-ax1.set_ylabel("% of Geographically Classified Mentions", fontsize=8.8, fontweight="bold")
-ax1.set_title("Panel A: Disclosed External Stack by Region (2021–2025, 2026 YTD)", fontsize=9.5, fontweight="bold")
+ax1.set_ylabel("% of AI-Context Regional Mentions", fontsize=8.8, fontweight="bold")
+ax1.set_title("Panel A: AI Disclosure Regional Orientation (2021–2025, 2026 YTD)", fontsize=9.5, fontweight="bold")
 ax1.grid(True, linestyle="--", alpha=0.3)
 ax1.legend(loc="center right", fontsize=8.0)
 ax1.spines[["top", "right"]].set_visible(False)
@@ -1500,8 +1500,8 @@ for i, total_us in enumerate(p_us):
 ax2.set_yticks(y_pos)
 ax2.set_yticklabels(["Vocal\nSubstantives", "Governance-\nLed", "Defensive\nDisclosers"], fontsize=8.2)
 ax2.set_xlim(0, 118)
-ax2.set_xlabel("% of External Entity Mentions", fontsize=8.8, fontweight="bold")
-ax2.set_title("Panel B: Stack Provenance by Archetype", fontsize=9.5, fontweight="bold")
+ax2.set_xlabel("% of AI-Context Regional Mentions", fontsize=8.8, fontweight="bold")
+ax2.set_title("Panel B: Regional Orientation by Archetype", fontsize=9.5, fontweight="bold")
 ax2.grid(True, axis="x", linestyle="--", alpha=0.3)
 ax2.spines[["top", "right"]].set_visible(False)
 
@@ -1521,20 +1521,22 @@ geo_eu_share = reach["europe_mentions_share"]
 geo_other_share = reach["other_mentions_share"]
 _cn_shares = dict(zip(pa["years"], pa["shares"]["China"]))
 _cn_counts = dict(zip(pa["years"], pa["counts"]["China"]))
-_cn_peak_year = max((y for y in _cn_shares if y >= 2022), key=lambda y: _cn_shares[y])
-geo_cn_peak_year = _cn_peak_year
-geo_cn_peak_share = _cn_shares[_cn_peak_year]
-geo_cn_peak_n = _cn_counts[_cn_peak_year]
+geo_cn_min_year = min(_cn_shares, key=lambda y: _cn_shares[y])
+geo_cn_min_share = _cn_shares[geo_cn_min_year]
+geo_cn_max_year = max(_cn_shares, key=lambda y: _cn_shares[y])
+geo_cn_max_share = _cn_shares[geo_cn_max_year]
+geo_cn_2025_share = _cn_shares[2025]
+geo_cn_2025_n = _cn_counts[2025]
 geo_cn_2026_share = _cn_shares[2026]
 geo_cn_2026_n = _cn_counts[2026]
 ```
 
 Two empirical patterns stand out (@fig-geo-provenance):
 
-1. **Overwhelming U.S. Ecosystem Concentration:** Disclosed external dependencies are heavily domestic. U.S.-based models and hyperscalers account for **`{python} f"{geo_us_share:.1f}"`%** of all geographically classified external entity mentions (`{python} f"{geo_us_n:.0f}"` of `{python} f"{geo_total_mentions:,}"` mentions across `{python} geo_us_firms` firms), with European providers (`{python} f"{geo_eu_share:.1f}"`%) and multilateral ecosystems (`{python} f"{geo_other_share:.1f}"`%) representing marginal shares.
-2. **Chinese Open-Weight Models Remain a Minor but Persistent Share:** Chinese technology mentions peak at **`{python} f"{geo_cn_peak_share:.1f}"`%** in `{python} geo_cn_peak_year` (`{python} geo_cn_peak_n` mentions), driven by open-weight reasoning architectures (such as DeepSeek-R1) deployed across cloud and hardware leaders, and remain present in the 2026 year-to-date sample at `{python} f"{geo_cn_2026_share:.1f}"`% (`{python} geo_cn_2026_n` mentions), though that window covers a smaller partial-year set of filings and calls.
+1. **U.S. Ecosystem Concentration, Understated by Construction:** References to the United States dominate AI-context disclosure, accounting for **`{python} f"{geo_us_share:.1f}"`%** of all regionally classified mentions (`{python} f"{geo_us_n:.0f}"` of `{python} f"{geo_total_mentions:,}"` mentions across `{python} geo_us_firms` firms), against Europe (`{python} f"{geo_eu_share:.1f}"`%) and the aggregate Other bloc (`{python} f"{geo_other_share:.1f}"`%). Because United States mentions are counted only through named technology entities while every other region additionally benefits from literal country/demonym matches, this gap holds despite -- not because of -- how the measure is built.
+2. **Chinese References Are a Stable, Low-Double-Digit Minority:** Chinese references hold between **`{python} f"{geo_cn_min_share:.1f}"`%** (`{python} geo_cn_min_year`) and **`{python} f"{geo_cn_max_share:.1f}"`%** (`{python} geo_cn_max_year`) of regionally classified mentions across the sample, including a rise to `{python} f"{geo_cn_2025_share:.1f}"`% (`{python} geo_cn_2025_n` mentions) in 2025 that coincides with the release of DeepSeek's open-weight reasoning models, before settling back to `{python} f"{geo_cn_2026_share:.1f}"`% (`{python} geo_cn_2026_n` mentions) in the 2026 year-to-date sample -- within the range observed since 2021, not a decline.
 
-The disclosed external stack reveals substantial concentration in U.S. providers, even when firms foreground proprietary branding.
+AI disclosure remains oriented overwhelmingly around U.S. technology and market context, even under a measurement asymmetry that structurally favors every other region.
 
 ## External Characterization of Archetypes: Fundamental Financial Profiles
 
