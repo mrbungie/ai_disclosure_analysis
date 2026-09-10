@@ -62,7 +62,7 @@ from ai_intensity import document_table, aggregate  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
 DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
-YEARS = (2021, 2022, 2023, 2024, 2025)
+YEARS = (2021, 2022, 2023, 2024, 2025, 2026)
 OUTCOMES = {"beta": "beta", "volatilidad_idiosincratica": "idio_vol_252d", "price_to_sales": "ps_ratio",
             "rd_sobre_ventas": "rd_intensity", "crecimiento_ingresos_t1": "next_revenue_yoy"}
 EXTRA_OUTCOMES = {"volatilidad_total_60d": "vol_pre_60d"}    # robustez, no cabecera

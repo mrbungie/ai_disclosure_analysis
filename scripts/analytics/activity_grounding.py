@@ -101,7 +101,14 @@ def grid_grounding(prof: pd.DataFrame, a: pd.DataFrame) -> dict:
 
 
 def washing_grounding(prof: pd.DataFrame, a: pd.DataFrame) -> dict:
-    w = pd.read_parquet(OUT_DIR / "firm_washing_score.parquet")[["ticker", "n_frames", "exceso", "tasa_obs", "p_esperada", "washing", "callada"]]
+    # `firm_washing_score.parquet` (washing_score.py) dropped the beta-binomial
+    # exceso/tasa_obs/p_esperada columns in favor of the W percentile-rank
+    # index; `firm_washing_score_all.parquet` still carries the beta-binomial
+    # 'exceso' this function needs, with 'promo_per_1k' standing in for the
+    # old observed-rate threshold ('p_esperada' has no equivalent here, so it
+    # is dropped from the printed columns; this JSON's `washing` block is not
+    # read by thesis.qmd, only `channel_gap` is).
+    w = pd.read_parquet(OUT_DIR / "firm_washing_score_all.parquet")[["ticker", "n_frames", "exceso", "promo_per_1k", "washing", "callada"]]
     m = w.merge(prof[["ticker", "n_activities", "concrecion_conductual", "share_named_product_or_process", "share_quantified_outcome", "share_deployed_or_scaled"]], on="ticker", how="left")
     m["n_activities"] = m["n_activities"].fillna(0).astype(int)
     m["grounded"] = m["ticker"].map(grounded_firms(a)).fillna(False).astype(bool)
@@ -113,12 +120,12 @@ def washing_grounding(prof: pd.DataFrame, a: pd.DataFrame) -> dict:
     tails = m[m["washing"] | m["callada"]].copy()
     tails["cola"] = np.where(tails["washing"], "washing", "sustancia callada")
     tails = tails.sort_values(["cola", "exceso"], ascending=[False, False])
-    cols = ["ticker", "cola", "n_frames", "tasa_obs", "p_esperada", "exceso", "n_activities", "n_grounded_activities", "concrecion_conductual"]
+    cols = ["ticker", "cola", "n_frames", "promo_per_1k", "exceso", "n_activities", "n_grounded_activities", "concrecion_conductual"]
     print("\n2. EXCESO PROMOCIONAL Y RESPALDO CONDUCTUAL")
     print(tails[cols].round(3).to_string(index=False))
     print(f"   Spearman(exceso, concreción) = {rho.statistic:+.3f} (p={rho.pvalue:.3f}); Spearman(exceso, log actividades desplegadas con nombre) = {rho_n.statistic:+.3f} (p={rho_n.pvalue:.1e}); n={int(ok.sum())}")
     # entre las 449: promoción alta con y sin respaldo
-    m["promo_alto"] = m["tasa_obs"] >= m["tasa_obs"].quantile(0.8)
+    m["promo_alto"] = m["promo_per_1k"] >= m["promo_per_1k"].quantile(0.8)
     hp = m[m["promo_alto"]]
     split = hp.groupby("grounded").agg(firms=("ticker", "size"), median_activities=("n_activities", "median"), mean_concreteness=("concrecion_conductual", "mean"),
                                        examples=("ticker", lambda s: ", ".join(hp.loc[s.index].sort_values("n_activities", ascending=False)["ticker"].head(8))))
@@ -131,7 +138,7 @@ def washing_grounding(prof: pd.DataFrame, a: pd.DataFrame) -> dict:
 
 def channel_activity_gap() -> dict:
     ch = pd.read_parquet(OUT_DIR / "channel_activity_cells.parquet")
-    ch = ch[ch["fy"].between(2021, 2025)]
+    ch = ch[ch["fy"].between(2021, 2026)]
     wide = ch.pivot_table(index=["ticker", "fy"], columns="channel", values=GAP_FAMILIES + ["n_activities"]).dropna()
     wide = wide[(wide[("n_activities", "call")] >= 3) & (wide[("n_activities", "filing")] >= 3)]
     gaps = pd.DataFrame(index=wide.index)

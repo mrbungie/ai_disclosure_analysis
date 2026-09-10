@@ -42,13 +42,32 @@ from ai_intensity import document_table  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
 ACTIVITIES = REPO_ROOT / "data" / "interim" / "ai_activities"
-CALLS_MANIFEST = REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls.parquet"
+# Tres fuentes de transcripciones, cada una con su propio manifest (igual que
+# la vista `filing_manifest` de build_duckdb.py): la base de Hugging Face
+# (01_fetch_transcripts.py, 2005-2025, no se actualiza) más dos rellenos de
+# huecos (03/04) que SÍ cubren 2026. Leer sólo la base deja fuera cualquier
+# call que exista únicamente en un relleno — todo 2026 y parte de 2025.
+CALLS_MANIFESTS = [
+    REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls.parquet",
+    REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls_equibles.parquet",
+    REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls_stockanalysis.parquet",
+]
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
-SEGMENT_LABELS = {"desplegadores_de_producto": "Product Deployers", "adoptantes_con_gobernanza": "Governance Adopters",
-                  "listadores_de_riesgo": "Risk Listers", "sin_ia": "No AI"}
-EXEMPLARS = {"desplegadores_de_producto": ["MSFT", "HPE", "TEAM", "HPQ", "ETSY"],
-             "adoptantes_con_gobernanza": ["JPM", "CINF", "STT", "BRK.B", "RF"],
-             "listadores_de_riesgo": ["BAC", "TDG", "HWM", "NKE", "DHI"]}
+# `build_segments.py` nombra cada segmento por la dimensión donde más se
+# despega del promedio (ver su docstring): el nombre puede cambiar de una
+# corrida a otra si la dimensión dominante cambia. Este diccionario sólo
+# traduce nombres conocidos a inglés legible; uno nuevo se titleiza genérico.
+_SEGMENT_LABEL_KNOWN = {"desplegadores_de_producto": "Product Deployers", "adoptantes_con_gobernanza": "Governance Adopters",
+                        "listadores_de_riesgo": "Risk Listers", "sin_ia": "No AI", "exploradores": "Explorers",
+                        "promocionales": "Promotional Disclosers"}
+
+
+class _SegmentLabels(dict):
+    def __missing__(self, key):
+        return str(key).replace("_", " ").title()
+
+
+SEGMENT_LABELS = _SegmentLabels(_SEGMENT_LABEL_KNOWN)
 
 FUNCTION_FAMILIES = [
     ("governance", r"govern|oversight|responsible[_ ]ai|ai[_ ]ethic|transparen|trust[_ ]and[_ ]safety|policy|compliance[_ ]program"),
@@ -158,11 +177,17 @@ def load() -> pd.DataFrame:
     con = duckdb.connect(str(DB), read_only=True)
     try:
         con.register("acts", acts[["text_hash"]].drop_duplicates())
+        calls_union = " UNION ALL BY NAME ".join(
+            f"SELECT document_id, ticker FROM read_parquet('{p}')" for p in CALLS_MANIFESTS if p.exists())
         inst_docs = con.execute(f"""
-            WITH docs AS (
-                SELECT accession_number, ticker, form_type AS form FROM filing_manifest WHERE country_code='us'
+            WITH calls AS (
+                SELECT document_id, ticker, row_number() OVER (PARTITION BY document_id ORDER BY 1) AS rn
+                FROM ({calls_union})
+                QUALIFY rn = 1
+            ), docs AS (
+                SELECT accession_number, ticker, form_type AS form FROM filing_manifest WHERE country_code='us' AND form_type != 'Earnings call transcript'
                 UNION ALL SELECT accession_number, ticker, '10-Q' FROM filing_manifest_10q WHERE country_code='us'
-                UNION ALL SELECT document_id, ticker, 'Earnings call' FROM read_parquet('{CALLS_MANIFEST}')
+                UNION ALL SELECT document_id, ticker, 'Earnings call' FROM calls
             )
             SELECT DISTINCT g.text_hash, g.accession_number, d.ticker, CASE WHEN d.form = 'Earnings call' THEN 'call' ELSE 'filing' END AS channel
             FROM (SELECT DISTINCT text_hash, accession_number FROM gold_ai_frames WHERE country_code='us' AND has_frame) g
@@ -370,7 +395,8 @@ def main() -> None:
     by_seg["median_activities"] = prof.groupby("segmento")["n_activities"].median()
     by_seg["share_customers"] = (prof.groupby("segmento")["share_customers"].mean() * 100).round(1)
     by_seg["share_internal"] = (prof.groupby("segmento")["share_internal"].mean() * 100).round(1)
-    order = ["desplegadores_de_producto", "adoptantes_con_gobernanza", "listadores_de_riesgo", "sin_ia"]
+    non_ai = [s for s in prof["segmento"].dropna().unique() if s != "sin_ia"]
+    order = sorted(non_ai, key=lambda s: -int(prof[prof["segmento"] == s].shape[0])) + (["sin_ia"] if "sin_ia" in prof["segmento"].values else [])
     by_seg = by_seg.reindex(order)
     print(by_seg.T.to_string())
     seg_stage = pd.crosstab(prof["segmento"], prof["max_stage"], normalize="index").reindex(order) * 100
@@ -398,7 +424,9 @@ def main() -> None:
 
     print("\nFICHAS — inventario de actividades concretas por empresa ejemplar")
     cards = {}
-    for s, tickers in EXEMPLARS.items():
+    exemplars = {s: prof[prof["segmento"] == s].sort_values("n_activities", ascending=False)["ticker"].head(5).tolist()
+                 for s in order[:3]}
+    for s, tickers in exemplars.items():
         print(f"  [{SEGMENT_LABELS[s]}]")
         for t_ in tickers:
             sub = a[a.ticker == t_]

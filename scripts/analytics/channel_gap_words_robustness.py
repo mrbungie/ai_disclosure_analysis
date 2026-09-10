@@ -24,7 +24,7 @@ import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from channel_gap_analysis import load_frames, CALLS_MANIFEST, FILING_FORMS, DB  # noqa: E402
+from channel_gap_analysis import load_frames, FILING_FORMS, DB, _calls_manifest_sql  # noqa: E402
 
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
 
@@ -51,9 +51,9 @@ def load_documents_words(con: duckdb.DuckDBPyConnection, frames: pd.DataFrame) -
         FROM manifest m JOIN words w USING (country_code, accession_number)
         WHERE m.country_code = 'us' AND m.ticker IS NOT NULL AND m.filing_date IS NOT NULL AND m.form IN {FILING_FORMS}
         UNION ALL
-        SELECT 'call', 'Earnings call', m.ticker, CAST(m.filing_date AS DATE), NULL::DATE,
+        SELECT 'call', 'Earnings call', m.ticker, m.filing_date, NULL::DATE,
                CAST(regexp_extract(m.document_id, '_([0-9]{{4}})Q', 1) AS INTEGER), m.document_id, w.n_words, w.n_paragraphs
-        FROM read_parquet('{CALLS_MANIFEST}') m
+        FROM ({_calls_manifest_sql()}) m
         JOIN words w ON w.accession_number = m.document_id AND w.country_code = 'us'
         WHERE m.ticker IS NOT NULL
     """).df()
