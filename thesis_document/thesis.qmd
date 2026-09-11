@@ -2854,7 +2854,7 @@ def _p(name):
 _ws = pd.read_parquet(_p("firm_year_washing_score.parquet"))
 _ws["pct_d"] = _ws.groupby("year")["frames_per_1k"].rank(pct=True) * 100
 _ws["pct_s"] = _ws.groupby("year")["substance"].rank(pct=True) * 100
-_dim = pd.read_parquet(_p("firm_strategy_dimensions.parquet")).set_index("ticker")["archetype"]
+_dim = pd.read_parquet(_p("firm_year_strategy_dimensions.parquet")).set_index(["ticker", "year"])["archetype"]
 _act = pd.read_parquet(_p("firm_activities.parquet"))
 db_path = Path("../duckdb/thesis.duckdb")
 if not db_path.exists():
@@ -2883,7 +2883,7 @@ for t, name, y in CASES:
     a = _act[(_act["ticker"] == t) & (_act["year"] == y)]
     a_f = a[a["channel"] == "filing"]
     cols.append(f"{name} ({t}, filing year {y})")
-    rows["arch"].append(_dim.get(t, "—"))
+    rows["arch"].append(_dim.get((t, y), "—"))
     if len(r):
         r = r.iloc[0]
         cv[t] = r
@@ -3412,19 +3412,19 @@ Markdown(tabulate(funnel_rows, headers=["Stage", "Operational Filter", "Unit"] +
 
 ### GBDT AI-relevance prefilter feature weights and signal importance {.unnumbered}
 
-To identify candidate paragraphs containing genuine corporate discussion of artificial intelligence across nearly ten million raw passages without incurring prohibitive inference costs or injecting keyword-matching bias, the pipeline deploys a 39-signal Gradient Boosted Decision Tree (`HistGradientBoostingClassifier`, depth 4, decision threshold $\tau = 0.17$).
+To identify paragraphs with genuine corporate AI discussion across nearly ten million raw passages without prohibitive LLM inference costs or keyword bias, the pipeline deploys a 39-signal Gradient Boosted Decision Tree (`HistGradientBoostingClassifier`, depth 4, decision threshold $\tau = 0.17$).
 
-The model addresses three key failure modes of traditional dictionary lookups and linear logistic classifiers:
+The model addresses three key failure modes of dictionary lookups and linear classifiers:
 
-1. **Context dilution:** In statutory filings (particularly DEF 14A proxy statements and 8-K voting reports), AI keywords frequently occur as isolated cells within massive board skill matrices or incidental biographical summaries (e.g., *"director serves on the advisory board of Scale AI"*). Linear keyword matching assigns equal weight to these passages, whereas tree-based interactions penalize long texts with low term density.
-2. **Document-channel neutrality:** Statutory document form (10-K, 10-Q, DEF 14A, 8-K, Call) is *deliberately excluded* from the feature set. Including filing form would cause the model to memorize channel-specific baseline frequencies rather than textual signals, inducing circularity into subsequent cross-venue comparisons.
-3. **Asymmetric loss function:** Because prefilter false negatives represent permanent sample attrition that cannot be recovered downstream, while false positives merely incur a fraction of a cent in LLM validation cost, the decision threshold was calibrated on holdout samples with an asymmetric loss preference ($\beta = 2.0$, prioritizing recall over precision).
+1. **Context dilution:** In proxy statements (DEF 14A) and current reports (8-K), AI keywords often appear in board skill matrices or director bios (e.g., *"director serves on the advisory board of Scale AI"*). Linear keyword matching overweights these passages. Tree-based interactions penalize long texts with low term density.
+2. **Document-channel neutrality:** Statutory document form is deliberately excluded from the feature set. Including filing form would cause the model to memorize channel baselines rather than textual signals, inducing circularity in cross-venue comparisons.
+3. **Asymmetric loss preference:** Prefilter false negatives represent permanent sample attrition. In contrast, false positives merely incur marginal LLM validation cost. The decision threshold was calibrated on holdouts with an asymmetric loss preference ($\beta = 2.0$), prioritizing recall over precision.
 
-To quantify how the trained model discriminates relevant corporate statements, @tbl-a0-gbdt-feature-importance reports the permutation feature importance ($\Delta \text{Average Precision}$, 10 random shuffles with sample weights) across the three underlying signal tiers:
+To quantify how the model discriminates relevant corporate statements, @tbl-a0-gbdt-feature-importance reports permutation feature importance ($\Delta \text{Average Precision}$, 10 random shuffles with sample weights) across three signal tiers:
 
-- **Sentence-level AI embeddings (67.4% total weight):** The fraction of sentences containing an AI keyword (`ai_sent_share`, 46.5% relative weight) and the raw count of AI-bearing sentences (`sent_n_ai`, 14.9%) overwhelmingly dominate the classification. Rather than evaluating paragraph-level dense embeddings where AI mentions are diluted by unrelated text, isolating and scoring only the specific sentences that mention AI provides the cleanest discriminative signal.
-- **Text structure and formatting disqualifiers (21.5% total weight):** Character length (`log_len`, 13.0%) and numeric digit frequency (`digit_rate`, 2.8%) serve as strong structural filters that penalize dense tabular disclosures, financial schedules, and multi-page governance matrices. Conversely, the density of first-person corporate pronouns (`first_person_per_100w`, 2.1%) acts as an affirmative marker of managerial voice (*"we deployed"*, *"our platform"*).
-- **Paragraph semantic anchors and lexical matches (11.1% total weight):** Dense cosine similarities against category anchors contribute localized contextual signal, led by strong lexical terms (`strong_ge1`, 3.8%), risk posture (`score_ai_risk`, 1.6%), and outcome realization (`score_ai_outcome`, 1.3%).
+- **Sentence-level AI embeddings (67.4% total weight):** The fraction of sentences containing an AI keyword (`ai_sent_share`, 46.5%) and the raw count of AI-bearing sentences (`sent_n_ai`, 14.9%) dominate classification. Isolating and scoring AI-bearing sentences avoids dilution from unrelated text in the surrounding paragraph.
+- **Text structure and formatting disqualifiers (21.5% total weight):** Character length (`log_len`, 13.0%) and numeric digit frequency (`digit_rate`, 2.8%) penalize dense tables, financial schedules, and governance matrices. Conversely, first-person corporate pronouns (`first_person_per_100w`, 2.1%) serve as affirmative markers of managerial voice (*"we deployed"*, *"our platform"*).
+- **Paragraph semantic anchors and lexical matches (11.1% total weight):** Dense cosine similarities against category anchors provide localized context, led by strong lexical terms (`strong_ge1`, 3.8%), risk posture (`score_ai_risk`, 1.6%), and outcome realization (`score_ai_outcome`, 1.3%).
 
 ```{python}
 #| label: tbl-a0-gbdt-feature-importance
@@ -3466,7 +3466,9 @@ To verify construct validity and quantify measurement error across the pipeline,
 
 ### External benchmark: disclosed AI activity against AI patents {.unnumbered}
 
-The measurement constructs are extracted from what firms write; no audited census of AI deployment exists against which to check them. AI patents are the closest external, non-textual observable of a firm's AI capacity. Patent publications of the universe firms were assigned to issuers through a curated table of patent-assignee aliases (operating subsidiaries and IP-holding entities) and classified as AI patents with the OECD (2025) taxonomy: five unconditional "core AI" CPC groups and 95 application groups conditional on AI keywords in the title or abstract. Under statutory patent rules (35 U.S.C. § 122(b)), patent applications remain confidential and are only published eighteen months after filing. To ensure an un-truncated, stationary comparison window where all filed applications have matured into public documents, the benchmark is closed at 2021–2023. @tbl-b1-patent-benchmark reports rank correlations between disclosure-based measures and AI patent publications over this fully matured 2021–2023 window, and @tbl-b2-patent-archetypes details the distribution across archetypes. Patents are a partial benchmark: most AI use disclosed by non-technology firms (vendor deployments, workflow automations) never produces a patent. The test asks whether firms that disclose more, and more grounded, AI activity are also the firms with more patented AI capacity.
+The measurement constructs are extracted from what firms write; no audited census of corporate AI deployment exists against which to check them. AI patents offer the closest external, non-textual observable of technological capacity. Patent publications are assigned to universe issuers via curated assignee aliases (operating subsidiaries and IP holding entities). AI patents are identified using the OECD (2025) taxonomy: five unconditional core CPC groups and 95 application groups requiring AI keywords in title or abstract.
+
+Under statutory patent rules (35 U.S.C. § 122(b)), applications remain confidential until publication 18 months after filing. To ensure an un-truncated, stationary benchmark where all applications have matured into public documents, the comparison window closes at 2021–2023. @tbl-b1-patent-benchmark reports rank correlations over this window, and @tbl-b2-patent-archetypes details archetype distributions. Patents remain an incomplete benchmark—routine workflow automation rarely produces a patent. The test simply evaluates whether firms disclosing more, and more grounded, AI activity hold systematically greater patented AI capacity.
 
 ```{python}
 #| echo: false
@@ -3536,7 +3538,13 @@ Markdown(tabulate(pat_rows, headers=["Disclosure measure", "ρ (firms with paten
 Markdown(tabulate(pat_arch_rows, headers=["Archetype", "Firms", "With patent data", "Share with ≥1 AI patent", "Median AI patents", "Mean AI patents"]))
 ```
 
-Three results follow. First, disclosed AI activity tracks patented AI capacity: across the `{python} pat_n_data` universe firms with matched patent publications, the count of disclosed AI activities has a rank correlation of `{python} f"{pat_corr['n_act'][0]:.2f}"` with AI patents, grounded activities `{python} f"{pat_corr['n_grounded'][0]:.2f}"`, and deployed or scaled activities `{python} f"{pat_corr['n_dep'][0]:.2f}"`; the correlation with total patents of any kind is only `{python} f"{pat_r_total:.2f}"`, and with the AI share of a firm's patents `{python} f"{pat_r_share:.2f}"`, so the association is specific to AI rather than to patenting in general. Second, the archetypes sort on the external benchmark in the order the text-based taxonomy predicts: `{python} f"{_arch.loc['Vocal Substantives', 'any_ai']:.0f}"`% of Vocal Substantives hold at least one AI patent (median `{python} f"{_arch.loc['Vocal Substantives', 'median_ai']:.0f}"`), against `{python} f"{_arch.loc['Governance-Led Disclosers', 'any_ai']:.0f}"`% of Governance-Led and `{python} f"{_arch.loc['Defensive Disclosers', 'any_ai']:.0f}"`% of Defensive Disclosers. Third, Decoupling is negatively related to patented capacity (ρ = `{python} f"{pat_corr['w_mean'][0]:.2f}"`): firms whose narrative rank runs ahead of their disclosed-substance rank also tend to hold fewer AI patents. None of this makes patents a census; it shows that the LLM-derived measures order firms in the same way as an independent, non-textual measure of AI capacity, which is what a measurement validation can establish.
+Three validation findings emerge from the benchmark:
+
+1. **Disclosed activity tracks patented capacity:** Disclosed AI activity correlates strongly with AI patent publications across matched firms ($\rho =$ `{python} f"{pat_corr['n_act'][0]:.2f}"`, grounded activities $\rho =$ `{python} f"{pat_corr['n_grounded'][0]:.2f}"`, deployed or scaled activities $\rho =$ `{python} f"{pat_corr['n_dep'][0]:.2f}"`). In contrast, total patent publications correlate at only $\rho =$ `{python} f"{pat_r_total:.2f}"` and the AI patent share at $\rho =$ `{python} f"{pat_r_share:.2f}"`, confirming that the extraction captures AI-specific technological capacity rather than overall patenting propensity.
+2. **Archetypes sort monotonically:** External patenting reflects the text-based hierarchy: `{python} f"{_arch.loc['Vocal Substantives', 'any_ai']:.0f}"`% of Vocal Substantives hold at least one AI patent (median `{python} f"{_arch.loc['Vocal Substantives', 'median_ai']:.0f}"`), compared to `{python} f"{_arch.loc['Governance-Led Disclosers', 'any_ai']:.0f}"`% of Governance-Led and `{python} f"{_arch.loc['Defensive Disclosers', 'any_ai']:.0f}"`% of Defensive Disclosers.
+3. **Decoupling reflects an external capacity deficit:** Decoupling ($W$) correlates negatively with AI patents ($\rho =$ `{python} f"{pat_corr['w_mean'][0]:.2f}"`). Firms whose disclosure rank outpaces their substance rank hold fewer AI patents.
+
+These relationships confirm that LLM-derived disclosure constructs align with an independent, objective measure of technological development.
 
 ### Error taxonomy and classification robustness {.unnumbered}
 
@@ -3819,7 +3827,15 @@ _rows = [[region, len(terms), "Named entities only (no literal country term)" if
 Markdown(tabulate(_rows, headers=["Region", "Terms in taxonomy", "Matching basis"]))
 ```
 
-Every term is matched with word-boundary anchoring (not substring containment), so a short term cannot match inside an unrelated longer word. Word-boundary matching alone does not guarantee semantic precision: several company names that are also common English words or generic business phrases produce matches that are overwhelmingly unrelated to the company even with boundaries enforced. Five such terms are deliberately excluded from the taxonomy for this reason: bare "stability" (intended for Stability AI; in this corpus, over 95% of boundary-matched instances are phrases like "financial stability" or "systems stability"), bare "reliance" (intended for Reliance Industries; over 95% of instances are risk-factor language such as "reliance on third-party vendors"), bare "flux" (intended for Black Forest Labs' Flux model; nearly all instances are "market/supply chain in flux"), bare "inception" (intended for the UAE lab Inception; almost all instances are "since/from inception," and the sole AI-related instance in the corpus refers to NVIDIA's Inception startup program, a U.S. entity), and bare "ascend" (intended for Huawei's Ascend chip line; every instance in the corpus is an unrelated product name, organization, or the verb). Each excluded term's genuine referent, where it appears in the corpus at all, is still captured by an unambiguous companion term already in the taxonomy (e.g., "stability ai", "huawei").
+Matching uses word boundaries rather than substring containment to avoid false positives inside longer words. Even so, boundary matching alone cannot prevent collisions when company names overlap with generic business vocabulary. Five ambiguous bare terms are deliberately excluded:
+
+- **"stability"** (Stability AI): over 95% of occurrences refer to "financial" or "systems stability".
+- **"reliance"** (Reliance Industries): over 95% appear in risk factors as "reliance on third-party vendors".
+- **"flux"** (Flux model): matches describe "markets in flux".
+- **"inception"** (Inception UAE): instances reflect "since inception" (the sole AI mention designates NVIDIA Inception, a U.S. program).
+- **"ascend"** (Huawei Ascend): matches are common verbs or unrelated products.
+
+Genuine mentions remain captured by unambiguous companion terms (e.g., "stability ai", "huawei").
 
 ### Cross-sector disclosure and AI activity distributions {.unnumbered}
 
@@ -3911,13 +3927,13 @@ Markdown(tabulate(rows, headers=["Sector", "Firms", "Median activities/firm", "P
 
 : XBRL concept coverage. {#tbl-d1-xbrl-coverage}
 
-Fiscal-period alignment rules (period-end date matched to the nearest prior filing date; the [340, 380]-day validity window for year-over-year growth), the market-model beta and idiosyncratic-volatility construction (252 trading days pre-filing, one-factor market model), and the ROIC-minus-WACC construction (geometric equity risk premium of 6.48%, not arithmetic) are documented here.
+This section details the fiscal-period alignment rules, market-model beta estimation (252 pre-filing trading days), and economic-profit construction (geometric equity risk premium of 6.48%). Annual growth uses a [340, 380]-day validity window matched to the nearest prior filing date.
 
 ### R&D coverage and interpretation {.unnumbered}
 
 R&D expense is constructed from four comparable current-expense concepts: `us-gaap:ResearchAndDevelopmentExpense`, `us-gaap:ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost`, `us-gaap:ResearchAndDevelopmentExpenseSoftwareExcludingAcquiredInProcessCost`, and `ifrs-full:ResearchAndDevelopmentExpense`. The latter two recover software reporters and IFRS filers that the narrower US-GAAP mapping missed; they add 34 firm-years to the panel. The resulting measure is available for 1,318 of 2,868 firm-years (46.0%).
 
-This is not evidence that the remaining firms spend zero on R&D. In a SIC-based diagnostic grouping, separately reported R&D is common among manufacturing and software firms (81.4% coverage) and almost absent in financial services and real estate (1.1%). The missingness is therefore primarily an economic and disclosure-selection feature of the accounting data, rather than a generic failure of the XBRL collection process. The raw stored facts contain no company-specific extension namespace, so this pipeline cannot recover issuer-defined R&D extensions from that input.
+Missing R&D values reflect economic disclosure patterns rather than extraction failures. Separately reported R&D is prevalent in manufacturing and software (81.4% coverage), but rare in financial services and real estate (1.1%). Because the raw stored facts exclude company-specific extension namespaces, issuer-defined custom extensions are not recovered.
 
 For that reason, R&D-to-sales is not imputed and is excluded from the common set of financial controls. When it is an outcome, estimates are interpreted for the non-random subsample of firms that separately disclose comparable current R&D; each specification reports its effective sample size. Tags for tax credits, capitalized development, acquired in-process R&D, and industry-specific exploration costs are deliberately not pooled into this measure because they do not represent the same current R&D expense.
 
@@ -3958,7 +3974,7 @@ mf_beta_min, mf_beta_max = _beta.min(), _beta.max()
 mf_beta_range = f"[{mf_beta_min:.2f}, {mf_beta_max:.2f}]"
 ```
 
-The resulting firm-year market-factors panel contains `{python} f"{mf_n_cells:,}"` firm-years for `{python} mf_n_tickers` tickers in `{python} mf_year_min`--`{python} mf_year_max`. Beta is available for `{python} f"{mf_beta_n:,}"` observations (`{python} f"{mf_beta_pct:.1f}"`%). The estimation-window diagnostic has a mean of `{python} f"{mf_win_mean:.1f}"` return days and a median of `{python} f"{mf_win_median:.0f}"`; `{python} f"{mf_win_ge240_pct:.1f}"`% of estimates use at least 240 trading days. The remaining `{python} mf_n_short` firm-years have fewer than 120 valid observations and are retained with beta missing rather than receiving a short-window estimate. Among valid estimates, beta has mean `{python} f"{mf_beta_mean:.2f}"`, median `{python} f"{mf_beta_median:.2f}"`, standard deviation `{python} f"{mf_beta_sd:.2f}"`, interquartile range `{python} f"{mf_beta_q1:.2f}"`--`{python} f"{mf_beta_q3:.2f}"`, and range `{python} mf_beta_range`.
+The market-factors panel spans `{python} f"{mf_n_cells:,}"` firm-years across `{python} mf_n_tickers` tickers (`{python} mf_year_min`–`{python} mf_year_max`). Beta is available for `{python} f"{mf_beta_n:,}"` observations (`{python} f"{mf_beta_pct:.1f}"`%). The estimation window averages `{python} f"{mf_win_mean:.1f}"` return days (median `{python} f"{mf_win_median:.0f}"`), with `{python} f"{mf_win_ge240_pct:.1f}"`% using $\ge 240$ trading days. Observations with fewer than 120 trading days (`{python} mf_n_short` firm-years) are left missing rather than estimated over truncated windows. Valid betas have mean `{python} f"{mf_beta_mean:.2f}"` (median `{python} f"{mf_beta_median:.2f}"`, SD `{python} f"{mf_beta_sd:.2f}"`, IQR `{python} f"{mf_beta_q1:.2f}"`–`{python} f"{mf_beta_q3:.2f}"`, range `{python} mf_beta_range`).
 
 ```{python}
 #| echo: false
@@ -3975,7 +3991,7 @@ uni_total = int(_uni["n"].sum())
 uni_delisted = int(_uni.loc[_uni["active_status"] == "delisted", "n"].sum())
 ```
 
-Daily prices are collected from 2020-01-01, so early-2021 filings have a prior-year trading history available for the 252-day window. The sampling frame is built around S&P 500 membership reconstructed at 2021-01-01, supplemented by the manual core; `{python} uni_delisted` of the `{python} uni_total` firms in the current universe are explicitly marked `delisted`. Price collection first uses Yahoo Finance and then falls back to Stooq and Tiingo when a delisted ticker is unavailable. Freezing membership and retaining these firms reduces survivorship bias relative to a current-constituent sample, although historical price coverage still depends on the availability and adjustment quality of those fallback sources.
+Daily price series begin on 2020-01-01, providing a full 252-day estimation history for early-2021 filings. Reconstructing index membership at 2021-01-01 explicitly includes `{python} uni_delisted` delisted firms among the `{python} uni_total` universe constituents, mitigating survivorship bias. Prices are gathered from Yahoo Finance, falling back to Stooq and Tiingo for delisted tickers.
 
 ## Appendix E: Supplementary Robustness and Alternative Specifications {.unnumbered}
 
@@ -4069,10 +4085,10 @@ plt.show()
 
 Four empirical findings emerge from this decomposition:
 
-1. **Mention counts fail on valuation:** Raw keyword mentions add zero explanatory power to Price-to-Sales ($\Delta R^2 = +0.0000$). High-multiple firms do not systematically mention AI more frequently; rather, valuation responds to *how* AI is deployed—adding semantic posture and disclosed AI activities increases $R^2$ by $+3.6$ percentage points.
-2. **Semantic posture captures strategic intent:** The multi-dimensional posture block adds substantial predictive power for next-year revenue growth ($\Delta R^2 = +0.0450$, exceeding the $+0.0423$ from mention counts) and market beta ($\Delta R^2 = +0.0140$).
-3. **Disclosed AI activities isolate concrete execution:** Extracting specific, action-level claims adds material explanatory power across all outcomes (+1.8 pp on R&D intensity, +2.3 pp on revenue growth, +1.5 pp on valuation, +1.2 pp on beta).
-4. **Decoupling carries near-zero incremental market information:** Once underlying semantic posture and concrete activities are controlled for, adding the AI-washing index ($W$) yields virtually zero incremental explanatory power across all five outcomes ($\Delta R^2 \le 0.0017$; $p = 0.725$ on beta). The market prices narrative volume and disclosed operational activity, but does not independently price the within-disclosure decoupling gap.
+1. **Mention counts fail on valuation:** Raw keyword mentions add essentially no explanatory power to Price-to-Sales ($\Delta R^2 = +0.0004$). High-multiple firms do not systematically mention AI more frequently; rather, valuation responds to *how* AI is deployed—adding semantic posture and disclosed AI activities together raises $R^2$ by $+4.3$ percentage points.
+2. **Volume dominates market-risk outcomes; posture and activity dominate valuation and R&D:** Raw mention counts explain more variance in market beta ($\Delta R^2 = +0.0708$), idiosyncratic volatility ($+0.0542$), and next-year revenue growth ($+0.0428$) than the semantic posture block adds on top of them ($+0.0447$, $+0.0276$, and $+0.0378$, respectively). The pattern reverses for valuation and R&D intensity, where posture adds more than mentions did ($+0.0281$ vs. $+0.0004$ on Price-to-Sales; $+0.0183$ vs. $+0.0110$ on R&D intensity): here *how* a firm talks about AI carries more information than whether it talks about it at all.
+3. **Disclosed AI activities isolate concrete execution:** Extracting specific, action-level claims adds material explanatory power across all outcomes (+1.3 pp on R&D intensity, +1.6 pp on revenue growth, +1.5 pp on valuation, +1.0 pp on beta).
+4. **Decoupling carries near-zero incremental market information:** Once underlying semantic posture and concrete activities are controlled for, adding the AI-washing index ($W$) yields virtually zero incremental explanatory power across all five outcomes ($\Delta R^2 \le 0.0008$; $p = 0.776$ on beta). The market prices narrative volume and disclosed operational activity, but does not independently price the within-disclosure decoupling gap.
 
 ```{python}
 #| label: tbl-c1-m0m3
@@ -4141,11 +4157,19 @@ w_n_firmyears_total = len(pd.read_parquet(_p("firm_year_master_v2.parquet")))
 w_n_firms_total = len(pd.read_parquet(_p("firm_segments.parquet")))
 ```
 
-**Decoupling index ($W$), full specification.** $\text{Substance}_{it} = \log(1 + n_{\text{activities},it}) \times \text{Grounding}_{it}$, where $\text{Grounding}_{it}$ averages, with empirical-Bayes shrinkage per component, five concreteness markers over that firm-year's disclosed AI activities (named function, deployed/scaled stage, named product or process, quantified outcome, named provider). $W_{it} = \text{pctrank}(\text{Disclosure}_{it}) - \text{pctrank}(\text{Substance}_{it})$, where $\text{Disclosure}_{it}$ is AI frames per 1,000 words and both percentile ranks are computed within the analytical sample (firm-years with $\text{Disclosure}_{it} > 0$: `{python} w_n_panel` of `{python} w_n_firmyears_total` firm-years, `{python} w_n_firms` of `{python} w_n_firms_total` firms pooled 2021–2026). No regression, no fixed effects, no fitted residual: it is a rank-based gap between two independently extracted quantities.
+**Decoupling index ($W$), full specification.** Disclosed substance is defined as:
+$$
+\text{Substance}_{it} = \log(1 + n_{\text{activities},it}) \times \text{Grounding}_{it}
+$$
+where $\text{Grounding}_{it}$ averages five empirical-Bayes shrunk concreteness markers across disclosed AI activities (named function, deployed/scaled stage, named product or process, quantified outcome, named provider). The index is computed as:
+$$
+W_{it} = \text{pctrank}(\text{Disclosure}_{it}) - \text{pctrank}(\text{Substance}_{it})
+$$
+where $\text{Disclosure}_{it}$ is AI frames per 1,000 words. Both percentile ranks are calculated within the disclosing sample ($\text{Disclosure}_{it} > 0$: `{python} w_n_panel` of `{python} w_n_firmyears_total` firm-years, `{python} w_n_firms` of `{python} w_n_firms_total` firms pooled 2021–2026). $W$ is non-parametric: it requires no regression, fixed effects, or fitted residuals.
 
-Percentile rank rather than z-score standardization: with z-scores, $\text{Disclosure}_{it}$'s distribution has a far heavier right tail than $\text{Substance}_{it}$'s (maximum z of 18.5 against 4.3), which put firms with the *most* grounded activity in absolute terms (Microsoft, NVIDIA) in the washing tail whenever their disclosure happened to be an even bigger outlier than their already-large substance — Spearman between the z-score and percentile-rank versions of $W$ is only 0.723, and only 43 of the 102 firm-years in each version's top-5% tail are shared (Jaccard = 0.267); only the percentile version keeps the tail composed of firms with no grounded activity behind unusually heavy disclosure.
+**Percentile ranking versus z-score standardization.** Percentile ranks are preferred over z-scores for two structural reasons. First, $\text{Disclosure}_{it}$ exhibits a much heavier right tail than $\text{Substance}_{it}$ (maximum $z$ of 18.5 versus 4.3). With z-scores, firms with the largest volume of grounded activity (e.g., Microsoft, NVIDIA) are placed in the washing tail whenever their narrative volume is an even larger outlier than their substance. Spearman correlation between the z-score and percentile versions is 0.723, sharing only 43 of 102 firm-years in the top-5% tail (Jaccard = 0.267). Percentile ranking ensures the washing tail identifies firms with high narrative disclosure backed by minimal grounded activity.
 
-**Substance functional form.** An additive form, $z(\log(1+n_{\text{activities}})) + z(\text{Grounding})$, and a grounded-count form, $\log(1 + n_{\text{activities}} \times \text{Grounding})$, were both compared against the multiplicative form used here. Substance under the multiplicative and grounded-count forms correlates at Spearman = 0.991 (n = `{python} w_n_panel`), and the resulting $W$ at Spearman = 0.986, with 89 of 102 top-5%-tail firm-years shared between the two (Jaccard = 0.774). The multiplicative form is used because it does not reward raw activity count over grounding quality when the two trade off directly against each other (a firm with many but poorly grounded activities does not automatically outscore one with fewer but well-grounded activities, at typical values in this sample), while the grounded-count form's arithmetic can favor the larger, less-grounded firm in exactly that comparison.
+**Substance functional form.** An additive form, $z(\log(1+n_{\text{activities}})) + z(\text{Grounding})$, and a grounded-count form, $\log(1 + n_{\text{activities}} \times \text{Grounding})$, yield near-identical rankings to the multiplicative baseline. Substance under the multiplicative and grounded-count forms correlates at Spearman $\rho = 0.991$ ($n = `{python} w_n_panel`$), producing decoupling indices with $\rho = 0.986$ and 89 of 102 shared top-tail firm-years (Jaccard = 0.774). The multiplicative form is preferred because it penalizes ungrounded volume: a firm with many vague activities does not automatically outscore one with fewer, well-grounded actions.
 
 ```{python}
 #| label: tbl-c4-washing-validation
@@ -4182,7 +4206,7 @@ for var, label in [("rd_intensity", "R&D intensity"), ("log_market_cap", "Log ma
 Markdown(tabulate(rows, headers=["Check", "Sample", "Spearman", "p"]))
 ```
 
-*Notes:* Construct consistency against Grounding is restricted to firm-years with at least one disclosed AI activity (n = `{python} mc['n']`); Grounding is a direct component of Substance, so this is not an independent validity check, only confirmation the score moves as its construction implies. The five economic-coherence rows test whether $W$ tracks R&D intensity (expected negative) without also tracking size, valuation, or risk (expected flat) — the pattern that survives is a small, correctly signed R&D relationship and no material size or risk relationship.
+*Notes:* Construct consistency against Grounding is restricted to firm-years with at least one disclosed AI activity ($n = `{python} mc['n']`$). Because Grounding is an internal component of Substance, this confirms mechanical consistency rather than independent validity. The economic-coherence tests show that $W$ tracks R&D intensity negatively without tracking firm size, valuation, or risk.
 
 ### Extreme decoupling tails {.unnumbered}
 
@@ -4202,8 +4226,8 @@ def _p(name):
     return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 w = pd.read_parquet(_p("firm_year_washing_score.parquet"))
-strat = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))[["ticker", "archetype"]]
-merged = w.merge(strat, on="ticker", how="left")
+strat = pd.read_parquet(_p("firm_year_strategy_dimensions.parquet"))[["ticker", "year", "archetype"]]
+merged = w.merge(strat, on=["ticker", "year"], how="left")
 flagged = merged[merged.washing | merged.callada].sort_values("w", ascending=False)
 
 top_wash = flagged.head(10).copy()
@@ -4220,9 +4244,9 @@ Markdown(tabulate(table, headers=["Tail", "Ticker", "Year", "AI frames/1k", "Act
                                    "Grounding", "W", "Disclosure archetype"]))
 ```
 
-*Notes:* Positive $W$ represents the washing tail (disclosure ranks substantially higher than substance); negative $W$ represents the quiet-substance tail (disclosed concrete activities rank substantially higher than narrative intensity). For presentation clarity, this table displays the top 10 most decoupled firm-years from each tail; the complete panel of all `{python} len(flagged)` extreme firm-years (top and bottom 5% cutoffs) is archived in the full washing-score panel in the project's processed-data store.
+*Notes:* Positive $W$ represents the washing tail (disclosure rank exceeds substance rank); negative $W$ represents quiet substance (grounded concrete activities exceed narrative intensity). The table shows the top 10 firm-years from each tail; the full panel of `{python} len(flagged)` extreme firm-years (5% cutoffs) is archived in the processed dataset.
 
-**Alternative firm-year aggregation.** Results are unchanged when firm-year intensity is constructed as an aggregate-numerator-over-aggregate-denominator ratio rather than the median document rate, because a firm-year's AI content comes from a single dominant filing often enough that the rollup rule carries little weight in practice (@tbl-a5-altagg-comparison).
+**Alternative firm-year aggregation.** Results are unchanged when firm-year intensity is constructed as an aggregate-numerator-over-denominator ratio rather than the median document rate (@tbl-a5-altagg-comparison). Because a firm-year's AI content typically concentrates in a single dominant filing, the rollup rule carries little empirical weight.
 
 ```{python}
 #| label: tbl-a5-altagg-comparison
@@ -4312,7 +4336,9 @@ This appendix documents the search for SEC staff comment letters that touch corp
 
 ### Search and classification {.unnumbered}
 
-The EDGAR full-text index was searched for every staff comment letter (form type `UPLOAD`) and company response (`CORRESP`) filed between 2022-01-01 and `{python} sec_cases["search_window"].split("..")[1]` containing any of the terms "artificial intelligence", "AI", "machine learning", "generative", "large language", or "AI-driven", "AI-powered", "AI-enabled". Hits were restricted to the `{python} hd_n_universe` issuers of the analysis universe and every matching staff letter was read in full. @tbl-g1-sec-letters lists the result: the correspondence of eight issuers in the universe matched at least one term, plus the letter to Match Group, which joined the index after the panel date. Reading the letters shows that most matches are not about AI disclosure at all. Two company responses (Apple, Amazon) matched only because of confidential-treatment page codes ("AI-001") and a passing reference to machine learning in a climate-risk letter, and are not listed.
+The EDGAR full-text index was searched for staff comment letters (form `UPLOAD`) and issuer responses (`CORRESP`) filed between 2022-01-01 and `{python} sec_cases["search_window"].split("..")[1]`. Search terms included "artificial intelligence", "AI", "machine learning", "generative", "large language", and hyphenated compounds ("AI-driven", "AI-powered", "AI-enabled"). Queries were restricted to the `{python} hd_n_universe` universe issuers, and every matching letter was read in full.
+
+As shown in @tbl-g1-sec-letters, correspondence for eight universe issuers matched at least one term, plus Match Group (which joined after the panel date). Full-text review reveals that most matches do not concern AI disclosure. Two responses (Apple, Amazon) matched solely due to confidential-treatment page codes ("AI-001") or incidental references in climate-risk reviews, and are omitted.
 
 ```{python}
 #| label: tbl-g1-sec-letters
@@ -4328,7 +4354,7 @@ Markdown(tabulate(_rows, headers=["Ticker", "Company", "Letter date", "Filing re
 
 ### Matched-peer comparison for the direct and adjacent cases {.unnumbered}
 
-For each case the treated firm's annual reports are indexed by event time $k$, where $k = 0$ is the first Form 10-K filed after the letter and $k = -1$ the last one before it. Three peers are selected within the same two-digit SIC industry by Mahalanobis nearest-neighbour matching on pre-letter log market capitalisation, AI claim density, promotional density and the $k=-2 \to k=-1$ change in claim density; their 10-Ks are aligned by filing year. Measures are per 1,000 words of the 10-K (claim, realized-integration, quantified-metric and specificity densities), the specificity index (specificity per frame) and Decoupling ($W$) for the filing year. With one direct and one adjacent case there is no regression to estimate; @tbl-g2-sec-cases reports the raw comparison.
+For each case, annual reports are indexed in event time $k$, where $k = 0$ denotes the first Form 10-K filed post-letter and $k = -1$ the final pre-letter filing. Three control peers within the same two-digit SIC industry are selected via Mahalanobis nearest-neighbour matching on pre-letter log market capitalization, AI claim density, promotional density, and pre-letter claim trend ($\Delta k_{-2 \to -1}$). Control 10-Ks are aligned by filing year. With one direct and one adjacent case, @tbl-g2-sec-cases reports raw case comparisons without regression estimation.
 
 ```{python}
 #| label: tbl-g2-sec-cases
