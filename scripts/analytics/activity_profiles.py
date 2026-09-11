@@ -183,6 +183,8 @@ def load() -> pd.DataFrame:
             WITH calls AS (
                 SELECT document_id, ticker, row_number() OVER (PARTITION BY document_id ORDER BY 1) AS rn
                 FROM ({calls_union})
+                -- same analysis universe as the views (S&P 500 at 2021-01-01, see build_duckdb.py)
+                WHERE ticker IN (SELECT ticker FROM firm_universe WHERE country_code = 'us')
                 QUALIFY rn = 1
             ), docs AS (
                 SELECT accession_number, ticker, form_type AS form FROM filing_manifest WHERE country_code='us' AND form_type != 'Earnings call transcript'
