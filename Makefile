@@ -130,6 +130,8 @@ analytics-activities:
 analytics-call-beta:
 	@echo "Panel de calls para las regresiones de beta post-call (build_call_beta_panel)..."
 	.venv/bin/python scripts/analytics/build_call_beta_panel.py $(ARGS)
+	@echo "Estudio de eventos SEC (cartas de comentario sobre IA) sobre el panel (sec_stacked_event_study)..."
+	.venv/bin/python scripts/analytics/sec_stacked_event_study.py $(ARGS)
 
 analytics: analytics-text analytics-financials analytics-panels analytics-activities analytics-call-beta
 
