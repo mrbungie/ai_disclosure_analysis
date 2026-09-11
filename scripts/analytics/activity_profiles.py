@@ -169,7 +169,13 @@ def load() -> pd.DataFrame:
         raise SystemExit("sin actividades extraídas")
     acts = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
     acts = acts[acts["error"].isna()]
-    # último veredicto por texto único (una corrida puede reprocesar un texto que dio error antes)
+    # el juez LLM no es determinista entre corridas: un texto puede reprocesarse (para
+    # corregir un error anterior) y salir con un veredicto distinto sin que haya error. Si
+    # CUALQUIER corrida encontró actividad para ese texto, esa extracción no se pierde aunque
+    # una corrida posterior sin error diga que no hay actividad; sólo cuando ninguna corrida
+    # encontró actividad se usa el veredicto negativo más reciente.
+    has_any_true = acts.groupby("text_hash")["has_activity"].transform("any")
+    acts = acts[(has_any_true & acts["has_activity"]) | ~has_any_true]
     last = acts.groupby("text_hash")["session_id"].transform("max")
     acts = acts[acts["session_id"] == last]
     n_texts = acts["text_hash"].nunique()
@@ -183,6 +189,8 @@ def load() -> pd.DataFrame:
             WITH calls AS (
                 SELECT document_id, ticker, row_number() OVER (PARTITION BY document_id ORDER BY 1) AS rn
                 FROM ({calls_union})
+                -- same analysis universe as the views (S&P 500 at 2021-01-01, see build_duckdb.py)
+                WHERE ticker IN (SELECT ticker FROM firm_universe WHERE country_code = 'us')
                 QUALIFY rn = 1
             ), docs AS (
                 SELECT accession_number, ticker, form_type AS form FROM filing_manifest WHERE country_code='us' AND form_type != 'Earnings call transcript'

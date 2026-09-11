@@ -1,127 +1,186 @@
-<svg width="1720" height="500" viewBox="0 0 1720 500" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif" xmlns:c2pa="http://c2pa.org/manifest"><metadata><c2pa:manifest>AAAWgmp1bWIAAAAeanVtZGMycGEAEQAQgAAAqgA4m3EDYzJwYQAAABZcanVtYgAAAEdqdW1kYzJtYQARABCAAACqADibcQN1cm46YzJwYTo1MzIzMWFmMi1kZDY4LTRjZmUtYjI0MS04NzIyZDQwNjJlOWQAAAADl2p1bWIAAAApanVtZGMyYXMAEQAQgAAAqgA4m3EDYzJwYS5hc3NlcnRpb25zAAAAALxqdW1iAAAARGp1bWRjYm9yABEAEIAAAKoAOJtxE2MycGEuaW5ncmVkaWVudC52MwAAAAAYYzJzaB3fnLGPHoB8sheLblDVPMoAAABwY2JvcqNpZGM6Zm9ybWF0bWltYWdlL3N2Zyt4bWxqaW5zdGFuY2VJRHgseG1wOmlpZDowOTJmNDM4Zi03MjRkLTRmODUtYWViOC02YmY3NjA5Y2Q2MmFscmVsYXRpb25zaGlwaHBhcmVudE9mAAAB4mp1bWIAAABBanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5hY3Rpb25zLnYyAAAAABhjMnNoBl83K/IfLm4j6TCpsCQW7AAAAZljYm9yomdhY3Rpb25zgqJmYWN0aW9ua2MycGEub3BlbmVkanBhcmFtZXRlcnOha2luZ3JlZGllbnRzgaJjdXJseC1zZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmluZ3JlZGllbnQudjNkaGFzaFgg8q4l4dUCPF0zrbRG6rPGsQE+UQytIp5Mj+zJChtrOG6kZmFjdGlvbngdY29tLmFudGhyb3BpYy5jbGF1ZGUucHJvdmlkZWRqcGFyYW1ldGVyc6F4H2NvbS5hbnRocm9waWMub3JpZ2luLWNvbmZpZGVuY2VndW5rbm93bmtkZXNjcmlwdGlvbnhmQ2xhdWRlIHByb3ZpZGVkIHRoaXMgZmlsZSBhdCB0aGUgcmVxdWVzdCBvZiBhIHVzZXIgYW5kIG1heSBoYXZlIGNyZWF0ZWQgb3IgbW9kaWZpZWQgdGhlIGZpbGUgY29udGVudHMubXNvZnR3YXJlQWdlbnShZG5hbWVmQ2xhdWRlcmFsbEFjdGlvbnNJbmNsdWRlZPUAAADIanVtYgAAAEBqdW1kY2JvcgARABCAAACqADibcRNjMnBhLmhhc2guZGF0YQAAAAAYYzJzaBTxpseEvRiqiSDCmnN3EVEAAACAY2JvcqVjYWxnZnNoYTI1NmNwYWRNAAAAAAAAAAAAAAAAAGRoYXNoWCBiI+n957uXzjAwa+qoyY0nQ4hGm/HHm5YJdcRtQg1WQGRuYW1lbmp1bWJmIG1hbmlmZXN0amV4Y2x1c2lvbnOBomVzdGFydBjDZmxlbmd0aBkeBAAAAj5qdW1iAAAAJ2p1bWRjMmNsABEAEIAAAKoAOJtxA2MycGEuY2xhaW0udjIAAAACD2Nib3KlY2FsZ2ZzaGEyNTZpc2lnbmF0dXJleE1zZWxmI2p1bWJmPS9jMnBhL3VybjpjMnBhOjUzMjMxYWYyLWRkNjgtNGNmZS1iMjQxLTg3MjJkNDA2MmU5ZC9jMnBhLnNpZ25hdHVyZWppbnN0YW5jZUlEeCx4bXA6aWlkOjBjZWRkNzEyLWUyMWQtNGQyNi05MGRhLTg4NGY4NjYyOTA3ZnJjcmVhdGVkX2Fzc2VydGlvbnODomN1cmx4LXNlbGYjanVtYmY9YzJwYS5hc3NlcnRpb25zL2MycGEuaW5ncmVkaWVudC52M2RoYXNoWCDyriXh1QI8XTOttEbqs8axAT5RDK0inkyP7MkKG2s4bqJjdXJseCpzZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmFjdGlvbnMudjJkaGFzaFggCsgcHjQ8K7TMfZk8XVXsetkQjXlYm431O6/xgPxKDiyiY3VybHgpc2VsZiNqdW1iZj1jMnBhLmFzc2VydGlvbnMvYzJwYS5oYXNoLmRhdGFkaGFzaFggJy7TTrEjbscb0jamXVCifzkm4nk0YGPpb1ns6KNaad50Y2xhaW1fZ2VuZXJhdG9yX2luZm+jZG5hbWVvQW50aHJvcGljIEZpbGVzZ3ZlcnNpb25lMS4wLjBrc3BlY1ZlcnNpb25lMi40LjAAABA4anVtYgAAAChqdW1kYzJjcwARABCAAACqADibcQNjMnBhLnNpZ25hdHVyZQAAABAIY2JvctKEWQISogEmGCFZAgowggIGMIIBjaADAgECAhRA5aAK7sI50L64g/oGQgU9Z1UTADAKBggqhkjOPQQDAzBJMRcwFQYDVQQKEw5BbnRocm9waWMsIFBCQzEuMCwGA1UEAxMlQW50aHJvcGljIENvbnRlbnQgQ3JlZGVudGlhbHMgUm9vdCBDQTAeFw0yNjA4MDcxODQzNTZaFw0yODA4MDYxOTQzNTZaMEQxFzAVBgNVBAoTDkFudGhyb3BpYywgUEJDMSkwJwYDVQQDEyBBbnRocm9waWMgQ2xhdWRlIENvbnRlbnQgU2lnbmluZzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJh6CmvLUBgFFNU0vUKlOVtE6djd17L5SuwX0LemFisBM3dkd/3cyjxFA3Qo5S46fX0/ihY0VZ7mfb9KF703t5OjWDBWMA4GA1UdDwEB/wQEAwIHgDAVBgNVHSUEDjAMBgorBgEEAYPoXgIBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUzlHiBIFOZFsj+OPEz5o+nMHXXMIwCgYIKoZIzj0EAwMDZwAwZAIwMXMdFJ4BetLLVY7ORuE9noqbbAZOZn/aArXyTwFAZfKrPzxF2vPoJNf1+UCdg1XGAjBwX1zd9WGqYkqmL5SFqw1QySjr1zJfpJM9+1rdDwSPLMOPOjKuiXjoU/pUUeG9RwmhY3BhZFkNngAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPZYQPJ91sNIrabuXBphlmoatLE2gzUmRlNIFXWRLZ3fdZq0sP00fikbtLZ4b22XhjFgrzY1pGTBZspc2TUoC66BtF4=</c2pa:manifest></metadata>
+<svg width="1740" height="510" viewBox="0 0 1740 510" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M1 1L8 5L1 9Z" fill="#5F5E5A"/>
     </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M1 1L8 5L1 9Z" fill="#3B6D11"/>
+    </marker>
   </defs>
 
-  <rect x="0" y="0" width="1720" height="500" fill="#FFFFFF"/>
+  <rect x="0" y="0" width="1740" height="510" fill="#FFFFFF"/>
 
-  <!-- connectors -->
+  <!-- CONNECTORS -->
   <g stroke="#5F5E5A" stroke-width="1.5" fill="none">
-    <path d="M170,290 L190,290 L190,100 L208,100" marker-end="url(#arrow)"/>
-    <path d="M170,310 L190,310 L190,430 L208,430" marker-end="url(#arrow)"/>
+    <!-- 3-WAY PARALLEL SPLIT FROM S&P 500 UNIVERSE -->
+    <path d="M155,230 L170,230 L170,90 L183,90" marker-end="url(#arrow)"/>
+    <path d="M155,245 L170,245 L170,388 L183,388" marker-end="url(#arrow)"/>
+    <path d="M155,260 L170,260 L170,465 L183,465" marker-end="url(#arrow)"/>
 
-    <line x1="400" y1="100" x2="438" y2="95" marker-end="url(#arrow)"/>
-    <line x1="525" y1="125" x2="525" y2="143" marker-end="url(#arrow)"/>
-    <line x1="525" y1="205" x2="525" y2="223" marker-end="url(#arrow)"/>
-    <line x1="525" y1="305" x2="525" y2="287" marker-end="url(#arrow)"/>
+    <!-- Text Data to Cleaning -->
+    <line x1="370" y1="90" x2="438" y2="90" marker-end="url(#arrow)"/>
 
-    <path d="M612,240 L630,240 L630,175 L648,175" marker-end="url(#arrow)"/>
-    <line x1="612" y1="255" x2="648" y2="255" marker-end="url(#arrow)"/>
+    <!-- Text Processing Stack Vertical Arrows -->
+    <line x1="525" y1="120" x2="525" y2="138" marker-end="url(#arrow)"/>
+    <line x1="525" y1="198" x2="525" y2="216" marker-end="url(#arrow)"/>
+    <line x1="525" y1="298" x2="525" y2="280" marker-end="url(#arrow)"/>
 
-    <line x1="802" y1="175" x2="838" y2="175" marker-end="url(#arrow)"/>
-    <line x1="802" y1="255" x2="838" y2="255" marker-end="url(#arrow)"/>
+    <!-- GBDT Gate to Pass 1 -->
+    <path d="M610,245 L625,245 L625,100 L638,100" marker-end="url(#arrow)"/>
 
-    <path d="M992,175 L1010,175 L1010,205 L1028,205" marker-end="url(#arrow)"/>
-    <path d="M992,255 L1010,255 L1010,235 L1028,235" marker-end="url(#arrow)"/>
+    <!-- Pass 1 to Semantic Frames -->
+    <line x1="815" y1="100" x2="843" y2="100" marker-end="url(#arrow)"/>
 
-    <line x1="390" y1="430" x2="1028" y2="430" marker-end="url(#arrow)"/>
+    <!-- Pass 2 to Disclosed Activities -->
+    <line x1="815" y1="220" x2="843" y2="220" marker-end="url(#arrow)"/>
 
-    <path d="M1230,215 L1250,215 L1250,300 L1258,300" marker-end="url(#arrow)"/>
-    <path d="M1120,460 L1120,480 L1250,480 L1250,350 L1258,350" marker-end="url(#arrow)"/>
+    <!-- Disclosed Activities to Grounding and Geo Taxonomy -->
+    <path d="M1020,210 L1035,210 L1035,188 L1048,188" marker-end="url(#arrow)"/>
+    <path d="M1020,230 L1035,230 L1035,258 L1048,258" marker-end="url(#arrow)"/>
 
-    <line x1="1462" y1="325" x2="1498" y2="325" marker-end="url(#arrow)"/>
+    <!-- Parallel Quantitative Streams into Processed Panel -->
+    <line x1="370" y1="388" x2="438" y2="398" marker-end="url(#arrow)"/>
+    <line x1="370" y1="465" x2="438" y2="442" marker-end="url(#arrow)"/>
+
+    <!-- Inputs to Fusion -->
+    <!-- From Semantic Frames (D, P) -->
+    <path d="M1020,100 L1250,100 L1250,220 L1273,220" marker-end="url(#arrow)"/>
+    <!-- From Grounding (G, S) -->
+    <path d="M1230,188 L1250,188 L1250,240 L1273,240" marker-end="url(#arrow)"/>
+    <!-- From Geo Taxonomy -->
+    <path d="M1230,258 L1250,258 L1250,260 L1273,260" marker-end="url(#arrow)"/>
+    <!-- From Processed Quantitative Data -->
+    <path d="M1010,420 L1250,420 L1250,280 L1273,280" marker-end="url(#arrow)"/>
+
+    <!-- Fusion to Empirical Analyses -->
+    <line x1="1470" y1="250" x2="1508" y2="250" marker-end="url(#arrow)"/>
   </g>
 
-  <!-- Firm-period data (gray) -->
+  <!-- SEQUENTIAL Pass 1 to Pass 2 Connector (Green & highlighted) -->
+  <g stroke="#3B6D11" stroke-width="2.0" fill="none">
+    <line x1="727" y1="130" x2="727" y2="188" marker-end="url(#arrow-green)"/>
+  </g>
+  <text x="734" y="163" font-size="10" fill="#2E580E" font-weight="600" font-style="italic">behavioral subset (~17.4k)</text>
+
+  <!-- 1. UNIVERSE (Gray) -->
   <g>
-    <rect x="20" y="270" width="150" height="60" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.75"/>
-    <text x="95" y="304" text-anchor="middle" font-size="14" font-weight="600" fill="#2C2C2A">Firm-period data</text>
+    <rect x="20" y="215" width="135" height="65" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.75"/>
+    <text x="87" y="242" text-anchor="middle" font-size="13" font-weight="bold" fill="#2C2C2A">S&amp;P 500 Universe</text>
+    <text x="87" y="260" text-anchor="middle" font-size="11" fill="#5F5E5A">2021–2026 (58k docs)</text>
   </g>
 
-  <!-- Text data (teal) -->
+  <!-- 2. TEXT DATA (Teal) -->
   <g>
-    <rect x="210" y="65" width="190" height="70" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.75"/>
-    <text x="305" y="95" text-anchor="middle" font-size="14" font-weight="600" fill="#04342C">Text data (Edgar)</text>
-    <text x="305" y="115" text-anchor="middle" font-size="12" fill="#0F6E56">10-K, 10-Q, 8-K, DEF14A, calls</text>
+    <rect x="185" y="55" width="185" height="70" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.75"/>
+    <text x="277" y="80" text-anchor="middle" font-size="13" font-weight="bold" fill="#04342C">Text Data (Edgar &amp; Calls)</text>
+    <text x="277" y="98" text-anchor="middle" font-size="11" fill="#0F6E56">10-K, 10-Q, 8-K, DEF 14A</text>
+    <text x="277" y="114" text-anchor="middle" font-size="11" fill="#0F6E56">Earnings calls, SEC letters</text>
   </g>
 
-  <!-- Numeric data (gray) -->
+  <!-- 3. FINANCIAL & MARKET DATA (Gray, Parallel Stream 2) -->
   <g>
-    <rect x="210" y="400" width="180" height="60" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.75"/>
-    <text x="300" y="425" text-anchor="middle" font-size="14" font-weight="600" fill="#2C2C2A">Numeric data</text>
-    <text x="300" y="444" text-anchor="middle" font-size="12" fill="#5F5E5A">XBRL, prices</text>
+    <rect x="185" y="355" width="185" height="65" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.75"/>
+    <text x="277" y="380" text-anchor="middle" font-size="13" font-weight="bold" fill="#2C2C2A">Financial &amp; Market Data</text>
+    <text x="277" y="398" text-anchor="middle" font-size="11" fill="#5F5E5A">XBRL fundamentals (capex, R&amp;D)</text>
+    <text x="277" y="413" text-anchor="middle" font-size="11" fill="#5F5E5A">Daily stock prices, Beta, IVol</text>
   </g>
 
-  <!-- Text processing stack (green) -->
+  <!-- 4. PATENTS DATA (Gray, Parallel Stream 3) -->
   <g>
-    <rect x="440" y="65" width="170" height="60" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.75"/>
-    <text x="525" y="99" text-anchor="middle" font-size="13" font-weight="600" fill="#173404">Cleaning and prefiltering</text>
-  </g>
-  <g>
-    <rect x="440" y="145" width="170" height="60" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.75"/>
-    <text x="525" y="169" text-anchor="middle" font-size="13" font-weight="600" fill="#173404">Embeddings and lexical</text>
-    <text x="525" y="187" text-anchor="middle" font-size="11" fill="#3B6D11">Text embeddings + signals</text>
-  </g>
-  <g>
-    <rect x="440" y="225" width="170" height="60" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.75"/>
-    <text x="525" y="259" text-anchor="middle" font-size="13" font-weight="600" fill="#173404">AI paragraph classifier</text>
+    <rect x="185" y="435" width="185" height="60" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.75"/>
+    <text x="277" y="458" text-anchor="middle" font-size="13" font-weight="bold" fill="#2C2C2A">AI Patents (OECD 2025)</text>
+    <text x="277" y="475" text-anchor="middle" font-size="11" fill="#5F5E5A">Google Patents / BigQuery</text>
+    <text x="277" y="489" text-anchor="middle" font-size="10" fill="#5F5E5A">5 core CPCs + 274 keywords</text>
   </g>
 
-  <!-- Golden sets (coral) -->
+  <!-- 5. PREPROCESSING STACK (Green) -->
   <g>
-    <rect x="440" y="305" width="170" height="50" rx="8" fill="#FAECE7" stroke="#D85A30" stroke-width="0.75"/>
-    <text x="525" y="325" text-anchor="middle" font-size="13" font-weight="600" fill="#4A1B0C">Golden sets</text>
-    <text x="525" y="342" text-anchor="middle" font-size="11" fill="#993C1D">+ training</text>
+    <rect x="440" y="60" width="170" height="60" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.75"/>
+    <text x="525" y="85" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#173404">Cleaning &amp; Deduplication</text>
+    <text x="525" y="103" text-anchor="middle" font-size="11" fill="#3B6D11">BLAKE2b hash (8.9M → 5.1M)</text>
+  </g>
+  <g>
+    <rect x="440" y="138" width="170" height="60" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.75"/>
+    <text x="525" y="163" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#173404">Feature Extraction</text>
+    <text x="525" y="181" text-anchor="middle" font-size="11" fill="#3B6D11">39 signals + BGE-M3 embeddings</text>
+  </g>
+  <g>
+    <rect x="440" y="216" width="170" height="60" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.75"/>
+    <text x="525" y="241" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#173404">Supervised GBDT Gate</text>
+    <text x="525" y="259" text-anchor="middle" font-size="11" fill="#3B6D11">Recall ≥ 0.92 (31,857 flagged)</text>
+  </g>
+  <!-- Golden sets (Coral) -->
+  <g>
+    <rect x="440" y="298" width="170" height="48" rx="8" fill="#FAECE7" stroke="#D85A30" stroke-width="0.75"/>
+    <text x="525" y="318" text-anchor="middle" font-size="12" font-weight="bold" fill="#4A1B0C">Golden Sets &amp; Benchmarks</text>
+    <text x="525" y="335" text-anchor="middle" font-size="10.5" fill="#993C1D">n=9,900 train; κ=0.81–0.87 audit</text>
   </g>
 
-  <!-- Disclosure / Extractor passes (green) -->
+  <!-- 6. LLM EXTRACTION PASSES (Green) -->
+  <!-- Pass 1 -->
   <g>
-    <rect x="650" y="145" width="150" height="60" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.75"/>
-    <text x="725" y="169" text-anchor="middle" font-size="13" font-weight="600" fill="#173404">Disclosure</text>
-    <text x="725" y="187" text-anchor="middle" font-size="11" fill="#3B6D11">LLM pass</text>
+    <rect x="640" y="70" width="175" height="60" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.75"/>
+    <text x="727" y="95" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#173404">Pass 1: Semantic Claims</text>
+    <text x="727" y="113" text-anchor="middle" font-size="11" fill="#3B6D11">Zero-shot LLM (8 core fields)</text>
   </g>
+  <!-- Pass 2 -->
   <g>
-    <rect x="650" y="225" width="150" height="60" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.75"/>
-    <text x="725" y="249" text-anchor="middle" font-size="13" font-weight="600" fill="#173404">Extractor</text>
-    <text x="725" y="267" text-anchor="middle" font-size="11" fill="#3B6D11">LLM pass</text>
-  </g>
-
-  <!-- Frames (blue) -->
-  <g>
-    <rect x="840" y="145" width="150" height="60" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.75"/>
-    <text x="915" y="169" text-anchor="middle" font-size="13" font-weight="600" fill="#042C53">Semantic</text>
-    <text x="915" y="187" text-anchor="middle" font-size="11" fill="#185FA5">frames</text>
-  </g>
-  <g>
-    <rect x="840" y="225" width="150" height="60" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.75"/>
-    <text x="915" y="249" text-anchor="middle" font-size="13" font-weight="600" fill="#042C53">Activity</text>
-    <text x="915" y="267" text-anchor="middle" font-size="11" fill="#185FA5">frames</text>
+    <rect x="640" y="190" width="175" height="60" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.75"/>
+    <text x="727" y="215" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#173404">Pass 2: Activity Triples</text>
+    <text x="727" y="233" text-anchor="middle" font-size="11" fill="#3B6D11">Firm-conditioned LLM extraction</text>
   </g>
 
-  <!-- Processed qualitative data (blue) -->
+  <!-- 7. STRUCTURED QUALITATIVE OUTPUTS & ENRICHMENTS (Blue) -->
+  <!-- Semantic frames (D, P) -->
   <g>
-    <rect x="1030" y="180" width="200" height="70" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.75"/>
-    <text x="1130" y="220" text-anchor="middle" font-size="14" font-weight="600" fill="#042C53">Processed qualitative data</text>
+    <rect x="845" y="70" width="175" height="60" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.75"/>
+    <text x="932" y="95" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#042C53">Semantic Frames</text>
+    <text x="932" y="113" text-anchor="middle" font-size="11" fill="#185FA5">48,787 frames → D, P Posture</text>
+  </g>
+  <!-- Disclosed activities (A) -->
+  <g>
+    <rect x="845" y="190" width="175" height="60" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.75"/>
+    <text x="932" y="215" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#042C53">Disclosed Activities</text>
+    <text x="932" y="233" text-anchor="middle" font-size="11" fill="#185FA5">27,883 operational triples (A)</text>
+  </g>
+  <!-- Grounding (G, S) -->
+  <g>
+    <rect x="1050" y="160" width="180" height="55" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.75"/>
+    <text x="1140" y="183" text-anchor="middle" font-size="12" font-weight="bold" fill="#042C53">Grounding &amp; Substance</text>
+    <text x="1140" y="201" text-anchor="middle" font-size="10.5" fill="#185FA5">5 falsification flags → G, S</text>
+  </g>
+  <!-- Geographic Taxonomy -->
+  <g>
+    <rect x="1050" y="230" width="180" height="55" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.75"/>
+    <text x="1140" y="253" text-anchor="middle" font-size="12" font-weight="bold" fill="#042C53">Geographic Taxonomy</text>
+    <text x="1140" y="271" text-anchor="middle" font-size="10.5" fill="#185FA5">Ecosystem lexicon (US, EU, CN)</text>
   </g>
 
-  <!-- Processed quantitative data (blue) -->
+  <!-- 8. PROCESSED QUANTITATIVE PANEL (Blue) -->
   <g>
-    <rect x="1030" y="400" width="200" height="60" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.75"/>
-    <text x="1130" y="435" text-anchor="middle" font-size="14" font-weight="600" fill="#042C53">Processed quantitative data</text>
+    <rect x="440" y="375" width="570" height="95" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.75"/>
+    <text x="725" y="400" text-anchor="middle" font-size="13" font-weight="bold" fill="#042C53">Processed Quantitative Panel (Firm-Year)</text>
+    <text x="725" y="420" text-anchor="middle" font-size="11" fill="#185FA5">• Financial Fundamentals: capex, R&amp;D-to-sales, gross/operating margins, asset turnover (XBRL)</text>
+    <text x="725" y="438" text-anchor="middle" font-size="11" fill="#185FA5">• Capital Market Risk: 252-day market beta, idiosyncratic volatility (ivol)</text>
+    <text x="725" y="456" text-anchor="middle" font-size="11" fill="#185FA5">• External Tech Capability: OECD AI patent grants &amp; patent intensity (Google Patents / BigQuery)</text>
   </g>
 
-  <!-- Point-in-time fusion (purple) -->
+  <!-- 9. MULTI-SOURCE FUSION (Purple) -->
   <g>
-    <rect x="1260" y="290" width="200" height="70" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.75"/>
-    <text x="1360" y="318" text-anchor="middle" font-size="13" font-weight="600" fill="#26215C">Point-in-time fusion</text>
-    <text x="1360" y="336" text-anchor="middle" font-size="11" fill="#534AB7">and aggregation</text>
+    <rect x="1275" y="195" width="195" height="110" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.75"/>
+    <text x="1372" y="223" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#26215C">Point-in-Time Fusion</text>
+    <text x="1372" y="242" text-anchor="middle" font-size="11" fill="#534AB7">Construct operationalization:</text>
+    <text x="1372" y="261" text-anchor="middle" font-size="12" font-weight="bold" fill="#26215C">D, P, A, G, S, W (Decoupling)</text>
+    <text x="1372" y="280" text-anchor="middle" font-size="10" fill="#534AB7">Firm-year, call &amp; venue panels</text>
   </g>
 
-  <!-- Analyses and visualizations (purple) -->
+  <!-- 10. EMPIRICAL ANALYSES & CHAPTERS (Purple) -->
   <g>
-    <rect x="1500" y="295" width="180" height="60" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.75"/>
-    <text x="1590" y="330" text-anchor="middle" font-size="13" font-weight="600" fill="#26215C">Analyses and visualizations</text>
+    <rect x="1510" y="190" width="195" height="120" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.75"/>
+    <text x="1607" y="217" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#26215C">Empirical Analyses</text>
+    <text x="1607" y="238" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 3: AI Archetypes (D, P)</text>
+    <text x="1607" y="255" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 4: Operations &amp; Geo (A, G)</text>
+    <text x="1607" y="272" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 5: Credibility &amp; Decoupling (W)</text>
+    <text x="1607" y="289" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 6–7: Markets &amp; Diligence</text>
   </g>
 </svg>

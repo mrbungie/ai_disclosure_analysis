@@ -101,6 +101,7 @@ prefilter:
 analytics-text:
 	@echo "Arquetipos de voz, clusters de comportamiento y panel empresa-año (build_firm_clusters)..."
 	.venv/bin/python scripts/analytics/build_firm_clusters.py $(ARGS)
+	.venv/bin/python scripts/analytics/build_document_panel.py $(ARGS)
 	.venv/bin/python scripts/analytics/build_segments.py $(ARGS)
 	.venv/bin/python scripts/analytics/build_voice_behavior_grid.py $(ARGS)
 
@@ -129,6 +130,8 @@ analytics-activities:
 analytics-call-beta:
 	@echo "Panel de calls para las regresiones de beta post-call (build_call_beta_panel)..."
 	.venv/bin/python scripts/analytics/build_call_beta_panel.py $(ARGS)
+	@echo "Cartas de comentario SEC sobre IA: inventario verificado y casos (sec_comment_letter_cases)..."
+	.venv/bin/python scripts/analytics/sec_comment_letter_cases.py $(ARGS)
 
 analytics: analytics-text analytics-financials analytics-panels analytics-activities analytics-call-beta
 
