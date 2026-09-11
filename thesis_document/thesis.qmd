@@ -57,6 +57,36 @@ hd_share = {int(y): float(v * 100) for y, v in _yr["any_ai"].items()}
 hd_frames = {int(y): float(v) for y, v in _yr["frames"].items()}
 hd_frames_ratio = hd_frames[2025] / hd_frames[2021]
 hd_frames_ratio_26 = hd_frames[2026] / hd_frames[2021]
+
+# Same-window seasonal adjustment for the partial 2026 year: the change in a
+# measure between the 2025 window that ends on the same calendar day as the
+# 2026 cut-off and the full 2025 year is applied to the 2026 year-to-date value.
+_dp = pd.read_parquet(_cl / "document_panel.parquet")
+_dp = _dp[_dp["form"].isin(["10-K", "10-Q", "DEF 14A", "8-K"])].copy()
+_dp["year"] = _dp["fecha"].dt.year
+_dp["md"] = _dp["fecha"].dt.month * 100 + _dp["fecha"].dt.day
+hd_cutoff = _dp.loc[_dp["year"] == 2026, "fecha"].max()
+hd_cutoff_md = int(hd_cutoff.month * 100 + hd_cutoff.day)
+hd_cutoff_str = hd_cutoff.strftime("%-d %B")
+
+def _fy_measures(sub):
+    g = sub.groupby("ticker").agg(w=("n_words", "sum"), fr=("n_frames", "sum"))
+    return float((1000 * g["fr"] / g["w"]).mean()), float((g["fr"] > 0).mean() * 100)
+
+_full25 = _fy_measures(_dp[_dp["year"] == 2025])
+_win25 = _fy_measures(_dp[(_dp["year"] == 2025) & (_dp["md"] <= hd_cutoff_md)])
+_ytd26 = _fy_measures(_dp[(_dp["year"] == 2026) & (_dp["md"] <= hd_cutoff_md)])
+hd_int_factor = _full25[0] / _win25[0]
+hd_share_factor = _full25[1] / _win25[1]
+hd_int_est_2026 = _ytd26[0] * hd_int_factor
+hd_share_est_2026 = min(_ytd26[1] * hd_share_factor, 100.0)
+hd_int_ratio_est = hd_int_est_2026 / hd_frames[2021]
+# Activity volumes: same-window factor on the activity count itself.
+_ad = pd.read_parquet(_ap, columns=["accession_number", "text_hash", "activity_index"]).drop_duplicates()
+_ad = _ad.merge(pd.read_parquet(_cl / "document_panel.parquet", columns=["accession_number", "fecha"]), on="accession_number", how="inner")
+_ad["year"] = _ad["fecha"].dt.year
+_ad["md"] = _ad["fecha"].dt.month * 100 + _ad["fecha"].dt.day
+hd_act_factor = float(((_ad["year"] == 2025).sum()) / ((_ad["year"] == 2025) & (_ad["md"] <= hd_cutoff_md)).sum())
 os.chdir(_repo_root)
 _c = duckdb.connect(str(_db), read_only=True)
 _tenk = _c.execute(f"""
@@ -114,7 +144,7 @@ These findings are translated into an AI Disclosure Credibility Framework combin
 
 ## Business problem
 
-Corporate AI disclosure became nearly ubiquitous after ChatGPT. Prior work documents the surge in annual-report AI language [@anantharaman2026, pp. 1--2]; in the corpus assembled for this thesis, the share of S&P 500 firms with any AI statement in their SEC filings rose from `{python} f"{hd_share[2021]:.0f}"`% in 2021 to `{python} f"{hd_share[2026]:.0f}"`% in 2026 (year to date; `{python} f"{hd_share[2025]:.0f}"`% in 2025, the last complete year), while narrative intensity per thousand words increased `{python} f"{hd_frames_ratio_26:.0f}"`-fold. Once almost every large corporation talks about AI, presence alone ceases to distinguish meaningful technological AI activity from strategic positioning.
+Corporate AI disclosure became nearly ubiquitous after ChatGPT. Prior work documents the surge in annual-report AI language [@anantharaman2026, pp. 1--2]; in the corpus assembled for this thesis, the share of S&P 500 firms with any AI statement in their SEC filings rose from `{python} f"{hd_share[2021]:.0f}"`% in 2021 to `{python} f"{hd_share[2025]:.0f}"`% in 2025 and an estimated `{python} f"{hd_share_est_2026:.0f}"`% at the close of 2026, while narrative intensity per thousand words increased an estimated `{python} f"{hd_int_ratio_est:.0f}"`-fold over the same period. Once almost every large corporation talks about AI, presence alone ceases to distinguish meaningful technological AI activity from strategic positioning.
 
 This creates a practical problem for investors, issuers, and regulators:
 
@@ -236,7 +266,7 @@ cov_months_2026 = pd.to_datetime(cov_last_date).month
 
 **Firm universe.** The analysis universe is the S&P 500 as constituted on 2021-01-01: `{python} uni_frame_total` tickers, of which `{python} uni_frame_delisted` were subsequently delisted or acquired and are retained, with their filings up to exit, to avoid survivorship bias. Firms added to the index after that date are excluded throughout. `{python} uni_n_firms` of the `{python} uni_frame_total` firms have at least one processed document; `{python} uni_n_activity_firms` disclose at least one operational AI activity, and `{python} bal_n` are observed in every year from 2021 to 2026 and form the balanced cohort used for diffusion checks. Whenever a table or regression uses a narrower sample (firms with call transcripts, firms with sufficient AI text in both venues, or the firm-years of a single fiscal year), the sample size is reported next to the estimate.
 
-**Temporal coverage.** The panel closes with the documents available on `{python} cov_last_date`, so 2026 is a partial year: `{python} cov_10k_2026` firms have filed their annual report in 2026 (against `{python} cov_10k_2025` in 2025), 10-Qs cover the first two quarters (`{python} cov_10q_2026` firms), and call transcripts run through the third quarter (`{python} cov_calls_2026` firms). Two conventions follow. Measures that are rates or shares (the share of firms disclosing AI, frames per thousand words, grounding shares, archetype assignments, Decoupling) are reported for 2026 as observed year-to-date, because they do not scale with elapsed time; 2025 is retained as the last complete year wherever a year-over-year comparison is made. Measures that are volumes (counts of disclosed activities in a year) are annualized for 2026 by the ratio of twelve months to the `{python} cov_months_2026` months observed, and every figure that shows an annualized value marks it as a projection.
+**Temporal coverage.** The panel closes with the documents available on `{python} cov_last_date`, so 2026 is a partial year: `{python} cov_10k_2026` firms have filed their annual report in 2026 (against `{python} cov_10k_2025` in 2025), 10-Qs cover the first two quarters (`{python} cov_10q_2026` firms), and call transcripts run through the third quarter (`{python} cov_calls_2026` firms). Two conventions follow. Cross-sectional measures that do not accumulate over the year (archetype assignments, Decoupling, grounding shares, the screening of the 2026 reporting season) are reported for 2026 as observed year to date. Measures that are compared across years (the share of firms disclosing AI, frames per thousand words, and counts of disclosed activities) are given both as observed and as an estimate of the full 2026 year obtained with a same-window seasonal adjustment: the 2025 value of the measure inside the window ending on the same calendar day as the 2026 cut-off (`{python} hd_cutoff_str`) is compared with its full-year 2025 value, and the resulting factor is applied to the 2026 year-to-date value. This corrects for the seasonality of the document mix rather than assuming a uniform flow of filings across months, and every figure that shows an estimated value marks it as a projection; 2025 remains the last complete year.
 
 ```{python}
 #| echo: false
@@ -564,7 +594,7 @@ Every automated stage in the measurement pipeline is benchmarked against held-ou
 
 ## AI becomes ubiquitous
 
-Between 2021 and 2026, artificial intelligence transformed from a specialist topic into a standard element of corporate disclosure. Across the S&P 500, the share of firms making at least one AI statement in their SEC filings rose from `{python} f"{hd_share[2021]:.1f}"`% in 2021 to `{python} f"{hd_share[2025]:.1f}"`% in 2025, the last complete year, and to `{python} f"{hd_share[2026]:.1f}"`% in the 2026 year-to-date sample (@fig-ai-diffusion). Because participation is a share of the firms that have filed, not a count, the 2026 value needs no time adjustment. Over the same period, narrative intensity, the volume of AI semantic frames per 1,000 words of corporate text, climbed from `{python} f"{hd_frames[2021]:.3f}"` frames per 1,000 words in 2021 to `{python} f"{hd_frames[2025]:.3f}"` in 2025 and `{python} f"{hd_frames[2026]:.3f}"` in 2026 year to date, a `{python} f"{hd_frames_ratio_26:.1f}"`-fold increase (`{python} f"{hd_frames_ratio:.1f}"`-fold through the last complete year).
+Between 2021 and 2026, artificial intelligence transformed from a specialist topic into a standard element of corporate disclosure. Across the S&P 500, the share of firms making at least one AI statement in their SEC filings rose from `{python} f"{hd_share[2021]:.1f}"`% in 2021 to `{python} f"{hd_share[2025]:.1f}"`% in 2025, the last complete year, and to `{python} f"{hd_share[2026]:.1f}"`% in the 2026 year-to-date sample (@fig-ai-diffusion). Over the same period, narrative intensity, the volume of AI semantic frames per 1,000 words of corporate text, climbed from `{python} f"{hd_frames[2021]:.3f}"` frames per 1,000 words in 2021 to `{python} f"{hd_frames[2025]:.3f}"` in 2025 (`{python} f"{hd_frames_ratio:.1f}"`-fold) and `{python} f"{hd_frames[2026]:.3f}"` in 2026 year to date. Year-to-date values are not directly comparable with complete years because the document mix within a year is seasonal (annual reports cluster in the first quarter), so the full-year 2026 values are estimated with a same-window adjustment: in 2025, the change from the window ending on `{python} hd_cutoff_str` to the full year was a factor of `{python} f"{hd_int_factor:.3f}"` for intensity and `{python} f"{hd_share_factor:.3f}"` for participation, and applying those factors to the 2026 year-to-date values gives an estimated `{python} f"{hd_int_est_2026:.3f}"` frames per 1,000 words (`{python} f"{hd_int_ratio_est:.1f}"`-fold since 2021) and `{python} f"{hd_share_est_2026:.1f}"`% participation at the close of 2026.
 
 The sharpest inflection occurs around the 2023–2024 filing season, when fiscal-year-2023 10-Ks became the first annual reports written with a full year of generative AI commercialization behind them: the share of 10-Ks containing any AI content surged from `{python} f"{hd_tenk_share[2023]:.0f}"`% to `{python} f"{hd_tenk_share[2024]:.0f}"`% in a single season. A balanced cohort of the `{python} bal_n` firms with a firm-year observation in every year from 2021 to 2026 reproduces the same trajectory (`{python} f"{bal_share[2021]:.0f}"`% to `{python} f"{bal_share[2025]:.0f}"`%), confirming that this reflects market-wide adoption rather than survivorship or index rebalancing.
 
@@ -1595,7 +1625,7 @@ As shown in @fig-ladder-substance, while `{python} f"{c2 / c1 * 100:.1f}"`% of A
 
 ## The paradox of the GenAI boom
 
-**The generative-AI boom multiplied the volume of disclosed AI activity but lowered its average grounding.** Between 2021 and 2026 the number of disclosed activities per year rose several-fold, while the share of activities at a deployed or scaled stage, the share naming a specific product or process, and the share with an identified business function all fell (@fig-volume-vs-grounding). The marginal activity added after 2023 is, on average, less concrete than the activities firms were already disclosing. This is the pattern H1 anticipates: when a vocabulary becomes an institutional expectation, adoption of the language outruns the accumulation of grounded activity behind it [@meyer1977, pp. 340--41]. Because activity counts scale with elapsed time, the 2026 volume is shown both as observed year to date and annualized on the months of filings available; the grounding shares for 2026 are rates and are read as observed.
+**The generative-AI boom multiplied the volume of disclosed AI activity but lowered its average grounding.** Between 2021 and 2026 the number of disclosed activities per year rose several-fold, while the share of activities at a deployed or scaled stage, the share naming a specific product or process, and the share with an identified business function all fell (@fig-volume-vs-grounding). The marginal activity added after 2023 is, on average, less concrete than the activities firms were already disclosing. This is the pattern H1 anticipates: when a vocabulary becomes an institutional expectation, adoption of the language outruns the accumulation of grounded activity behind it [@meyer1977, pp. 340--41]. Because activity counts accumulate over the year, the 2026 volume is shown both as observed year to date and as a full-year estimate obtained with the same-window seasonal factor; the grounding shares for 2026 are rates and are read as observed.
 
 ```{python}
 #| label: fig-volume-vs-grounding
@@ -1641,10 +1671,12 @@ gen_ev = both.groupby("year")["evidence_strength"].apply(lambda s: (s == "generi
 named_prod = both.groupby("year")["evidence_strength"].apply(lambda s: (s == "named_product_or_process").mean() * 100)
 ident_func = both.groupby("year")["function_family"].apply(lambda s: (s != "unspecified").mean() * 100)
 
-# Dynamic projection for 2026 based on observed elapsed filing months
+# Full-year 2026 projection with the same-window seasonal factor (activities
+# in full 2025 / activities in the 2025 window ending on the 2026 cut-off day),
+# computed once in the header chunk as hd_act_factor.
 latest_date_2026 = act_f[act_f["year"] == 2026]["filing_date"].max()
 months_observed = latest_date_2026.month if pd.notnull(latest_date_2026) else 8
-annual_factor = 12.0 / months_observed
+annual_factor = hd_act_factor
 vol_2026_obs = vol[2026]
 vol_2026_proj_total = int(round(vol_2026_obs * annual_factor))
 vol_2026_proj_adj = vol_2026_proj_total - vol_2026_obs
@@ -1712,7 +1744,7 @@ plt.tight_layout(rect=[0, 0, 1, 0.94])
 plt.show()
 ```
 
-The magnitudes are large. Disclosed activities in 2025, the last complete year, were `{python} f"{growth_ratio:.1f}"` times the 2021 count, and the 2026 total annualized on `{python} months_observed` months of filings reaches `{python} f"{proj_ratio:.1f}"` times the 2021 count. Over 2021–2025 the share at a deployed or scaled stage fell from `{python} f"{dep_share[main_years[0]]:.0f}"`% to `{python} f"{dep_share[main_years[-1]]:.0f}"`% (`{python} f"{dep_share[2026]:.0f}"`% in 2026 year to date) and the share naming a specific product or process fell from `{python} f"{named_prod[main_years[0]]:.0f}"`% to `{python} f"{named_prod[main_years[-1]]:.0f}"`% (`{python} f"{named_prod[2026]:.0f}"`% in 2026). This finding does not claim that real-world firm capabilities deteriorated. It establishes an informational phenomenon: **the marginal corporate AI activity disclosed following ChatGPT was less concrete, less mature, and more speculative than the disclosures preceding it**.
+The magnitudes are large. Disclosed activities in 2025, the last complete year, were `{python} f"{growth_ratio:.1f}"` times the 2021 count, and the full-year 2026 total estimated with the same-window seasonal factor (`{python} f"{hd_act_factor:.2f}"`, the ratio of full-year to same-window activity in 2025) reaches `{python} f"{proj_ratio:.1f}"` times the 2021 count. Over 2021–2025 the share at a deployed or scaled stage fell from `{python} f"{dep_share[main_years[0]]:.0f}"`% to `{python} f"{dep_share[main_years[-1]]:.0f}"`% (`{python} f"{dep_share[2026]:.0f}"`% in 2026 year to date) and the share naming a specific product or process fell from `{python} f"{named_prod[main_years[0]]:.0f}"`% to `{python} f"{named_prod[main_years[-1]]:.0f}"`% (`{python} f"{named_prod[2026]:.0f}"`% in 2026). This finding does not claim that real-world firm capabilities deteriorated. It establishes an informational phenomenon: **the marginal corporate AI activity disclosed following ChatGPT was less concrete, less mature, and more speculative than the disclosures preceding it**.
 
 ## Who owns the AI
 

@@ -101,6 +101,7 @@ prefilter:
 analytics-text:
 	@echo "Arquetipos de voz, clusters de comportamiento y panel empresa-año (build_firm_clusters)..."
 	.venv/bin/python scripts/analytics/build_firm_clusters.py $(ARGS)
+	.venv/bin/python scripts/analytics/build_document_panel.py $(ARGS)
 	.venv/bin/python scripts/analytics/build_segments.py $(ARGS)
 	.venv/bin/python scripts/analytics/build_voice_behavior_grid.py $(ARGS)
 
