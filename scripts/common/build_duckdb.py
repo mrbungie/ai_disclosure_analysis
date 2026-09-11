@@ -142,6 +142,26 @@ def _manifest_source(stem: str) -> str | None:
         )"""
 
 
+# The US analysis universe: S&P 500 membership as of 2021-01-01, tagged in
+# firm_universe.parquet's `membership_groups` by scripts/us/00_build_firm_universe.py.
+# Everything else that was downloaded for the US (post-2021 index additions,
+# the manually curated core) stays on disk but is invisible to the views, so
+# the thesis, the analytics and every ad-hoc query see exactly one universe.
+US_ANALYSIS_PANEL = "sp500_2021_start_panel"
+
+
+def _us_panel_where(country: str, manifests_dir, column: str = "ticker") -> str:
+    """WHERE clause restricting a US select to the analysis panel; empty for
+    other countries. `column='membership_groups'` filters firm_universe
+    itself; the default filters any manifest by ticker membership."""
+    if country != "us":
+        return ""
+    if column == "membership_groups":
+        return f" WHERE list_contains(membership_groups, '{US_ANALYSIS_PANEL}')"
+    return (f" WHERE ticker IN (SELECT ticker FROM read_parquet('{manifests_dir}/firm_universe.parquet')"
+            f" WHERE list_contains(membership_groups, '{US_ANALYSIS_PANEL}'))")
+
+
 def _filing_manifest_selects(countries: list[tuple[str, dict]], dirs) -> list[str]:
     """One SELECT per country for the `filing_manifest` view, UNIONing in
     `filing_manifest_proxy.parquet` (and, later, 8-K/comment-letter
@@ -159,7 +179,8 @@ def _filing_manifest_selects(countries: list[tuple[str, dict]], dirs) -> list[st
         base_path = _manifest_source(f"{manifests_dir}/filing_manifest")
         if base_path is None:
             continue
-        parts = [f"SELECT '{country}' AS country_code, * FROM {base_path}"]
+        panel_where = _us_panel_where(country, manifests_dir)
+        parts = [f"SELECT '{country}' AS country_code, * FROM {base_path}{panel_where}"]
         for extra in ("filing_manifest_proxy", "filing_manifest_8k",
                       "filing_manifest_earnings_calls", "filing_manifest_earnings_calls_equibles",
                       "filing_manifest_earnings_calls_stockanalysis", "filing_manifest_20f",
@@ -173,7 +194,7 @@ def _filing_manifest_selects(countries: list[tuple[str, dict]], dirs) -> list[st
                 # fails to bind — so normalise here, once, at the view.
                 parts.append(
                     f"SELECT '{country}' AS country_code, "
-                    f"* REPLACE (TRY_CAST(filing_date AS DATE) AS filing_date) FROM {source}")
+                    f"* REPLACE (TRY_CAST(filing_date AS DATE) AS filing_date) FROM {source}{panel_where}")
         selects.append("\n            UNION ALL BY NAME\n            ".join(parts))
     return selects
 
@@ -726,8 +747,16 @@ def main(with_text_tables: bool = False):
 
     views = {
         # --- firm universe + filing manifest ---
+        # The US analysis universe is the S&P 500 as constituted on
+        # 2021-01-01 (membership group US_ANALYSIS_PANEL, 502 tickers). The
+        # raw firm_universe.parquet also carries post-2021 index additions
+        # and a manually curated core that were downloaded alongside; they
+        # are filtered out HERE, at the view, so every downstream join on
+        # ticker (manifests, analytics, the thesis) inherits the same
+        # universe without each script having to remember a filter.
         "firm_universe": _union([
             f"SELECT '{country}' AS country_code, * FROM read_parquet('{dirs(cfg)[0]}/firm_universe.parquet')"
+            + _us_panel_where(country, dirs(cfg)[0], column="membership_groups")
             for country, cfg in countries
             if _existing(f"{dirs(cfg)[0]}/firm_universe.parquet")
         ]),
@@ -750,6 +779,7 @@ def main(with_text_tables: bool = False):
         # both "not built yet" and "doesn't exist for this country".
         "filing_manifest_10q": _union([
             f"SELECT '{country}' AS country_code, * FROM read_parquet('{dirs(cfg)[0]}/filing_manifest_10q.parquet')"
+            + _us_panel_where(country, dirs(cfg)[0])
             for country, cfg in countries
             if _existing(f"{dirs(cfg)[0]}/filing_manifest_10q.parquet")
         ]),

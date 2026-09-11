@@ -135,14 +135,41 @@ def load_disclosure_firm_year() -> pd.DataFrame:
     return m[["ticker", "year", "frames_per_1k", "any_ai", "n_promo", "n_frames"]]
 
 
+def load_10k_years() -> pd.DataFrame:
+    """(empresa, año calendario de presentación) con al menos un 10-K filed.
+
+    `Substance_it` se mide casi enteramente sobre 10-K/10-Q/DEF 14A/8-K (ver
+    `activity_profiles.py`, canal 'filing'); ninguno de esos reemplaza al
+    10-K como fuente principal de actividad fundamentada. Un año calendario
+    sin 10-K filed (ejercicio fiscal aún en curso, p.ej. 2026 para una firma
+    que cierra en septiembre) no es comparable a un año con 10-K: cualquier
+    firma queda con `Substance_it = 0` por construcción hasta que su 10-K
+    aparece, sin relación con cuánto vaya a divulgar. `build()` usa esta
+    bandera para propagar (as-of) `n_activities`/`grounding_index` del
+    último 10-K disponible en vez de tratar el año como sustancia cero."""
+    con = duckdb.connect(str(DB), read_only=True)
+    try:
+        return con.execute("""
+            SELECT DISTINCT ticker, EXTRACT(year FROM filing_date)::INT AS year
+            FROM filing_manifest
+            WHERE country_code = 'us' AND form_type = '10-K' AND filing_date IS NOT NULL
+        """).df()
+    finally:
+        con.close()
+
+
 def build(keys: tuple[str, ...]) -> pd.DataFrame:
-    """Construye la muestra analítica (Disclosure_it > 0) y el índice W_it,
-    a nivel panel empresa-año (`keys=("ticker","year")`) o pooled por
-    empresa (`keys=("ticker",)`)."""
+    """Construye la muestra analítica (Disclosure_it > 0, ejercicio con 10-K
+    filed) y el índice W_it, a nivel panel empresa-año
+    (`keys=("ticker","year")`) o pooled por empresa (`keys=("ticker",)`)."""
     if keys == ("ticker", "year"):
         disc = load_disclosure_firm_year()
         acts = load_activities_firm_year()
         d = disc.merge(acts, on=["ticker", "year"], how="left")
+        has_10k = load_10k_years()
+        has_10k["has_10k"] = True
+        d = d.merge(has_10k, on=["ticker", "year"], how="left")
+        d["has_10k"] = d["has_10k"].fillna(False)
     else:
         m = pd.read_parquet(OUT_DIR / "firm_year_master_v2.parquet")
         m = m[m["year"].isin(YEARS)]
@@ -153,6 +180,18 @@ def build(keys: tuple[str, ...]) -> pd.DataFrame:
         d = disc.merge(acts, on="ticker", how="left")
     d["n_activities"] = d["n_activities"].fillna(0.0)
     d["grounding_index"] = d["grounding_index"].fillna(d["grounding_index"].median())
+    if "has_10k" in d.columns:
+        # as-of, no por exclusión: un ejercicio sin 10-K propio (fiscal year en curso)
+        # no tiene Substance_it=0 porque no hay actividad, sino porque todavía no llegó
+        # el 10-K que la documentaría. Se usa el último 10-K disponible hasta ese punto
+        # (n_activities y grounding_index del ejercicio cerrado más reciente de la misma
+        # empresa) en vez de descartar el firm-año o tratarlo como sustancia cero.
+        d = d.sort_values(["ticker", "year"])
+        for col in ("n_activities", "grounding_index"):
+            asof = d[col].where(d["has_10k"])
+            d[col] = asof.groupby(d["ticker"]).ffill()
+        d = d.dropna(subset=["n_activities", "grounding_index"])
+        d = d.drop(columns="has_10k")
     d = d[d["any_ai"] > 0].reset_index(drop=True)
 
     d["substance"] = np.log1p(d["n_activities"]) * d["grounding_index"]

@@ -58,6 +58,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ai_intensity import document_table, aggregate  # noqa: E402
+from washing_score import load_10k_years  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
@@ -111,6 +112,18 @@ def load(con) -> pd.DataFrame:
     m["sector_year"] = m["sic2"].astype(str) + "_" + m["year"].astype(str)
     acts = pd.read_parquet(OUT_DIR / "firm_year_activities.parquet")[["ticker", "year"] + list(ACTIVITY.values())]
     m = m.merge(acts, on=["ticker", "year"], how="left").fillna({c: 0.0 for c in ACTIVITY.values()})
+    # as-of, no ceros por defecto: un ejercicio sin 10-K propio (fiscal year en curso,
+    # ver washing_score.load_10k_years) no tiene actividad divulgada cero, sino que
+    # todavía no llegó el 10-K que la documentaría. Se usa el último 10-K disponible de
+    # la misma empresa hasta ese punto en vez de diluir el bloque de actividad hacia cero.
+    has_10k = load_10k_years()
+    has_10k["has_10k"] = True
+    m = m.merge(has_10k, on=["ticker", "year"], how="left")
+    m["has_10k"] = m["has_10k"].fillna(False)
+    m = m.sort_values(["ticker", "year"])
+    for c in ACTIVITY.values():
+        m[c] = m[c].where(m["has_10k"]).groupby(m["ticker"]).ffill().fillna(0.0)
+    m = m.drop(columns="has_10k")
     # washing_z (washing_score.py): W = z(intensidad de divulgación de IA) -
     # z(sustancia de la actividad de IA divulgada, ponderada por
     # fundamentación). Sólo está definido para empresas-año con divulgación

@@ -53,6 +53,8 @@ def _calls_manifest_sql() -> str:
             SELECT *, row_number() OVER (PARTITION BY document_id ORDER BY 1) AS rn
             FROM ({union})
         ) WHERE rn = 1
+          -- same analysis universe as the views (S&P 500 at 2021-01-01, see build_duckdb.py)
+          AND ticker IN (SELECT ticker FROM firm_universe WHERE country_code = 'us')
     """
 COUNT_COLUMNS = ["n_frames", "n_promo", "n_quant", "n_spec", "n_risk", "n_gov", "n_hyp", "n_realized",
                  "n_deployed", "n_revenue_outcome", "n_cost_outcome", "n_ai_investment", "n_ai_infrastructure"]
