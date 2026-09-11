@@ -3591,14 +3591,17 @@ rows = [[i] + [f"{v:+.2f}" for v in r] for i, r in corr.iterrows()]
 Markdown(tabulate(rows, headers=[""] + list(LABELS.values())))
 ```
 
-A principal-components analysis of these seven standardized dimensions is reported in @tbl-a3-pca-diagnostic as a robustness diagnostic:
+A principal-components analysis of these seven standardized dimensions is reported in @tbl-a3-pca-diagnostic (variance explained) and @tbl-a3-pca-loadings (component loadings) as a dimensionality check:
 
 ```{python}
 #| label: tbl-a3-pca-diagnostic
-#| tbl-cap: "PCA diagnostic on the seven posture dimensions: variance explained, reported as a robustness check, not as the clustering method."
+#| tbl-cap: "PCA diagnostic on the seven posture dimensions: variance explained, reported as a dimensionality check, not as the clustering method."
 #| echo: false
-import json
 from pathlib import Path
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 from tabulate import tabulate
 from IPython.display import Markdown
 
@@ -3606,12 +3609,40 @@ def _p(name):
     p = Path(f"../data/processed/clusters/{name}")
     return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
-manifest = json.loads(_p("strategy_dimensions_manifest.json").read_text())
-pca = manifest["pca_diagnostic"]
-rows = [[f"PC{i+1}", f"{ev:.1%}", f"{cum:.1%}"]
-        for i, (ev, cum) in enumerate(zip(pca["explained_variance_ratio"], pca["cumulative_variance_ratio"]))]
-Markdown(tabulate(rows, headers=["Component", "Variance explained", "Cumulative"]))
+df_strat = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
+FEATS = ["promotional_posture", "risk_orientation", "governance_orientation",
+         "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
+LABELS = {
+    "promotional_posture": "Promotional", "risk_orientation": "Risk", "governance_orientation": "Governance",
+    "temporal_posture": "Temporal (realized)", "ai_positioning": "Customer-facing",
+    "specificity": "Specificity", "disclosure_intensity": "Intensity"
+}
+
+fit_pop = df_strat[df_strat["archetype"] != "No AI"]
+X_pca = StandardScaler().fit_transform(fit_pop[FEATS].values)
+pca_model = PCA(n_components=len(FEATS), random_state=42).fit(X_pca)
+
+ev_rows = [[f"PC{i+1}", f"{ev:.1%}", f"{cum:.1%}"]
+           for i, (ev, cum) in enumerate(zip(pca_model.explained_variance_ratio_, np.cumsum(pca_model.explained_variance_ratio_)))]
+Markdown(tabulate(ev_rows, headers=["Component", "Variance explained", "Cumulative"]))
 ```
+
+```{python}
+#| label: tbl-a3-pca-loadings
+#| tbl-cap: "Principal component factor loadings across the first four components (PC1–PC4), capturing 83.8% of total variance across posture dimensions."
+#| echo: false
+load_rows = []
+for idx, f in enumerate(FEATS):
+    row = [LABELS[f]] + [f"{pca_model.components_[c, idx]:+.3f}" for c in range(4)]
+    load_rows.append(row)
+Markdown(tabulate(load_rows, headers=["Posture dimension", "PC1 (42.4%)", "PC2 (20.2%)", "PC3 (12.4%)", "PC4 (8.8%)"]))
+```
+
+The component loadings reveal three distinct, economically intuitive strategic axes:
+
+1. **PC1 (Commercial execution vs. defensive risk, 42.4%):** Positive loadings on customer-facing positioning (+0.465), technical specificity (+0.463), and disclosure intensity (+0.388) contrast sharply with risk orientation (-0.463). It separates active commercial deployers from passive risk-warning disclosures.
+2. **PC2 (Institutional governance vs. front-office product, 20.2%):** Dominated by governance orientation (+0.736) and realized deployment (+0.478) against customer-facing orientation (-0.327). It isolates compliance-oriented supervisory oversight from front-office product commercialization.
+3. **PC3 (Promotional rhetoric vs. grounded specificity, 12.4%):** Highly positive on promotional posture (+0.856) but negative on technical specificity (-0.313) and realized deployment (-0.286). This component isolates forward-looking promotional hype from verified operational execution.
 
 ### Full disclosed AI activities ranking and archetype profiles {.unnumbered}
 
