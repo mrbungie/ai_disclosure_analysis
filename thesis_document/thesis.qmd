@@ -3600,8 +3600,6 @@ A principal-components analysis of these seven standardized dimensions is report
 from pathlib import Path
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
 from tabulate import tabulate
 from IPython.display import Markdown
 
@@ -3619,11 +3617,17 @@ LABELS = {
 }
 
 fit_pop = df_strat[df_strat["archetype"] != "No AI"]
-X_pca = StandardScaler().fit_transform(fit_pop[FEATS].values)
-pca_model = PCA(n_components=len(FEATS), random_state=42).fit(X_pca)
+X_raw = fit_pop[FEATS].values
+X_pca = (X_raw - X_raw.mean(axis=0)) / X_raw.std(axis=0, ddof=0)
+_, S_pca, Vt_pca = np.linalg.svd(X_pca, full_matrices=False)
+# Ensure deterministic sign matching scikit-learn svd_flip
+max_cols = np.argmax(np.abs(Vt_pca), axis=1)
+signs = np.sign(Vt_pca[range(Vt_pca.shape[0]), max_cols])
+Vt_pca *= signs[:, np.newaxis]
+ev_ratios = (S_pca ** 2) / np.sum(S_pca ** 2)
 
 ev_rows = [[f"PC{i+1}", f"{ev:.1%}", f"{cum:.1%}"]
-           for i, (ev, cum) in enumerate(zip(pca_model.explained_variance_ratio_, np.cumsum(pca_model.explained_variance_ratio_)))]
+           for i, (ev, cum) in enumerate(zip(ev_ratios, np.cumsum(ev_ratios)))]
 Markdown(tabulate(ev_rows, headers=["Component", "Variance explained", "Cumulative"]))
 ```
 
@@ -3633,7 +3637,7 @@ Markdown(tabulate(ev_rows, headers=["Component", "Variance explained", "Cumulati
 #| echo: false
 load_rows = []
 for idx, f in enumerate(FEATS):
-    row = [LABELS[f]] + [f"{pca_model.components_[c, idx]:+.3f}" for c in range(4)]
+    row = [LABELS[f]] + [f"{Vt_pca[c, idx]:+.3f}" for c in range(4)]
     load_rows.append(row)
 Markdown(tabulate(load_rows, headers=["Posture dimension", "PC1 (42.4%)", "PC2 (20.2%)", "PC3 (12.4%)", "PC4 (8.8%)"]))
 ```
