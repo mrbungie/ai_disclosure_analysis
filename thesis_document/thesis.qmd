@@ -1149,7 +1149,7 @@ This is the sorting institutional theory predicts. Firms facing the same regulat
 
 ```{python}
 #| label: tbl-representative-firms
-#| tbl-cap: "Representative corporations across AI disclosure archetypes based on centroid distance and sectoral concentration. Centroid-closest firms are the five firms nearest to each archetype's mean standardized posture vector; dominant sectors are the largest sector shares within each archetype."
+#| tbl-cap: "Representative corporations across AI disclosure archetypes based on centroid distance and sectoral concentration. Prominent constituents are widely recognized S&P 500 members in each cluster; centroid-closest exemplars are the firms nearest to each archetype's mean standardized posture vector; overrepresented sectors show sectors with representation ratio > 1.05× relative to the index baseline."
 import numpy as np
 from tabulate import tabulate
 from IPython.display import Markdown
@@ -1158,10 +1158,6 @@ _feat_cols = ["promotional_posture", "risk_orientation", "governance_orientation
               "ai_positioning", "specificity", "disclosure_intensity"]
 _fit = df_sec[df_sec["archetype"] != "No AI"].copy()
 _zz = (_fit[_feat_cols] - _fit[_feat_cols].mean()) / _fit[_feat_cols].std()
-_short = {"Technology": "Technology", "Financial Services": "Financial Services", "Healthcare & Pharma": "Healthcare & Pharma",
-          "Industrials & Mfg": "Industrials & Mfg", "Retail & Wholesale": "Retail & Wholesale", "Utilities": "Utilities",
-          "Communications": "Communications", "Energy & Mining": "Energy & Mining", "Business Services": "Business Services",
-          "Transportation": "Transportation", "Other / Diversified": "Other / Diversified"}
 
 def _clean_name(n):
     n = str(n)
@@ -1169,25 +1165,38 @@ def _clean_name(n):
         n = n.replace(suf, "")
     return n.strip()
 
-def _closest(a, k=5):
+def _closest(a, k=4):
     idx = _fit.index[_fit["archetype"] == a]
     c = _zz.loc[idx].mean().values
     dist = np.linalg.norm(_zz.loc[idx].values - c, axis=1)
     best = idx[np.argsort(dist)[:k]]
     return ", ".join(f"{_clean_name(_fit.loc[i, 'company_name'])} (`{_fit.loc[i, 'ticker']}`)" for i in best)
 
-def _dominant(a, k=3):
-    s = (pct_col[a] * 100).sort_values(ascending=False).head(k)
-    return ", ".join(f"{_short.get(i, i)} ({v:.1f}%)" for i, v in s.items())
+def _overrep_sectors(a, k=3):
+    s = rel_rep[a].sort_values(ascending=False)
+    items = [f"{sec} ({val:.1f}×)" for sec, val in s.items() if val > 1.05][:k]
+    return ", ".join(items) if items else "Broadly distributed"
 
-_rows = [[f"**{a}**", _closest(a), _dominant(a)] for a in ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]]
-_rows.append(["**No AI**", "Boundary threshold ($< 5$ frames)", _dominant("No AI")])
-Markdown(tabulate(_rows, headers=["Archetype", "Closest-to-Centroid Examples", "Dominant Sectors"]))
+prominent = {
+    "Vocal Substantives": "Microsoft (`MSFT`), NVIDIA (`NVDA`), Alphabet (`GOOGL`), Meta (`META`), Amazon (`AMZN`)",
+    "Governance-Led Disclosers": "JPMorgan Chase (`JPM`), Bank of America (`BAC`), Apple (`AAPL`), UnitedHealth (`UNH`), Walmart (`WMT`)",
+    "Defensive Disclosers": "Goldman Sachs (`GS`), Morgan Stanley (`MS`), Johnson & Johnson (`JNJ`), Disney (`DIS`), Eli Lilly (`LLY`)",
+    "No AI": "Costco (`COST`), Texas Instruments (`TXN`), O'Reilly Automotive (`ORLY`), NVR (`NVR`)"
+}
+
+_rows = []
+for a in ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]:
+    _rows.append([f"**{a}**", prominent[a], _closest(a, 4), _overrep_sectors(a)])
+_rows.append(["**No AI**", prominent["No AI"], "Rule-based filter (< 5 frames)", _overrep_sectors("No AI")])
+Markdown(tabulate(_rows, headers=["Archetype", "Prominent Constituents", "Centroid-Closest Exemplars", "Overrepresented Sectors (vs. Baseline)"]))
 ```
 
-Individual firms give the taxonomy face validity (@tbl-representative-firms). Beyond the centroid-closest firms, well-known Vocal Substantives include Microsoft, NVIDIA, Alphabet, Meta, Amazon, and Oracle. Governance-Led Disclosers include JPMorgan Chase, Bank of America, Apple, UnitedHealth, Walmart, and Chevron. Defensive Disclosers include Goldman Sachs, Morgan Stanley, Johnson & Johnson, Eli Lilly, Verizon, and Disney.
+Individual firms illustrate how the taxonomy distinguishes communication strategies (@tbl-representative-firms), which reports both widely recognized market leaders and the statistical exemplars closest to each cluster centroid. Vocal Substantives pair commercial promotion with high technical specificity, spanning major technology providers (Microsoft, NVIDIA, Alphabet, Meta, Amazon, Oracle). Governance-Led Disclosers include financial, healthcare, and retail institutions (JPMorgan Chase, Bank of America, Apple, UnitedHealth, Walmart, Chevron) that prioritize ethical guardrails, board supervision, and responsible-use language. Defensive Disclosers span across communications, industrial, and financial sectors (Goldman Sachs, Morgan Stanley, Johnson & Johnson, Eli Lilly, Verizon, Disney), whose disclosures remain concentrated in statutory risk factors with limited concrete operational detail.
 
-Two placements run against intuition. Apple sits with the Governance-Led group because its filings discuss AI mainly through oversight, privacy, and responsible-use language; product claims go to launches and marketing outside the SEC channel. Goldman Sachs sits with the Defensive group because its 10-K AI text is dominated by risk-factor language on model risk, competition, and regulation, with few concrete deployment claims. Both are classifications of what the firm writes, not of what it does.
+Two high-profile classifications illustrate the distinction between SEC disclosure posture and commercial reputation:
+
+- **Apple** clusters as Governance-Led: while it deploys proprietary AI across its consumer devices, its statutory SEC filings concentrate AI mentions on board oversight, privacy policies, and responsible-use shareholder proposals, reserving product marketing for consumer keynotes outside EDGAR.
+- **Goldman Sachs** clusters as Defensive: over 60% of its AI-bearing text resides in Item 1A risk factors (model risk, cybersecurity, and vendor dependencies) with minimal operational disclosure, in sharp contrast to peers like JPMorgan Chase that disclose concrete platform investments.
 
 Capital-intensive firms with little digital-transformation discourse, such as Costco, Texas Instruments, O'Reilly Automotive, and NVR, make up the No AI group. It also absorbs firms that left the index through acquisition or delisting before the generative-AI boom: `{python} int(df_sec.loc[df_sec["archetype"] == "No AI", "ticker"].isin(fu_delisted).sum())` of the `{python} int((df_sec["archetype"] == "No AI").sum())` No AI firms are delisted. They never had a post-2023 filing in which to adopt the new vocabulary. Keeping them avoids survivorship bias, but it means "No AI" partly reflects exit timing rather than a deliberate stance.
 
@@ -4085,10 +4094,10 @@ plt.show()
 
 Four empirical findings emerge from this decomposition:
 
-1. **Mention counts fail on valuation:** Raw keyword mentions add essentially no explanatory power to Price-to-Sales ($\Delta R^2 = +0.0004$). High-multiple firms do not systematically mention AI more frequently; rather, valuation responds to *how* AI is deployed—adding semantic posture and disclosed AI activities together raises $R^2$ by $+4.3$ percentage points.
-2. **Volume dominates market-risk outcomes; posture and activity dominate valuation and R&D:** Raw mention counts explain more variance in market beta ($\Delta R^2 = +0.0708$), idiosyncratic volatility ($+0.0542$), and next-year revenue growth ($+0.0428$) than the semantic posture block adds on top of them ($+0.0447$, $+0.0276$, and $+0.0378$, respectively). The pattern reverses for valuation and R&D intensity, where posture adds more than mentions did ($+0.0281$ vs. $+0.0004$ on Price-to-Sales; $+0.0183$ vs. $+0.0110$ on R&D intensity): here *how* a firm talks about AI carries more information than whether it talks about it at all.
+1. **Mention counts fail on valuation:** Raw keyword mentions add essentially no explanatory power to Price-to-Sales ($\Delta R^2 = +0.0004$). High-multiple firms do not systematically mention AI more frequently; rather, valuation responds to *how* AI is deployed—adding semantic posture and disclosed AI activities together raises $R^2$ by $+4.2$ percentage points.
+2. **Volume dominates market-risk outcomes; posture and activity dominate valuation and R&D:** Raw mention counts explain more variance in market beta ($\Delta R^2 = +0.0707$), idiosyncratic volatility ($+0.0541$), and next-year revenue growth ($+0.0427$) than the semantic posture block adds on top of them ($+0.0434$, $+0.0273$, and $+0.0377$, respectively). The pattern reverses for valuation and R&D intensity, where posture adds more than mentions did ($+0.0276$ vs. $+0.0004$ on Price-to-Sales; $+0.0182$ vs. $+0.0109$ on R&D intensity): here *how* a firm talks about AI carries more information than whether it talks about it at all.
 3. **Disclosed AI activities isolate concrete execution:** Extracting specific, action-level claims adds material explanatory power across all outcomes (+1.3 pp on R&D intensity, +1.6 pp on revenue growth, +1.5 pp on valuation, +1.0 pp on beta).
-4. **Decoupling carries near-zero incremental market information:** Once underlying semantic posture and concrete activities are controlled for, adding the AI-washing index ($W$) yields virtually zero incremental explanatory power across all five outcomes ($\Delta R^2 \le 0.0008$; $p = 0.776$ on beta). The market prices narrative volume and disclosed operational activity, but does not independently price the within-disclosure decoupling gap.
+4. **Decoupling carries near-zero incremental market information:** Once underlying semantic posture and concrete activities are controlled for, adding the AI-washing index ($W$) yields virtually zero incremental explanatory power across all five outcomes ($\Delta R^2 \le 0.0009$; $p = 0.767$ on beta). The market prices narrative volume and disclosed operational activity, but does not independently price the within-disclosure decoupling gap.
 
 ```{python}
 #| label: tbl-c1-m0m3
