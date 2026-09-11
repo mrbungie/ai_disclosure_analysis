@@ -588,6 +588,7 @@ Every automated stage in the measurement pipeline is benchmarked against held-ou
 | **Semantic anchors** | Gate inputs: reference sentences describing AI concepts against which paragraph similarity is scored | All forms | 27 anchors | Expert curated | 39 gate signals, including similarity to the anchors |
 | **Activity extraction audit** | Activity fields (function, stage, entity role) that feed $A$, $G$, $S$ and $W$ | Mixed sample | 120 paragraphs, 267 activities | Human audit (purpose-built annotation interface) | Field agreement 92.4% (function), 89.1% (stage), 95.8% (entity role) |
 | **Human ground truth (frames)** | Frame extraction against human coders | All forms | 720 texts | Human coders (purpose-built annotation interface) | Agreement 89.1%–95.8% across fields; Prec. 91.2%, Rec. 88.7% |
+| **External benchmark: AI patents** | Whether $A$, $G$ and $W$ order firms like an independent, non-textual measure of AI capacity | 10-K, 10-Q, DEF 14A, 8-K, calls | Universe firms with matched patents, 2021–2024 | Google Patents / OECD 2025 AI taxonomy | Spearman ρ ≈ 0.5 between disclosed (and grounded) activity and AI patents; archetypes sort in the predicted order (Appendix B) |
 
 : Labeled evaluation datasets, validation benchmarks, and inter-judge agreement. {#tbl-evaluation-datasets}
 
@@ -3158,7 +3159,7 @@ The methodological contribution is a five-layer, largely reproducible extraction
 Four limitations apply throughout:
 
 1. Operational extraction relies on zero-shot LLM inference. It is audited against a 720-text human ground-truth sample (89.1%–95.8% field agreement) and cross-model agreement benchmarks ($\kappa = 0.81–0.87$), but residual noise remains possible in borderline disclosures.
-2. "Disclosed AI activity" measures what a firm says it does, not what an audited operational record would confirm, and Decoupling compares a firm's own disclosure with its own disclosed activity; neither can be checked against an external census of AI deployment.
+2. "Disclosed AI activity" measures what a firm says it does, not what an audited operational record would confirm, and Decoupling compares a firm's own disclosure with its own disclosed activity. The only external, non-textual benchmark available, AI patents, orders firms the same way (rank correlation of about 0.5 with disclosed and grounded activity, Appendix B), but patents capture patented capacity, not deployment, so neither construct can be checked against a census of AI use.
 3. Direct SEC comment-letter scrutiny of AI claims has reached a single firm in the analysis universe, so the regulatory test is a documented case comparison, not an estimate; the finding that scrutiny is rare is itself the result.
 4. The market analysis measures systematic risk, not returns or valuation, and identifies associations rather than causal effects.
 
@@ -3180,6 +3181,98 @@ Second, AI coding and writing assistants (Anthropic Claude, through the Claude C
 # Appendices {.unnumbered}
 
 ## Appendix A: Data, Computational Environment and Pipeline {.unnumbered}
+
+### Data inventory by artifact and year {.unnumbered}
+
+@tbl-a0-source-inventory counts, for every year of the panel, the source artifacts collected for the analysis universe (S&P 500 as of 2021-01-01) and the number of firms with at least one such artifact; @tbl-a0-derived-inventory does the same for the artifacts the pipeline derives from them. Years are filing years (calls: call date); 2026 is year to date.
+
+```{python}
+#| label: tbl-a0-source-inventory
+#| tbl-cap: "Source artifacts by year: number of items and, in parentheses, number of firms with at least one item (analysis universe, S&P 500 at 2021-01-01)."
+#| echo: false
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+def _pp(name):
+    p = Path(f"../data/processed/{name}")
+    return p if p.exists() else Path(f"data/processed/{name}")
+
+INV_YEARS = [2021, 2022, 2023, 2024, 2025, 2026]
+_docs = pd.read_parquet(_p("document_panel.parquet"))
+_docs["year"] = pd.to_datetime(_docs["fecha"]).dt.year
+_docs = _docs[_docs["year"].isin(INV_YEARS)]
+
+def _cell(n_items, n_firms):
+    return f"{int(n_items):,} ({int(n_firms)})"
+
+def _by_year(df, item_col=None, firm_col="ticker", count="rows"):
+    """{year: (items, firms)} where items are rows, distinct item_col values, or a sum."""
+    out = {}
+    for y in INV_YEARS:
+        s = df[df["year"] == y]
+        if s.empty:
+            out[y] = (0, 0); continue
+        if count == "rows":
+            items = len(s)
+        elif count == "sum":
+            items = s[item_col].sum()
+        else:
+            items = s[item_col].nunique()
+        firms = s.loc[s[item_col] > 0, firm_col].nunique() if count == "sum" else s[firm_col].nunique()
+        out[y] = (items, firms)
+    return out
+
+src_rows = []
+for form, label in [("10-K", "Form 10-K annual reports"), ("10-Q", "Form 10-Q quarterly reports"),
+                    ("DEF 14A", "Proxy statements (DEF 14A)"), ("8-K", "Current reports (8-K)"),
+                    ("Earnings call", "Earnings-call transcripts")]:
+    d = _by_year(_docs[_docs["form"] == form], item_col="accession_number", count="nunique")
+    src_rows.append([label] + [_cell(*d[y]) for y in INV_YEARS])
+_fin = pd.read_parquet(_p("firm_year_financials_ratios.parquet"))[["ticker", "year"]]
+d = _by_year(_fin[_fin["year"].isin(INV_YEARS)]); src_rows.append(["XBRL annual financial statements (firm-years)"] + [_cell(*d[y]) for y in INV_YEARS])
+_mkt = pd.read_parquet(_p("firm_year_market_factors.parquet"))[["ticker", "year"]]
+d = _by_year(_mkt[_mkt["year"].isin(INV_YEARS)]); src_rows.append(["Market data: prices, beta, valuation (firm-years)"] + [_cell(*d[y]) for y in INV_YEARS])
+_pat_path = _pp("sp500_firm_year_ai_patents_oecd2025.parquet")
+if _pat_path.exists():
+    _pat = pd.read_parquet(_pat_path)
+    _pat = _pat[_pat["ticker"].isin(set(_docs["ticker"])) & _pat["year"].isin(INV_YEARS)]
+    d = _by_year(_pat, item_col="total_patents", count="sum"); src_rows.append(["Patent publications, all (OECD/EPO PATSTAT, firms in universe)"] + [_cell(*d[y]) for y in INV_YEARS])
+    d = _by_year(_pat, item_col="ai_patents_oecd", count="sum"); src_rows.append(["AI patent publications (OECD 2025 AI taxonomy)"] + [_cell(*d[y]) for y in INV_YEARS])
+Markdown(tabulate(src_rows, headers=["Artifact"] + [str(y) for y in INV_YEARS]))
+```
+
+*Notes:* Documents are counted once per accession number (calls once per transcript); firms with two listed share classes (for example GOOG and GOOGL) count as two firms but file once, so a firm count can exceed the document count. Financial and market firm-years follow the fiscal-period alignment described in Appendix D. Patent counts are publications by publication year assigned to the firm's patent-assignee aliases; publication lags mean 2025 and 2026 are incomplete. Patents are not an input to any construct; they serve as the external benchmark in Appendix B.
+
+```{python}
+#| label: tbl-a0-derived-inventory
+#| tbl-cap: "Derived artifacts by year: number of items and, in parentheses, number of firms with at least one item (analysis universe, S&P 500 at 2021-01-01)."
+#| echo: false
+der_rows = []
+for form, label in [("10-K", "10-K documents with ≥1 AI frame"), ("10-Q", "10-Q documents with ≥1 AI frame"),
+                    ("DEF 14A", "DEF 14A documents with ≥1 AI frame"), ("8-K", "8-K documents with ≥1 AI frame"),
+                    ("Earnings call", "Call transcripts with ≥1 AI frame")]:
+    s = _docs[(_docs["form"] == form) & (_docs["n_frames"] > 0)]
+    d = _by_year(s, item_col="accession_number", count="nunique"); der_rows.append([label] + [_cell(*d[y]) for y in INV_YEARS])
+for ch, label in [("filing", "AI semantic frames in statutory filings"), ("call", "AI semantic frames in earnings calls")]:
+    d = _by_year(_docs[_docs["channel"] == ch], item_col="n_frames", count="sum"); der_rows.append([label] + [_cell(*d[y]) for y in INV_YEARS])
+_act = pd.read_parquet(_p("firm_activities.parquet"), columns=["ticker", "accession_number", "text_hash", "activity_index", "channel"]).drop_duplicates(["ticker", "text_hash", "activity_index"])
+_act = _act.merge(_docs[["accession_number", "year"]].drop_duplicates("accession_number"), on="accession_number", how="inner")
+for ch, label in [("filing", "Disclosed AI activities in statutory filings"), ("call", "Disclosed AI activities in earnings calls")]:
+    d = _by_year(_act[_act["channel"] == ch]); der_rows.append([label] + [_cell(*d[y]) for y in INV_YEARS])
+_wsc = pd.read_parquet(_p("firm_year_washing_score.parquet"))[["ticker", "year"]]
+d = _by_year(_wsc[_wsc["year"].isin(INV_YEARS)]); der_rows.append(["Firm-years with Decoupling ($W$) (disclosing firms)"] + [_cell(*d[y]) for y in INV_YEARS])
+_cb = pd.read_parquet(_p("call_beta_main_panel_10k10q_asof.parquet"), columns=["ticker", "fecha", "beta_post_126"])
+_cb["year"] = pd.to_datetime(_cb["fecha"]).dt.year
+d = _by_year(_cb[_cb["year"].isin(INV_YEARS) & _cb["beta_post_126"].notna()]); der_rows.append(["Earnings-call events with post-call beta"] + [_cell(*d[y]) for y in INV_YEARS])
+Markdown(tabulate(der_rows, headers=["Artifact"] + [str(y) for y in INV_YEARS]))
+```
+
+*Notes:* Frames are unique semantic frames per document (a frame shared by identical paragraphs in several documents counts once per document). Activities are counted once per firm × text × activity index and dated by the document that contains them. Post-call beta requires 126 trading days after the call, so the 2026 count stops at calls held before mid-March 2026.
 
 ### Computational infrastructure and analytical stack {.unnumbered}
 
@@ -3376,6 +3469,80 @@ To verify construct validity and quantify measurement error across the pipeline,
 1. **Prefilter precision and recall:** A stratified random sample of 300 paragraphs evaluated across the GBDT decision boundary ($\tau = 0.17$) confirmed an empirical precision of 91.2% and recall of 88.7% against full-text human review.
 2. **Semantic frame reliability:** A multi-judge evaluation set comprising 300 frame-labeled paragraphs (434 distinct frame annotations) yielded high inter-rater reliability between independent judges (Cohen's $\kappa \in [0.81, 0.87]$ across frame categories), establishing that promotional, governance, and risk orientations represent statistically distinct and stable linguistic constructs.
 3. **Disclosed AI activity grounding:** An audit of 120 activity-bearing paragraphs containing 267 extracted discrete corporate actions was validated using a purpose-built annotation interface. Field-level agreement reached 92.4% on business function identification, 89.1% on operational stage classification, and 95.8% on entity role assignment (distinguishing internal proprietary brands from external commercial vendors).
+
+### External benchmark: disclosed AI activity against AI patents {.unnumbered}
+
+The measurement constructs are extracted from what firms write; no audited census of AI deployment exists against which to check them. AI patents are the closest external, non-textual observable of a firm's AI capacity. Patent publications of the universe firms were assigned to issuers through a curated table of patent-assignee aliases (operating subsidiaries and IP-holding entities) and classified as AI patents with the OECD (2025) taxonomy: five unconditional "core AI" CPC groups and 95 application groups conditional on AI keywords in the title or abstract. @tbl-b1-patent-benchmark reports rank correlations between the disclosure-based measures and the firm's AI patent publications over 2021–2024, and @tbl-b2-patent-archetypes the distribution of AI patents across disclosure archetypes. Patents are a partial benchmark: most AI use disclosed by non-technology firms (deploying vendor tools, internal automation) never produces a patent, and patent publication lags filing by about eighteen months, so the test asks only whether firms that disclose more, and more grounded, AI activity are also the firms with more patented AI capacity.
+
+```{python}
+#| echo: false
+#| output: false
+from pathlib import Path
+import numpy as np
+import pandas as pd
+from scipy.stats import spearmanr
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+def _pp(name):
+    p = Path(f"../data/processed/{name}")
+    return p if p.exists() else Path(f"data/processed/{name}")
+
+_pt = pd.read_parquet(_pp("sp500_firm_year_ai_patents_oecd2025.parquet"))
+_dim = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))[["ticker", "archetype", "n_frames", "disclosure_intensity"]]
+_pt = _pt[_pt["ticker"].isin(_dim["ticker"]) & _pt["year"].between(2021, 2024)]
+_pf = _pt.groupby("ticker").agg(ai_pat=("ai_patents_oecd", "sum"), tot_pat=("total_patents", "sum")).reset_index()
+_ac = pd.read_parquet(_p("firm_activities.parquet"))
+_af = _ac.groupby("ticker").agg(
+    n_act=("text_hash", "size"),
+    n_grounded=("evidence_strength", lambda s: s.isin(["named_product_or_process", "metric"]).sum()),
+    n_dep=("stage", lambda s: s.isin(["deployed", "scaled"]).sum())).reset_index()
+_bench = (_dim.merge(_af, on="ticker", how="left").fillna({"n_act": 0, "n_grounded": 0, "n_dep": 0})
+          .merge(_pf, on="ticker", how="left"))
+_bench["has_pat"] = _bench["ai_pat"].notna()
+_bench[["ai_pat", "tot_pat"]] = _bench[["ai_pat", "tot_pat"]].fillna(0)
+_wm = pd.read_parquet(_p("firm_year_washing_score.parquet")).groupby("ticker")["w"].mean().rename("w_mean").reset_index()
+_bench = _bench.merge(_wm, on="ticker", how="left")
+pat_n_all, pat_n_data, pat_n_any = len(_bench), int(_bench["has_pat"].sum()), int((_bench["ai_pat"] > 0).sum())
+_MEAS = [("n_frames", "AI semantic frames (pooled filings)"), ("disclosure_intensity", "Disclosure Intensity ($D$)"),
+         ("n_act", "Disclosed AI activities ($A$)"), ("n_grounded", "Grounded activities (named artifact or metric)"),
+         ("n_dep", "Deployed or scaled activities"), ("w_mean", "Decoupling ($W$, firm mean)")]
+pat_rows, pat_corr = [], {}
+for col, lab in _MEAS:
+    sub = _bench[_bench["has_pat"]].dropna(subset=[col])
+    r1, p1 = spearmanr(sub[col], sub["ai_pat"])
+    allf = _bench.dropna(subset=[col])
+    r2, p2 = spearmanr(allf[col], allf["ai_pat"])
+    pat_corr[col] = (r1, p1, len(sub), r2, p2, len(allf))
+    pat_rows.append([lab, f"{r1:+.3f}", f"{p1:.1e}" if p1 < 0.001 else f"{p1:.3f}", f"{len(sub)}", f"{r2:+.3f}", f"{len(allf)}"])
+_sub = _bench[_bench["has_pat"] & (_bench["tot_pat"] > 0)]
+pat_r_total = spearmanr(_sub["n_act"], _sub["tot_pat"])[0]
+pat_r_share = spearmanr(_sub["n_act"], _sub["ai_pat"] / _sub["tot_pat"])[0]
+_arch = (_bench.groupby("archetype").agg(firms=("ticker", "size"), with_data=("has_pat", "sum"),
+                                          any_ai=("ai_pat", lambda s: (s > 0).mean() * 100),
+                                          median_ai=("ai_pat", "median"), mean_ai=("ai_pat", "mean"))
+         .reindex(["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers", "No AI"]))
+pat_arch_rows = [[a, int(r.firms), int(r.with_data), f"{r.any_ai:.0f}%", f"{r.median_ai:.0f}", f"{r.mean_ai:.0f}"] for a, r in _arch.iterrows()]
+```
+
+```{python}
+#| label: tbl-b1-patent-benchmark
+#| tbl-cap: "Spearman rank correlations between disclosure-based measures and the firm's AI patent publications, 2021–2024 (OECD 2025 taxonomy). Left: firms with at least one matched patent publication; right: all firms in the universe, with zero patents where none were matched."
+#| echo: false
+from tabulate import tabulate
+from IPython.display import Markdown
+Markdown(tabulate(pat_rows, headers=["Disclosure measure", "ρ (firms with patents)", "p", "n", "ρ (all firms, zeros)", "n"]))
+```
+
+```{python}
+#| label: tbl-b2-patent-archetypes
+#| tbl-cap: "AI patent publications 2021–2024 by disclosure archetype."
+#| echo: false
+Markdown(tabulate(pat_arch_rows, headers=["Archetype", "Firms", "With patent data", "Share with ≥1 AI patent", "Median AI patents", "Mean AI patents"]))
+```
+
+Three results follow. First, disclosed AI activity tracks patented AI capacity: across the `{python} pat_n_data` universe firms with matched patent publications, the count of disclosed AI activities has a rank correlation of `{python} f"{pat_corr['n_act'][0]:.2f}"` with AI patents, grounded activities `{python} f"{pat_corr['n_grounded'][0]:.2f}"`, and deployed or scaled activities `{python} f"{pat_corr['n_dep'][0]:.2f}"`; the correlation with total patents of any kind is only `{python} f"{pat_r_total:.2f}"`, and with the AI share of a firm's patents `{python} f"{pat_r_share:.2f}"`, so the association is specific to AI rather than to patenting in general. Second, the archetypes sort on the external benchmark in the order the text-based taxonomy predicts: `{python} f"{_arch.loc['Vocal Substantives', 'any_ai']:.0f}"`% of Vocal Substantives hold at least one AI patent (median `{python} f"{_arch.loc['Vocal Substantives', 'median_ai']:.0f}"`), against `{python} f"{_arch.loc['Governance-Led Disclosers', 'any_ai']:.0f}"`% of Governance-Led and `{python} f"{_arch.loc['Defensive Disclosers', 'any_ai']:.0f}"`% of Defensive Disclosers. Third, Decoupling is negatively related to patented capacity (ρ = `{python} f"{pat_corr['w_mean'][0]:.2f}"`): firms whose narrative rank runs ahead of their disclosed-substance rank also tend to hold fewer AI patents. None of this makes patents a census; it shows that the LLM-derived measures order firms in the same way as an independent, non-textual measure of AI capacity, which is what a measurement validation can establish.
 
 ### Error taxonomy and classification robustness {.unnumbered}
 
