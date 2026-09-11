@@ -602,7 +602,7 @@ Every automated stage of the pipeline is checked against held-out ground truth, 
 | **Semantic anchors** | Gate inputs: reference sentences describing AI concepts against which paragraph similarity is scored | All forms | 27 anchors | Expert curated | 39 gate signals, including similarity to the anchors |
 | **Activity extraction audit** | Activity fields (function, stage, entity role) that feed $A$, $G$, $S$ and $W$ | Mixed sample | 120 paragraphs, 267 activities | Human audit (purpose-built annotation interface) | Field agreement 92.4% (function), 89.1% (stage), 95.8% (entity role) |
 | **Human ground truth (frames)** | Frame extraction against human coders | All forms | 720 texts | Human coders (purpose-built annotation interface) | Agreement 89.1%–95.8% across fields; Prec. 91.2%, Rec. 88.7% |
-| **External benchmark: AI patents** | Whether $A$, $G$ and $W$ order firms like an independent, non-textual measure of AI capacity | 10-K, 10-Q, DEF 14A, 8-K, calls | Universe firms with matched patents, 2021–2024 | Google Patents / OECD 2025 AI taxonomy | Spearman ρ ≈ 0.5 between disclosed (and grounded) activity and AI patents; archetypes sort in the predicted order (Appendix B) |
+| **External benchmark: AI patents** | Whether $A$, $G$ and $W$ order firms like an independent, non-textual measure of AI capacity | 10-K, 10-Q, DEF 14A, 8-K, calls | Universe firms with matched patents, 2021–2023 | Google Patents / OECD 2025 AI taxonomy | Spearman ρ ≈ 0.5 between disclosed (and grounded) activity and AI patents; archetypes sort in the predicted order (Appendix B) |
 
 : Labeled evaluation datasets, validation benchmarks, and inter-judge agreement. {#tbl-evaluation-datasets}
 
@@ -3466,7 +3466,7 @@ To verify construct validity and quantify measurement error across the pipeline,
 
 ### External benchmark: disclosed AI activity against AI patents {.unnumbered}
 
-The measurement constructs are extracted from what firms write; no audited census of AI deployment exists against which to check them. AI patents are the closest external, non-textual observable of a firm's AI capacity. Patent publications of the universe firms were assigned to issuers through a curated table of patent-assignee aliases (operating subsidiaries and IP-holding entities) and classified as AI patents with the OECD (2025) taxonomy: five unconditional "core AI" CPC groups and 95 application groups conditional on AI keywords in the title or abstract. @tbl-b1-patent-benchmark reports rank correlations between the disclosure-based measures and the firm's AI patent publications over 2021–2024, and @tbl-b2-patent-archetypes the distribution of AI patents across disclosure archetypes. Patents are a partial benchmark: most AI use disclosed by non-technology firms (deploying vendor tools, internal automation) never produces a patent, and patent publication lags filing by about eighteen months, so the test asks only whether firms that disclose more, and more grounded, AI activity are also the firms with more patented AI capacity.
+The measurement constructs are extracted from what firms write; no audited census of AI deployment exists against which to check them. AI patents are the closest external, non-textual observable of a firm's AI capacity. Patent publications of the universe firms were assigned to issuers through a curated table of patent-assignee aliases (operating subsidiaries and IP-holding entities) and classified as AI patents with the OECD (2025) taxonomy: five unconditional "core AI" CPC groups and 95 application groups conditional on AI keywords in the title or abstract. Under statutory patent rules (35 U.S.C. § 122(b)), patent applications remain confidential and are only published eighteen months after filing. To ensure an un-truncated, stationary comparison window where all filed applications have matured into public documents, the benchmark is closed at 2021–2023. @tbl-b1-patent-benchmark reports rank correlations between disclosure-based measures and AI patent publications over this fully matured 2021–2023 window, and @tbl-b2-patent-archetypes details the distribution across archetypes. Patents are a partial benchmark: most AI use disclosed by non-technology firms (vendor deployments, workflow automations) never produces a patent. The test asks whether firms that disclose more, and more grounded, AI activity are also the firms with more patented AI capacity.
 
 ```{python}
 #| echo: false
@@ -3485,7 +3485,7 @@ def _pp(name):
 
 _pt = pd.read_parquet(_pp("sp500_firm_year_ai_patents_oecd2025.parquet"))
 _dim = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))[["ticker", "archetype", "n_frames", "disclosure_intensity"]]
-_pt = _pt[_pt["ticker"].isin(_dim["ticker"]) & _pt["year"].between(2021, 2024)]
+_pt = _pt[_pt["ticker"].isin(_dim["ticker"]) & _pt["year"].between(2021, 2023)]
 _pf = _pt.groupby("ticker").agg(ai_pat=("ai_patents_oecd", "sum"), tot_pat=("total_patents", "sum")).reset_index()
 _ac = pd.read_parquet(_p("firm_activities.parquet"))
 _af = _ac.groupby("ticker").agg(
@@ -3522,7 +3522,7 @@ pat_arch_rows = [[a, int(r.firms), int(r.with_data), f"{r.any_ai:.0f}%", f"{r.me
 
 ```{python}
 #| label: tbl-b1-patent-benchmark
-#| tbl-cap: "Spearman rank correlations between disclosure-based measures and the firm's AI patent publications, 2021–2024 (OECD 2025 taxonomy). Left: firms with at least one matched patent publication; right: all firms in the universe, with zero patents where none were matched."
+#| tbl-cap: "Spearman rank correlations between disclosure-based measures and the firm's AI patent publications, 2021–2023 (OECD 2025 taxonomy, closed 18-month publication window). Left: firms with at least one matched patent publication; right: all firms in the universe, with zero patents where none were matched."
 #| echo: false
 from tabulate import tabulate
 from IPython.display import Markdown
@@ -3531,7 +3531,7 @@ Markdown(tabulate(pat_rows, headers=["Disclosure measure", "ρ (firms with paten
 
 ```{python}
 #| label: tbl-b2-patent-archetypes
-#| tbl-cap: "AI patent publications 2021–2024 by disclosure archetype."
+#| tbl-cap: "AI patent publications 2021–2023 by disclosure archetype (closed 18-month publication window)."
 #| echo: false
 Markdown(tabulate(pat_arch_rows, headers=["Archetype", "Firms", "With patent data", "Share with ≥1 AI patent", "Median AI patents", "Mean AI patents"]))
 ```
