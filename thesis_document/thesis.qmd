@@ -139,13 +139,13 @@ Between 2021 and 2026 almost every S&P 500 firm started talking about AI, so cou
 
 We use `{python} hd_paragraphs_m` million paragraphs from the SEC filings and earnings calls of the S&P 500 as constituted in January 2021. We add an inventory of `{python} f"{hd_n_activities:,}"` discrete AI activities disclosed by `{python} hd_n_activity_firms` of those firms. The main result is that corporate AI is mostly an application-layer story. Firms describe putting AI into products, workflows, customer service, and internal operations, not building foundational technology.
 
-Still, firms follow three stable disclosure strategies. Vocal Substantives pair heavy communication with large, mature AI activity portfolios and are the only group with distinctive financial fundamentals. Governance-Led and Defensive Disclosers copy the oversight or risk language of their industries with far less disclosed activity behind it. The generative-AI boom multiplied disclosed activity several-fold without improving its grounding. The external AI technology firms rely on is still heavily concentrated in U.S.-based providers.
+Still, firms follow three stable disclosure strategies. Vocal Substantives talk a lot and back it with large, mature AI activity portfolios; they are the only group whose financials look different. Governance-Led and Defensive Disclosers copy the oversight or risk language of their industries, with far less disclosed activity behind it. The generative-AI boom multiplied disclosed activity several times over without making it better grounded. The external AI technology firms rely on is still heavily concentrated in U.S.-based providers.
 
 Credibility is tested where disclosure becomes costly. Earnings calls carry about `{python} round(hd_promo_ratio)` times more promotional claims and `{python} round(hd_quant_ratio)` times more quantified claims per thousand words than statutory filings. Within the same firm and fiscal year, both venues describe the same activities. Yet the share backed by a quantified outcome is `{python} f"{hd_gap_quant_pp:.0f}"` percentage points lower in the filings. The story travels to the binding venue; much of the evidence does not.
 
 Direct SEC scrutiny of AI claims has so far reached one firm in this universe. That firm answered with more AI text, not better-grounded AI text. In the market, the volume of a firm's AI rhetoric, not its disclosed substance, is what relates to later systematic risk. The gap between the two is not priced. None of this evidence is causal.
 
-We turn these findings into an AI Disclosure Credibility Framework that combines Disclosure Intensity, Communication Posture, Disclosed AI Activity, AI Activity Grounding, Disclosed Substance, Decoupling, and cross-venue consistency. For issuers, the advice is simple: move evidence, not adjectives, into the 10-K. Name the action, the object, and the deployment stage, and carry the quantified outcomes from the call into the filing. For investors, the framework is a scalable way to decide how deep due diligence should go. A large gap between narrative and disclosed substance is a reason to read more closely, not a verdict.
+We turn these findings into an AI Disclosure Credibility Framework: six measures (Disclosure Intensity, Communication Posture, Disclosed AI Activity, AI Activity Grounding, Disclosed Substance, Decoupling) plus a check that the story holds across venues. For issuers, the advice is simple: move evidence, not adjectives, into the 10-K. Name the action, the object, and the deployment stage, and carry the quantified outcomes from the call into the filing. For investors, the framework is a scalable way to decide how deep due diligence should go. A large gap between narrative and disclosed substance is a reason to read more closely, not a verdict.
 
 # Introduction
 
@@ -187,7 +187,7 @@ At the same time, market participants and regulators have raised concerns about 
 Despite rapid progress, research on corporate AI disclosure and AI washing has four gaps:
 
 1. **Keyword search treats mentions too coarsely.** Existing studies classify AI mentions as actionable or speculative [@anantharaman2026, pp. 1--2; @basnet2025, p. 1; @song2026, pp. 1--2], but keyword search cannot tell empty risk-factor boilerplate from specific, checkable claims. *This thesis extracts structured semantic frames (subject, tense, domain, promotional tone, sentence evidence) instead of relying on raw text.*
-2. **No operational AI activity inventory.** Prior studies estimate overall firm-level exposure or mention counts [@song2026, pp. 1--2; @eisfeldt2023, p. 9], but do not record the concrete actions firms take. *This thesis builds an inventory of `{python} f"{hd_n_activities:,}"` separate operational AI activity claims across `{python} hd_n_activity_firms` S&P 500 firms. For each claim it classifies the action, object, business function, operational stage, sourcing, and evidence.*
+2. **No operational AI activity inventory.** Prior studies estimate overall firm-level exposure or mention counts [@song2026, pp. 1--2; @eisfeldt2023, p. 9], but do not record the concrete actions firms take. *This thesis builds an inventory of the operational AI activity claims of S&P 500 firms. For each claim it classifies the action, object, business function, operational stage, sourcing, and evidence.*
 3. **Only one channel, the annual filing.** Prior AI studies focus almost only on Form 10-K filings. Earnings calls are a voluntary channel where managers face different incentives and less formality [@matsumoto2011, pp. 1383--84; @frankel1999, pp. 133--34]. *This thesis compares the same firm-years across statutory filings and earnings calls, using firm $\times$ fiscal-year fixed effects to measure credibility gaps between venues.*
 4. **No outside ground truth.** Environmental disclosures can be checked against audited emissions data [@delmas2011, pp. 68--69; @marquis2016, pp. 486--87]; firm-level AI deployment has no such external record. *The thesis therefore defines decoupling ($W$) strictly as the observable gap between a firm's narrative intensity and its own disclosed, grounded AI activity. It measures internal consistency, not hidden fraud.*
 
@@ -1199,12 +1199,12 @@ We now test whether the four disclosure archetypes line up with disclosed AI act
 
 To make the activities readable for managers, we group them into six business roles:
 
-- **Operate (Internal operations & workflows):** Improving supply chains, automating business processes, forecasting operations, logistics, and back-office finance.
-- **Serve (Sales, marketing & client service):** Customer service chatbots, chat interfaces for clients, recommendation engines, and targeted marketing.
-- **Sell (Customer products & digital services):** Building AI features, generative tools, and predictive analytics directly into customer-facing products and software.
-- **Enable (Employee productivity & software development):** Developer copilots, automated code generation, enterprise knowledge search, and internal employee tooling.
-- **Control (Risk, cybersecurity & governance):** Real-time fraud detection, cybersecurity anomaly detection, compliance monitoring, and model risk oversight.
-- **Build (Compute, data platforms & foundational models):** Company data platforms, scalable cloud infrastructure, and training the firm's own foundation models.
+- **Operate:** AI that runs the business better, from supply chains and process automation to forecasting, logistics, and back-office finance.
+- **Serve:** AI that talks to customers, such as service chatbots, client chat interfaces, recommendation engines, and targeted marketing.
+- **Sell:** AI built into the products themselves, such as AI features, generative tools, and predictive analytics inside customer-facing software.
+- **Enable:** AI that helps employees work, such as developer copilots, code generation, enterprise search, and internal tools.
+- **Control:** AI that protects the firm, such as fraud detection, cybersecurity anomaly detection, compliance monitoring, and model risk oversight.
+- **Build:** the AI plumbing, such as company data platforms, cloud infrastructure, and training the firm's own foundation models.
 
 ```{python}
 #| label: fig-activity-map
@@ -1569,7 +1569,7 @@ Sell dominates the mix in all three groups. The archetypes differ in how strongl
 
 ## Decomposing AI activity grounding
 
-Firms disclose thousands of AI activities, but the question that matters is how concretely each one is grounded in the text. To measure AI activity grounding ($G$), we pass all `{python} f"{hd_n_activities:,}"` disclosed activities through a ladder of ever stricter requirements:
+Firms disclose thousands of AI activities, but the question that matters is how concretely each one is grounded in the text. To measure AI activity grounding ($G$), we pass every disclosed activity through a ladder of ever stricter requirements:
 
 $$\text{AI Activity Claim} \;\longrightarrow\; \text{Specific Business Function} \;\longrightarrow\; \text{Deployed Stage} \;\longrightarrow\; \text{Named Product/Process} \;\longrightarrow\; \text{Quantified Outcome Metric}$$
 
