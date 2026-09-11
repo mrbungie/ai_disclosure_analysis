@@ -56,6 +56,7 @@ _yr = _m.groupby("year").agg(any_ai=("any_ai", "mean"), frames=("frames_per_1k",
 hd_share = {int(y): float(v * 100) for y, v in _yr["any_ai"].items()}
 hd_frames = {int(y): float(v) for y, v in _yr["frames"].items()}
 hd_frames_ratio = hd_frames[2025] / hd_frames[2021]
+hd_frames_ratio_26 = hd_frames[2026] / hd_frames[2021]
 os.chdir(_repo_root)
 _c = duckdb.connect(str(_db), read_only=True)
 _tenk = _c.execute(f"""
@@ -101,7 +102,7 @@ hd_inc_p = _inc["wald_washing"]["p"]
 
 # Executive Summary {.unnumbered}
 
-Corporate AI disclosure became nearly universal across the S&P 500 between 2021 and 2025, making simple mention counts increasingly uninformative. This thesis develops a scalable framework to distinguish how much firms talk about AI, what they claim to be doing, how concretely those AI activities are supported, and whether narrative intensity runs ahead of disclosed substance.
+Corporate AI disclosure became nearly universal across the S&P 500 between 2021 and 2026, making simple mention counts increasingly uninformative. This thesis develops a scalable framework to distinguish how much firms talk about AI, what they claim to be doing, how concretely those AI activities are supported, and whether narrative intensity runs ahead of disclosed substance.
 
 Using `{python} hd_paragraphs_m` million paragraphs from the SEC filings and earnings calls of the S&P 500 as constituted in January 2021, and an inventory of `{python} f"{hd_n_activities:,}"` discrete AI activities disclosed by `{python} hd_n_activity_firms` of those firms, the analysis shows that corporate AI is primarily an application-layer phenomenon: firms mostly describe deploying AI in products, workflows, customer services, and internal operations rather than building foundational technology. Firms nevertheless follow three stable disclosure strategies. Vocal Substantives combine high communication intensity with large and mature AI activity portfolios and are the only group with distinctive financial fundamentals; Governance-Led and Defensive Disclosers adopt the oversight or risk register of their industries with far less disclosed activity behind it. The generative-AI boom multiplied disclosed activity several-fold without raising its grounding, and the external AI technology firms rely on remains heavily concentrated in U.S.-based providers.
 
@@ -113,7 +114,7 @@ These findings are translated into an AI Disclosure Credibility Framework combin
 
 ## Business problem
 
-Corporate AI disclosure became nearly ubiquitous after ChatGPT. Prior work documents the surge in annual-report AI language [@anantharaman2026, pp. 1--2]; in the corpus assembled for this thesis, the share of S&P 500 firms with any AI statement in their SEC filings rose from `{python} f"{hd_share[2021]:.0f}"`% in 2021 to `{python} f"{hd_share[2025]:.0f}"`% in 2025, while narrative intensity increased `{python} f"{hd_frames_ratio:.1f}"`-fold. Once almost every large corporation talks about AI, presence alone ceases to distinguish meaningful technological AI activity from strategic positioning.
+Corporate AI disclosure became nearly ubiquitous after ChatGPT. Prior work documents the surge in annual-report AI language [@anantharaman2026, pp. 1--2]; in the corpus assembled for this thesis, the share of S&P 500 firms with any AI statement in their SEC filings rose from `{python} f"{hd_share[2021]:.0f}"`% in 2021 to `{python} f"{hd_share[2026]:.0f}"`% in 2026 (year to date; `{python} f"{hd_share[2025]:.0f}"`% in 2025, the last complete year), while narrative intensity per thousand words increased `{python} f"{hd_frames_ratio_26:.0f}"`-fold. Once almost every large corporation talks about AI, presence alone ceases to distinguish meaningful technological AI activity from strategic positioning.
 
 This creates a practical problem for investors, issuers, and regulators:
 
@@ -214,9 +215,28 @@ bal_n = int((_yrs == 6).sum())
 bal_share = (_master[_master["ticker"].isin(_yrs[_yrs == 6].index)]
              .groupby("year").apply(lambda s: (s["n_frames"] > 0).mean() * 100)).to_dict()
 uni_n_activity_firms = int(pd.read_parquet(_p("firm_activities.parquet"))["ticker"].nunique())
+
+# Temporal coverage of the partial 2026 year, from the manifests.
+con = duckdb.connect(str(db_path), read_only=True)
+_cov = con.execute("""
+    SELECT form_type, count(DISTINCT ticker) AS firms, max(filing_date) AS last_date
+    FROM (SELECT form_type, ticker, filing_date FROM filing_manifest WHERE country_code = 'us'
+          UNION ALL SELECT '10-Q', ticker, filing_date FROM filing_manifest_10q WHERE country_code = 'us')
+    WHERE extract(year FROM filing_date) = 2026 GROUP BY 1
+""").df().set_index("form_type")
+_cov25 = con.execute("SELECT count(DISTINCT ticker) FROM filing_manifest WHERE country_code = 'us' AND form_type = '10-K' AND extract(year FROM filing_date) = 2025").fetchone()[0]
+con.close()
+cov_last_date = str(pd.to_datetime(_cov["last_date"].max()).date())
+cov_10k_2026 = int(_cov.loc["10-K", "firms"]) if "10-K" in _cov.index else 0
+cov_10k_2025 = int(_cov25)
+cov_10q_2026 = int(_cov.loc["10-Q", "firms"]) if "10-Q" in _cov.index else 0
+cov_calls_2026 = int(_cov.loc["Earnings call transcript", "firms"]) if "Earnings call transcript" in _cov.index else 0
+cov_months_2026 = pd.to_datetime(cov_last_date).month
 ```
 
 **Firm universe.** The analysis universe is the S&P 500 as constituted on 2021-01-01: `{python} uni_frame_total` tickers, of which `{python} uni_frame_delisted` were subsequently delisted or acquired and are retained, with their filings up to exit, to avoid survivorship bias. Firms added to the index after that date are excluded throughout. `{python} uni_n_firms` of the `{python} uni_frame_total` firms have at least one processed document; `{python} uni_n_activity_firms` disclose at least one operational AI activity, and `{python} bal_n` are observed in every year from 2021 to 2026 and form the balanced cohort used for diffusion checks. Whenever a table or regression uses a narrower sample (firms with call transcripts, firms with sufficient AI text in both venues, or the firm-years of a single fiscal year), the sample size is reported next to the estimate.
+
+**Temporal coverage.** The panel closes with the documents available on `{python} cov_last_date`, so 2026 is a partial year: `{python} cov_10k_2026` firms have filed their annual report in 2026 (against `{python} cov_10k_2025` in 2025), 10-Qs cover the first two quarters (`{python} cov_10q_2026` firms), and call transcripts run through the third quarter (`{python} cov_calls_2026` firms). Two conventions follow. Measures that are rates or shares (the share of firms disclosing AI, frames per thousand words, grounding shares, archetype assignments, Decoupling) are reported for 2026 as observed year-to-date, because they do not scale with elapsed time; 2025 is retained as the last complete year wherever a year-over-year comparison is made. Measures that are volumes (counts of disclosed activities in a year) are annualized for 2026 by the ratio of twelve months to the `{python} cov_months_2026` months observed, and every figure that shows an annualized value marks it as a projection.
 
 ```{python}
 #| echo: false
@@ -544,7 +564,7 @@ Every automated stage in the measurement pipeline is benchmarked against held-ou
 
 ## AI becomes ubiquitous
 
-Between 2021 and 2025, artificial intelligence transformed from a specialist topic into a standard element of corporate disclosure. Across the S&P 500, the share of firms making at least one AI statement in their SEC filings rose from `{python} f"{hd_share[2021]:.1f}"`% in 2021 to `{python} f"{hd_share[2025]:.1f}"`% in 2025 (@fig-ai-diffusion); the 2026 year-to-date sample sits slightly higher still, at `{python} f"{hd_share[2026]:.1f}"`%. Over the same 2021–2025 period, narrative intensity, the volume of AI semantic frames per 1,000 words of corporate text, expanded `{python} f"{hd_frames_ratio:.1f}"`-fold, climbing from `{python} f"{hd_frames[2021]:.3f}"` to `{python} f"{hd_frames[2025]:.3f}"` frames per 1,000 words, and continues rising in the 2026 year-to-date sample (`{python} f"{hd_frames[2026]:.3f}"`).
+Between 2021 and 2026, artificial intelligence transformed from a specialist topic into a standard element of corporate disclosure. Across the S&P 500, the share of firms making at least one AI statement in their SEC filings rose from `{python} f"{hd_share[2021]:.1f}"`% in 2021 to `{python} f"{hd_share[2025]:.1f}"`% in 2025, the last complete year, and to `{python} f"{hd_share[2026]:.1f}"`% in the 2026 year-to-date sample (@fig-ai-diffusion). Because participation is a share of the firms that have filed, not a count, the 2026 value needs no time adjustment. Over the same period, narrative intensity, the volume of AI semantic frames per 1,000 words of corporate text, climbed from `{python} f"{hd_frames[2021]:.3f}"` frames per 1,000 words in 2021 to `{python} f"{hd_frames[2025]:.3f}"` in 2025 and `{python} f"{hd_frames[2026]:.3f}"` in 2026 year to date, a `{python} f"{hd_frames_ratio_26:.1f}"`-fold increase (`{python} f"{hd_frames_ratio:.1f}"`-fold through the last complete year).
 
 The sharpest inflection occurs around the 2023–2024 filing season, when fiscal-year-2023 10-Ks became the first annual reports written with a full year of generative AI commercialization behind them: the share of 10-Ks containing any AI content surged from `{python} f"{hd_tenk_share[2023]:.0f}"`% to `{python} f"{hd_tenk_share[2024]:.0f}"`% in a single season. A balanced cohort of the `{python} bal_n` firms with a firm-year observation in every year from 2021 to 2026 reproduces the same trajectory (`{python} f"{bal_share[2021]:.0f}"`% to `{python} f"{bal_share[2025]:.0f}"`%), confirming that this reflects market-wide adoption rather than survivorship or index rebalancing.
 
@@ -958,11 +978,12 @@ def _oos(train_years, test_year=2025):
 
 oos_ari_2124, oos_jac_2124, oos_n_2025 = _oos([2021, 2022, 2023, 2024])
 oos_ari_2123, oos_jac_2123, _ = _oos([2021, 2022, 2023])
+oos_ari_2125, _, oos_n_2026 = _oos([2021, 2022, 2023, 2024, 2025], test_year=2026)
 oos_jac_min, oos_jac_max = min(oos_jac_2124.values()), max(oos_jac_2124.values())
 oos_vs_2123 = oos_jac_2123.get("Vocal Substantives", float("nan"))
 ```
 
-Out-of-sample validation supports temporal stability. A model frozen on the 2021–2024 firm-years and applied to the `{python} oos_n_2025` firm-years of 2025 achieves an Adjusted Rand Index of ARI = `{python} f"{oos_ari_2124:.3f}"` against an unconstrained 2025 refit, with Jaccard recovery of `{python} f"{oos_jac_min:.1f}"`–`{python} f"{oos_jac_max:.1f}"`% across archetypes. Even the stricter pre-GenAI 2021–2023 training window retains meaningful post-2023 recovery (ARI = `{python} f"{oos_ari_2123:.3f}"`, with Vocal Substantives recovered at `{python} f"{oos_vs_2123:.1f}"`%), indicating that the empirical taxonomy is not an artifact of the initial commercialization wave.
+Out-of-sample validation supports temporal stability. A model frozen on the 2021–2024 firm-years and applied to the `{python} oos_n_2025` firm-years of 2025 achieves an Adjusted Rand Index of ARI = `{python} f"{oos_ari_2124:.3f}"` against an unconstrained 2025 refit, with Jaccard recovery of `{python} f"{oos_jac_min:.1f}"`–`{python} f"{oos_jac_max:.1f}"`% across archetypes. Even the stricter pre-GenAI 2021–2023 training window retains meaningful post-2023 recovery (ARI = `{python} f"{oos_ari_2123:.3f}"`, with Vocal Substantives recovered at `{python} f"{oos_vs_2123:.1f}"`%), indicating that the empirical taxonomy is not an artifact of the initial commercialization wave. Extending the frozen window to 2021–2025 and testing on the `{python} oos_n_2026` firm-years observed so far in 2026 gives ARI = `{python} f"{oos_ari_2125:.3f}"`; posture rates do not depend on how much of the year has elapsed, so the partial year is a valid test set.
 
 ## Sectoral sorting of disclosure archetypes
 
@@ -1574,7 +1595,7 @@ As shown in @fig-ladder-substance, while `{python} f"{c2 / c1 * 100:.1f}"`% of A
 
 ## The paradox of the GenAI boom
 
-**The generative-AI boom multiplied the volume of disclosed AI activity but lowered its average grounding.** Between 2021 and 2025 the number of disclosed activities per year rose several-fold, while the share of activities at a deployed or scaled stage, the share naming a specific product or process, and the share with an identified business function all fell (@fig-volume-vs-grounding). The marginal activity added after 2023 is, on average, less concrete than the activities firms were already disclosing. This is the pattern H1 anticipates: when a vocabulary becomes an institutional expectation, adoption of the language outruns the accumulation of grounded activity behind it [@meyer1977, pp. 340--41]. The caveat is that 2026 is a partial year and its grounding shares are estimated on the filings available to date.
+**The generative-AI boom multiplied the volume of disclosed AI activity but lowered its average grounding.** Between 2021 and 2026 the number of disclosed activities per year rose several-fold, while the share of activities at a deployed or scaled stage, the share naming a specific product or process, and the share with an identified business function all fell (@fig-volume-vs-grounding). The marginal activity added after 2023 is, on average, less concrete than the activities firms were already disclosing. This is the pattern H1 anticipates: when a vocabulary becomes an institutional expectation, adoption of the language outruns the accumulation of grounded activity behind it [@meyer1977, pp. 340--41]. Because activity counts scale with elapsed time, the 2026 volume is shown both as observed year to date and annualized on the months of filings available; the grounding shares for 2026 are rates and are read as observed.
 
 ```{python}
 #| label: fig-volume-vs-grounding
@@ -1691,7 +1712,7 @@ plt.tight_layout(rect=[0, 0, 1, 0.94])
 plt.show()
 ```
 
-The magnitudes are large. Disclosed activities in 2025 were `{python} f"{growth_ratio:.1f}"` times the 2021 count, while the share at a deployed or scaled stage fell from `{python} f"{dep_share[main_years[0]]:.0f}"`% to `{python} f"{dep_share[main_years[-1]]:.0f}"`% and the share naming a specific product or process fell from `{python} f"{named_prod[main_years[0]]:.0f}"`% to `{python} f"{named_prod[main_years[-1]]:.0f}"`%. This finding does not claim that real-world firm capabilities deteriorated. It establishes an informational phenomenon: **the marginal corporate AI activity disclosed following ChatGPT was less concrete, less mature, and more speculative than the disclosures preceding it**.
+The magnitudes are large. Disclosed activities in 2025, the last complete year, were `{python} f"{growth_ratio:.1f}"` times the 2021 count, and the 2026 total annualized on `{python} months_observed` months of filings reaches `{python} f"{proj_ratio:.1f}"` times the 2021 count. Over 2021–2025 the share at a deployed or scaled stage fell from `{python} f"{dep_share[main_years[0]]:.0f}"`% to `{python} f"{dep_share[main_years[-1]]:.0f}"`% (`{python} f"{dep_share[2026]:.0f}"`% in 2026 year to date) and the share naming a specific product or process fell from `{python} f"{named_prod[main_years[0]]:.0f}"`% to `{python} f"{named_prod[main_years[-1]]:.0f}"`% (`{python} f"{named_prod[2026]:.0f}"`% in 2026). This finding does not claim that real-world firm capabilities deteriorated. It establishes an informational phenomenon: **the marginal corporate AI activity disclosed following ChatGPT was less concrete, less mature, and more speculative than the disclosures preceding it**.
 
 ## Who owns the AI
 
@@ -3077,7 +3098,7 @@ Issuers use the framework to align communication with actual strategic importanc
 
 The overarching question was whether the content of corporate AI disclosure can distinguish talk from disclosed substance, and whether that distinction carries useful economic information. The answer is yes on the first count and a qualified yes on the second: content separates firms in ways that mention counts cannot, and some of those differences relate to firm fundamentals and market risk, although the evidence is associative rather than causal. The four research questions are answered in turn.
 
-**RQ1, evolution and composition (H1 supported).** AI disclosure went from a minority practice to a near-universal one in four years: the share of S&P 500 firms with any AI content in their filings rose from roughly one third in 2021 to more than nine in ten in 2025, with the steepest jump in the first 10-K season after generative AI became commercial. What firms report doing is overwhelmingly application-layer: across `{python} f"{hd_n_activities:,}"` disclosed activities, selling with AI and operating with AI dominate every archetype, while building foundational technology is rare. The boom multiplied the number of disclosed activities but lowered their average grounding, and the external technology firms rely on is concentrated in a handful of U.S. providers. The diffusion pattern is the one institutional theory predicts: the vocabulary spread faster than the grounded activity behind it.
+**RQ1, evolution and composition (H1 supported).** AI disclosure went from a minority practice to a near-universal one in five years: the share of S&P 500 firms with any AI content in their filings rose from roughly one third in 2021 to more than nine in ten in 2025 and 2026, with the steepest jump in the first 10-K season after generative AI became commercial. What firms report doing is overwhelmingly application-layer: across `{python} f"{hd_n_activities:,}"` disclosed activities, selling with AI and operating with AI dominate every archetype, while building foundational technology is rare. The boom multiplied the number of disclosed activities but lowered their average grounding, and the external technology firms rely on is concentrated in a handful of U.S. providers. The diffusion pattern is the one institutional theory predicts: the vocabulary spread faster than the grounded activity behind it.
 
 **RQ2, heterogeneity (H2 supported).** Firms sort into three stable disclosure archetypes plus a shrinking No AI group, and the sorting follows industry norms: technology firms cluster among Vocal Substantives, regulated financials and utilities among Governance-Led Disclosers, and consumer and industrial firms among Defensive Disclosers. Posture predicts disclosed activity even at equal disclosure volume; at the same amount of AI text, Vocal Substantives report `{python} f"{hd_vs_ratio:.2f}"` times as many activities as Defensive Disclosers. Only that archetype is consistently distinct on sector-year-adjusted fundamentals. Talking about AI, or emphasizing governance, carries no economic signature of its own.
 
