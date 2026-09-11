@@ -1149,7 +1149,7 @@ This is the sorting institutional theory predicts. Firms facing the same regulat
 
 ```{python}
 #| label: tbl-representative-firms
-#| tbl-cap: "Representative corporations across AI disclosure archetypes based on centroid distance and sectoral concentration. Prominent constituents are widely recognized S&P 500 members in each cluster; centroid-closest exemplars are the firms nearest to each archetype's mean standardized posture vector; overrepresented sectors show sectors with representation ratio > 1.05× relative to the index baseline."
+#| tbl-cap: "Representative corporations and disclosure registers across AI disclosure archetypes. Prominent constituents are widely recognized S&P 500 members in each cluster; centroid-closest exemplars are the firms nearest to each archetype's mean standardized posture vector; primary SEC disclosure focus summarizes the dominant narrative register in statutory filings."
 import numpy as np
 from tabulate import tabulate
 from IPython.display import Markdown
@@ -1172,11 +1172,6 @@ def _closest(a, k=4):
     best = idx[np.argsort(dist)[:k]]
     return ", ".join(f"{_clean_name(_fit.loc[i, 'company_name'])} (`{_fit.loc[i, 'ticker']}`)" for i in best)
 
-def _overrep_sectors(a, k=3):
-    s = rel_rep[a].sort_values(ascending=False)
-    items = [f"{sec} ({val:.1f}×)" for sec, val in s.items() if val > 1.05][:k]
-    return ", ".join(items) if items else "Broadly distributed"
-
 prominent = {
     "Vocal Substantives": "Microsoft (`MSFT`), NVIDIA (`NVDA`), Alphabet (`GOOGL`), Meta (`META`), Amazon (`AMZN`)",
     "Governance-Led Disclosers": "JPMorgan Chase (`JPM`), Bank of America (`BAC`), Apple (`AAPL`), UnitedHealth (`UNH`), Walmart (`WMT`)",
@@ -1184,11 +1179,18 @@ prominent = {
     "No AI": "Costco (`COST`), Texas Instruments (`TXN`), O'Reilly Automotive (`ORLY`), NVR (`NVR`)"
 }
 
+focus = {
+    "Vocal Substantives": "Customer-facing tools, commercial roadmaps, high technical specificity, realized deployments",
+    "Governance-Led Disclosers": "Board oversight, model risk management, responsible AI frameworks, data privacy",
+    "Defensive Disclosers": "Item 1A risk factors, cybersecurity, third-party vendor dependencies, minimal operational claims",
+    "No AI": "Physical operations, heavy capital assets, retail/real estate; negligible AI mentions in SEC filings"
+}
+
 _rows = []
 for a in ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]:
-    _rows.append([f"**{a}**", prominent[a], _closest(a, 4), _overrep_sectors(a)])
-_rows.append(["**No AI**", prominent["No AI"], "Rule-based filter (< 5 frames)", _overrep_sectors("No AI")])
-Markdown(tabulate(_rows, headers=["Archetype", "Prominent Constituents", "Centroid-Closest Exemplars", "Overrepresented Sectors (vs. Baseline)"]))
+    _rows.append([f"**{a}**", prominent[a], _closest(a, 4), focus[a]])
+_rows.append(["**No AI**", prominent["No AI"], "Rule-based filter (< 5 frames)", focus["No AI"]])
+Markdown(tabulate(_rows, headers=["Archetype", "Prominent Constituents", "Centroid-Closest Exemplars", "Primary SEC Disclosure Focus"]))
 ```
 
 Individual firms illustrate how the taxonomy distinguishes communication strategies (@tbl-representative-firms), which reports both widely recognized market leaders and the statistical exemplars closest to each cluster centroid. Vocal Substantives pair commercial promotion with high technical specificity, spanning major technology providers (Microsoft, NVIDIA, Alphabet, Meta, Amazon, Oracle). Governance-Led Disclosers include financial, healthcare, and retail institutions (JPMorgan Chase, Bank of America, Apple, UnitedHealth, Walmart, Chevron) that prioritize ethical guardrails, board supervision, and responsible-use language. Defensive Disclosers span across communications, industrial, and financial sectors (Goldman Sachs, Morgan Stanley, Johnson & Johnson, Eli Lilly, Verizon, Disney), whose disclosures remain concentrated in statutory risk factors with limited concrete operational detail.
