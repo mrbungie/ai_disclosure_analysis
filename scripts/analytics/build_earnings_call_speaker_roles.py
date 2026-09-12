@@ -50,13 +50,25 @@ Three deterministic signals, applied in order of confidence:
      an executive on every call, including ones where they only speak in
      `qa`.
 
-  3. Title-keyword fallback, also excluded from signal 1's confirmed
+  3. SEC Form 4 officer-of-record roster (build_sec_officer_roster.py),
+     matched by an order-invariant name key so "Zavery Amit" (the SEC's
+     Last-First filing order) and "Amit Zavery" (the transcript's First-Last
+     order) resolve to the same person. This is what finally closes the
+     Amit Zavery case: he never speaks in `prepared` in any of ServiceNow's
+     7 sampled calls and the operator never announces him by name (he isn't
+     an analyst being introduced), so signals 1-2 have nothing to catch him
+     with -- but his Form 4 filings carry `RPTOWNER_RELATIONSHIP="Officer"`,
+     `RPTOWNER_TITLE="President, CPO and COO"` directly from SEC's own
+     structured data, independent of anything in the call transcript.
+
+  4. Title-keyword fallback, also excluded from signal 1's confirmed
      analysts. For a ticker where the executive never appears in
-     `prepared` in the whole sample, an explicit corporate title in the
-     raw speaker string (CEO, CFO, "Head of Investor Relations", ...) is
-     deterministic evidence, matched with word boundaries so it doesn't
-     fire on names that merely contain the letters ("Cook", "Spector",
-     "Francfort" do NOT match "coo"/"cto"/"cfo").
+     `prepared` in the whole sample and has no SEC officer-roster match
+     (e.g. too recently promoted to show up in the fetched quarters), an
+     explicit corporate title in the raw speaker string (CEO, CFO, "Head of
+     Investor Relations", ...) is deterministic evidence, matched with word
+     boundaries so it doesn't fire on names that merely contain the letters
+     ("Cook", "Spector", "Francfort" do NOT match "coo"/"cto"/"cfo").
 
 Name normalization (strip trailing "- CFO" / "(CEO)" / affiliation suffixes,
 collapse whitespace, lowercase) runs before every one of these comparisons,
@@ -110,12 +122,62 @@ _ANNOUNCE_RE = re.compile(
 )
 
 _TOKEN_RE = re.compile(r"[a-z]+")
+_NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "dr", "mr", "mrs", "ms"}
+
+SEC_OFFICER_ROSTER_PATH = REPO_ROOT / "data" / "interim" / "sec_officer_roster" / "officer_roster.parquet"
 
 
 def normalize_speaker(raw: str) -> str:
     """Strip trailing title/affiliation text, collapse whitespace, lowercase."""
     name_part = _NAME_SEP_RE.split(raw, maxsplit=1)[0]
     return _WS_RE.sub(" ", name_part).strip().lower()
+
+
+def canonical_name_key(raw: str | None) -> str | None:
+    """Order-invariant identity key: lowercase, drop initials/suffixes, sort tokens.
+
+    SEC Form 4 names are "Last First Middle" ("Zavery Amit"); call transcripts
+    use "First Last" ("Amit Zavery"). Sorting the token set makes the two
+    comparable without guessing which source uses which order, and dropping
+    single-letter initials and suffixes (Jr., III, ...) avoids a false
+    mismatch when only one source includes them. Requires >=2 remaining
+    tokens so a single common surname alone can never satisfy the key.
+    """
+    if raw is None:
+        return None
+    tokens = sorted(
+        t for t in _TOKEN_RE.findall(raw.lower())
+        if len(t) >= 2 and t not in _NAME_SUFFIXES
+    )
+    return " ".join(tokens) if len(tokens) >= 2 else None
+
+
+def name_matches_with_nickname(a: str | None, b: str | None) -> bool:
+    """Same-length token sets, exact match except for at most one nickname pair.
+
+    Catches cases the exact `canonical_name_key` join misses because SEC
+    filings use a legal first name while the transcript uses a nickname
+    (Salesforce's Srini Tallapragada is SEC-registered as "Tallapragada
+    Srinivas"). Every OTHER token -- crucially the surname -- must match
+    exactly; only one token pair may differ, and only via a >=3-letter
+    prefix relationship ("srini" -> "srinivas"), which keeps this from
+    matching two unrelated same-surname people.
+    """
+    if a is None or b is None:
+        return False
+    ta = sorted(t for t in _TOKEN_RE.findall(a.lower()) if len(t) >= 2 and t not in _NAME_SUFFIXES)
+    tb = sorted(t for t in _TOKEN_RE.findall(b.lower()) if len(t) >= 2 and t not in _NAME_SUFFIXES)
+    if len(ta) < 2 or len(ta) != len(tb):
+        return False
+    nickname_slots_used = 0
+    for x, y in zip(ta, tb):
+        if x == y:
+            continue
+        if len(x) >= 3 and len(y) >= 3 and (x.startswith(y) or y.startswith(x)):
+            nickname_slots_used += 1
+            continue
+        return False
+    return nickname_slots_used <= 1
 
 
 def extract_announced_name(operator_text: str | None) -> str | None:
@@ -142,15 +204,35 @@ def main() -> None:
         "extract_announced_name", extract_announced_name, ["VARCHAR"], "VARCHAR",
         null_handling="special")
     con.create_function("name_token_overlap", name_token_overlap, ["VARCHAR", "VARCHAR"], "BOOLEAN")
+    con.create_function(
+        "canonical_name_key", canonical_name_key, ["VARCHAR"], "VARCHAR",
+        null_handling="special")
+    con.create_function(
+        "name_matches_with_nickname", name_matches_with_nickname, ["VARCHAR", "VARCHAR"], "BOOLEAN",
+        null_handling="special")
 
     con.execute(f"""
         CREATE TEMP TABLE ec AS
         SELECT *,
                split_part(document_id, '_', 1) AS ticker,
-               normalize_speaker(speaker) AS speaker_norm
+               normalize_speaker(speaker) AS speaker_norm,
+               canonical_name_key(speaker) AS speaker_name_key
         FROM read_parquet('{SOURCE_GLOB}', union_by_name=True)
         WHERE speaker IS NOT NULL AND trim(speaker) <> ''
     """)
+
+    has_officer_roster = SEC_OFFICER_ROSTER_PATH.exists()
+    if has_officer_roster:
+        con.execute(f"""
+            CREATE TEMP TABLE sec_officer_roster AS
+            SELECT DISTINCT ticker, officer_name_raw, canonical_name_key(officer_name_raw) AS name_key
+            FROM read_parquet('{SEC_OFFICER_ROSTER_PATH.as_posix()}')
+            WHERE canonical_name_key(officer_name_raw) IS NOT NULL
+        """)
+    else:
+        print(f"  no SEC officer roster at {SEC_OFFICER_ROSTER_PATH} -- run "
+              f"build_sec_officer_roster.py first; skipping that signal")
+        con.execute("CREATE TEMP TABLE sec_officer_roster (ticker VARCHAR, officer_name_raw VARCHAR, name_key VARCHAR)")
 
     # Signal 1: operator hand-off announcements in the Q&A section, with the
     # announced name carried forward to every subsequent turn until the next
@@ -175,7 +257,7 @@ def main() -> None:
 
     con.execute("""
         CREATE TEMP TABLE confirmed_analyst AS
-        SELECT DISTINCT e.ticker, e.speaker_norm
+        SELECT DISTINCT e.ticker, e.speaker_norm, e.speaker_name_key
         FROM qa_announced q
         JOIN ec e ON e.document_id = q.document_id AND e.paragraph_index = q.paragraph_index
         WHERE q.block_type = 'speaker_turn'
@@ -199,40 +281,72 @@ def main() -> None:
         SELECT ticker, speaker_norm FROM confirmed_analyst
     """)
 
+    # Signal 3: SEC Form 4 officer-of-record roster (build_sec_officer_roster.py),
+    # keyed by an order-invariant name so "Zavery Amit" (SEC) and "Amit
+    # Zavery" (transcript) match. Also excludes operator-confirmed analysts,
+    # in case a name key were ever shared with an unrelated officer.
+    con.execute("""
+        CREATE TEMP TABLE sec_officer_roster_clean AS
+        SELECT sor.ticker, sor.officer_name_raw, sor.name_key
+        FROM sec_officer_roster sor
+        LEFT JOIN confirmed_analyst ca
+            ON ca.ticker = sor.ticker AND ca.speaker_name_key = sor.name_key
+        WHERE ca.speaker_name_key IS NULL
+    """)
+
     con.execute(f"""
         CREATE TABLE speaker_roles AS
         WITH sp AS (
-            SELECT document_id, ticker, speaker, speaker_norm,
+            SELECT document_id, ticker, speaker, speaker_norm, speaker_name_key,
                    bool_or(section = 'prepared' AND block_type = 'speaker_turn') AS in_prepared_this_call,
                    bool_or(section = 'qa' AND block_type = 'speaker_turn') AS in_qa,
                    bool_or(block_type = 'operator') AS ever_operator,
                    count(*) AS n_turns
             FROM ec
-            GROUP BY document_id, ticker, speaker, speaker_norm
+            GROUP BY document_id, ticker, speaker, speaker_norm, speaker_name_key
         ), rostered AS (
             SELECT sp.*,
                    ca.speaker_norm IS NOT NULL AS operator_confirmed_analyst,
                    er.speaker_norm IS NOT NULL AS on_exec_roster,
+                   so.name_key IS NOT NULL AS on_sec_officer_roster,
                    regexp_matches(lower(sp.speaker), '{_TITLE_RE.pattern}') AS has_title_keyword
             FROM sp
             LEFT JOIN confirmed_analyst ca
                 ON ca.ticker = sp.ticker AND ca.speaker_norm = sp.speaker_norm
             LEFT JOIN exec_roster er
                 ON er.ticker = sp.ticker AND er.speaker_norm = sp.speaker_norm
+            LEFT JOIN sec_officer_roster_clean so
+                ON so.ticker = sp.ticker AND so.name_key = sp.speaker_name_key
+        ), nickname_matched AS (
+            -- Only probe the fuzzy nickname join for speakers the exact
+            -- name_key join above already missed, and only against that
+            -- ticker's officers -- bounds the UDF's cost to the residual.
+            SELECT r.document_id, r.speaker,
+                   bool_or(name_matches_with_nickname(sor.officer_name_raw, r.speaker)) AS matched
+            FROM rostered r
+            JOIN sec_officer_roster_clean sor ON sor.ticker = r.ticker
+            WHERE NOT r.on_sec_officer_roster AND NOT r.in_prepared_this_call
+              AND NOT r.operator_confirmed_analyst
+            GROUP BY r.document_id, r.speaker
         )
-        SELECT document_id, ticker, speaker, speaker_norm, n_turns,
-               in_prepared_this_call, in_qa, ever_operator,
-               operator_confirmed_analyst, on_exec_roster, has_title_keyword,
+        SELECT r.document_id, r.ticker, r.speaker, r.speaker_norm, r.n_turns,
+               r.in_prepared_this_call, r.in_qa, r.ever_operator,
+               r.operator_confirmed_analyst, r.on_exec_roster, r.on_sec_officer_roster,
+               coalesce(nm.matched, false) AS on_sec_officer_roster_nickname,
+               r.has_title_keyword,
                CASE
-                   WHEN ever_operator AND NOT in_prepared_this_call AND NOT in_qa THEN 'operator_only'
-                   WHEN operator_confirmed_analyst THEN 'analyst_confirmed_by_operator'
-                   WHEN in_prepared_this_call THEN 'exec_ir'
-                   WHEN on_exec_roster THEN 'exec_ir_cross_quarter'
-                   WHEN has_title_keyword AND in_qa THEN 'exec_ir_title_keyword'
-                   WHEN in_qa THEN 'analyst_qa_only'
+                   WHEN r.ever_operator AND NOT r.in_prepared_this_call AND NOT r.in_qa THEN 'operator_only'
+                   WHEN r.operator_confirmed_analyst THEN 'analyst_confirmed_by_operator'
+                   WHEN r.in_prepared_this_call THEN 'exec_ir'
+                   WHEN r.on_exec_roster THEN 'exec_ir_cross_quarter'
+                   WHEN r.on_sec_officer_roster THEN 'exec_ir_sec_officer'
+                   WHEN coalesce(nm.matched, false) THEN 'exec_ir_sec_officer_nickname'
+                   WHEN r.has_title_keyword AND r.in_qa THEN 'exec_ir_title_keyword'
+                   WHEN r.in_qa THEN 'analyst_qa_only'
                    ELSE 'other'
                END AS heuristic_role
-        FROM rostered
+        FROM rostered r
+        LEFT JOIN nickname_matched nm ON nm.document_id = r.document_id AND nm.speaker = r.speaker
     """)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -245,7 +359,8 @@ def main() -> None:
 
     recovered = con.execute("""
         SELECT count(*) FROM speaker_roles
-        WHERE heuristic_role IN ('exec_ir_cross_quarter', 'exec_ir_title_keyword')
+        WHERE heuristic_role IN ('exec_ir_cross_quarter', 'exec_ir_sec_officer',
+                                  'exec_ir_sec_officer_nickname', 'exec_ir_title_keyword')
     """).fetchone()[0]
 
     cleaned_from_roster = con.execute("""
@@ -304,7 +419,9 @@ def main() -> None:
         ],
         "residual_non_firm_speaker_pct": round(100 * residual_analyst / total_frames, 2) if total_frames else None,
         "naive_rule_baseline_analyst_qa_only_pct": 17.45,
-        "roster_only_fix_baseline_pct": 13.33,
+        "cross_quarter_roster_only_baseline_pct": 13.33,
+        "plus_operator_confirmation_baseline_pct": 22.04,
+        "plus_sec_officer_roster_pct": 20.24,
     }
     SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
     SUMMARY_PATH.write_text(json.dumps(summary, indent=2))
