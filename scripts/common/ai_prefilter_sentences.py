@@ -62,12 +62,37 @@ def term_regex(terms) -> str:
     return f"\\b({alternation})\\b"
 
 
-def load_sentences(con, limit: int = 0) -> pd.DataFrame:
-    """Oraciones con término de IA de los textos que pasan la compuerta léxica.
+def already_covered_hashes(output_dir: Path, model: str, fingerprint: str) -> set[int]:
+    """text_hash values that already have a score from THIS model+anchors
+    combination -- a different model or a changed anchor set produces
+    non-comparable margins, so coverage is scoped to (model, fingerprint),
+    not to text_hash alone (unlike ai_classify.py's judge-model-agnostic
+    coverage: there any successful prior judge counts, because the schema
+    is fixed; here the anchors/model ARE the measurement, so a change
+    invalidates prior scores rather than being interchangeable with them)."""
+    parts = sorted(output_dir.glob("prefilter_sentence_scores__run=*.parquet"))
+    if not parts:
+        return set()
+    con = duckdb.connect()
+    try:
+        files = ", ".join(f"'{p}'" for p in parts)
+        df = con.execute(f"""
+            SELECT DISTINCT text_hash FROM read_parquet([{files}], union_by_name=True)
+            WHERE model = ? AND anchors_fingerprint = ?
+        """, [model, fingerprint]).df()
+    finally:
+        con.close()
+    return set(df["text_hash"].tolist())
+
+
+def load_sentences(con, limit: int = 0, exclude_hashes: set[int] | None = None) -> pd.DataFrame:
+    """Oraciones con término de IA de los textos que pasan la compuerta léxica,
+    menos los textos que `exclude_hashes` ya cubre (ver `already_covered_hashes`).
 
     La compuerta se aplica al PÁRRAFO (es la población candidata del prefiltro)
     y el filtro de término a la ORACIÓN, que es lo que se va a embeber."""
     pattern = term_regex(strong_terms() + weak_terms())
+    con.register("_exclude", pd.DataFrame({"text_hash": sorted(exclude_hashes or [])}, dtype="uint64"))
     return con.execute(f"""
         WITH candidates AS (
             SELECT up.country_code, up.form, up.accession_number, up.item_key,
@@ -77,6 +102,7 @@ def load_sentences(con, limit: int = 0) -> pd.DataFrame:
                   QUALIFY row_number() OVER (PARTITION BY text_hash ORDER BY run_id DESC) = 1) s
               USING (text_hash)
             WHERE up.is_scorable AND (s.strong_lexical_match OR s.weak_lexical_match)
+              AND NOT EXISTS (SELECT 1 FROM _exclude e WHERE e.text_hash = up.text_hash)
         )
         SELECT c.text_hash, sn.sentence_index, sn.sentence_text
         FROM candidates c
@@ -99,17 +125,34 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--max-seq-length", type=int, default=256)
     parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument("--force-recompute-hashes", type=Path, default=None,
+                        help="Parquet/CSV with a text_hash column: recompute these even if a "
+                             "prior run under the same model+anchors already covers them -- for "
+                             "invalidating specific texts after an upstream data fix (e.g. a "
+                             "sentences segmentation bug), not for routine incremental runs.")
     args = parser.parse_args()
+
+    anchors = anchor_rows()
+    fingerprint = anchors_fingerprint(anchors)
+    covered = already_covered_hashes(args.output_dir, args.model, fingerprint)
+    if args.force_recompute_hashes:
+        forced = pd.read_parquet(args.force_recompute_hashes) if args.force_recompute_hashes.suffix == ".parquet" \
+            else pd.read_csv(args.force_recompute_hashes)
+        covered -= set(forced["text_hash"].tolist())
+        print(f"forzando recálculo de {len(forced):,} text_hash pese a cobertura previa")
+    print(f"{len(covered):,} textos ya cubiertos por model={args.model} fingerprint={fingerprint[:12]}...")
 
     con = duckdb.connect(str(args.database), read_only=True)
     try:
-        sentences = load_sentences(con, args.limit)
+        sentences = load_sentences(con, args.limit, exclude_hashes=covered)
     finally:
         con.close()
     print(f"{len(sentences):,} oraciones con término de IA en "
-          f"{sentences['text_hash'].nunique():,} textos candidatos")
+          f"{sentences['text_hash'].nunique():,} textos candidatos nuevos")
+    if sentences.empty:
+        print("Nada pendiente.")
+        return
 
-    anchors = anchor_rows()
     device = resolve_device(args.device)
     model = _load_model(args.model, device, args.dtype)
     # bge-m3 acepta 8.192 tokens y reserva memoria para eso; una oración no los
@@ -149,7 +192,6 @@ def main() -> None:
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    fingerprint = anchors_fingerprint(anchors)
     aggregated["model"] = args.model
     aggregated["anchors_fingerprint"] = fingerprint
     aggregated["run_id"] = run_id
