@@ -1,0 +1,59 @@
+{
+  "role_counts": [
+    {
+      "heuristic_role": "analyst_qa_only",
+      "n_speaker_instances": 111216,
+      "n_calls": 11120
+    },
+    {
+      "heuristic_role": "exec_ir",
+      "n_speaker_instances": 35459,
+      "n_calls": 11127
+    },
+    {
+      "heuristic_role": "operator_only",
+      "n_speaker_instances": 11188,
+      "n_calls": 11186
+    },
+    {
+      "heuristic_role": "exec_ir_cross_quarter",
+      "n_speaker_instances": 6700,
+      "n_calls": 4018
+    },
+    {
+      "heuristic_role": "other",
+      "n_speaker_instances": 2287,
+      "n_calls": 251
+    },
+    {
+      "heuristic_role": "exec_ir_title_keyword",
+      "n_speaker_instances": 3,
+      "n_calls": 3
+    }
+  ],
+  "n_speakers_recovered_by_fix": 6703,
+  "qa_firm_frames_by_role_after_fix": [
+    {
+      "heuristic_role": "exec_ir",
+      "n_frames": 12982
+    },
+    {
+      "heuristic_role": "analyst_qa_only",
+      "n_frames": 2097
+    },
+    {
+      "heuristic_role": "exec_ir_cross_quarter",
+      "n_frames": 637
+    },
+    {
+      "heuristic_role": "exec_ir_title_keyword",
+      "n_frames": 11
+    },
+    {
+      "heuristic_role": "operator_only",
+      "n_frames": 1
+    }
+  ],
+  "residual_analyst_qa_only_pct": 13.33,
+  "naive_rule_baseline_analyst_qa_only_pct": 17.45
+}
