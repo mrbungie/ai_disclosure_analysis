@@ -1,54 +1,22 @@
-"""Semantic frame extraction over AI-disclosure paragraphs — see
-docs/classification_model.md for the full design (schema, worked examples,
-negation rule, downstream aggregation plan). This script is the extraction
-step only: paragraph text in, zero-or-more `AIFrame`s out.
+"""Semantic frame extraction over AI-disclosure paragraphs -- Pass-1 of the
+v2 pipeline (spec: docs, 2026-09-12). Replaces the deprecated
+scripts/deprecated/ai_classify.py -- see data/deprecated/POINTER.json for why.
 
 Population classified: `scripts/common/ai_prefilter_classify.py`'s final
-logistic-regression model marked `is_ai_prefiltered=True` — see
-docs/prefilter_evaluation.md §8.8 for the funnel. This replaced an earlier
-version of this script that used the golden set's `is_ai_disclosure=True`
-labels as a stand-in population, back when no prefilter-scored candidate set
-existed yet in this environment — that subset is a subset of / mostly
-overlaps with the real population, so its results aren't discarded, just
-superseded as the source of truth for "what's pending."
+logistic-regression model marked `is_ai_prefiltered=True` over
+`unique_paragraphs` -- one row per unique paragraph TEXT.
 
-DEDUP IS A PHASE, NOT SOMETHING THIS SCRIPT COMPUTES (docs/
-prefilter_evaluation.md §8.8): `ai_prefilter_classify.py` now trains and
-applies the prefilter model over `unique_paragraphs` (build_duckdb.py's
-canonical dedup table) directly, so its output —
-`data/interim/prefilter_predictions_unique/` — is ALREADY one row per
-unique paragraph TEXT, never per instance. This script just reads that
-population as-is: no grouping, no independent hashing, no dedup logic of
-its own. `ai_frames` inherits the same shape — keyed by `text_hash`, with
-`(country_code, form, accession_number, item_key, paragraph_index)` naming
-only the one representative instance that was actually classified, and
-`duplicate_count` (carried straight through from `unique_paragraphs`)
-saying how many paragraph instances in the corpus share that text. A
-caller that wants the frames for a SPECIFIC paragraph instance must
-compute that paragraph's own `text_hash` (same BLAKE2b, now a column on
-`paragraphs` itself) and join on that, never on the paragraph key. An
-earlier version of this script (§8.7) computed its own hash from a
-sentence-reconstructed text and its own ad hoc dedup grouping — a real bug
-came from exactly that duplication; there is now exactly one place in the
-codebase that decides what a paragraph's text_hash is.
+Same operational contract as the deprecated version: additive (nothing is
+ever overwritten or deleted), atomic part files every `--part-rows` rows,
+a failed API call is written as an error row (not skipped) so a
+credit/network cutoff retries itself next run, and coverage is checked by
+`text_hash` (judge-model-agnostic).
 
-Same operational contract as golden_set.py, deliberately kept close so the
-two don't drift: additive (nothing is ever overwritten or deleted), atomic
-part files every `--part-rows` rows, a failed API call is written as an
-error row (not skipped) so a credit/network cutoff retries itself next
-run, and "already classified" is judge-model-agnostic (any prior
-successful run counts as coverage — see golden_set.py's cmd_label for why:
-switching judge models must never silently reprocess everything). Coverage
-is checked by `text_hash`, so a text already classified under one
-paragraph's identity is never resent even if a NEW duplicate instance of it
-shows up in a later prefilter run.
-
-Grounding: each paragraph is split into its constituent `sentences` (the
-materialized DuckDB table scripts/common/build_duckdb.py already builds)
-and sent to the model as `[0] ... [1] ...`, per docs/classification_model.md
-§1 — the model returns sentence indices as evidence, never reproduced text,
-so there's nothing to hallucinate-and-not-match the way a copied quote
-could.
+Checkpointing: rows are buffered and flushed to an atomic parquet part every
+`--part-rows` (default 250). On SIGINT/SIGTERM, in-flight tasks are
+cancelled and whatever is currently buffered is flushed immediately before
+exit -- nothing collected so far is lost, nothing partially-written is left
+in a non-atomic state (write to `.partial`, then `replace()`).
 
 Usage:
     uv run python scripts/common/ai_classify.py --limit 50   # smoke test
@@ -66,14 +34,14 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 import duckdb
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATABASE = REPO_ROOT / "duckdb" / "thesis.duckdb"
@@ -81,207 +49,201 @@ DEFAULT_DIR = REPO_ROOT / "data" / "interim" / "ai_classify"
 FRAME_GLOB = "ai_frames__session=*.parquet"
 
 PARAGRAPH_KEY = ("country_code", "form", "accession_number", "item_key", "paragraph_index")
-DEFAULT_JUDGE_MODEL = "qwen/qwen3.7-flash"
-PROMPT_VERSION = "v1"
+DEFAULT_JUDGE_MODEL = "openai/gpt-5.6-luna"  # ver docs/judge_model_selection.md
+PROMPT_VERSION = "v2"
+DEFAULT_CONCURRENCY = 6  # el spec pedía 32; medido en la práctica contra OpenRouter/qwen -- ver comentario en argparse
 
 
 # --------------------------------------------------------------------------
-# Salida estructurada — docs/classification_model.md
+# Salida estructurada -- spec v2 §1.1
 # --------------------------------------------------------------------------
 
-Subject = Literal["firm", "suppliers_or_partners", "customers", "competitors_or_industry"]
+Subject = Literal["firm", "partners", "customers", "industry", "regulators"]
 AIType = Literal["generative", "predictive_ml", "unspecified"]
-Temporal = Literal["realized", "planned", "expected", "hypothetical"]
-Domain = Literal["internal", "customer_facing", "unspecified"]
+Temporal = Literal["realized", "forward", "hypothetical"]
 
 Concept = Literal[
-    "deployed", "pilot_or_testing", "exploring", "use_stage_unspecified", "expansion_or_scaling",
-    "proprietary_ai", "third_party_ai", "ai_infrastructure", "ai_talent", "ai_investment",
+    # adopción y habilitadores
+    "deployed", "pilot", "exploring", "scaling",
+    "proprietary_ai", "third_party_ai", "infrastructure", "talent", "investment",
+    # resultados
     "productivity_outcome", "cost_outcome", "revenue_outcome", "customer_outcome",
-    "risk_cybersecurity", "risk_privacy", "risk_regulatory_or_legal", "risk_intellectual_property",
-    "risk_bias_or_fairness", "risk_reliability_or_accuracy", "risk_competitive_or_disruption",
-    "risk_workforce", "risk_operational_dependence",
-    "gov_board_oversight", "gov_management_oversight", "gov_ai_policy_or_framework",
-    "gov_technical_controls", "gov_human_oversight", "gov_vendor_governance",
+    # riesgos
+    "risk_cyber", "risk_privacy", "risk_regulatory", "risk_ip", "risk_bias",
+    "risk_reliability", "risk_competitive", "risk_workforce", "risk_operational",
+    "risk_reputational",
+    # gobernanza
+    "gov_board", "gov_management", "gov_policy", "gov_technical", "gov_human", "gov_vendor",
 ]
 
+Specificity = Literal["process", "product", "vendor", "metric", "timeline"]
+Rhetoric = Literal["promotional", "strategic", "hedged"]
+Valence = Literal["positive", "negative", "mixed", "not_applicable"]
+MODEL_INCONSISTENT = "model_inconsistent"  # never part of Valence -- the model must not see or choose this
 
-class SpecificityEvidence(BaseModel):
-    business_process: bool = Field(description=(
-        "True when a concrete business process, organizational function, workflow, "
-        "or operational activity is identified."))
-    product_or_system: bool = Field(description=(
-        "True when a specific AI-enabled product, model, system, platform, tool, "
-        "or application is identified."))
-    vendor_or_partner: bool = Field(description=(
-        "True when a specific vendor, technology provider, supplier, partner, or "
-        "external AI provider is identified."))
-    quantified_metric: bool = Field(description=(
-        "True when the frame contains an explicit numerical metric, percentage, "
-        "monetary amount, quantity, or measured result."))
-    date_or_timeline: bool = Field(description=(
-        "True when the frame includes an explicit date, period, deadline, "
-        "milestone, implementation schedule, or timeline."))
-
-
-class RhetoricalSignals(BaseModel):
-    promotional: bool = Field(description=(
-        "True when the proposition uses strongly positive, transformational, "
-        "superiority-oriented, leadership-oriented, revolutionary, or similarly "
-        "promotional language about AI."))
-    strategic_importance: bool = Field(description=(
-        "True when the proposition explicitly frames AI as central, critical, "
-        "material, strategically important, or a strategic priority."))
-
-
-class FrameEvidence(BaseModel):
-    sentence_ids: list[int] = Field(
-        min_length=1,
-        description="Indices of all numbered sentences necessary to support this frame.")
+ADOPTION_CONCEPTS = {
+    "deployed", "pilot", "exploring", "scaling",
+    "proprietary_ai", "third_party_ai", "infrastructure", "talent", "investment",
+}
+GOVERNANCE_CONCEPTS = {"gov_board", "gov_management", "gov_policy", "gov_technical", "gov_human", "gov_vendor"}
+OUTCOME_CONCEPTS = {"productivity_outcome", "cost_outcome", "revenue_outcome", "customer_outcome"}
 
 
 class AIFrame(BaseModel):
-    """One semantically coherent proposition about AI. Multiple concepts can
-    belong to the same frame — do NOT create one frame per concept. Create
-    separate frames only when keeping the information together would destroy
-    an important semantic relationship (see docs/classification_model.md §3
-    for the full rule and worked examples, including negation §3.1)."""
+    subject: Subject
+    ai_type: AIType
+    temporal: Temporal
+    concepts: list[Concept] = Field(min_length=1)
+    specificity: list[Specificity] = Field(default_factory=list)
+    rhetoric: list[Rhetoric] = Field(default_factory=list)
+    valence: Valence  # required, no default -- "null" must never be a free lazy answer
+    sentence_ids: list[int] = Field(min_length=1)
 
-    subject: Subject = Field(description=(
-        "Whose AI activity, capability, outcome, risk, or governance arrangement is "
-        "being described. 'customers' is the firm's own customers/users adopting or "
-        "reacting to AI. 'competitors_or_industry' is adoption, capability, or "
-        "pressure attributed to competitors or the industry at large — kept separate "
-        "from 'customers' because customer adoption and competitive pressure are "
-        "distinct phenomena (market-pull vs. competitive-push)."))
-    ai_type: AIType = Field(description=(
-        "'generative' includes generative AI, LLMs, and foundation-model uses. "
-        "'predictive_ml' refers to traditional predictive or discriminative "
-        "machine-learning applications. 'unspecified' when the disclosure refers "
-        "only to AI generally."))
-    temporal: Temporal = Field(description=(
-        "'realized': already occurred, currently exists, or is ongoing. 'planned': "
-        "concrete intention, commitment, announced action, or implementation plan. "
-        "'expected': management expectation, forecast, target, or anticipated "
-        "outcome. 'hypothetical': may, might, could, potentially, or another "
-        "possibility without a concrete commitment."))
-    domain: Domain = Field(description=(
-        "'internal': employees, internal operations, internal decision-making, or "
-        "internal business processes. 'customer_facing': products, services, "
-        "interfaces, customer interactions, or other externally facing "
-        "applications. 'unspecified': the application domain is unclear, absent, "
-        "or not informative."))
-    concepts: list[Concept] = Field(
-        min_length=1,
-        description="All thesis concepts asserted within this same semantic frame.")
-    specificity: SpecificityEvidence = Field(description=(
-        "Observable evidence indicating how concretely this proposition is "
-        "grounded in the disclosure."))
-    rhetoric: RhetoricalSignals = Field(description=(
-        "Rhetorical characteristics associated specifically with this frame."))
-    evidence: FrameEvidence = Field(description=(
-        "References to the numbered input sentences supporting this frame."))
+    @model_validator(mode="after")
+    def _dedupe_lists(self):
+        # The model sometimes repeats the same value twice in one list (seen:
+        # concepts=['productivity_outcome', 'productivity_outcome']) -- harmless
+        # to keep, but it silently inflates concept/specificity/rhetoric counts
+        # for anything downstream that counts list membership. dict.fromkeys
+        # preserves first-seen order, unlike set().
+        self.concepts = list(dict.fromkeys(self.concepts))  # type: ignore[assignment]
+        self.specificity = list(dict.fromkeys(self.specificity))  # type: ignore[assignment]
+        self.rhetoric = list(dict.fromkeys(self.rhetoric))  # type: ignore[assignment]
+        return self
+
+    @model_validator(mode="after")
+    def _valence_iff_outcome(self):
+        # Never raises: a cross-field mismatch here would fail the whole tool
+        # call under reasoning=none (no room for the model to self-correct),
+        # dropping every OTHER correct field (subject/temporal/concepts) in
+        # this frame along with it. Instead, flag the mismatch explicitly so
+        # it stays auditable -- "model_inconsistent" is never confusable with
+        # a real "not_applicable" judgment.
+        has_outcome = bool(OUTCOME_CONCEPTS & set(self.concepts))
+        chose_applicable = self.valence != "not_applicable"
+        if has_outcome != chose_applicable:
+            # Deliberately outside the `Valence` type declared above (which is
+            # exactly what pydantic-ai turns into the model-facing schema) --
+            # the model must never see or choose this value. Pydantic v2 does
+            # not revalidate plain attribute assignment by default, so this is
+            # safe at runtime; a static type checker will (correctly) flag it.
+            self.valence = MODEL_INCONSISTENT  # type: ignore[assignment]
+        return self
 
 
 class ParagraphExtraction(BaseModel):
-    """Structured extraction from one paragraph, pre-segmented into numbered
-    sentences. Zero frames is valid when the paragraph does not contain
-    information relevant to the ontology, INCLUDING when its only AI-related
-    content is a negated proposition (docs/classification_model.md §3.1) —
-    do not create a frame to represent something the text says did NOT
-    happen."""
-
-    frames: list[AIFrame] = Field(
-        default_factory=list,
-        description=("All distinct semantic AI frames supported by the paragraph. "
-                      "Use the minimum number of frames necessary to preserve the "
-                      "relevant semantic pairings. A negated claim (e.g. 'we do not "
-                      "use AI') produces NO frame."))
+    frames: list[AIFrame] = Field(default_factory=list)
 
 
 SYSTEM_PROMPT = """\
-You extract structured semantic frames about AI from paragraphs of corporate \
-disclosures (10-K/10-Q/Memoria Anual), for academic research on AI disclosure. \
-Every paragraph you see was already judged to contain substantive AI-related \
-content, but your job is finer-grained than that binary judgment: identify every \
-distinct, semantically coherent proposition ("frame") about AI in the paragraph.
+You extract structured "frames" about AI from one paragraph of a corporate filing \
+(10-K/10-Q), for research on AI disclosure. You are told which firm files the \
+document (ticker and name): that firm, its subsidiaries and its products \
+('our X', or the firm named in third person, e.g. a quoted press release) are \
+subject=firm. Sentences are numbered [0], [1], ... Cite them by index; never \
+reproduce sentence text.
 
-Core rule: create the MINIMUM number of frames necessary to preserve the \
-relationships between subject, AI type, temporal status, domain, concepts, and \
-evidence. Do not split one proposition into several frames just because it \
-asserts several concepts at once (e.g. "we use generative AI, cutting costs and \
-improving service" is ONE frame with multiple concepts). Split into separate \
-frames only when merging would incorrectly pair information across distinct \
-propositions (e.g. one AI type/temporal pairing for a realized use, a different \
-pairing for an expected future use).
+A frame is one coherent proposition about AI: who (subject), what kind of AI \
+(ai_type), when (temporal), and which concepts it asserts. Create the minimum \
+number of frames that keeps pairings correct: one sentence asserting several \
+concepts about the same subject and time is ONE frame. Split only when merging \
+would pair information from different propositions (e.g. a realized use and a \
+planned use). Zero frames is a valid and common answer.
 
-Negation rule: a negated proposition ("we do not currently use generative AI") is \
-NOT positive evidence of adoption, capability, outcome, risk, or governance, even \
-though it names those same concepts. Never create a frame that would assert the \
-opposite of what the text says. A paragraph whose only AI-relevant content is \
-negated produces zero frames for that content.
+Rules:
+- subject is whoever performs the action. "We face evolving AI regulation" is \
+subject=firm with risk_regulatory; "the EU AI Act requires providers to..." is \
+subject=regulators; customer or market demand for the firm's products is \
+subject=customers. partners = a named supplier, vendor, or joint-venture \
+partner acting on its own (e.g. "NVIDIA's CUDA platform").
+- A frame captures only what the text affirms; a negated statement ("we do not \
+use generative AI") earns no frame.
+- temporal tracks the state of the fact, for whichever subject: realized = \
+already exists, done, or ongoing (a competitor's or the industry's current \
+capability counts, even mentioned briefly or in a list); forward = a stated \
+future intent ("plans to", "will", "expects to"); hypothetical = conditional \
+possibility or risk ("could", "may result in", "if... then").
+- valence: every frame states one. positive for gains or savings, negative \
+for losses or cost increases, mixed for both -- whenever a *_outcome concept \
+is present. not_applicable otherwise.
+- specificity lists the concrete evidence given: process (a named business \
+process), product (a named product or system), vendor (a named vendor or \
+partner), metric (a quantified figure), timeline (a date or period).
+- rhetoric: promotional = superlatives or self-praise; strategic = AI framed \
+as central to strategy; hedged = non-committal wording about the firm's own \
+realized or forward activity ("may", "could", "seek to") -- reserved for that \
+case, since risk-factor conditionals already carry temporal=hypothetical.
+- ai_type follows whatever the text names, for whichever entity: assign \
+predictive_ml/generative the moment the proposition says machine learning, \
+deep learning, an LLM, or generative AI, even for a competitor or the industry.
+- sentence_ids cites the full set of sentences behind subject, ai_type, \
+temporal and every concept -- both sentences when a frame's evidence spans two."""
 
-Subject attribution rule: subject=firm with temporal=realized/planned/expected means \
-the FIRM ITSELF is the one using, building, or committing to AI. A mention of \
-customer, market, or competitor demand for AI-related products or applications is NOT \
-evidence of the firm's own AI adoption, even when that demand drives the firm's \
-revenue. For example, "net sales increased due to growth in AI-related applications" \
-describes market/customer demand for the firm's (non-AI) products — this is \
-subject=customers or subject=competitors_or_industry with concepts like \
-revenue_outcome, never subject=firm with ai_type=generative/predictive_ml implying \
-the firm itself deployed AI. Ask: is the FIRM the one doing the AI activity, or is \
-someone else (a customer, the market, a competitor) doing it and merely affecting \
-the firm's results? Only the former gets subject=firm.
 
-Input is the paragraph's sentences, numbered:
-[0] First sentence.
-[1] Second sentence.
-Return sentence indices as evidence — never reproduce the sentence text.
-
-Zero frames is a valid, common answer when, on closer reading, nothing in the \
-paragraph actually fits the ontology (this can happen even though the paragraph \
-passed an earlier coarse AI-relevance check)."""
-
-
-def build_prompt(sentences: list[str]) -> str:
+def build_prompt(sentences: list[str], firm_ticker: str = "", firm_name: str = "") -> str:
     numbered = "\n".join(f"[{i}] {s}" for i, s in enumerate(sentences))
-    return f"{numbered}\n---\nExtract the semantic AI frames for this paragraph."
+    header = f"Filing firm: {firm_ticker} ({firm_name})\n" if firm_ticker or firm_name else ""
+    return f"{header}{numbered}"
+
+
+def validate_frames(extraction: ParagraphExtraction, n_sentences: int) -> list[str]:
+    """Post-parse checks beyond what Pydantic enforces structurally (needs the
+    runtime sentence count, which the schema doesn't have access to)."""
+    errors = []
+    for i, frame in enumerate(extraction.frames):
+        bad = [s for s in frame.sentence_ids if not (0 <= s < n_sentences)]
+        if bad:
+            errors.append(f"frame {i}: sentence_ids {bad} out of range [0, {n_sentences})")
+    return errors
+
+
+def merge_duplicate_frames(frames: list[AIFrame]) -> list[AIFrame]:
+    """Fixes a real model failure mode post-hoc: splitting one proposition into
+    several near-identical frames instead of respecting the prompt's "minimum
+    number of frames" rule (same subject and temporal -> one frame). Merges
+    only when frames ALSO share at least one evidence sentence -- a strong
+    signal it's the same proposition, not two genuinely distinct ones that
+    happen to share subject/temporal by coincidence."""
+    merged: list[AIFrame] = []
+    for frame in frames:
+        match = next((m for m in merged
+                      if m.subject == frame.subject and m.temporal == frame.temporal
+                      and set(m.sentence_ids) & set(frame.sentence_ids)), None)
+        if match is None:
+            merged.append(frame.model_copy(deep=True))
+            continue
+        match.concepts = list(dict.fromkeys(match.concepts + frame.concepts))
+        match.specificity = list(dict.fromkeys(match.specificity + frame.specificity))
+        match.rhetoric = list(dict.fromkeys(match.rhetoric + frame.rhetoric))
+        match.sentence_ids = sorted(set(match.sentence_ids) | set(frame.sentence_ids))
+        if match.ai_type == "unspecified" and frame.ai_type != "unspecified":
+            match.ai_type = frame.ai_type  # type: ignore[assignment]
+        has_outcome = bool(OUTCOME_CONCEPTS & set(match.concepts))
+        if has_outcome:
+            real_valence = next((v for v in (match.valence, frame.valence)
+                                 if v in ("positive", "negative", "mixed")), None)
+            match.valence = real_valence if real_valence else MODEL_INCONSISTENT  # type: ignore[assignment]
+        else:
+            match.valence = "not_applicable"
+    return merged
 
 
 # --------------------------------------------------------------------------
-# Partes: verificación y escritura atómica — mismo contrato que golden_set.py
+# Partes: verificación y escritura atómica -- mismo contrato que v1
 # --------------------------------------------------------------------------
 
 FRAME_SCHEMA = pa.schema([
-    # NOTE: (country_code, form, accession_number, item_key, paragraph_index)
-    # name only the ONE representative paragraph instance that was actually
-    # sent to the model for this text_hash -- see the module docstring.
-    # text_hash is the real join key; duplicate_count is how many paragraph
-    # instances in the corpus share this exact text.
     ("country_code", pa.string()), ("form", pa.string()),
     ("accession_number", pa.string()), ("item_key", pa.string()),
     ("paragraph_index", pa.int64()), ("text_hash", pa.uint64()),
     ("duplicate_count", pa.int64()),
-    ("frame_index", pa.int64()), ("has_frame", pa.bool_()),
-    ("subject", pa.string()), ("ai_type", pa.string()),
-    ("temporal", pa.string()), ("domain", pa.string()),
+    ("frame_id", pa.int64()), ("has_frame", pa.bool_()),
+    ("subject", pa.string()), ("ai_type", pa.string()), ("temporal", pa.string()),
     ("concepts", pa.list_(pa.string())),
-    ("specificity_business_process", pa.bool_()),
-    ("specificity_product_or_system", pa.bool_()),
-    ("specificity_vendor_or_partner", pa.bool_()),
-    ("specificity_quantified_metric", pa.bool_()),
-    ("specificity_date_or_timeline", pa.bool_()),
-    ("rhetoric_promotional", pa.bool_()), ("rhetoric_strategic_importance", pa.bool_()),
-    ("evidence_sentence_ids", pa.list_(pa.int64())),
-    # Los índices reales de la tabla `sentences` (DuckDB), en el MISMO orden
-    # en que se numeraron en el prompt ([0]=sentence_indices[0], etc.) —
-    # necesario porque `sentence_index` en esa tabla no siempre empieza en 0
-    # (verificado: arranca en 1 en varias filings reales), así que
-    # `evidence_sentence_ids` (posiciones dentro del prompt) NO son
-    # directamente el `sentence_index` real. sentence_indices[i] traduce la
-    # posición i del prompt al sentence_index verdadero, sin tener que
-    # re-derivar el mismo orden más tarde.
-    ("sentence_indices", pa.list_(pa.int64())),
+    ("specificity", pa.list_(pa.string())),
+    ("rhetoric", pa.list_(pa.string())),
+    ("valence", pa.string()),
+    ("sentence_ids", pa.list_(pa.int64())),
     ("judge_model", pa.string()), ("prompt_version", pa.string()),
     ("session_id", pa.string()), ("classified_at", pa.string()), ("error", pa.string()),
 ])
@@ -302,60 +264,34 @@ def commit_part(rows: list[dict], directory: Path, session_id: str, index: int) 
 def _base_record(row: dict, judge_model: str, session_id: str) -> dict:
     return {
         **{key: row[key] for key in PARAGRAPH_KEY},
-        # `row["text_hash"]` comes straight from `unique_paragraphs.text_hash`
-        # (build_duckdb.py) -- THE single canonical hash, never recomputed here
-        # from " ".join(row["sentences"]), which does not reproduce the
-        # original text byte-for-byte (see fetch_pending's comment).
         "text_hash": row["text_hash"],
         "duplicate_count": row["duplicate_count"],
-        "sentence_indices": list(row["sentence_indices"]),
         "judge_model": judge_model, "prompt_version": PROMPT_VERSION,
         "session_id": session_id, "classified_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
+def _empty_frame_fields() -> dict:
+    return {"subject": None, "ai_type": None, "temporal": None, "concepts": [],
+            "specificity": [], "rhetoric": [], "valence": None, "sentence_ids": []}
+
+
 def _frame_rows(row: dict, judge_model: str, session_id: str, extraction: ParagraphExtraction) -> list[dict]:
     base = _base_record(row, judge_model, session_id)
-    if not extraction.frames:
-        return [{
-            **base, "frame_index": None, "has_frame": False,
-            "subject": None, "ai_type": None, "temporal": None, "domain": None,
-            "concepts": [], "specificity_business_process": None, "specificity_product_or_system": None,
-            "specificity_vendor_or_partner": None, "specificity_quantified_metric": None,
-            "specificity_date_or_timeline": None, "rhetoric_promotional": None,
-            "rhetoric_strategic_importance": None, "evidence_sentence_ids": [], "error": None,
-        }]
-    rows = []
-    for i, frame in enumerate(extraction.frames):
-        rows.append({
-            **base, "frame_index": i, "has_frame": True,
-            "subject": frame.subject, "ai_type": frame.ai_type,
-            "temporal": frame.temporal, "domain": frame.domain,
-            "concepts": list(frame.concepts),
-            "specificity_business_process": frame.specificity.business_process,
-            "specificity_product_or_system": frame.specificity.product_or_system,
-            "specificity_vendor_or_partner": frame.specificity.vendor_or_partner,
-            "specificity_quantified_metric": frame.specificity.quantified_metric,
-            "specificity_date_or_timeline": frame.specificity.date_or_timeline,
-            "rhetoric_promotional": frame.rhetoric.promotional,
-            "rhetoric_strategic_importance": frame.rhetoric.strategic_importance,
-            "evidence_sentence_ids": list(frame.evidence.sentence_ids),
-            "error": None,
-        })
-    return rows
+    frames = merge_duplicate_frames(extraction.frames)
+    if not frames:
+        return [{**base, "frame_id": None, "has_frame": False, **_empty_frame_fields(), "error": None}]
+    return [{**base, "frame_id": i, "has_frame": True,
+             "subject": f.subject, "ai_type": f.ai_type, "temporal": f.temporal,
+             "concepts": list(f.concepts), "specificity": list(f.specificity),
+             "rhetoric": list(f.rhetoric), "valence": f.valence,
+             "sentence_ids": list(f.sentence_ids), "error": None}
+            for i, f in enumerate(frames)]
 
 
 def _error_row(row: dict, judge_model: str, session_id: str, error: Exception) -> dict:
-    base = _base_record(row, judge_model, session_id)
-    return {
-        **base, "frame_index": None, "has_frame": None,
-        "subject": None, "ai_type": None, "temporal": None, "domain": None, "concepts": [],
-        "specificity_business_process": None, "specificity_product_or_system": None,
-        "specificity_vendor_or_partner": None, "specificity_quantified_metric": None,
-        "specificity_date_or_timeline": None, "rhetoric_promotional": None,
-        "rhetoric_strategic_importance": None, "evidence_sentence_ids": [],
-        "error": f"{type(error).__name__}: {str(error).splitlines()[0][:300]}",
-    }
+    return {**_base_record(row, judge_model, session_id), "frame_id": None, "has_frame": None,
+            **_empty_frame_fields(), "error": f"{type(error).__name__}: {str(error).splitlines()[0][:300]}"}
 
 
 async def classify_rows(
@@ -368,20 +304,12 @@ async def classify_rows(
     progress_every: int,
 ) -> tuple[list[Path], dict]:
     from pydantic_ai import Agent
-    from pydantic_ai.models.openrouter import OpenRouterModel
+    from pydantic_ai.models.openrouter import OpenRouterModel, OpenRouterModelSettings
     from pydantic_ai.providers.openrouter import OpenRouterModelProfile, OpenRouterProvider
 
     # Qwen-via-Alibaba workaround for a real, closed-as-not-planned pydantic-ai
-    # bug (github.com/pydantic/pydantic-ai/issues/5287, verified against this
-    # project's own runs 2026-09-04: same paragraph, same settings, ~20%
-    # non-deterministic 400 "The content field is a required field", always
-    # and only when a prior assistant turn had only tool calls and no text).
-    # OpenAI's spec allows `content: null` on a tool-call-only assistant
-    # message and every other provider accepts it — Alibaba's endpoint alone
-    # requires a non-null string. OpenRouter forwards the body verbatim, so
-    # nothing short of coercing the field ourselves fixes it; this is the
-    # exact subclass workaround pydantic-ai's own maintainer posted on that
-    # issue before closing it.
+    # bug (github.com/pydantic/pydantic-ai/issues/5287) -- harmless no-op for
+    # any other model/provider, kept as a generic safety net.
     class QwenSafeOpenRouterModel(OpenRouterModel):
         async def _map_messages(self, messages, model_request_parameters, *, model_settings=None):
             mapped = await super()._map_messages(
@@ -391,24 +319,32 @@ async def classify_rows(
                     m["content"] = ""
             return mapped
 
-    # Same OpenRouter caching setup as golden_set.py's label_rows() — see
-    # that function's comment for why the profile override is necessary
-    # (pydantic-ai only auto-enables cache_control for Anthropic/Google,
-    # not Alibaba/Qwen, even though OpenRouter itself supports it for this
-    # model). SYSTEM_PROMPT here is longer than golden_set's, so caching
-    # matters more, not less.
     model = QwenSafeOpenRouterModel(
         judge_model,
         provider=OpenRouterProvider(api_key=os.environ["OPENROUTER_API_KEY"]),
         profile=OpenRouterModelProfile(openrouter_supports_cache_control=True),
         settings={"openrouter_cache_instructions": True},
     )
-    # retries=2 (pydantic-ai's structured-output self-correction) is back on
-    # now that the crash it used to trigger is fixed above — measured
-    # (2026-09-04) that retries=0 alone traded the ~18% crash rate for a ~21%
-    # "Exceeded maximum output retries (0)" rate instead (no chance to
-    # self-correct a first-pass schema miss), which is worse, not better.
-    agent = Agent(model, output_type=ParagraphExtraction, system_prompt=SYSTEM_PROMPT, retries=2)
+    # docs/judge_model_selection.md: openai/gpt-5.6-luna via amazon-bedrock/
+    # us-east-1 with reasoning disabled won the 6-paragraph comparison on
+    # speed (~3s/call) AND valence consistency (0% model_inconsistent vs
+    # 9-33% for every other candidate tried). allow_fallbacks=True (unlike
+    # the pinned, no-fallback comparisons) -- a full-corpus run should
+    # degrade to another OpenRouter provider rather than stall entirely if
+    # amazon-bedrock has a bad moment; a hard failure still just becomes an
+    # error row, retried next run, never fatal to the batch.
+    model_settings = OpenRouterModelSettings(
+        openrouter_provider={"order": ["amazon-bedrock/us-east-1"], "allow_fallbacks": True},
+        extra_body={"reasoning": {"effort": "none"}},
+    )
+    # retries=2: pydantic-ai's own structural self-correction (schema/Literal/
+    # our valence-iff-outcome validator) -- separate from, and in addition to,
+    # our own single semantic retry below (needs the runtime sentence count to
+    # validate sentence_ids, which a bare Pydantic validator can't see). Either
+    # layer failing for good is NOT fatal to the run: it's written as an error
+    # row (error IS NOT NULL) and picked up again by `fetch_pending` next run.
+    agent = Agent(model, output_type=ParagraphExtraction, system_prompt=SYSTEM_PROMPT, retries=2,
+                 model_settings=model_settings)
 
     written: list[Path] = []
     buffered: list[dict] = []
@@ -428,8 +364,18 @@ async def classify_rows(
         async with semaphore:
             if interrupted.is_set():
                 raise asyncio.CancelledError
+            prompt = build_prompt(row["sentences"], row.get("ticker", ""), row.get("firm", ""))
+            n = len(row["sentences"])
             try:
-                result = await agent.run(build_prompt(row["sentences"]))
+                result = await agent.run(prompt)
+                errors = validate_frames(result.output, n)
+                if errors:
+                    retry_prompt = (f"{prompt}\n\n---\nYour previous answer was invalid: "
+                                     f"{'; '.join(errors)}. Correct it and answer again.")
+                    result = await agent.run(retry_prompt)
+                    errors = validate_frames(result.output, n)
+                    if errors:
+                        raise ValueError(f"invalid sentence_ids after retry: {'; '.join(errors)}")
                 out = _frame_rows(row, judge_model, session_id, result.output)
                 done += 1
                 n_frames += sum(1 for r in out if r["has_frame"])
@@ -465,6 +411,10 @@ async def classify_rows(
                 flush()
                 print(f"  parte escrita ({len(written)} en esta sesión)", flush=True)
     finally:
+        # SIGINT/SIGTERM: cancel whatever hasn't started/finished and flush
+        # whatever made it into `buffered` so far -- never lost, never left
+        # as a partial (non-atomic) file (commit_part writes .partial then
+        # replaces).
         for task in tasks:
             task.cancel()
         flush()
@@ -478,12 +428,9 @@ async def classify_rows(
 # --------------------------------------------------------------------------
 
 def fetch_pending(database: Path, output_dir: Path, limit: int) -> tuple[list[dict], dict]:
-    """Returns (representative_rows_to_classify, stats). See the module
-    docstring: population is deduped by `text_hash` BEFORE any LLM call —
-    only one representative paragraph instance per unique text is ever
-    classified; `stats` reports both the instance-level and text-level
-    counts so the console/manifest never implies more (or fewer) LLM calls
-    happened than actually did."""
+    """Returns (representative_rows_to_classify, stats). Population is deduped
+    by `text_hash` BEFORE any LLM call -- only one representative paragraph
+    instance per unique text is ever classified."""
     con = duckdb.connect(str(database), read_only=True)
     try:
         existing_parts = sorted(str(p) for p in frame_parts(output_dir))
@@ -496,20 +443,35 @@ def fetch_pending(database: Path, output_dir: Path, limit: int) -> tuple[list[di
             con.execute("CREATE OR REPLACE TEMP VIEW classified_hashes AS "
                         "SELECT CAST(NULL AS UBIGINT) AS text_hash WHERE false")
 
-        # Población: el modelo final del prefiltro (scripts/common/
-        # ai_prefilter_classify.py, §8.8) ya corre sobre `unique_paragraphs`
-        # y escribe UNA fila por texto único con `text_hash`+`duplicate_count`
-        # incluidos -- no hay ningún dedup que hacer acá, solo leer.
-        # QUALIFY particiona por `text_hash` (no por llave de instancia): es
-        # la identidad estable de "este texto", independiente de qué llave
-        # de instancia el prefiltro haya elegido como representante en cada
-        # corrida (evita revivir el bug de §8.7 si esa elección cambiara).
+        # `model_version` alone doesn't order runs -- it's the frozen model's
+        # id (ai_prefilter_apply_frozen.py), NOT the run timestamp, and two
+        # separate `--apply-only`-style runs share the same model_version
+        # while producing DIFFERENT predictions (2026-09-12: refreshed
+        # sentence-level features after fixing the sentences segmentation
+        # bug). `ORDER BY model_version DESC` alone is then a tie with an
+        # undefined winner -- the exact "row_number() desempataba al azar"
+        # bug this project already hit once (docs/prefilter_evaluation.md).
+        # The predictions parquet itself carries no run timestamp column;
+        # the filename's `run=<timestamp>` is the only place it lives.
         con.execute("""
             CREATE OR REPLACE TEMP VIEW positives AS
-            SELECT * FROM read_parquet(
+            SELECT * EXCLUDE (filename), regexp_extract(filename, 'run=([0-9TZ]+)', 1) AS _run_id
+            FROM read_parquet(
                 'data/interim/prefilter_predictions_unique/prefilter_predictions__run=*.parquet',
-                union_by_name=True)
-            QUALIFY row_number() OVER (PARTITION BY text_hash ORDER BY model_version DESC) = 1
+                union_by_name=True, filename=True)
+            QUALIFY row_number() OVER (PARTITION BY text_hash ORDER BY _run_id DESC) = 1
+        """)
+        # subject=firm sólo tiene sentido si el modelo sabe quién es "la firma" --
+        # mismo join que ai_activities_from_frames.py usa para su "Filing firm: ...".
+        con.execute(f"""
+            CREATE OR REPLACE TEMP VIEW doc_firm AS
+            WITH docs AS (
+                SELECT accession_number, ticker FROM filing_manifest WHERE country_code = 'us'
+                UNION ALL SELECT accession_number, ticker FROM filing_manifest_10q WHERE country_code = 'us'
+                UNION ALL SELECT document_id, ticker FROM read_parquet('{REPO_ROOT / "data/interim/manifests/filing_manifest_earnings_calls.parquet"}')
+            ), names AS (SELECT ticker, any_value(company_name) AS company_name FROM firm_universe WHERE country_code = 'us' GROUP BY 1)
+            SELECT accession_number, any_value(ticker) AS ticker, any_value(company_name) AS company_name
+            FROM docs LEFT JOIN names USING (ticker) GROUP BY 1
         """)
         counts = con.execute("""
             SELECT
@@ -524,8 +486,10 @@ def fetch_pending(database: Path, output_dir: Path, limit: int) -> tuple[list[di
         stats = {k: int(v) for k, v in counts.items()}
 
         pending_df = con.execute(f"""
-            SELECT p.{', p.'.join(PARAGRAPH_KEY)}, p.text_hash, p.duplicate_count
+            SELECT p.{', p.'.join(PARAGRAPH_KEY)}, p.text_hash, p.duplicate_count,
+                   coalesce(f.ticker, '') AS ticker, coalesce(f.company_name, '') AS firm
             FROM positives p
+            LEFT JOIN doc_firm f USING (accession_number)
             WHERE p.is_ai_prefiltered
               AND NOT EXISTS (SELECT 1 FROM classified_hashes c WHERE c.text_hash = p.text_hash)
             ORDER BY {', '.join(f'p.{c}' for c in PARAGRAPH_KEY)}
@@ -548,13 +512,6 @@ def fetch_pending(database: Path, output_dir: Path, limit: int) -> tuple[list[di
     finally:
         con.close()
 
-    # `text_hash`/`duplicate_count` come straight from `reps` -- i.e. from
-    # `prefilter_predictions_unique`, which itself inherits them from
-    # `unique_paragraphs` (build_duckdb.py). Never recomputed from the
-    # sentence-reconstructed prompt text: an earlier version of this
-    # function did exactly that and the two didn't match byte-for-byte
-    # (§8.7's bug — 7/721 hashes matched). `build_prompt` only needs the
-    # sentence list, so the reconstructed text itself is never even kept.
     info_by_key = {tuple(r[c] for c in PARAGRAPH_KEY): r for r in reps}
     rows_by_key: dict[tuple, dict] = {}
     for record in sent_df.to_dict("records"):
@@ -564,11 +521,11 @@ def fetch_pending(database: Path, output_dir: Path, limit: int) -> tuple[list[di
             rows_by_key[key] = {**{c: record[c] for c in PARAGRAPH_KEY},
                                 "text_hash": info["text_hash"],
                                 "sentences": [], "sentence_indices": [],
-                                "duplicate_count": info["duplicate_count"]}
+                                "duplicate_count": info["duplicate_count"],
+                                "ticker": info.get("ticker", ""), "firm": info.get("firm", "")}
         rows_by_key[key]["sentences"].append(record["sentence_text"])
         rows_by_key[key]["sentence_indices"].append(int(record["sentence_index"]))
-    rows = list(rows_by_key.values())
-    return rows, stats
+    return list(rows_by_key.values()), stats
 
 
 def main() -> None:
@@ -578,7 +535,9 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_DIR)
     parser.add_argument("--judge-model", default=DEFAULT_JUDGE_MODEL)
     parser.add_argument("--limit", type=int, default=0, help="Clasificar sólo N párrafos pendientes")
-    parser.add_argument("--concurrency", type=int, default=8)
+    parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY,
+                        help="4-8 recomendado contra OpenRouter/qwen; el spec pedía 32 pero eso "
+                             "asume vLLM propio -- vía OpenRouter falla/rate-limita a esa escala")
     parser.add_argument("--part-rows", type=int, default=250,
                         help="Filas (no párrafos) por parte atómica")
     parser.add_argument("--progress-every", type=int, default=25)

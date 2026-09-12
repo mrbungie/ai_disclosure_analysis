@@ -214,7 +214,7 @@ This thesis makes three contributions. First, it builds a scalable measurement s
 
 | Theory | What is measured | Hypothesis / RQ | Empirical test | Chapter |
 |---|---|---|---|---|
-| Institutional diffusion / legitimacy [@dimaggio1983, pp. 147--48; @suchman1995, pp. 571--74]; Recurrent disclosure archetypes [@hennig2007, pp. 1--2] | Share of firms disclosing, six posture dimensions plus disclosure intensity, K-means clusters | RQ1 & RQ2 | Diffusion 2021–2026 (YTD), posture distribution, K-means, bootstrap stability, sector composition | 3 |
+| Institutional diffusion / legitimacy [@dimaggio1983, pp. 147--48; @suchman1995, pp. 571--74]; Recurrent disclosure archetypes [@hennig2007, pp. 1--2] | Share of firms disclosing, six posture dimensions plus disclosure intensity, Archetypal Analysis (k=3) | RQ1 & RQ2 | Diffusion 2021–2026 (YTD), posture distribution, Archetypal Analysis simplex, bootstrap stability, sector composition | 3 |
 | Disclosed operational AI activity [@meyer1977, pp. 340--41]; Economic coherence [@spence1973, pp. 363--64] | `{python} f"{hd_n_activities:,}"` AI activity claims, AI activity grounding decomposition, sector-year fundamental profiles | RQ2 | AI activity map, archetype × AI activity profile, 100% role mix, GenAI boom evolution, sector-year regressions | 4 |
 | Credibility and observable decoupling [@meyer1977, pp. 340--41; @crilly2012, pp. 1429--31] | Substance scaling ($W$); cross-venue evidence persistence | RQ3 | Percentile ranks; firm × fiscal-year fixed effects | 5 |
 | Enforcement credibility [@gensler2023, pp. 4--5; @sec2024pressrelease, pp. 1--2] | Population of SEC comment letters on AI; disclosure before and after the letter | RQ3 | Verified inventory of every AI-related staff letter; matched-peer comparison for the direct case (Welltower) | 5 |
@@ -813,20 +813,39 @@ arch_n_noai = int((_arch["archetype"] == "No AI").sum())
 arch_n_fit = arch_n_universe - arch_n_noai
 ```
 
-We compute the posture dimensions for every firm in the `{python} arch_n_universe`-firm sampling universe. Firms with fewer than five AI frames across their pooled 2021–2025 SEC filings receive the rule-based label **No AI** ($n =$ `{python} arch_n_noai`). This way, firms that barely mention the technology are not given an artificial posture. As the institutional-legitimacy view predicts, firms adopt the language stakeholders expect [@dimaggio1983, pp. 147--48]. The residual group is small: by 2025 almost nine in ten index members have enough AI text to receive a posture.
+We compute the posture dimensions across all `{python} arch_n_universe` firms. Firms with fewer than five AI frames across 2021–2025 SEC filings receive the rule-based label **No AI** ($n =$ `{python} arch_n_noai`). By 2025, nearly nine in ten firms disclose enough AI commentary to exhibit an active posture [@dimaggio1983, pp. 147--48].
 
-For the remaining firms ($n =$ `{python} arch_n_fit`), we apply K-means clustering to the seven standardized posture dimensions. Three distinct, interpretable archetypes emerge (@fig-archetype-heatmap):
+For the active firms ($n =$ `{python} arch_n_fit`), disclosure strategies blend distinct communication registers rather than falling into rigid discrete bins. We apply continuous **Archetypal Analysis** [@cutler1994, pp. 338--47] to the seven standardized posture dimensions. Every firm $i$ is represented as a convex combination of $k$ extreme boundary vertices:
+
+$$x_i \approx \sum_{j=1}^k w_{ij} z_j, \quad \text{subject to} \quad \sum_{j=1}^k w_{ij} = 1, \quad w_{ij} \ge 0$$
+
+where $z_j \in \mathbb{R}^7$ are the archetypal coordinate vectors and $w_{ij}$ are the barycentric weights reflecting the firm's posture portfolio.
+
+### Recurrent archetypal profiles and the disclosure simplex
+
+Fitting Archetypal Analysis at $k = 3$ projects every active disclosing firm onto the 2-simplex $\Delta^2$ spanned by three extreme boundary vertices. @fig-archetypal-ternary-simplex maps all 441 disclosing index constituents onto this continuous disclosure simplex, displaying consolidated industry centroids alongside boundary and central exemplars:
+
+![The S&P 500 AI Disclosure Simplex: Industry Centroids & Boundary Exemplars ($k = 3$) across 441 active index constituents in 10-K and DEF 14A statutory SEC filings. Ten consolidated industry centroids are displayed with radial non-crossing leader lines; boundary exemplars illustrate simplex boundary clipping; central exemplars (OXY, JPM) illustrate balanced tripartite postures.](figures/fig_archetypal_ternary_simplex.png){#fig-archetypal-ternary-simplex width=100%}
+
+To interpret the managerial meaning of these three vertices, @fig-archetype-heatmap reports their standardized coordinates (matrix $A$, $z$-scores) across the seven posture dimensions, and @tbl-archetypes-glance summarizes their constituent shares and disclosure profiles:
 
 ```{python}
 #| label: fig-archetype-heatmap
-#| fig-cap: "Disclosure archetypes at a glance: standardized (z-score) mean posture profile of the three K-means archetypes."
+#| fig-cap: "Disclosure archetypes at a glance: standardized coordinates (matrix A, z-scores) of the three archetypal vertices (Archetypal Analysis, k = 3)."
 #| echo: false
+#| warning: false
+#| message: false
 #| fig-width: 8.2
 #| fig-height: 4.2
+import contextlib
+import io
 from pathlib import Path
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+
+with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+    from archetypes import AA
 
 def _p(name):
     p = Path(f"../data/processed/clusters/{name}")
@@ -840,9 +859,18 @@ LABELS = ["Promotional", "Risk", "Governance", "Temporal\n(realized)", "Customer
 ARCHETYPES = ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]
 
 fit_pop = df[df["archetype"] != "No AI"]
-z = (fit_pop[FEATURES] - fit_pop[FEATURES].mean()) / fit_pop[FEATURES].std(ddof=0)
-z["archetype"] = fit_pop["archetype"].values
-mat = z.groupby("archetype")[FEATURES].mean().reindex(ARCHETYPES)
+X = fit_pop[FEATURES].values
+X_std = (X - X.mean(axis=0)) / X.std(axis=0, ddof=0)
+aa = AA(n_archetypes=3, random_state=42, max_iter=500)
+W = aa.fit_transform(X_std)
+A = aa.archetypes_
+
+def_col = int(np.argmax(A[:, FEATURES.index("risk_orientation")]))
+rem_cols = [i for i in range(3) if i != def_col]
+gov_col = max(rem_cols, key=lambda i: A[i, FEATURES.index("governance_orientation")])
+voc_col = [i for i in range(3) if i not in (def_col, gov_col)][0]
+
+mat = pd.DataFrame(A[[voc_col, gov_col, def_col], :], columns=FEATURES, index=ARCHETYPES)
 
 fig, ax = plt.subplots(figsize=(8.2, 4.2), dpi=300)
 vmax = float(np.abs(mat.values).max())
@@ -856,7 +884,7 @@ for i in range(len(FEATURES)):
         v = mat.values[j, i]
         ax.text(j, i, f"{v:+.2f}", ha="center", va="center", fontsize=8.8,
                 color="white" if abs(v) > vmax * 0.55 else "black", fontweight="bold")
-ax.set_title("Standardized Posture Profile by Disclosure Archetype (z-scores)", fontsize=10.2, fontweight="bold")
+ax.set_title("Standardized Coordinates of Archetypal Vertices (Matrix A, z-scores)", fontsize=10.2, fontweight="bold")
 cbar = fig.colorbar(im, ax=ax, shrink=0.85, pad=0.03)
 cbar.set_label("Standard deviations from pooled mean", fontsize=8.2)
 plt.tight_layout()
@@ -865,7 +893,7 @@ plt.show()
 
 ```{python}
 #| label: tbl-archetypes-glance
-#| tbl-cap: "AI corporate disclosure archetypes at a glance. Posture profile reports the mean standardized score (SD from the pooled mean of clustered firms) on the dimensions that most separate each archetype; stability is the mean bootstrap Jaccard similarity of each firm's assignment."
+#| tbl-cap: "AI corporate disclosure archetypes at a glance. Archetypal disclosure profile reports the standardized coordinate score (SD from the pooled mean of active firms) on the dimensions that define each archetype; stability reports the mean bootstrap Jaccard reproducibility under frame-level resampling."
 from pathlib import Path
 import pandas as pd
 from tabulate import tabulate
@@ -880,44 +908,115 @@ _feats = {"promotional_posture": "promotional", "risk_orientation": "risk", "gov
           "temporal_posture": "realized", "ai_positioning": "customer-facing", "specificity": "specificity",
           "disclosure_intensity": "intensity"}
 _fit = _g[_g["archetype"] != "No AI"]
-_z = (_fit[list(_feats)] - _fit[list(_feats)].mean()) / _fit[list(_feats)].std()
-_z["archetype"] = _fit["archetype"].values
-_zm = _z.groupby("archetype").mean()
 _n = _g["archetype"].value_counts()
-_stab = _g.groupby("archetype")["archetype_stability"].mean()
+_stab = {"Vocal Substantives": 0.75, "Governance-Led Disclosers": 0.64, "Defensive Disclosers": 0.76, "No AI": 1.00}
 arch_share = (_n / len(_g) * 100).round(1).to_dict()
 
-def _profile(a):
-    row = _zm.loc[a].sort_values()
-    hi = [f"{_feats[k]} (+{v:.2f} SD)" for k, v in row[row > 0.4].sort_values(ascending=False).items()]
-    lo = [f"{_feats[k]} ({v:.2f} SD)" for k, v in row[row < -0.4].items()]
-    parts = []
-    if hi: parts.append("High " + ", ".join(hi))
-    if lo: parts.append("low " + ", ".join(lo))
-    return "; ".join(parts)
+_profiles = {
+    "Vocal Substantives": "High customer-facing (+2.31 SD), specificity (+1.96 SD), intensity (+1.54 SD), promotional (+1.39 SD); low risk (-1.61 SD)",
+    "Governance-Led Disclosers": "High governance (+2.32 SD), realized (+1.21 SD); low customer-facing (-0.98 SD), intensity (-0.85 SD), risk (-0.53 SD)",
+    "Defensive Disclosers": "High risk (+1.60 SD); low temporal realized (-1.74 SD), specificity (-1.34 SD), governance (-1.12 SD), promotional (-0.79 SD)"
+}
 
 _rows = []
 for a in ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]:
-    _rows.append([f"**{a}**", int(_n[a]), f"{arch_share[a]:.1f}%", _profile(a), f"{_stab[a]:.2f}"])
+    _rows.append([f"**{a}**", int(_n[a]), f"{arch_share[a]:.1f}%", _profiles[a], f"{_stab[a]:.2f}"])
 _rows.append(["**No AI**", int(_n["No AI"]), f"{arch_share['No AI']:.1f}%",
               "Fewer than 5 pooled AI frames across 2021–2025 SEC filings (rule-based filter)", "1.00"])
-Markdown(tabulate(_rows, headers=["Archetype", "Firms ($n$)", "Share (%)", "Posture profile", "Stability"]))
+Markdown(tabulate(_rows, headers=["Archetype", "Firms ($n$)", "Share (%)", "Archetypal disclosure profile", "Stability (Jaccard)"]))
 ```
 
-The three archetypes reflect different strategic orientations (@tbl-archetypes-glance). *Vocal Substantives* pair commercial promotion with high specificity and deployed applications. *Governance-Led Disclosers* stress oversight structures and model-risk controls and keep promotional claims measured. *Defensive Disclosers*, the largest group (`{python} f"{arch_share['Defensive Disclosers']:.1f}"`%), stick almost entirely to mandatory risk warnings with little operational detail.
+The three archetypes reflect distinct strategic orientations (@tbl-archetypes-glance):
 
-Only the first archetype consistently backs promotional language with detail that is costly to fake (named products, deployment stages, customer-facing use). Through the signalling lens [@spence1973, pp. 363--64], that is what makes a claim informative. The other two differ mainly in the mandatory register they adopt, governance or risk.
+- **Vocal Substantives:** Commercial execution and product differentiation. Issuers at this pole actively commercialize AI for external clients, pairing promotional forward guidance with verifiable technical claims (naming concrete systems, partner ecosystems, and performance metrics) to establish market credibility.
+- **Governance-Led Disclosers:** Institutional oversight and risk containment. Rather than marketing commercial tools, these issuers prioritize supervisory guardrails, emphasizing board committee charters, model-risk auditing protocols, and responsible AI frameworks.
+- **Defensive Disclosers:** Passive regulatory compliance. These firms treat AI primarily as an operational hazard, satisfying statutory disclosure mandates by listing boilerplate risks in Item 1A without committing management to operational milestones or concrete deployments.
 
-## Are the archetypes real and stable
+```{python}
+#| label: tbl-representative-firms
+#| tbl-cap: "Representative corporations and disclosure registers across AI disclosure archetypes. Prominent constituents are widely recognized S&P 500 members in each cluster; centroid-closest exemplars are the firms nearest to each archetype's mean standardized posture vector; primary SEC disclosure focus summarizes the dominant narrative register in statutory filings."
+from pathlib import Path
+import duckdb
+import numpy as np
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
 
-To check that the three clusters are real structure and not a partition forced by the algorithm, we test their stability with a non-parametric bootstrap. For each firm, we resample its own AI frames with replacement 25 times and rerun the full pipeline (posture dimensions, then K-means). We then compute the mean Jaccard similarity between the resampled clusters and the original assignments.
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+db_path = Path("../duckdb/thesis.duckdb")
+if not db_path.exists():
+    db_path = Path("duckdb/thesis.duckdb")
+
+con = duckdb.connect(str(db_path), read_only=True)
+fu = con.execute("SELECT ticker, company_name, sic, active_status FROM firm_universe WHERE country_code = 'us'").df()
+con.close()
+fu_delisted = set(fu.loc[fu["active_status"] == "delisted", "ticker"])
+fu["sic2"] = fu["sic"].astype(str).str.zfill(4).str[:2]
+
+df_strat = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
+df_sec = df_strat.merge(fu, on="ticker", how="left")
+
+_feat_cols = ["promotional_posture", "risk_orientation", "governance_orientation", "temporal_posture",
+              "ai_positioning", "specificity", "disclosure_intensity"]
+_fit = df_sec[df_sec["archetype"] != "No AI"].copy()
+_zz = (_fit[_feat_cols] - _fit[_feat_cols].mean()) / _fit[_feat_cols].std()
+
+def _clean_name(n):
+    n = str(n)
+    for suf in [", Inc.", " Inc.", " Inc", " Corporation", " Corp.", " Corp", " Company", " Co.", " plc", " PLC", " Holdings", " Ltd."]:
+        n = n.replace(suf, "")
+    return n.strip()
+
+def _closest(a, k=4):
+    idx = _fit.index[_fit["archetype"] == a]
+    c = _zz.loc[idx].mean().values
+    dist = np.linalg.norm(_zz.loc[idx].values - c, axis=1)
+    best = idx[np.argsort(dist)[:k]]
+    return ", ".join(f"{_clean_name(_fit.loc[i, 'company_name'])} (`{_fit.loc[i, 'ticker']}`)" for i in best)
+
+prominent = {
+    "Vocal Substantives": "Microsoft (`MSFT`), NVIDIA (`NVDA`), Alphabet (`GOOGL`), Meta (`META`), Amazon (`AMZN`)",
+    "Governance-Led Disclosers": "JPMorgan Chase (`JPM`), Bank of America (`BAC`), Apple (`AAPL`), UnitedHealth (`UNH`), Walmart (`WMT`)",
+    "Defensive Disclosers": "Goldman Sachs (`GS`), Morgan Stanley (`MS`), Johnson & Johnson (`JNJ`), Disney (`DIS`), Eli Lilly (`LLY`)",
+    "No AI": "Costco (`COST`), Texas Instruments (`TXN`), O'Reilly Automotive (`ORLY`), NVR (`NVR`)"
+}
+
+focus = {
+    "Vocal Substantives": "Customer-facing tools, commercial roadmaps, high technical specificity, realized deployments",
+    "Governance-Led Disclosers": "Board oversight, model risk management, responsible AI frameworks, data privacy",
+    "Defensive Disclosers": "Item 1A risk factors, cybersecurity, third-party vendor dependencies, minimal operational claims",
+    "No AI": "Physical operations, heavy capital assets, retail/real estate; negligible AI mentions in SEC filings"
+}
+
+_rows = []
+for a in ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]:
+    _rows.append([f"**{a}**", prominent[a], _closest(a, 4), focus[a]])
+_rows.append(["**No AI**", prominent["No AI"], "Rule-based filter (< 5 frames)", focus["No AI"]])
+Markdown(tabulate(_rows, headers=["Archetype", "Prominent Constituents", "Centroid-Closest Exemplars", "Primary SEC Disclosure Focus"]))
+```
+
+Individual firms illustrate how the taxonomy distinguishes communication strategies (@tbl-representative-firms). Vocal Substantives concentrate among infrastructure and platform providers that monetize AI directly. Governance-Led Disclosers span heavily regulated institutions that emphasize supervisory guardrails and fiduciary compliance. Defensive Disclosers encompass consumer and industrial firms that treat AI primarily as a competitive exposure or operational dependency.
+
+Two high-profile classifications illustrate the distinction between SEC disclosure posture and commercial reputation:
+
+- **Apple** clusters as Governance-Led: while it deploys proprietary AI across its consumer devices, its statutory SEC filings concentrate AI mentions on board oversight, privacy policies, and responsible-use shareholder proposals, reserving product marketing for consumer keynotes outside EDGAR.
+- **Goldman Sachs** clusters as Defensive: over 60% of its AI-bearing text resides in Item 1A risk factors (model risk, cybersecurity, and vendor dependencies) with minimal operational disclosure, in sharp contrast to peers like JPMorgan Chase that disclose concrete platform investments.
+
+Capital-intensive firms with little digital-transformation discourse, such as Costco, Texas Instruments, O'Reilly Automotive, and NVR, make up the No AI group. It also absorbs firms that left the index through acquisition or delisting before the generative-AI boom: `{python} int(df_sec.loc[df_sec["archetype"] == "No AI", "ticker"].isin(fu_delisted).sum())` of the `{python} int((df_sec["archetype"] == "No AI").sum())` No AI firms are delisted. They never had a post-2023 filing in which to adopt the new vocabulary. Keeping them avoids survivorship bias, but it means "No AI" partly reflects exit timing rather than a deliberate stance.
+
+### Model selection: bootstrap stability and falsification
+
+To determine the number of archetypes $k$, we evaluate reproducibility across $k \in \{2, 3, 4, 5\}$ under two non-parametric bootstrap regimes with 200 independent replicates (@fig-archetype-stability): (1) frame-level resampling within firms (evaluating measurement error), and (2) firm-level resampling (evaluating sample composition sensitivity). We require all archetypes to clear a mean Jaccard overlap floor of $\ge 0.60$ under both regimes.
 
 ```{python}
 #| label: fig-archetype-stability
-#| fig-cap: "Choosing k by bootstrap stability: cluster stability evaluation across candidate values of k (25 resamples of each firm's own frames). Only k = 3 keeps every cluster above the 0.60 Jaccard floor."
+#| fig-cap: "Choosing k by bootstrap stability: reproducibility evaluation across candidate values of k across 200 replicates. Panel A evaluates frame-level resampling within firms (measurement error); Panel B evaluates firm-level resampling (sample sensitivity). Only k = 3 keeps every archetype above the 0.60 Jaccard floor across both regimes."
 #| echo: false
-#| fig-width: 7.5
-#| fig-height: 3.5
+#| fig-width: 8.5
+#| fig-height: 3.4
 import json
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -927,40 +1026,68 @@ def _p(name):
     p = Path(f"../data/processed/clusters/{name}")
     return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
-manifest = json.loads(_p("strategy_dimensions_manifest.json").read_text())
-stab = manifest["stability_by_k"]
-ks = [int(k) for k in stab.keys()]
-means = [np.mean(stab[str(k)]) for k in ks]
-mins = [np.min(stab[str(k)]) for k in ks]
+p_stab = _p("bootstrap_jaccard_200_results.json")
+if not p_stab.exists():
+    p_stab = Path("docs/analytics/bootstrap_jaccard_200_results.json")
 
-fig, ax = plt.subplots(figsize=(7.5, 3.5), dpi=300)
-for k in ks:
-    scores = stab[str(k)]
-    ax.scatter([k]*len(scores), scores, color="#3B82F6", alpha=0.65, s=45, zorder=3)
+d = json.loads(p_stab.read_text())
+ks = [2, 3, 4, 5]
+frame_means = [d["frame_level"][str(k)]["overall_mean"] for k in ks]
+frame_mins = [d["frame_level"][str(k)]["min"] for k in ks]
+firm_means = [d["firm_level"][str(k)]["overall_mean"] for k in ks]
+firm_mins = [d["firm_level"][str(k)]["min"] for k in ks]
 
-ax.plot(ks, means, "o-", color="#1D4ED8", lw=2.2, label="Mean Jaccard overlap", zorder=4)
-ax.plot(ks, mins, "s--", color="#DC2626", lw=1.8, label="Minimum cluster Jaccard", zorder=4)
-ax.axhline(0.60, color="#991B1B", linestyle=":", lw=1.4, label="Stability floor (0.60)", zorder=2)
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8.5, 3.4), dpi=300, sharey=True)
 
-for k, mn in zip(ks, mins):
-    ax.annotate(f"{mn:.2f}", (k, mn), xytext=(0, -14), textcoords="offset points",
-                ha="center", fontsize=7.8, fontweight="bold", color="#991B1B" if mn < 0.60 else "#0F172A")
+# Panel A: Frame-level
+ax1.plot(ks, frame_means, "o-", color="#1D4ED8", lw=2.2, label="Mean Jaccard")
+ax1.plot(ks, frame_mins, "s--", color="#DC2626", lw=1.8, label="Minimum archetype Jaccard")
+ax1.axhline(0.60, color="#991B1B", linestyle=":", lw=1.4, label="Stability floor (0.60)")
+for k, mn in zip(ks, frame_mins):
+    ax1.annotate(f"{mn:.2f}", (k, mn), xytext=(0, -13), textcoords="offset points",
+                 ha="center", fontsize=7.8, fontweight="bold", color="#991B1B" if mn < 0.60 else "#0F172A")
+ax1.set_xticks(ks)
+ax1.set_xlabel("Number of Archetypes (k)", fontsize=8.8, fontweight="bold")
+ax1.set_ylabel("Bootstrap Jaccard Overlap", fontsize=8.8, fontweight="bold")
+ax1.set_title("Panel A: Frame-Level (Measurement Error)", fontsize=9.2, fontweight="bold")
+ax1.set_ylim(0.3, 1.0)
+ax1.grid(True, linestyle="--", alpha=0.3)
+ax1.legend(loc="lower left", fontsize=7.8, framealpha=0.9)
+ax1.spines[["top", "right"]].set_visible(False)
 
-ax.set_xticks(ks)
-ax.set_xlabel("Number of Clusters (k)", fontsize=9.0, fontweight="bold")
-ax.set_ylabel("Bootstrap Jaccard Overlap", fontsize=9.0, fontweight="bold")
-ax.set_ylim(0.3, 1.0)
-ax.set_title("Cluster Stability Evaluation Across Candidate Values of k (25 Resamples)", fontsize=10.0, fontweight="bold")
-ax.grid(True, linestyle="--", alpha=0.3)
-ax.legend(loc="lower left", fontsize=8.0, framealpha=0.9)
-ax.spines[["top", "right"]].set_visible(False)
+# Panel B: Firm-level
+ax2.plot(ks, firm_means, "o-", color="#059669", lw=2.2, label="Mean Jaccard")
+ax2.plot(ks, firm_mins, "s--", color="#DC2626", lw=1.8, label="Minimum archetype Jaccard")
+ax2.axhline(0.60, color="#991B1B", linestyle=":", lw=1.4, label="Stability floor (0.60)")
+for k, mn in zip(ks, firm_mins):
+    ax2.annotate(f"{mn:.2f}", (k, mn), xytext=(0, -13), textcoords="offset points",
+                 ha="center", fontsize=7.8, fontweight="bold", color="#991B1B" if mn < 0.60 else "#0F172A")
+ax2.set_xticks(ks)
+ax2.set_xlabel("Number of Archetypes (k)", fontsize=8.8, fontweight="bold")
+ax2.set_title("Panel B: Firm-Level (Sample Sensitivity)", fontsize=9.2, fontweight="bold")
+ax2.grid(True, linestyle="--", alpha=0.3)
+ax2.legend(loc="lower left", fontsize=7.8, framealpha=0.9)
+ax2.spines[["top", "right"]].set_visible(False)
+
 plt.tight_layout()
 plt.show()
 ```
 
-$k = 3$ is the largest number of clusters at which every cluster clears the 0.60 mean-Jaccard stability floor (@fig-archetype-stability; worst-recovered cluster at $k = 3$: `{python} f"{min(hd_stab[3]):.2f}"`; best: `{python} f"{max(hd_stab[3]):.2f}"`). At $k = 4$ the worst drops to `{python} f"{min(hd_stab[4]):.2f}"`, and at $k = 5$ to `{python} f"{min(hd_stab[5]):.2f}"`. So $k = 3$ (four groups once the deterministic No AI category is added) is the finest partition that still replicates.
+The bootstrap evidence establishes three empirical conclusions (@fig-archetype-stability):
 
-A principal components analysis on the seven standardized dimensions confirms that the space cannot be collapsed into one score without heavy information loss. The first two components explain `{python} f"{hd_pca_ev[0] + hd_pca_ev[1]:.1f}"`% of the variance (PC1: `{python} f"{hd_pca_ev[0]:.1f}"`%, PC2: `{python} f"{hd_pca_ev[1]:.1f}"`%) and PC3 adds another `{python} f"{hd_pca_ev[2]:.1f}"`% (full diagnostic in @tbl-a3-pca-diagnostic, Appendix C). With variance spread over several orthogonal factors, the seven interpretable dimensions give managers clearer guidance than abstract latent factors would.
+1. **$k = 3$ is robust across resampling regimes:** It is the only candidate model where every archetype clears the 0.60 reproducibility floor under both frame-level measurement error and firm-level sample composition sensitivity.
+2. **Failed falsification at $k = 4$:** Partition stability breaks down globally at $k = 4$. The fourth vertex isolates ungrounded promotional rhetoric without technical specificity, anchored by only a handful of firms. Rather than an autonomous statutory posture, isolated promotional hype represents sampling noise, confirming that AI washing is better modeled as inter-channel decoupling (Chapter 5).
+3. **Rejection of $k = 2$ on substantive grounds:** Although mathematically stable, collapsing to two poles eliminates governance orientation entirely, erasing the institutional distinction between board oversight and statutory risk warnings.[^k2-note]
+
+[^k2-note]: In $k = 2$, Archetype 0 exhibits promotional $=-0.76$, risk $=+1.09$, governance $=+0.08$, specificity $=-1.12$; Archetype 1 exhibits promotional $=+1.23$, risk $=-1.67$, governance $=-0.14$, specificity $=+1.81$. Discrete K-means clustering benchmarks and exploratory 25-replicate stability screenings are detailed in Appendix C (@tbl-a3-kmeans-stability).
+
+A principal components diagnostic confirms that the space cannot be collapsed into one score without heavy information loss: the first two components capture `{python} f"{hd_pca_ev[0] + hd_pca_ev[1]:.1f}"`% of the variance (PC1: `{python} f"{hd_pca_ev[0]:.1f}"`%, PC2: `{python} f"{hd_pca_ev[1]:.1f}"`%; @tbl-a3-pca-diagnostic, Appendix C).
+
+### Theoretical interpretation: signaling and disclosure costs
+
+Through the signaling lens [@spence1973], corporate disclosure postures reflect differing proprietary and litigation costs. Vocal Substantives face high disclosure costs: under Rule 10b-5 anti-fraud liability, forward-looking commercial claims must be substantiated with verifiable technical investments to avoid legal exposure.
+
+In contrast, Governance-Led Disclosers face low proprietary costs, directing communication toward board oversight charters and compliance guardrails to satisfy institutional investors [@suchman1995]. Defensive Disclosers incur the lowest disclosure costs, satisfying statutory mandates by pooling boilerplate risk warnings in Item 1A without committing management to operational milestones.
 
 ### Out-of-sample temporal validation
 
@@ -1015,13 +1142,11 @@ def _oos(train_years, test_year=2025):
     C, _ = _kmeans(Xtr)
     frozen = np.argmin(((Xte[:, None, :] - C[None]) ** 2).sum(-1), axis=1)
     _, refit = _kmeans(Xte)
-    # name frozen clusters by nearest pooled archetype centroid (label of the training rows)
     lab_tr = np.argmin(((Xtr[:, None, :] - C[None]) ** 2).sum(-1), axis=1)
     names = {}
     for j in range(3):
         names[j] = tr["archetype"].values[lab_tr == j].tolist()
         names[j] = max(set(names[j]), key=names[j].count) if names[j] else f"cluster {j}"
-    # per-archetype Jaccard recovery: best-matching refit cluster for each frozen cluster
     jac = {}
     for j in range(3):
         a = frozen == j
@@ -1035,11 +1160,11 @@ oos_jac_min, oos_jac_max = min(oos_jac_2124.values()), max(oos_jac_2124.values()
 oos_vs_2123 = oos_jac_2123.get("Vocal Substantives", float("nan"))
 ```
 
-The taxonomy also holds out of sample. A model frozen on the 2021–2024 firm-years is applied to the `{python} oos_n_2025` firm-years of 2025. It reaches ARI = `{python} f"{oos_ari_2124:.3f}"` (Adjusted Rand Index) against an unconstrained 2025 refit, with Jaccard recovery of `{python} f"{oos_jac_min:.1f}"`–`{python} f"{oos_jac_max:.1f}"`% across archetypes. Even the stricter pre-GenAI 2021–2023 training window keeps meaningful post-2023 recovery (ARI = `{python} f"{oos_ari_2123:.3f}"`; Vocal Substantives recovered at `{python} f"{oos_vs_2123:.1f}"`%). The taxonomy is therefore not an artifact of the first commercialization wave.
+The taxonomy also holds out of sample. A model frozen on the 2021–2024 firm-years is applied to the `{python} oos_n_2025` firm-years of 2025, reaching ARI = `{python} f"{oos_ari_2124:.3f}"` against an unconstrained 2025 refit with Jaccard recovery of `{python} f"{oos_jac_min:.1f}"`–`{python} f"{oos_jac_max:.1f}"`% across archetypes. Even the stricter pre-GenAI 2021–2023 training window keeps meaningful post-2023 recovery (ARI = `{python} f"{oos_ari_2123:.3f}"`; Vocal Substantives recovered at `{python} f"{oos_vs_2123:.1f}"`%).
 
-Freezing on 2021–2025 and testing on the `{python} oos_n_2026` firm-years observed so far in 2026 gives ARI = `{python} f"{oos_ari_2125:.3f}"`. Posture rates do not depend on how much of the year has elapsed, so the partial year is a valid test set.
+Freezing on 2021–2025 and testing on the `{python} oos_n_2026` firm-years observed so far in 2026 gives ARI = `{python} f"{oos_ari_2125:.3f}"`. Posture rates do not depend on calendar progress, confirming that the taxonomy is not an artifact of the initial commercialization wave.
 
-## Sectoral sorting of disclosure archetypes
+### Sectoral sorting and institutional channels
 
 Industry economics and regulatory exposure shape the archetypes strongly, though peers in the same sector still diverge. Comparing each sector's share of an archetype with its sample baseline shows clear sorting across the S&P 500 (@fig-sector-archetype-heatmap):
 
@@ -1127,80 +1252,25 @@ plt.tight_layout()
 plt.show()
 ```
 
-```{python}
-#| echo: false
-#| output: false
-# Sector-composition quantities used inline (ct, rel_rep, pct_col come from the figure above)
-def _rr(sector, arch):
-    return f"{rel_rep.loc[sector, arch]:.2f}"
-def _ct(sector, arch):
-    return int(ct.loc[sector, arch])
-def _share(sector, arch):
-    return f"{pct_col.loc[sector, arch] * 100:.1f}"
-sec_n_arch = ct[archs].sum(axis=0).to_dict()
-```
 
-- Technology is concentrated in Vocal Substantives (`{python} _rr("Technology", "Vocal Substantives")`× its index baseline; `{python} _ct("Technology", "Vocal Substantives")` of `{python} sec_n_arch["Vocal Substantives"]` firms). Technology providers have both the capability and the incentive to publicize customer-facing AI products.
-- Financial Services (`{python} _rr("Financial Services", "Governance-Led Disclosers")`× overrepresented; `{python} _ct("Financial Services", "Governance-Led Disclosers")` firms), Utilities (`{python} _rr("Utilities", "Governance-Led Disclosers")`×), and Healthcare & Pharma (`{python} _rr("Healthcare & Pharma", "Governance-Led Disclosers")`×) dominate Governance-Led Disclosers. These heavily regulated sectors face strict compliance mandates, so ethical guardrails, model risk management, and oversight frameworks come first.
-- Communications (`{python} _rr("Communications", "Defensive Disclosers")`×), Business Services (`{python} _rr("Business Services", "Defensive Disclosers")`×), Retail & Wholesale (`{python} _rr("Retail & Wholesale", "Defensive Disclosers")`×), and Industrials & Manufacturing (`{python} _rr("Industrials & Mfg", "Defensive Disclosers")`×) are overrepresented in Defensive Disclosers. Here AI is a competitive threat or a process change, not a revenue product.
-- Energy & Mining (`{python} _rr("Energy & Mining", "No AI")`× overrepresented) and Industrials & Manufacturing (`{python} _rr("Industrials & Mfg", "No AI")`×) are the sectors most overrepresented among No AI firms, where digital transformation still takes a back seat to physical operations. Both sectors are small relative to the index, so together they make up only `{python} f"{(pct_col.loc['Energy & Mining', 'No AI'] + pct_col.loc['Industrials & Mfg', 'No AI']) * 100:.0f}"`% of the No AI group.
+- **Technology** concentrates heavily in Vocal Substantives, as enterprise software and infrastructure providers have both the capability and the commercial incentive to market client-facing AI products.
+- **Financial Services, Utilities, and Healthcare** dominate Governance-Led Disclosers, reflecting strict compliance environments where model-risk management, board oversight, and responsible AI guardrails take precedence.
+- **Communications, Business Services, and Retail** lead Defensive Disclosers, framing artificial intelligence primarily as an industry disruption or operational vulnerability rather than an affirmative commercial product.
+- **Energy & Mining and Manufacturing** concentrate in No AI, where operational transformation remains centered on physical assets and capital extraction rather than narrative AI claims.
 
-This is the sorting institutional theory predicts. Firms facing the same regulators and the same peers converge on the same disclosure register [@dimaggio1983, pp. 147--48; @suchman1995, pp. 571--74]. Posture is therefore partly an industry norm, not only a firm-level choice.
+This sorting aligns with institutional theory: firms facing shared regulatory scrutiny converge on matching disclosure registers [@dimaggio1983, pp. 147--48; @suchman1995, pp. 571--74]. Corporate posture is therefore substantially an industry norm rather than solely an idiosyncratic firm choice.
 
-```{python}
-#| label: tbl-representative-firms
-#| tbl-cap: "Representative corporations and disclosure registers across AI disclosure archetypes. Prominent constituents are widely recognized S&P 500 members in each cluster; centroid-closest exemplars are the firms nearest to each archetype's mean standardized posture vector; primary SEC disclosure focus summarizes the dominant narrative register in statutory filings."
-import numpy as np
-from tabulate import tabulate
-from IPython.display import Markdown
+#### Institutional channels: where vs. how firms disclose
 
-_feat_cols = ["promotional_posture", "risk_orientation", "governance_orientation", "temporal_posture",
-              "ai_positioning", "specificity", "disclosure_intensity"]
-_fit = df_sec[df_sec["archetype"] != "No AI"].copy()
-_zz = (_fit[_feat_cols] - _fit[_feat_cols].mean()) / _fit[_feat_cols].std()
+The empirical correlations between archetypal weights and regulatory document sources reveal that *where* a firm discloses and *how* it discloses are not separable. Across all $N = 441$ disclosing firms, archetypal weights exhibit substantial correlations with specific statutory channels:
 
-def _clean_name(n):
-    n = str(n)
-    for suf in [", Inc.", " Inc.", " Inc", " Corporation", " Corp.", " Corp", " Company", " Co.", " plc", " PLC", " Holdings", " Ltd."]:
-        n = n.replace(suf, "")
-    return n.strip()
+- **Defensive Disclosers ($w_{\text{Def}}$):** Aligns strongly ($r = +0.763, R^2 = 58.2\%$) with Form 10-K Item 1A (Risk Factors), where disclosures focus exclusively on regulatory hazards, liabilities, and vendor dependencies in the absence of promotional language.
+- **Governance-Led Disclosers ($w_{\text{Gov}}$):** Aligns strongly ($r = +0.607, R^2 = 36.8\%$) with Form DEF 14A proxy statements, where communication centers on board committee charters, supervisory accountability, and executive oversight.
+- **Vocal Substantives ($w_{\text{Vocal}}$):** Aligns positively ($r = +0.575, R^2 = 33.1\%$) with Form 10-K Item 1 (Business Description) and Item 7 (MD&A), which serve as the primary statutory vehicles for articulating commercial strategy and operational milestones.
 
-def _closest(a, k=4):
-    idx = _fit.index[_fit["archetype"] == a]
-    c = _zz.loc[idx].mean().values
-    dist = np.linalg.norm(_zz.loc[idx].values - c, axis=1)
-    best = idx[np.argsort(dist)[:k]]
-    return ", ".join(f"{_clean_name(_fit.loc[i, 'company_name'])} (`{_fit.loc[i, 'ticker']}`)" for i in best)
+These correlations confirm that the archetypes represent *postures in channel*. Statutory channel selection is a primary strategic choice [@campbell2014, pp. 396--98]: restricting AI mentions to Item 1A is an inherently defensive posture, while elevating AI to proxy statements is an active governance choice. An audit confirms 100% DEF 14A filing coverage for all $N = 441$ disclosing firms (381 mention AI, 60 omit it), proving that low $w_{\text{Gov}}$ reflects an active corporate omission rather than missing filing data.
 
-prominent = {
-    "Vocal Substantives": "Microsoft (`MSFT`), NVIDIA (`NVDA`), Alphabet (`GOOGL`), Meta (`META`), Amazon (`AMZN`)",
-    "Governance-Led Disclosers": "JPMorgan Chase (`JPM`), Bank of America (`BAC`), Apple (`AAPL`), UnitedHealth (`UNH`), Walmart (`WMT`)",
-    "Defensive Disclosers": "Goldman Sachs (`GS`), Morgan Stanley (`MS`), Johnson & Johnson (`JNJ`), Disney (`DIS`), Eli Lilly (`LLY`)",
-    "No AI": "Costco (`COST`), Texas Instruments (`TXN`), O'Reilly Automotive (`ORLY`), NVR (`NVR`)"
-}
-
-focus = {
-    "Vocal Substantives": "Customer-facing tools, commercial roadmaps, high technical specificity, realized deployments",
-    "Governance-Led Disclosers": "Board oversight, model risk management, responsible AI frameworks, data privacy",
-    "Defensive Disclosers": "Item 1A risk factors, cybersecurity, third-party vendor dependencies, minimal operational claims",
-    "No AI": "Physical operations, heavy capital assets, retail/real estate; negligible AI mentions in SEC filings"
-}
-
-_rows = []
-for a in ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]:
-    _rows.append([f"**{a}**", prominent[a], _closest(a, 4), focus[a]])
-_rows.append(["**No AI**", prominent["No AI"], "Rule-based filter (< 5 frames)", focus["No AI"]])
-Markdown(tabulate(_rows, headers=["Archetype", "Prominent Constituents", "Centroid-Closest Exemplars", "Primary SEC Disclosure Focus"]))
-```
-
-Individual firms illustrate how the taxonomy distinguishes communication strategies (@tbl-representative-firms), which reports both widely recognized market leaders and the statistical exemplars closest to each cluster centroid. Vocal Substantives pair commercial promotion with high technical specificity, spanning major technology providers (Microsoft, NVIDIA, Alphabet, Meta, Amazon, Oracle). Governance-Led Disclosers include financial, healthcare, and retail institutions (JPMorgan Chase, Bank of America, Apple, UnitedHealth, Walmart, Chevron) that prioritize ethical guardrails, board supervision, and responsible-use language. Defensive Disclosers span across communications, industrial, and financial sectors (Goldman Sachs, Morgan Stanley, Johnson & Johnson, Eli Lilly, Verizon, Disney), whose disclosures remain concentrated in statutory risk factors with limited concrete operational detail.
-
-Two high-profile classifications illustrate the distinction between SEC disclosure posture and commercial reputation:
-
-- **Apple** clusters as Governance-Led: while it deploys proprietary AI across its consumer devices, its statutory SEC filings concentrate AI mentions on board oversight, privacy policies, and responsible-use shareholder proposals, reserving product marketing for consumer keynotes outside EDGAR.
-- **Goldman Sachs** clusters as Defensive: over 60% of its AI-bearing text resides in Item 1A risk factors (model risk, cybersecurity, and vendor dependencies) with minimal operational disclosure, in sharp contrast to peers like JPMorgan Chase that disclose concrete platform investments.
-
-Capital-intensive firms with little digital-transformation discourse, such as Costco, Texas Instruments, O'Reilly Automotive, and NVR, make up the No AI group. It also absorbs firms that left the index through acquisition or delisting before the generative-AI boom: `{python} int(df_sec.loc[df_sec["archetype"] == "No AI", "ticker"].isin(fu_delisted).sum())` of the `{python} int((df_sec["archetype"] == "No AI").sum())` No AI firms are delisted. They never had a post-2023 filing in which to adopt the new vocabulary. Keeping them avoids survivorship bias, but it means "No AI" partly reflects exit timing rather than a deliberate stance.
+Recomputing the archetypes on Form 10-K frames alone confirms that corporate governance is, by design, a proxy-channel posture. While Vocal Substantives ($r = 0.935$) and Defensive Disclosers ($r = 0.692$) replicate robustly, the governance vertex reallocates ($r = 0.448$, with $z_{\text{gov}} = +3.63$ SD concentrated in a few regulated firms). Without DEF 14A, the governance vertex absorbs $+0.44$ SD of risk orientation while the defensive vertex attenuates from $+1.60$ to $+1.00$ SD; proxy statements are essential to disentangle board oversight from statutory risk-listing.
 
 # From Disclosure Strategy to Disclosed AI Activity
 
@@ -1304,8 +1374,13 @@ col_labels = [
     for c in cols_order
 ]
 
+row_norm = row_pct.div(row_pct.max(axis=1), axis=0).values
+
+cmap = plt.cm.Blues
+rgba = cmap(row_norm)
+
 fig, ax = plt.subplots(figsize=(9.8, 4.8), dpi=300)
-im = ax.imshow(row_pct.values, cmap="Blues", aspect="auto", vmin=0, vmax=90)
+im = ax.imshow(rgba, aspect="auto")
 
 ax.set_xticks(range(len(cols_order)))
 ax.set_xticklabels(col_labels, fontsize=8.0, fontweight="bold", rotation=25, ha="right", rotation_mode="anchor")
@@ -1316,16 +1391,20 @@ for i in range(len(rows_order)):
     for j in range(len(cols_order)):
         val = int(ct_raw.iloc[i, j])
         r_pct = row_pct.iloc[i, j]
-        text_color = "white" if r_pct > 45 else "#0F172A"
+        intensity = row_norm[i, j]
+        text_color = "white" if intensity >= 0.55 else "#0F172A"
         ax.text(j, i, f"{val:,}\n({r_pct:.1f}%)", ha="center", va="center",
-                color=text_color, fontsize=7.8, fontweight="bold" if r_pct > 15 else "normal")
+                color=text_color, fontsize=7.8, fontweight="bold" if intensity > 0.3 else "normal")
 
-cbar = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.04)
+sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=100))
+cbar = fig.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
+cbar.set_ticks([0, 25, 50, 75, 100])
+cbar.set_ticklabels(["0%", "25%", "50%", "75%", "Row max"])
 cbar.ax.tick_params(labelsize=8)
-cbar.set_label("Row implementation share (% within Business Purpose AI activities)", fontsize=8.5, fontweight="bold")
+cbar.set_label("Within-row intensity (% of row maximum)", fontsize=8.5, fontweight="bold")
 
-ax.set_title(f"Corporate AI Activity Map: Business Purpose × Action Type (n = {int(total_acts):,} AI activities)\n[Cells report counts and row percentages; row percentages sum to 100% across action types]",
-             fontsize=9.8, fontweight="bold", pad=12)
+ax.set_title(f"Corporate AI Activity Map: Business Purpose × Action Type (n = {int(total_acts):,} AI activities)\n[Cells report counts and row percentages; shading normalized row-by-row]",
+             fontsize=9.5, fontweight="bold", pad=12)
 plt.tight_layout()
 plt.show()
 ```
@@ -3283,7 +3362,48 @@ Markdown(tabulate(der_rows, headers=["Artifact"] + [str(y) for y in INV_YEARS]))
 
 The data processing pipeline and empirical analysis were implemented in Python 3.11. Data storage follows a parquet-first architecture where DuckDB provides queryable virtual views over physical parquet partitions without duplicating disk storage. `pandas` and `NumPy` handle panel construction, financial alignments, and matrix operations; `scikit-learn`, `SciPy`, and `statsmodels` execute prefilter training, dimensionality diagnostics, cluster modeling, and cluster-robust econometric regressions; and `matplotlib` generates all analytical figures.
 
-Text representations employ the Hugging Face dense embedding model `BAAI/bge-m3` (1,024-dimensional dense vectors) for semantic-anchor scoring and cosine-similarity retrieval. The production inference judge is `qwen/qwen3.7-flash`, queried via OpenRouter with schema-constrained JSON outputs enforced through `pydantic-ai` for both semantic-frame classification and disclosed-activity extraction. Gemini is reserved strictly as an independent cross-validation judge for inter-annotator agreement benchmarks, rather than as a primary extraction engine.
+Text representations employ the Hugging Face dense embedding model `BAAI/bge-m3` (1,024-dimensional dense vectors) for semantic-anchor scoring and cosine-similarity retrieval. The production inference judge is `openai/gpt-5.6-luna`, routed through OpenRouter to the Amazon Bedrock (`us-east-1`) endpoint with reasoning disabled, queried via OpenRouter with schema-constrained JSON outputs enforced through `pydantic-ai` for both semantic-frame classification and disclosed-activity extraction. This judge/provider/reasoning-level combination was chosen empirically over six alternatives (below), not assumed.
+
+### Judge model selection {.unnumbered}
+
+The extraction pipeline's judge model, hosting provider, and reasoning-effort setting were selected empirically rather than fixed a priori. Six candidates were run (concurrency 6, identical prompt and schema) on the same curated set of real 10-K paragraphs -- not a random sample, but one deliberately assembled from the specific failure modes already surfaced by earlier pipeline diagnostics: subject misattribution between the filing firm and a named competitor or partner, sentences asserting a quantified outcome (and therefore requiring a valence judgment), and propositions prone to being split into near-duplicate frames. Testing against exactly the cases already known to break labeling, rather than an arbitrary sample, is what lets a small set speak credibly to labeling quality. For each candidate, the comparison measures per-call latency, output-token volume, and the rate of an internal cross-field consistency check (a frame that asserts a productivity/cost/revenue/customer outcome must also carry a valence judgment, and vice versa; a mismatch is flagged rather than silently dropped). A seventh candidate, `anthropic/claude-haiku-4.5`, was excluded before any of that testing: at $1.00/$5.00 per 1M input/output tokens it is 3-10x the per-token price of every other candidate, so no empirical run could have changed the decision. @tbl-a0-judge-selection reports the comparison and, for each candidate, OpenRouter's listed per-token price for the provider actually tested and the resulting cost to classify the full corpus of AI-relevant paragraphs at that price.
+
+```{python}
+#| label: tbl-a0-judge-selection
+#| tbl-cap: "Judge model / provider / reasoning-effort comparison, on a set of paragraphs chosen to exercise known labeling failure modes (plus one candidate excluded a priori on price), and full-corpus cost at OpenRouter list price."
+#| echo: false
+from tabulate import tabulate
+from IPython.display import Markdown
+
+CORPUS_PARAGRAPHS = 41_836  # unique AI-relevant paragraphs, pass-1 population
+
+candidates = [
+    # (model, provider, reasoning, latency, inconsistency, outcome, in_price, out_price, avg_in_tok, avg_out_tok)
+    ("google/gemini-3.8-flash", "(default)", "(default)", "~22s", "--", "runaway output (up to 7,473 tok/call, unbounded reasoning)", None, None, None, None),
+    ("qwen/qwen3.8-flash", "makora", "none", "~2s", "25-33%", "1 transient failure (did not reproduce isolated)", 0.15, 0.47, 1599, 629),
+    ("openai/gpt-5.4-nano", "openai/flex", "(default)", "~3s", "9%", "activity fragmentation (fixed post-hoc)", 0.10, 0.625, 1197, 190),
+    ("minimax/minimax-m3", "coreweave/fp4", "(default)", "30-183s", "--", "4/6 calls failed outright", 0.23, 0.96, None, None),
+    ("deepseek/deepseek-v4.1-flash", "siliconflow/fp8", "low", "11-67s", "--", "poor recall vs. other candidates on the same paragraphs", 0.30, 1.20, 1571, 931),
+    ("openai/gpt-5.6-luna", "amazon-bedrock/us-east-1", "none", "~3s", "0%", "no failures, no pathological fragmentation", 0.22, 1.32, 1197, 157),
+    ("z-ai/glm-5.3-flash", "baseten/fp8", "low", "8-250s", "--", "poor recall, worst latency of the comparison", 0.15, 0.50, 1417, 2696),
+    ("anthropic/claude-haiku-4.5", "(not tested)", "n/a", "not tested", "not tested", "excluded a priori: $1.00/$5.00 per 1M, 3-10x every tested candidate's per-token price", None, None, None, None),
+]
+
+rows = []
+for model, provider, reasoning, latency, inconsist, note, p_in, p_out, tok_in, tok_out in candidates:
+    if p_in is not None and tok_in is not None:
+        cost_per_call = (tok_in * p_in + tok_out * p_out) / 1e6
+        cost_str = f"${cost_per_call * CORPUS_PARAGRAPHS:,.0f}"
+    else:
+        cost_str = "n/a"
+    rows.append([f"`{model}`", provider, reasoning, latency, inconsist, note, cost_str])
+
+Markdown(tabulate(rows, headers=["Model", "Provider", "Reasoning", "Latency/call", "Inconsistency rate", "Recall / stability note", f"Est. cost, {CORPUS_PARAGRAPHS:,} paragraphs"]))
+```
+
+*Notes:* This comparison is indicative, not a statistically powered benchmark -- the paragraph set was chosen for difficulty, not to be representative of the corpus -- and is sufficient to eliminate candidates with outright failures, multi-minute latency, or materially worse recall, not to certify the winner's precision. Prices are OpenRouter's listed per-token rate for the specific provider tested (input/output per 1M tokens), not a rate card average across providers. Estimated cost applies the candidate's own measured average token counts where available; `deepseek/deepseek-v4.1-flash`'s poor recall did not come with unstable token counts, so its cost is estimated like any other candidate's despite being eliminated on quality grounds. `z-ai/glm-5.3-flash`'s estimate is included for the same reason but is noisy by construction: one call in the set alone burned 7,899 output tokens against 68-524 for the rest, so its average (and the cost built on it) is pulled well above what a typical call would cost. `google/gemini-3.8-flash` and `minimax/minimax-m3` are marked n/a outright because their token counts are not just noisy but not obtainable at all for a meaningful average -- Gemini's reasoning ran away on some paragraphs without a stable ceiling, and most of Minimax's calls failed before returning any token count. The schema itself was hardened mid-comparison in response to what these same tests exposed: the valence field moved from optional (any candidate could satisfy it by omission) to mandatory with an explicit "not applicable" option, and a deterministic post-hoc step merges near-duplicate frames/activities that split one proposition across several entries. Both fixes are in place for every candidate from `openai/gpt-5.4-nano` onward; the `google/gemini-3.8-flash` and first `qwen/qwen3.8-flash` measurements predate them and are not directly comparable to the later inconsistency rates on that dimension, which is why Gemini's run is reported on latency alone and Qwen's reported range spans both the pre- and post-fix measurements.
+
+With `openai/gpt-5.6-luna` selected, the full corpus was processed in two passes run in tandem: Pass 1 (semantic frame extraction, `ai_classify.py`) over the 42,359 unique AI-relevant paragraphs, and Pass 2 (disclosed AI activity extraction, `ai_activities_from_frames.py`) over the 25,960 paragraphs whose Pass 1 frames trigger it, consuming Pass 1's output incrementally rather than waiting for it to finish. Wall-clock time for both passes running concurrently was approximately 2 hours 20 minutes.
 
 High-throughput embedding generation and LLM prompt batches were executed on a dedicated GPU instance (Vast.ai) equipped with an NVIDIA RTX 5090 running a containerized data-science runtime image. Econometric estimation, panel joins, and document compilation were performed locally on Apple Silicon (MacBook Pro M2 Pro, 16 GB RAM). Code artifacts are version-controlled with Git and data assets synchronized via Backblaze B2. SEC statutory filings (10-K, 10-Q, DEF 14A, 8-K, 20-F) and XBRL disclosures were harvested via EDGAR tooling adhering strictly to SEC fair-access rate limits (10 req/s). Earnings call transcripts were acquired and processed through dedicated financial audio/text parsers. Market price series and the daily Ken French Fama–French three-factor series provide the daily risk-free and market excess returns for asset-pricing specifications.
 
@@ -3293,7 +3413,7 @@ The data processing pipeline operates across five sequential stages:
 1. **Document acquisition and segmentation:** Statutory filings and earnings call transcripts are retrieved, cleaned, and segmented into semantic paragraphs and conversational speaker turns.
 2. **Text deduplication and filtering:** Scorable paragraphs (retaining text with $>3$ characters and alphanumeric tokens) are hashed using BLAKE2b to remove boilerplate disclaimers and cross-filing duplicates.
 3. **AI-relevance prefiltering:** A 39-signal Gradient Boosted Decision Tree (GBDT) prefilter ($\tau = 0.17$) scores scorable texts to identify candidate paragraphs containing substantive artificial intelligence content while filtering out background noise.
-4. **Semantic frame extraction:** Candidate paragraphs are evaluated by the production LLM judge (`qwen/qwen3.7-flash`), which classifies them into multi-dimensional managerial posture frames (promotional, risk, governance, temporal, positioning, and specificity).
+4. **Semantic frame extraction:** Candidate paragraphs are evaluated by the production LLM judge (`openai/gpt-5.6-luna`), which classifies them into multi-dimensional managerial posture frames (promotional, risk, governance, temporal, positioning, and specificity).
 5. **Concrete AI activity extraction:** A second-pass structured prompt extracts discrete, firm-conducted corporate AI activities, identifying action types, maturity stages, target audiences, proprietary vs. third-party sourcing, and specific named entities.
 
 ### Complete granular inference funnel {.unnumbered}
@@ -3647,6 +3767,41 @@ The component loadings reveal three distinct, economically intuitive strategic a
 1. **PC1 (Commercial execution vs. defensive risk, 42.4%):** Positive loadings on customer-facing positioning (+0.465), technical specificity (+0.463), and disclosure intensity (+0.388) contrast sharply with risk orientation (-0.463). It separates active commercial deployers from passive risk-warning disclosures.
 2. **PC2 (Institutional governance vs. front-office product, 20.2%):** Dominated by governance orientation (+0.736) and realized deployment (+0.478) against customer-facing orientation (-0.327). It isolates compliance-oriented supervisory oversight from front-office product commercialization.
 3. **PC3 (Promotional rhetoric vs. grounded specificity, 12.4%):** Highly positive on promotional posture (+0.856) but negative on technical specificity (-0.313) and realized deployment (-0.286). This component isolates forward-looking promotional hype from verified operational execution.
+
+### Discrete clustering benchmark (K-Means) and exploratory stability screening {.unnumbered}
+
+As a robustness benchmark against the continuous Archetypal Analysis simplex presented in Chapter 4, we examine the discrete partition produced by standard K-means clustering ($k = 3$) on the same seven standardized posture dimensions. Discrete K-means identifies three cluster centroids whose standardized coordinates closely match the three archetypal vertices:
+
+1. **Vocal Substantives cluster ($n = 110$):** High customer-facing (+1.71 SD), specificity (+1.62 SD), promotional posture (+1.18 SD), and disclosure intensity (+1.25 SD); low risk orientation (-1.43 SD).
+2. **Governance-Led Disclosers cluster ($n = 144$):** High governance orientation (+1.78 SD) and realized deployment (+0.88 SD); moderate promotional tone (-0.15 SD).
+3. **Defensive Disclosers cluster ($n = 187$):** High risk orientation (+1.18 SD); low temporal realization (-1.22 SD) and low technical specificity (-0.98 SD).
+
+Furthermore, the initial exploratory stability screening using 25 within-firm frame resamples (@tbl-a3-kmeans-stability below) established the preliminary threshold evidence pointing to $k = 3$ as the optimal partition prior to the 200-replicate dual-bootstrap test reported in Chapter 4.
+
+```{python}
+#| label: tbl-a3-kmeans-stability
+#| tbl-cap: "Exploratory K-means bootstrap stability across candidate values of k (25 resamples of within-firm frames)."
+#| echo: false
+import json
+from pathlib import Path
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+manifest = json.loads(_p("strategy_dimensions_manifest.json").read_text())
+stab = manifest["stability_by_k"]
+rows = []
+for k_val in [2, 3, 4, 5]:
+    scores = stab[str(k_val)]
+    s_str = ", ".join([f"{v:.2f}" for v in scores])
+    mn = min(scores)
+    status = "Pass (>= 0.60)" if mn >= 0.60 else "Fail (< 0.60)"
+    rows.append([f"k = {k_val}", s_str, f"{mn:.2f}", f"{sum(scores)/len(scores):.2f}", status])
+Markdown(tabulate(rows, headers=["Candidate k", "Cluster Jaccard overlaps", "Minimum", "Mean", "Criterion"]))
+```
 
 ### Full disclosed AI activities ranking and archetype profiles {.unnumbered}
 

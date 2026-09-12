@@ -1,0 +1,90 @@
+{
+  "role_counts": [
+    {
+      "heuristic_role": "analyst_confirmed_by_operator",
+      "n_speaker_instances": 108387,
+      "n_calls": 11204
+    },
+    {
+      "heuristic_role": "exec_ir",
+      "n_speaker_instances": 31959,
+      "n_calls": 11091
+    },
+    {
+      "heuristic_role": "operator_only",
+      "n_speaker_instances": 11188,
+      "n_calls": 11186
+    },
+    {
+      "heuristic_role": "analyst_qa_only",
+      "n_speaker_instances": 9812,
+      "n_calls": 5458
+    },
+    {
+      "heuristic_role": "exec_ir_cross_quarter",
+      "n_speaker_instances": 2990,
+      "n_calls": 2009
+    },
+    {
+      "heuristic_role": "exec_ir_sec_officer",
+      "n_speaker_instances": 1945,
+      "n_calls": 1489
+    },
+    {
+      "heuristic_role": "other",
+      "n_speaker_instances": 1371,
+      "n_calls": 238
+    },
+    {
+      "heuristic_role": "exec_ir_sec_officer_nickname",
+      "n_speaker_instances": 450,
+      "n_calls": 414
+    },
+    {
+      "heuristic_role": "exec_ir_title_keyword",
+      "n_speaker_instances": 3,
+      "n_calls": 3
+    }
+  ],
+  "n_speakers_recovered_by_fix": 5388,
+  "n_false_executives_removed_by_operator_confirmation": 585,
+  "qa_firm_frames_by_role_after_fix": [
+    {
+      "heuristic_role": "exec_ir",
+      "n_frames": 11665
+    },
+    {
+      "heuristic_role": "analyst_confirmed_by_operator",
+      "n_frames": 2734
+    },
+    {
+      "heuristic_role": "exec_ir_cross_quarter",
+      "n_frames": 592
+    },
+    {
+      "heuristic_role": "analyst_qa_only",
+      "n_frames": 398
+    },
+    {
+      "heuristic_role": "exec_ir_sec_officer",
+      "n_frames": 292
+    },
+    {
+      "heuristic_role": "exec_ir_sec_officer_nickname",
+      "n_frames": 53
+    },
+    {
+      "heuristic_role": "exec_ir_title_keyword",
+      "n_frames": 11
+    },
+    {
+      "heuristic_role": "operator_only",
+      "n_frames": 1
+    }
+  ],
+  "residual_non_firm_speaker_pct": 19.89,
+  "naive_rule_baseline_analyst_qa_only_pct": 17.45,
+  "cross_quarter_roster_only_baseline_pct": 13.33,
+  "plus_operator_confirmation_baseline_pct": 22.04,
+  "plus_sec_officer_roster_pct": 20.24
+}

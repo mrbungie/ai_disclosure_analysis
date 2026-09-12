@@ -29,6 +29,7 @@ Usage:
 
 import glob
 import hashlib
+import re
 from pathlib import Path
 
 import duckdb
@@ -51,6 +52,55 @@ def _text_hash8(text: str | None) -> int:
     return int.from_bytes(
         hashlib.blake2b((text or "").encode("utf-8"), digest_size=8).digest(),
         "big", signed=False)
+
+def _resplit_table_text(text: str | None) -> list[str]:
+    """A `content_type='table'` paragraph is usually a real data table (financial
+    schedule, board skill matrix) that genuinely should stay whole -- see
+    `_table_sentence_select_sql`. But some paragraphs get classified as
+    'table' upstream (an HTML->markdown artifact) when their actual content
+    is a bullet list of risk factors or several prose sentences packed into
+    table cells, e.g.:
+
+        |  | ● | We derive a significant portion of our revenue from... |
+        | --- | --- | --- |
+        |  | ● | An inability to develop, adopt, and integrate new... |
+
+    or a multi-column cell bundling several full sentences with '. '. Found
+    2026-09-12: ai_classify.py citing sentence indices past the single row
+    `_table_sentence_select_sql` gives these -- because from the MODEL's
+    reading, there obviously are several distinct sentences in there, just
+    not split in `sentences`. This returns the original text unchanged
+    (as a 1-item list, preserving current behavior) for a genuine table;
+    for the disguised-prose case, it extracts markdown-table cells and
+    further splits any cell that itself bundles multiple sentences,
+    dropping table-syntax noise (blank cells, '---' separator rows)."""
+    text = text or ""
+    if len(text) < 300 or not (text.count("|") >= 6 or text.count("---") >= 2 or text.count("●") >= 2):
+        return [text]
+    cells: list[str] = []
+    for line in text.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        if line.count("|") >= 2:
+            for cell in line.split("|"):
+                cell = cell.strip().lstrip("●").strip()
+                if len(cell) > 15 and not re.fullmatch(r"-{2,}", cell):
+                    cells.append(cell)
+        elif len(line) > 15:
+            cells.append(line)
+    out: list[str] = []
+    for cell in cells:
+        for part in re.split(r"(?<=[.!?])\s+(?=[A-Z])", cell):
+            part = part.strip()
+            if len(part) > 10:
+                out.append(part)
+    deduped: list[str] = []
+    for s in out:
+        if not deduped or deduped[-1] != s:
+            deduped.append(s)
+    return deduped or [text]
+
 
 # Everything else here is a live VIEW (re-evaluated on every query, always
 # current with whatever's on disk). paragraphs/sentences are the
@@ -678,18 +728,31 @@ def _list_sentence_select_sql() -> str:
 
 
 def _table_sentence_select_sql() -> str:
-    """A `content_type='table'` paragraph is NOT sentence-structured —
-    stays whole, as its own single "sentence" (sentence_index=1,
-    sentence_text=paragraph_text), so every paragraph — table included —
-    has at least one row in `sentences` and a query that just wants "all
-    the text, sentence-grain or not" doesn't need a UNION with
-    `paragraphs` to avoid silently dropping tables."""
+    """A `content_type='table'` paragraph is usually NOT sentence-structured
+    and stays whole (sentence_index=1, sentence_text=paragraph_text) — so
+    every paragraph, table included, has at least one row in `sentences`.
+    `resplit_table_text` (see its docstring) is a no-op passthrough for a
+    genuine table (returns `[paragraph_text]`); it only actually splits the
+    disguised-prose case (bullet lists / multi-sentence cells that an
+    upstream HTML->markdown conversion mis-tagged as a table). Computed
+    once into `parts` and unnested from there, same reason as
+    `_prose_sentence_select_sql`'s single-pass `sentence_parts` column:
+    calling a non-trivial function twice per row (once for
+    generate_subscripts, once for unnest) doubles its cost for nothing."""
     return """
+        WITH table_paragraphs AS (
+            SELECT * FROM paragraphs WHERE content_type = 'table'
+        ),
+        parts AS (
+            SELECT * EXCLUDE (paragraph_text),
+                   resplit_table_text(paragraph_text) AS sentence_parts
+            FROM table_paragraphs
+        )
         SELECT
             form, country_code, accession_number, item_key, content_type, paragraph_index,
-            1 AS sentence_index, paragraph_text AS sentence_text
-        FROM paragraphs
-        WHERE content_type = 'table'
+            generate_subscripts(sentence_parts, 1) AS sentence_index,
+            unnest(sentence_parts) AS sentence_text
+        FROM parts
     """
 
 
@@ -721,6 +784,7 @@ def main(with_text_tables: bool = False):
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect(str(DB_PATH))
     con.create_function("text_hash8", _text_hash8, ["VARCHAR"], "UBIGINT")
+    con.create_function("resplit_table_text", _resplit_table_text, ["VARCHAR"], "VARCHAR[]")
     # `paragraphs`' window functions (LAG/LEAD per accession_number) OOM'd
     # (2026-09-04) once DEF 14A -- large, table-heavy documents -- joined
     # 10-K/10-Q in the UNION: default thread count multiplies the working
@@ -1079,7 +1143,11 @@ def main(with_text_tables: bool = False):
     # is in `paragraphs` — Chile (or any later country) starts appearing the
     # moment its own paragraphs enter the underlying is_ai_prefiltered
     # population or get an entity-mention run, no view change needed here.
-    frames_glob = "data/interim/ai_classify/ai_frames__session=*.parquet"
+    # Pipeline v1 deprecado (2026-09-12): ver scripts/deprecated/ai_classify.py y
+    # data/deprecated/POINTER.json. Este glob apunta a la foto congelada de v1
+    # para que gold_ai_frames siga resolviendo mientras no exista un v2 real;
+    # no se le suma nada nuevo.
+    frames_glob = "data/deprecated/ai_classify/ai_frames__session=*.parquet"
     if with_text_tables and _existing(frames_glob):
         # Dedup por LLAMADA al juez, no por (text_hash, frame_index).
         #
