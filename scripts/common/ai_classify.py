@@ -443,12 +443,23 @@ def fetch_pending(database: Path, output_dir: Path, limit: int) -> tuple[list[di
             con.execute("CREATE OR REPLACE TEMP VIEW classified_hashes AS "
                         "SELECT CAST(NULL AS UBIGINT) AS text_hash WHERE false")
 
+        # `model_version` alone doesn't order runs -- it's the frozen model's
+        # id (ai_prefilter_apply_frozen.py), NOT the run timestamp, and two
+        # separate `--apply-only`-style runs share the same model_version
+        # while producing DIFFERENT predictions (2026-09-12: refreshed
+        # sentence-level features after fixing the sentences segmentation
+        # bug). `ORDER BY model_version DESC` alone is then a tie with an
+        # undefined winner -- the exact "row_number() desempataba al azar"
+        # bug this project already hit once (docs/prefilter_evaluation.md).
+        # The predictions parquet itself carries no run timestamp column;
+        # the filename's `run=<timestamp>` is the only place it lives.
         con.execute("""
             CREATE OR REPLACE TEMP VIEW positives AS
-            SELECT * FROM read_parquet(
+            SELECT * EXCLUDE (filename), regexp_extract(filename, 'run=([0-9TZ]+)', 1) AS _run_id
+            FROM read_parquet(
                 'data/interim/prefilter_predictions_unique/prefilter_predictions__run=*.parquet',
-                union_by_name=True)
-            QUALIFY row_number() OVER (PARTITION BY text_hash ORDER BY model_version DESC) = 1
+                union_by_name=True, filename=True)
+            QUALIFY row_number() OVER (PARTITION BY text_hash ORDER BY _run_id DESC) = 1
         """)
         # subject=firm sólo tiene sentido si el modelo sabe quién es "la firma" --
         # mismo join que ai_activities_from_frames.py usa para su "Filing firm: ...".
