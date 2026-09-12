@@ -80,15 +80,22 @@ estructural (`retries=2`) y al reintento semántico propio, y si falla del
 todo se registra como fila de error y se reintenta en la corrida siguiente
 (nunca bloquea el resto del batch).
 
-## Pendiente
+## Resultado de la corrida real (2026-09-12)
 
-- **Precio real de `gpt-5.6-luna` vía `amazon-bedrock` no confirmado.** Se
-  decidió avanzar igual porque la calidad/velocidad medida es
-  significativamente mejor que las alternativas y el volumen (~42k
-  párrafos) hace que valga la pena partir la corrida real y medir el gasto
-  real en vez de seguir estimando.
-- **Pass-2 (`ai_activities_from_frames.py`) no se probó con este modelo.**
-  Hereda el mismo `DEFAULT_JUDGE_MODEL` por import desde `ai_classify.py`,
-  pero no hay evidencia empírica de que el mismo candidato se comporte igual
-  de bien en la tarea de extracción de actividades (schema y prompt
-  distintos). Se debe revalidar antes de lanzar esa corrida.
+Ambas pasadas corrieron sobre el corpus completo, en tándem (pass-2 consume
+el output de pass-1 incrementalmente, sin esperar a que termine):
+
+- **Pass-1**: 42.359 textos únicos AI-positivos (población final, tras el
+  fix de segmentación de `sentences` -- ver commit `f893a71` y el hallazgo
+  de +292/-65 en `is_ai_prefiltered` que ese fix destapó). 87.962 frames.
+  1 error permanente (no relacionado al bug de segmentación).
+- **Pass-2**: 25.960 textos con frames disparadores. ~59.850 actividades.
+  2 errores permanentes.
+- **Reloj de pared, ambas fases en tándem**: ~2h20min.
+
+`gpt-5.6-luna` vía `amazon-bedrock/us-east-1` sí se comportó bien en pass-2
+(schema y prompt distintos a pass-1) -- no hubo degradación de calidad
+visible ni tasa de error anormal en esa tarea. El precio real vía
+`amazon-bedrock` específicamente sigue sin confirmarse contra factura, pero
+la corrida completa. Ver `thesis_document/thesis.qmd`, Apéndice A, para el
+párrafo con estos números.
