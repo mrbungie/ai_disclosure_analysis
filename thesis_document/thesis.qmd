@@ -261,7 +261,15 @@ To address these research questions, we construct an empirical measurement pipel
 
 ## Data sources and corpus
 
-The sample covers SEC filings (10-K, 10-Q, 20-F, DEF 14A, 8-K) and earnings-call transcripts for the S&P 500 from 2021 through early 2026. All document counts and summary metrics are computed directly from the underlying database.
+The empirical analysis combines five primary data sources across textual, financial, and technological domains for the S&P 500 universe from 2021 through early 2026:
+
+1. **Statutory SEC filings:** Annual reports (Form 10-K and 20-F), quarterly reports (Form 10-Q), proxy statements (DEF 14A), and current reports (Form 8-K) retrieved directly from EDGAR.
+2. **Earnings-call transcripts:** Oral conference-call transcripts covering quarterly management presentations and executive Q&A sessions.
+3. **Market prices and returns:** Daily price, volume, and factor return series retrieved via Yahoo Finance (`yfinance`) to estimate pre- and post-call market betas, idiosyncratic volatility, and market capitalization.
+4. **Standardized financial fundamentals:** Balance-sheet and income-statement accounting items extracted from SEC XBRL company facts (capex, R&D, operating margin, revenue growth, and leverage).
+5. **AI patent records:** Firm-matched patent grants and applications from Google Patents classified under the OECD AI taxonomy, providing an independent external benchmark of technological capacity.
+
+All document counts and summary metrics are computed directly from the underlying database.
 
 ```{python}
 #| echo: false
@@ -387,7 +395,9 @@ Markdown(tabulate(table, headers=["Stage", "Unit of Observation", "Operational F
 
 *Notes: High-level overview of the six-stage inference funnel. Granular form-by-form decompositions and model acceptance diagnostics are detailed in Appendix A (@tbl-a1-funnel-full).*
 
-Following the principles of Knowledge Discovery in Databases (KDD) [@fayyad1996, pp. 37--40] and the CRISP-DM process model [@shearer2000, pp. 13--15], the pipeline moves systematically from document selection and cleaning to feature modeling and empirical validation. Because this is an academic research study rather than a commercial software system, the cycle ends at the evaluation and econometric analysis stage rather than an operational deployment phase. In practice, this architecture (@fig-pipeline-architecture; @tbl-funnel-summary) turns raw corporate text into structured metrics through two intermediate steps:
+Following the principles of Knowledge Discovery in Databases (KDD) [@fayyad1996, pp. 37--40] and the CRISP-DM process model [@shearer2000, pp. 13--15], the pipeline was iteratively applied from document selection and cleaning to feature modeling and empirical validation. Because this is an academic research study rather than a commercial software system, the cycle ends at the evaluation and econometric analysis stage rather than an operational deployment phase. In practice, this architecture (@fig-pipeline-architecture; @tbl-funnel-summary) turns raw corporate text into structured metrics through two intermediate steps:
+
+It is important to note that this is mostly an empirical and exploratory analytics exercise rather than a prescriptive or operational framework, and its primary goal is to generate insights and support hypothesis testing rather than to provide scientific or operational guarantees.
 
 $$\text{Raw text} \longrightarrow \text{AI claims (Frames)} \longrightarrow \text{Disclosed AI activities} \longrightarrow \text{Firm-level measures}$$
 
