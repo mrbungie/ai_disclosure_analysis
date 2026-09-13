@@ -182,9 +182,9 @@ Not every result in the chapters that follow was predicted in advance. The speci
 
 ### The emerging empirical frontier
 
-The wave of commercial interest in AI after ChatGPT produced a fast-growing body of research. It builds on text-analysis work in finance and accounting [@li2008, pp. 1--3; @loughran2011, pp. 35--36; @gentzkow2019, pp. 1--2]. Recent studies examine corporate AI language in annual filings [@anantharaman2026, pp. 1--2]. They separate actionable claims from speculative claims [@basnet2025, pp. 1--2]. Other work separates planned from implemented AI using patents [@song2026, pp. 1--2]. Still others build generative-AI exposure from the mix of occupations a firm employs [@eisfeldt2023, p. 9].
+The wave of commercial interest in AI after ChatGPT produced a fast-growing body of research. It builds on text-analysis work in finance and accounting [@li2008, pp. 1--3; @loughran2011, pp. 35--36; @gentzkow2019, pp. 1--2; @hoberg2016; @hassan2019]. Recent studies examine corporate AI language in annual filings [@anantharaman2026, pp. 1--2]. They separate actionable claims from speculative claims [@basnet2025, pp. 1--2]. Other work separates planned from implemented AI using patents and hiring data [@song2026, pp. 1--2; @babina2024]. Still others build generative-AI exposure from the mix of occupations a firm employs [@eisfeldt2023, p. 9].
 
-At the same time, market participants and regulators have raised concerns about "AI washing": corporate AI claims with no visible implementation behind them [@gensler2023, pp. 4--5; @sec2024pressrelease, pp. 1--2]. This work borrows from research on greenwashing and symbolic management [@delmas2011, pp. 64--68; @lyon2015, pp. 1--3; @marquis2016, pp. 483--85]. It points to the same need. We must separate corporate rhetoric from grounded technical substance.
+At the same time, market participants and regulators have raised concerns about "AI washing": corporate AI claims with no visible implementation behind them [@gensler2023, pp. 4--5; @sec2024pressrelease, pp. 1--2]. This work borrows from research on greenwashing and symbolic management [@delmas2011, pp. 64--68; @lyon2015, pp. 1--3; @marquis2016, pp. 483--85], and from evidence that firms manage the tone of qualitative disclosure independently of underlying fundamentals [@huang2014] and inflate speculative disclosure around prior technology manias [@cheng2019]. It points to the same need. We must separate corporate rhetoric from grounded technical substance.
 
 ### Gaps in the literature and methodological responses
 
@@ -201,7 +201,7 @@ Three theories motivate the empirical designs:
 
 - **Signalling and cheap talk.** A claim is more credible when it contains details that are costly to fake or easy to check [@spence1973, pp. 363--64; @dye1985, pp. 123--24; @crawford1982, pp. 1431--32]. We therefore separate generic promotional language from specific evidence. This includes named products, deployment stages, quantified metrics, and named partners [@rogers2011, pp. 2155--56].
 - **Institutional legitimacy.** When a technology is new and uncertain, organizations adopt fashionable symbols and language [@meyer1977, pp. 340--41; @dimaggio1983, pp. 147--48; @suchman1995, pp. 571--74]. Stakeholders expect them, whether or not operations change. This explains why we track how AI disclosure spreads across the market. It also guides how disclosure postures cluster across firms.
-- **Decoupling and symbolic management.** Organizational research separates formal structures from daily operations [@meyer1977, pp. 340--41; @westphal1994, pp. 367--69; @crilly2012, pp. 1429--31; @merkldavies2007, pp. 116--18]. Actual corporate adoption has no audited record. This thesis therefore measures observable decoupling. It compares narrative volume to disclosed, grounded AI activity.
+- **Decoupling and symbolic management.** Organizational research separates formal structures from daily operations [@meyer1977, pp. 340--41; @westphal1994, pp. 367--69; @crilly2012, pp. 1429--31; @merkldavies2007, pp. 116--18; @bromley2012]. Actual corporate adoption has no audited record. This thesis therefore measures observable decoupling. It compares narrative volume to disclosed, grounded AI activity.
 
 These theories give us the measurement chain that organizes every empirical result: $\boxed{D \longrightarrow P \longrightarrow A \longrightarrow G \longrightarrow S \longrightarrow W}$. Here $D$ is Disclosure Intensity (how much a firm talks about AI). $P$ is Communication Posture (how it talks). $A$ is Disclosed AI Activity (what it says it does). $G$ is AI Activity Grounding (how concretely each activity is supported). $S$ is Disclosed Substance (activity volume weighted by grounding). $W$ is Decoupling (the gap between the rank of $D$ and the rank of $S$).
 
@@ -418,7 +418,7 @@ The architecture follows the standard KDD/CRISP-DM sequence: data selection and 
 
 Before any language model reads a paragraph, the text stack cleans, deduplicates, and filters it. Each scorable paragraph is hashed on its normalized text (BLAKE2b), which collapses `{python} f"{totals[2] / 1e6:.2f}"` million scorable paragraph instances into `{python} f"{totals[3] / 1e6:.2f}"` million unique texts. Everything downstream runs once per unique hash, not once per document, and the results are joined back to every filing that contains that text. This keeps the computation manageable and stops recycled boilerplate and legal disclaimers from being scored again and again.
 
-The prefilter is a supervised gradient-boosted decision tree (GBDT). It scores 39 lexical, semantic, structural, and sentence-level signals in four groups. The first is keywords and named entities. The second is cosine similarity between the paragraph's sentence embedding (a numeric vector that summarizes its meaning) and a set of reference AI concepts. The third and fourth are document geometry and syntactic cues.
+The prefilter is a supervised gradient-boosted decision tree (GBDT) [@friedman2001, pp. 1189--95]. It scores 39 lexical, semantic, structural, and sentence-level signals in four groups. The first is keywords and named entities. The second is cosine similarity between the paragraph's sentence embedding (a numeric vector that summarizes its meaning) and a set of reference AI concepts. The third and fourth are document geometry and syntactic cues.
 
 We tuned the classifier for high recall ($\ge 0.92$ across all document types) on purpose. A false positive is cheap because the LLM pass rejects it later, but a missed mention is gone for good. Held-out performance and inter-judge evaluations are reported in @tbl-evaluation-datasets.
 
@@ -426,7 +426,7 @@ In total, the gate flags `{python} f"{n_prefiltered:,}"` candidate unique texts:
 
 ## From paragraphs to individual AI claims: frame extraction
 
-Every text the prefilter flags goes to a zero-shot large language model (LLM) judge, gpt-5.6-luna, the same model used for every extraction step in this thesis. The judge separates real corporate AI discourse from stray keywords, boilerplate disclaimers, and macroeconomic commentary, and extracts zero, one, or several structured claims ("frames") per text. Instead of reading a disclosure as one undifferentiated narrative, it breaks each claim into a standard seven-dimension schema (@tbl-frame-schema).
+Every text the prefilter flags goes to a zero-shot large language model (LLM) judge, gpt-5.6-luna, the same model used for every extraction step in this thesis, following evidence that LLM annotators can match or exceed human coders on zero-shot text-classification and computational social-science tasks [@gilardi2023; @ziems2024]. The judge separates real corporate AI discourse from stray keywords, boilerplate disclaimers, and macroeconomic commentary, and extracts zero, one, or several structured claims ("frames") per text. Instead of reading a disclosure as one undifferentiated narrative, it breaks each claim into a standard seven-dimension schema (@tbl-frame-schema).
 
 This pass is a high-precision gate: `{python} f"{(1 - n_framed / n_prefiltered) * 100:.1f}"`% of the prefilter candidates contain no real AI claim and are dropped. In total, `{python} f"{n_prefiltered:,}"` candidate texts yield `{python} f"{n_frames_total:,}"` validated semantic frames, and `{python} f"{share_firm_subject:.1f}"`% of those describe actions or exposures of the disclosing firm itself. These frames are the raw material for AI Disclosure Intensity ($D$) and Communication Posture ($P$).
 
@@ -578,13 +578,13 @@ Different questions call for different units of observation:
 
 To aggregate documents into firm-years, we take the median document intensity rate rather than a weighted mean. A single long exhibit or boilerplate risk section cannot distort the annual score. In practice, Form 10-Q filings rarely carry much AI narrative. Form 10-K filings dominate annual figures. As a result, the median and the weighted average agree to several decimal places across the panel.
 
-For operational concepts (deployments, governance, risks), we use log-transformed counts rather than shares of total AI discourse, because counts are far more stable on test-retest ($\rho = 0.845$ for counts vs. $0.528$ for shares). Finally, firm-level rates for firms with little AI text are shrunk empirically toward the corpus mean, so that a handful of paragraphs cannot inflate the variance of sparse disclosers.
+For operational concepts (deployments, governance, risks), we use log-transformed counts rather than shares of total AI discourse, because counts are far more stable on test-retest ($\rho = 0.845$ for counts vs. $0.528$ for shares). Finally, firm-level rates for firms with little AI text are shrunk empirically toward the corpus mean using an empirical-Bayes estimator [@efron1973], so that a handful of paragraphs cannot inflate the variance of sparse disclosers.
 
 ## Financial and market variables
 
 Firm-year financial and market variables come from XBRL and price data. They are aligned on the actual fiscal period end rather than the filing date. Concept coverage relies on documented fallback chains (capex 91%, SG&A 81%, net margin 99%, revenue 99%) and a [340, 380]-day gap rule to validate year-over-year changes.
 
-The variable set used throughout the empirical analysis is market capitalization, R&D-to-sales, gross margin, operating margin, asset turnover, price-to-sales, next-fiscal-year revenue growth, market beta, and idiosyncratic volatility. Idiosyncratic volatility is the annualized standard deviation of one-factor market-model residuals over the 252 trading days before the filing.
+The variable set used throughout the empirical analysis is market capitalization, R&D-to-sales, gross margin, operating margin, asset turnover, price-to-sales, next-fiscal-year revenue growth, market beta, and idiosyncratic volatility [@campbell2001; @ang2006]. Idiosyncratic volatility is the annualized standard deviation of one-factor market-model residuals over the 252 trading days before the filing.
 
 R&D-to-sales has only 46% XBRL coverage, so we use it as an outcome and not as a general control. It picks out firms that separately report comparable current R&D instead of treating non-reporting as zero. Appendix D gives the beta specification, its estimation-window diagnostics, the treatment of delisted firms, and the R&D coverage assessment. All financial ratios are winsorized at the 1st and 99th percentiles.
 
@@ -595,7 +595,7 @@ Every automated stage of the pipeline is checked against held-out ground truth, 
 | Benchmark dataset | What it validates | Forms | Sample size | Labels from | Metric / performance |
 |---|---|---|---:|---|---|
 | **LLM-labeled reference set (prefilter training and test)** | Machine-learning gate: does a paragraph discuss AI? | 10-K, 10-Q | 9,900 texts | Qwen 3.7 Flash, cross-checked by Gemini 3.8 | F1 = 0.96 (Prec. 0.98, Rec. 0.94) on held-out texts |
-| **Inter-judge agreement** | Frame classification: do two independent models assign the same frame dimensions? | 10-K, 10-Q | 6,038 pairs | Gemini 3.8 vs. Qwen 3.7 Flash | Cohen's $\kappa = 0.81–0.87$ across dimensions (agreement beyond chance; 1 = perfect) |
+| **Inter-judge agreement** | Frame classification: do two independent models assign the same frame dimensions? | 10-K, 10-Q | 6,038 pairs | Gemini 3.8 vs. Qwen 3.7 Flash | Cohen's $\kappa = 0.81–0.87$ [@cohen1960, pp. 37--40] across dimensions (agreement beyond chance; 1 = perfect) |
 | **Out-of-domain proxy statements and 8-Ks** | Gate transfer to forms not used in training | DEF 14A, 8-K | 1,500 texts | Qwen 3.7 Flash | Prec. 0.73, Rec. 0.92; F1 = 0.82 (14A), 0.65 (8-K) |
 | **Out-of-domain earnings calls** | Gate transfer to transcripts | Transcripts | 800 texts | Qwen 3.7 Flash | Prec. 0.59, Rec. 0.98, F1 = 0.73 (Prec. 0.85 on strong positives) |
 | **Semantic anchors** | Gate inputs: reference sentences describing AI concepts against which paragraph similarity is scored | All forms | 27 anchors | Expert curated | 39 gate signals, including similarity to the anchors |
@@ -1376,7 +1376,7 @@ A principal components diagnostic confirms that the space cannot be collapsed in
 
 ### Theoretical interpretation: signaling and disclosure costs
 
-Through the signaling lens [@spence1973], corporate disclosure postures reflect differing proprietary and litigation costs. Vocal Substantives face high disclosure costs: under Rule 10b-5 anti-fraud liability, forward-looking commercial claims must be substantiated with verifiable technical investments to avoid legal exposure.
+Through the signaling lens [@spence1973; @verrecchia1983], corporate disclosure postures reflect differing proprietary and litigation costs. Vocal Substantives face high disclosure costs: under Rule 10b-5 anti-fraud liability, forward-looking commercial claims must be substantiated with verifiable technical investments to avoid legal exposure.
 
 In contrast, Governance-Led Disclosers face low proprietary costs, directing communication toward board oversight charters and compliance guardrails to satisfy institutional investors [@suchman1995]. Defensive Disclosers incur the lowest disclosure costs, satisfying statutory mandates by pooling boilerplate risk warnings in Item 1A without committing management to operational milestones.
 
@@ -2487,7 +2487,7 @@ Two patterns stand out in @fig-geo-provenance, and both show AI disclosure orien
 
 ## External characterization of archetypes: fundamental financial profiles
 
-Financial fundamentals and market prices do not come from disclosure text; they come from XBRL filings and market returns. We test whether the archetypes match economically distinct firms, first on raw medians and then after adjusting for sector and year. The adjusted model is $X = \alpha_{s,y} + \gamma \cdot \text{Archetype} + \varepsilon$, with No AI as the reference group and firm-clustered standard errors.
+Financial fundamentals and market prices do not come from disclosure text; they come from XBRL filings and market returns. We test whether the archetypes match economically distinct firms, first on raw medians and then after adjusting for sector and year. The adjusted model is $X = \alpha_{s,y} + \gamma \cdot \text{Archetype} + \varepsilon$, with No AI as the reference group and firm-clustered standard errors [@bertrand2004].
 
 ```{python}
 #| echo: false
@@ -3065,7 +3065,7 @@ def _ad(m, who="treated"):
     return "n/a" if a is None or b is None else f"{b - a:+.3f}"
 ```
 
-When the regulator questions a firm's AI claims directly, does the issuer fix the specific gap, and does it change its broader disclosure posture? The first finding is about how rare this is. We ran a full-text search of every SEC staff comment letter and company response filed from 2022 to 2026 for AI-related terms. We restricted it to the analysis universe and read each staff letter. The search matches the correspondence of `{python} sec_n_matched` issuers, but only `{python} sec_n_direct` letter questions a firm's own AI claims.
+When the regulator questions a firm's AI claims directly, does the issuer fix the specific gap, and does it change its broader disclosure posture? SEC comment letters are a documented channel through which the staff pushes firms toward more concrete disclosure [@bozanic2017], and materiality standards for AI-specific disclosure remain an open regulatory question [@strauss2025]. The first finding here is about how rare direct scrutiny is. We ran a full-text search of every SEC staff comment letter and company response filed from 2022 to 2026 for AI-related terms. We restricted it to the analysis universe and read each staff letter. The search matches the correspondence of `{python} sec_n_matched` issuers, but only `{python} sec_n_direct` letter questions a firm's own AI claims.
 
 That letter is the Welltower letter of 2025-04-28. It contrasts a single 10-K sentence with the "industry-leading" platform claimed on the earnings call, then asks the company to describe its data science platform and the status of its AI integration.
 
@@ -3635,7 +3635,7 @@ The year-by-year inventory of every source artifact (10-K, 10-Q, DEF 14A, 8-K, a
 
 The data processing pipeline and empirical analysis were implemented in Python 3.11. Data storage follows a parquet-first architecture where DuckDB provides queryable virtual views over physical parquet partitions without duplicating disk storage. `pandas` and `NumPy` handle panel construction, financial alignments, and matrix operations; `scikit-learn`, `SciPy`, and `statsmodels` execute prefilter training, dimensionality diagnostics, cluster modeling, and cluster-robust econometric regressions; and `matplotlib` generates all analytical figures.
 
-Text representations employ the Hugging Face dense embedding model `BAAI/bge-m3` (1,024-dimensional dense vectors) for semantic-anchor scoring and cosine-similarity retrieval. The production inference judge is `openai/gpt-5.6-luna`, routed through OpenRouter to the Amazon Bedrock (`us-east-1`) endpoint with reasoning disabled, queried via OpenRouter with schema-constrained JSON outputs enforced through `pydantic-ai` for both semantic-frame classification and disclosed-activity extraction. This judge/provider/reasoning-level combination was chosen empirically over six alternatives (below), not assumed.
+Text representations employ the Hugging Face dense embedding model `BAAI/bge-m3` [@chen2024bge] (1,024-dimensional dense vectors) for semantic-anchor scoring and cosine-similarity retrieval. The production inference judge is `openai/gpt-5.6-luna`, routed through OpenRouter to the Amazon Bedrock (`us-east-1`) endpoint with reasoning disabled, queried via OpenRouter with schema-constrained JSON outputs enforced through `pydantic-ai` for both semantic-frame classification and disclosed-activity extraction. This judge/provider/reasoning-level combination was chosen empirically over six alternatives (below), not assumed.
 
 ### Judge model selection {.unnumbered}
 
