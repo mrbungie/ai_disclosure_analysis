@@ -206,13 +206,13 @@ Motivated by these empirical and practical tensions, this study addresses the fo
 
 ## Objectives and contributions
 
-The primary objective of this thesis is to develop an open, multi-stage measurement framework that audits corporate AI communication across `{python} f"{hd_n_docs:,}"` statutory SEC filings and earnings-call transcripts, and to evaluate the economic credibility of those claims across textual evidence, disclosure channels, regulatory enforcement, and capital markets.
+This thesis examines whether corporate AI disclosure reflects disclosed operational substance, and develops an open measurement framework that audits corporate AI communication across `{python} f"{hd_n_docs:,}"` statutory SEC filings and earnings-call transcripts to evaluate the economic credibility of those claims across textual evidence, disclosure channels, regulatory enforcement, and capital markets.
 
 In addressing this objective, the thesis makes three main contributions:
 
 1. **A multi-dimensional measurement architecture.** Moving beyond keyword frequencies and opaque sentiment scores, the study establishes an end-to-end pipeline combining supervised gradient boosting with zero-shot large language model extraction. It measures corporate AI communication across five observable dimensions: narrative intensity, communication posture, operational AI activities, verification grounding, and observable decoupling.
-2. **Multi-angle empirical tests linking theory to corporate evidence.** Rather than analyzing corporate discourse in isolation, the study tests theoretical mechanisms across four analytical settings: market-wide diffusion and communication archetypes (Chapter 3), operational activity mapping and economic coherence (Chapter 4), cross-venue credibility gaps and SEC comment-letter scrutiny (Chapter 5), and capital-market pricing of systematic risk (Chapter 6).
-3. **A practical credibility framework for diligence and strategy.** Translating measurement into decision-making tools, the thesis operationalizes a credibility framework (Chapter 7) featuring portfolio screening matrices and compliance benchmarks that help investors and corporate issuers separate substantive AI integration from promotional cheap talk.
+2. **Multi-angle empirical tests linking theory to corporate evidence.** Rather than analyzing corporate discourse in isolation, the study tests theoretical mechanisms across four empirical settings: market-wide diffusion and communication archetypes, operational activity mapping and economic coherence, cross-venue credibility gaps under SEC comment-letter scrutiny, and capital-market pricing of systematic risk.
+3. **A practical credibility framework for diligence and strategy.** Translating measurement into decision tools, the study formalizes a credibility framework featuring portfolio screening matrices and compliance benchmarks that help investors and corporate issuers separate substantive AI integration from promotional cheap talk.
 
 ## Theoretical foundations and state of the art
 
@@ -248,10 +248,12 @@ To address these gaps through our theoretical mechanisms, we formulate a central
 
 Four linked research questions guide the empirical chapters:
 
-- **RQ1: Evolution and composition (Chapter 3).** *How has corporate AI disclosure evolved across the market, and what concrete operational activities do firms report?* Derived from institutional diffusion theory, this question evaluates whether market-wide AI adoption reflects ceremonial compliance or genuine operational deployment.
-- **RQ2: Strategic heterogeneity and economic coherence (Chapters 3 & 4).** *Which recurring communication archetypes set firms apart, and do their disclosed activities cohere with underlying economic fundamentals?* Derived from configuration theory and signalling, this question tests whether distinct disclosure postures reflect genuine economic endowments rather than random noise.
-- **RQ3: Credibility, decoupling, and venue divergence (Chapter 5).** *Where do gaps open between narrative volume and grounded substance, and how do promotional claims shift between informal calls and statutory filings?* Derived from cheap talk, decoupling, and regulatory enforcement, this question tests whether liability differences and SEC comment letters discipline corporate communication.
-- **RQ4: Market pricing and information content (Chapter 6).** *Does capital-market pricing reflect grounded operational substance, or do investors respond indiscriminately to narrative volume?* Derived from signalling theory, this question tests whether post-call systematic risk responds to substantive operational signals or cheap talk.
+- **RQ1: Evolution and composition.** *How has corporate AI disclosure evolved across the market, and what concrete operational activities do firms report?* Derived from institutional diffusion theory, this question evaluates whether market-wide AI adoption reflects ceremonial compliance or genuine operational deployment.
+- **RQ2: Strategic heterogeneity and economic coherence.** *Which recurring communication archetypes set firms apart, and do their disclosed activities cohere with underlying economic fundamentals?* Derived from configuration theory and signalling, this question tests whether distinct disclosure postures reflect genuine economic endowments rather than random noise.
+- **RQ3: Credibility, decoupling, and venue divergence.** *Where do gaps open between narrative volume and grounded substance, and how do promotional claims shift between informal calls and statutory filings?* Derived from cheap talk, decoupling, and regulatory enforcement, this question tests whether liability differences and SEC comment letters discipline corporate communication.
+- **RQ4: Market pricing and information content.** *Does capital-market pricing reflect grounded operational substance, or do investors respond indiscriminately to narrative volume?* Derived from signalling theory, this question tests whether post-call systematic risk responds to substantive operational signals or cheap talk.
+
+The next chapter details the empirical data and multi-stage measurement methodology; the subsequent empirical chapters present the findings on communication archetypes, operational substance, cross-venue credibility, and market risk; and the final chapter synthesizes the results into a managerial and investment credibility framework.
 
 # Methodology
 
