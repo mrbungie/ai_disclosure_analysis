@@ -369,6 +369,24 @@ def resize_oversized_images(document: Document, max_width_emu: int) -> None:
                 xfrm_ext.set("cy", str(new_cy))
 
 
+def fix_hyperlink_style(document: Document) -> None:
+    """Force the docx's `Hyperlink` character style to bold black, no
+    underline.
+
+    Pandoc's docx writer always emits its own `Hyperlink` style (blue,
+    single underline) into the output regardless of what `reference-doc`
+    defines for that style name -- editing template/reference.docx alone
+    does not change it, so it has to be patched here, post-render."""
+    try:
+        style = document.styles["Hyperlink"]
+    except KeyError:
+        return
+    style.font.bold = True
+    style.font.italic = False
+    style.font.underline = False
+    style.font.color.rgb = RGBColor(0, 0, 0)
+
+
 def refresh_analytics() -> None:
     """Rebuild every deterministic data/processed/clusters/ output the thesis
     cites (`make analytics`, see the repo Makefile), before Quarto ever
@@ -435,6 +453,7 @@ def merge_cover_and_content(content_docx: Path, tmp_dir: Path) -> Path:
 
 
 def mark_fields_dirty_and_save(document: Document, out_path: Path) -> None:
+    fix_hyperlink_style(document)
     for fld_char in document.element.body.iter(qn("w:fldChar")):
         if fld_char.get(qn("w:fldCharType")) == "begin":
             fld_char.set(qn("w:dirty"), "true")
