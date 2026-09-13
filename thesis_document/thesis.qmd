@@ -480,15 +480,15 @@ rows = [
     ("1. Raw Corpus", "Paragraph instances", f"Raw segmentation across {n_docs:,} filings & calls", n_raw, 100.0),
     ("2. Scorable Filter", "Scorable instances", "Length (>3 chars) & alphanumeric content", n_scorable, n_scorable / n_raw * 100),
     ("3. Deduplication", "Unique scorable texts", "BLAKE2b content hash", n_unique, n_unique / n_raw * 100),
-    ("4. Machine Learning Gate", "Candidate paragraphs", "Supervised GBDT (classification threshold tau=0.17)", n_prefiltered, n_prefiltered / n_raw * 100),
-    ("5. Semantic Frames", "Texts with >=1 frame", "Zero-shot LLM judge (gpt-5.6-luna)", n_framed, n_framed / n_raw * 100),
-    ("6. Disclosed AI Activities", "Operational action triples", "Firm-conditioned LLM extraction (pass 2)", n_activities, n_activities / n_raw * 100),
+    ("4. Machine Learning Gate", "Candidate unique texts", "Supervised GBDT (tau=0.17, 39 signals)", n_prefiltered, n_prefiltered / n_raw * 100),
+    ("5. Semantic Frames", "Texts with >=1 frame", f"Zero-shot LLM judge (yields {n_frames_total:,} claims)", n_framed, n_framed / n_raw * 100),
+    ("6. Disclosed AI Activities", "Texts with firm action", f"Firm-conditioned LLM (yields {n_activities:,} activities)", n_firm_texts, n_firm_texts / n_raw * 100),
 ]
 table = [[stage, unit, filt, f"{count:,}", f"{share:.2f}%"] for stage, unit, filt, count, share in rows]
 Markdown(tabulate(table, headers=["Stage", "Unit of Observation", "Operational Filter", "Retained Volume", "Share of Raw"]))
 ```
 
-*Notes: High-level overview of the six-stage inference funnel. Granular form-by-form decompositions and model acceptance diagnostics are detailed in Appendix A (@tbl-a1-funnel-full).*
+*Notes: High-level overview of the six-stage inference funnel. Stages 3–6 trace unique texts retained across screening steps; extracted semantic constructs ({python} f"{n_frames_total:,}" claims and {python} f"{n_activities:,}" operational activity triples) are parsed from these retained passages. Granular form-by-form decompositions are detailed in Appendix A (@tbl-a1-funnel-full).*
 
 Grounded in Knowledge Discovery in Databases (KDD) [@fayyad1996, pp. 37--40] and CRISP-DM [@shearer2000, pp. 13--15], the pipeline follows an iterative workflow from document cleaning to empirical validation. As an exploratory academic study, the process terminates at econometric evaluation rather than operational deployment. In practice, this architecture (@fig-pipeline-architecture; @tbl-funnel-summary) converts raw corporate text into structured metrics through two intermediate extraction layers:
 
