@@ -159,7 +159,7 @@ This is a practical problem for three groups:
 
 - **Investors** need to tell real operational exposure from narrative positioning. Studies of filings separate actionable or implemented AI from speculative claims and link that split to valuation [@basnet2025, pp. 1--2; @song2026, pp. 1--2].
 - **Issuers** need to report material AI activity without creating expectations they cannot meet, or legal risk.
-- **Regulators** are looking harder at whether public claims are backed up [@gensler2023, pp. 4--5; @sec2024pressrelease, pp. 1--2]. The SEC’s 2025 Welltower comment letter shows that mismatches across calls, press releases, and statutory filings can by themselves draw regulatory attention [@welltower2025letter, p. 1].
+- **Regulators** are looking harder at whether public claims are backed up [@gensler2023, pp. 4--5; @sec2024pressrelease, pp. 1--2]. The SEC's 2025 Welltower comment letter shows that mismatches across calls, press releases, and statutory filings can by themselves draw regulatory attention [@welltower2025letter, p. 1].
 
 Simple mention counts [@loughran2011, p. 36] cannot solve this problem. They treat generic risk boilerplate the same way as specific claims about deployed products, metrics, or providers. So this thesis measures not only how much firms discuss AI, but what they claim and which AI activities they disclose. It also measures how concretely each activity is grounded and whether the claims hold up across disclosure venues.
 
@@ -2050,7 +2050,49 @@ def _mix(a, role):
 _SELL, _OPER, _CTRL, _SERVE = "Sell (Customer products)", "Operate (Internal operations)", "Control (Risk & security)", "Serve (Sales & service)"
 ```
 
-Vocal Substantives concentrate most heavily in Sell; Governance-Led Disclosers split closer to evenly between Sell and Operate, with Control activities a small share even here — governance is how this group talks, not mainly what it does; Defensive Disclosers describe the same commercial and operational mix as everyone else, just less of it. Sell dominates in all three groups: the archetypes differ in how strongly (Vocal Substantives most of all) and in how much they disclose, not in what corporate AI is for.
+Vocal Substantives concentrate most heavily in Sell; Governance-Led Disclosers split closer to evenly between Sell and Operate, with Control activities a small share even here: governance is how this group talks, not mainly what it does. Defensive Disclosers describe the same commercial and operational mix as everyone else, just less of it. Sell dominates in all three groups: the archetypes differ in how strongly (Vocal Substantives most of all) and in how much they disclose, not in what corporate AI is for.
+
+Three filings illustrate what that split looks like in practice.
+
+```{python}
+#| echo: false
+#| output: false
+import re
+from pathlib import Path
+import duckdb
+
+def _quote(ticker, act_df, **filters):
+    sub = act_df[act_df["ticker"] == ticker]
+    for k, v in filters.items():
+        sub = sub[sub[k] == v]
+    r = sub.iloc[0]
+    db_path = Path("../duckdb/thesis.duckdb")
+    if not db_path.exists():
+        db_path = Path("duckdb/thesis.duckdb")
+    con = duckdb.connect(str(db_path), read_only=True)
+    q = con.execute("SELECT paragraph_text FROM paragraphs WHERE accession_number = ? AND paragraph_index = ? LIMIT 1",
+                     [r["accession_number"], int(r["paragraph_index"])]).fetchone()
+    con.close()
+    if not q:
+        return ""
+    t = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", q[0])
+    t = re.sub(r"\(see page[s]?\s*[^)]*\)", "", t)  # drop cross-page reference placeholders lost in text extraction
+    t = re.sub(r"\s{2,}", " ", t)
+    return re.sub(r"\s+([.,;:])", r"\1", t).strip()
+
+def _clip(text, n=260):
+    return f'"{text[:n].strip()}..."' if len(text) > n else f'"{text}"'
+
+_amd_quote = _quote("AMD", act, role="Sell (Customer products)", evidence_type="metric")
+_aig_quote = _quote("AIG", act, role="Control (Risk & security)", evidence_type="named")
+_lly_quote = _quote("LLY", act, evidence_type="generic")
+```
+
+**AMD (Vocal Substantives, Sell):** `{python} _clip(_amd_quote)` The claim names the acquisition, the product line, and the deployment target: a reader can check it against AMD's own subsequent filings.
+
+**AIG (Governance-Led Disclosers, Control):** `{python} _clip(_aig_quote)` The activity here is board-level oversight language, not a product or a deployment, consistent with why this archetype's Control share is small in volume but central to how it frames AI.
+
+**Eli Lilly (Defensive Disclosers, generic evidence):** `{python} _clip(_lly_quote)` No product, stage, or metric is named: this is what an "unspecified function" activity actually reads like in the filing, not just a row in a taxonomy table.
 
 ## Decomposing AI activity grounding
 
@@ -2483,7 +2525,7 @@ geo_cn_2026_n = _cn_counts[2026]
 
 Two patterns stand out in @fig-geo-provenance, and both show AI disclosure oriented overwhelmingly around U.S. technology and market context:
 
-**U.S. ecosystem dominance, understated by design:** References to the United States dominate AI-context disclosure, with `{python} f"{geo_us_share:.1f}"`% of all regionally classified mentions across `{python} geo_us_firms` firms — a gap that holds despite, not because of, how the measure is built. Chinese references are a stable, low-double-digit minority throughout the sample (`{python} f"{geo_cn_min_share:.1f}"`–`{python} f"{geo_cn_max_share:.1f}"`%), rising briefly to `{python} f"{geo_cn_2025_share:.1f}"`% in 2025 (the year DeepSeek released its open-weight reasoning models) before settling back to `{python} f"{geo_cn_2026_share:.1f}"`% in 2026 year to date, inside the range seen since 2021 and not a decline.
+**U.S. ecosystem dominance, understated by design:** References to the United States dominate AI-context disclosure, with `{python} f"{geo_us_share:.1f}"`% of all regionally classified mentions across `{python} geo_us_firms` firms, a gap that holds despite, not because of, how the measure is built. Chinese references are a stable, low-double-digit minority throughout the sample (`{python} f"{geo_cn_min_share:.1f}"`–`{python} f"{geo_cn_max_share:.1f}"`%), rising briefly to `{python} f"{geo_cn_2025_share:.1f}"`% in 2025 (the year DeepSeek released its open-weight reasoning models) before settling back to `{python} f"{geo_cn_2026_share:.1f}"`% in 2026 year to date, inside the range seen since 2021 and not a decline.
 
 ## External characterization of archetypes: fundamental financial profiles
 
@@ -2529,7 +2571,7 @@ beta_vs, beta_gov, beta_def = econ_a["Vocal Substantives"]["beta"], econ_a["Gove
 
 Raw medians already put Vocal Substantives ahead of the other two archetypes on the measures that matter for a technology-heavy group: R&D/sales, gross margin, and beta. The sector-year-adjusted panel in @fig-economic-coefficients confirms this for each archetype. **Vocal Substantives** is the archetype that stands out most consistently, carrying a market-cap premium alongside higher R&D-to-sales, gross margin, beta, and price-to-sales (`{python} f"{vs_mktcap_g:+.2f}"` log points of market cap, $p$ `{python} _pfmt(vs_mktcap_p)`).
 
-**Governance-Led Disclosers** differ from No AI mainly on scale and earnings quality, not technology intensity — a market-cap and ROIC-minus-WACC premium but little price-to-sales effect, fitting an archetype whose governance-heavy disclosure tracks firm size and regulatory exposure rather than distinctive AI economics. **Defensive Disclosers** differ least from No AI, with an R&D effect the only measure that stands out.
+**Governance-Led Disclosers** differ from No AI mainly on scale and earnings quality, not technology intensity: a market-cap and ROIC-minus-WACC premium but little price-to-sales effect, fitting an archetype whose governance-heavy disclosure tracks firm size and regulatory exposure rather than distinctive AI economics. **Defensive Disclosers** differ least from No AI, with an R&D effect the only measure that stands out.
 
 After sector-year adjustment, the archetype most grounded in disclosed AI activity (Vocal Substantives, @tbl-4-1-archetype-profile) is also the one that stands out most consistently on fundamentals. Talking about AI, or stressing governance, is not by itself tied to distinctive economics. This is what signalling theory predicts [@spence1973, pp. 363--64]. The information markets care about sits in the costly, specific content of disclosure, not in its volume or tone.
 
@@ -2604,7 +2646,7 @@ pair_mktcap_ratio = pair["MA"]["market_cap"] / pair["TYL"]["market_cap"]
 
 Two firms in the same two-digit SIC sector (73, business services) in the `{python} pair_year` filing year illustrate why posture, disclosed activity, and economics need to be read together rather than sector alone. Mastercard (`{python} pair["MA"]["archetype"]`) and Tyler Technologies (`{python} pair["TYL"]["archetype"]`) disclose AI at a similar intensity ($D =$ `{python} f"{pair['MA']['d']:.2f}"` and `{python} f"{pair['TYL']['d']:.2f}"`), but Mastercard's disclosed activity is more than twice as grounded ($G =$ `{python} f"{pair['MA']['g']:.2f}"` versus `{python} f"{pair['TYL']['g']:.2f}"`) and its decoupling runs in the opposite direction ($W =$ `{python} f"{pair['MA']['w']:+.2f}"` versus `{python} f"{pair['TYL']['w']:+.2f}"`).
 
-The two firms also differ sharply in scale, with Mastercard's market capitalization roughly `{python} f"{pair_mktcap_ratio:.0f}"` times Tyler's, and in market beta (`{python} f"{pair['MA']['beta']:.2f}"` versus `{python} f"{pair['TYL']['beta']:.2f}"`). Same sector, same regulatory environment, similar disclosure volume — the gap sits in what each firm reports having grounded behind that volume, and it lines up with the gap in their economics. (Appendix G disaggregates this comparison, and others like it, across sectors.)
+The two firms also differ sharply in scale, with Mastercard's market capitalization roughly `{python} f"{pair_mktcap_ratio:.0f}"` times Tyler's, and in market beta (`{python} f"{pair['MA']['beta']:.2f}"` versus `{python} f"{pair['TYL']['beta']:.2f}"`). Same sector, same regulatory environment, similar disclosure volume: the gap sits in what each firm reports having grounded behind that volume, and it lines up with the gap in their economics. (Appendix G disaggregates this comparison, and others like it, across sectors.)
 
 ## What disclosed AI activity adds to disclosure posture
 
@@ -3486,7 +3528,7 @@ Markdown(tabulate(table, headers=["Feature / Dimension"] + cols))
 
 **Apple (AAPL):** Apple is the Governance-Led posture in practice. Its communication stresses proprietary on-device processing and consumer privacy rather than speculative commercial claims, and it keeps narrative volume in line with its operational footprint ($D =$ `{python} f"{cv['AAPL']['frames_per_1k']:.3f}"`, $W =$ `{python} f"{cv['AAPL']['w']:+.3f}"`).
 
-**Welltower (WELL, SEC comment letter):** Welltower is the case where cross-venue divergence met a regulator ($D =$ `{python} f"{cv['WELL']['frames_per_1k']:.3f}" if 'WELL' in cv else "n/a"` in the 2025 filing year) — the full event-time case, with the SEC letter's own language and Welltower's subsequent response, is examined in Chapter 5 and Appendix F.
+**Welltower (WELL, SEC comment letter):** Welltower is the case where cross-venue divergence met a regulator ($D =$ `{python} f"{cv['WELL']['frames_per_1k']:.3f}" if 'WELL' in cv else "n/a"` in the 2025 filing year); the full event-time case, with the SEC letter's own language and Welltower's subsequent response, is examined in Chapter 5 and Appendix F.
 
 ## Portfolio-scale application: screening the S&P 500
 
@@ -3586,7 +3628,7 @@ Content separates firms in ways that mention counts cannot, and some of that con
 - **Evolution and composition.** AI disclosure expanded from one third of S&P 500 firms in 2021 to over nine in ten in 2025 and 2026. The generative-AI boom multiplied disclosed activity, yet it lowered average grounding. What firms report doing sits at the application layer: selling and operating with AI, using tools from a few U.S. providers. Vocabulary spread faster than grounded activity, matching what institutional theory predicts.
 - **Heterogeneity.** Firms sort into three stable disclosure archetypes that follow industry norms, and posture predicts activity beyond word count: at equal AI text, Vocal Substantives report `{python} f"{hd_vs_ratio:.2f}"` times as many activities as Defensive Disclosers. Vocal Substantives is the archetype that stands out most consistently on sector-year-adjusted fundamentals; talking about AI, or stressing governance, is not by itself tied to distinctive economics.
 - **Credibility and decoupling.** Decoupling is a persistent firm-year trait (year-to-year rank correlation `{python} f"{hd_w_rho:.2f}"`). Within the same firm and fiscal year, calls and statutory filings describe the same mix of activities, but the share with a quantified outcome is `{python} f"{hd_gap_quant_pp:.0f}"` percentage points higher in calls: the story makes it to the binding venue, the evidence does not. Direct SEC scrutiny of AI claims has reached one firm in the universe; its effect is documented as a case (less AI text, a narrower talk-substance gap), not tested econometrically. AI washing, as measured here, is persistent internal inconsistency, not proven fraud.
-- **Economic relevance — the exception.** Historical AI disclosure posture predicts higher post-call systematic risk; disclosed substance does not, and decoupling adds nothing once both are in the model. The link is cross-sectional (heavy AI talkers already had high beta), not causal: the market signal in AI communication is volume, not grounding — the cheap-talk account, not the signalling one.
+- **Economic relevance, the exception.** Historical AI disclosure posture predicts higher post-call systematic risk; disclosed substance does not, and decoupling adds nothing once both are in the model. The link is cross-sectional (heavy AI talkers already had high beta), not causal: the market signal in AI communication is volume, not grounding: the cheap-talk account, not the signalling one.
 
 **What managers and investors should do.**
 
@@ -3978,7 +4020,7 @@ To verify construct validity and quantify measurement error across the pipeline,
 
 The measurement constructs are extracted from what firms write; no audited census of corporate AI deployment exists against which to check them. AI patents offer the closest external, non-textual observable of technological capacity. Patent publications are assigned to universe issuers via curated assignee aliases (operating subsidiaries and IP holding entities). AI patents are identified using the OECD (2025) taxonomy: five unconditional core CPC groups and 95 application groups requiring AI keywords in title or abstract.
 
-Under statutory patent rules (35 U.S.C. § 122(b)), applications remain confidential until publication 18 months after filing. To ensure an un-truncated, stationary benchmark where all applications have matured into public documents, the comparison window closes at 2021–2023. @tbl-b1-patent-benchmark reports rank correlations over this window, and @tbl-b2-patent-archetypes details archetype distributions. Patents remain an incomplete benchmark—routine workflow automation rarely produces a patent. The test simply evaluates whether firms disclosing more, and more grounded, AI activity hold systematically greater patented AI capacity.
+Under statutory patent rules (35 U.S.C. § 122(b)), applications remain confidential until publication 18 months after filing. To ensure an un-truncated, stationary benchmark where all applications have matured into public documents, the comparison window closes at 2021–2023. @tbl-b1-patent-benchmark reports rank correlations over this window, and @tbl-b2-patent-archetypes details archetype distributions. Patents remain an incomplete benchmark: routine workflow automation rarely produces a patent. The test simply evaluates whether firms disclosing more, and more grounded, AI activity hold systematically greater patented AI capacity.
 
 ```{python}
 #| echo: false
@@ -4437,7 +4479,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-Four findings emerge from @fig-nlp-horse-race: mention counts fail on valuation (adding essentially no explanatory power to Price-to-Sales), while semantic posture and disclosed AI activities together raise $R^2$ by $+4.2$ percentage points there — *how* AI is deployed, not whether it's mentioned, is what moves valuation. Conversely, raw mention counts dominate market-risk outcomes (beta, idiosyncratic volatility, next-year revenue growth), where posture and activity add comparatively little on top.
+Four findings emerge from @fig-nlp-horse-race: mention counts fail on valuation (adding essentially no explanatory power to Price-to-Sales), while semantic posture and disclosed AI activities together raise $R^2$ by $+4.2$ percentage points there: *how* AI is deployed, not whether it's mentioned, is what moves valuation. Conversely, raw mention counts dominate market-risk outcomes (beta, idiosyncratic volatility, next-year revenue growth), where posture and activity add comparatively little on top.
 
 Disclosed AI activities add material explanatory power across every outcome regardless of which layer dominates it. And once posture and activities are controlled for, adding the decoupling index ($W$) yields virtually zero incremental explanatory power anywhere ($\Delta R^2 \le 0.0009$): the market prices narrative volume and disclosed activity, not the within-disclosure decoupling gap.
 
@@ -4752,7 +4794,7 @@ Markdown(tabulate(_rows, headers=_hdr))
 
 ## Appendix G: Sector, Cohort, and Rollup Disaggregation {.unnumbered}
 
-The disclosure-posture, activity, decoupling, and credibility results above are computed on the pooled S&P 500 panel. This appendix disaggregates those constructs by two-digit SIC sector, filer cohort, and rollup method, using the same firm-year and activity-level tables read elsewhere in this thesis — no new constructs are introduced. Each table and figure below also writes the data behind it to `docs/analytics/`, and `docs/analytics/appendix_g_slide_manifest.txt` records which exported file backs which prospective slide.
+The disclosure-posture, activity, decoupling, and credibility results above are computed on the pooled S&P 500 panel. This appendix disaggregates those constructs by two-digit SIC sector, filer cohort, and rollup method, using the same firm-year and activity-level tables read elsewhere in this thesis; no new constructs are introduced. Each table and figure below also writes the data behind it to `docs/analytics/`, and `docs/analytics/appendix_g_slide_manifest.txt` records which exported file backs which prospective slide.
 
 ```{python}
 #| echo: false
@@ -4815,7 +4857,7 @@ _export("appendix_g_sic_posture.csv", posture_by_sic.join(arch_mix), "sector pos
 Markdown(tabulate(rows, headers=["Sector", "Disclosure Int. ($D$)", "Risk", "Governance", "Promotional"] + ARCH))
 ```
 
-Disclosure Intensity ($D$) is highest in business services and industrial/computer equipment and lowest in electric/gas/sanitary and holding/investment offices — sectors far from AI's core supply chain talk about it least. But every sector mixes archetypes: even electric/gas/sanitary, the lowest-$D$ sector, has Vocal Substantives among its firms, and business services has Defensive Disclosers alongside its majority of Vocal Substantives. Sector explains the general level of AI disclosure; it does not determine which posture a given firm within that sector adopts.
+Disclosure Intensity ($D$) is highest in business services and industrial/computer equipment and lowest in electric/gas/sanitary and holding/investment offices: sectors far from AI's core supply chain talk about it least. But every sector mixes archetypes: even electric/gas/sanitary, the lowest-$D$ sector, has Vocal Substantives among its firms, and business services has Defensive Disclosers alongside its majority of Vocal Substantives. Sector explains the general level of AI disclosure; it does not determine which posture a given firm within that sector adopts.
 
 ### What do different industries do with AI? {.unnumbered}
 
@@ -4965,7 +5007,7 @@ _export("appendix_g_sic_grounding_components.csv", comp_by_sic, "heatmap of sect
 Markdown(tabulate(rows, headers=["Sector"] + COMPONENTS))
 ```
 
-The component that drops out first, in every sector, is quantified outcomes: even sectors above 85% on "specific function" and above 70% on "deployed or scaled" fall to single digits or low teens on "quantified outcome". Sectors do not withhold different evidence from each other; they withhold the same evidence — a number attached to the claim.
+The component that drops out first, in every sector, is quantified outcomes: even sectors above 85% on "specific function" and above 70% on "deployed or scaled" fall to single digits or low teens on "quantified outcome". Sectors do not withhold different evidence from each other; they withhold the same evidence: a number attached to the claim.
 
 ### Is the grounding decline within firms, or driven by new filers? {.unnumbered}
 
@@ -5097,7 +5139,7 @@ rows = [[a] + [f"{tmat.loc[a, b]:.0f}%" for b in ARCH] for a in ARCH]
 Markdown(tabulate(rows, headers=["From \\ To"] + ARCH))
 ```
 
-Archetypes are sticky but not permanent: across `{python} n_pairs` consecutive firm-year pairs, `{python} f"{stay_rate:.0f}"`% stay in the same archetype on average, and Vocal Substantives and Defensive Disclosers are the stickiest, each retaining roughly three-quarters of their firms year over year. Governance-Led Disclosers is the least stable category, most often transitioning toward Defensive Disclosers rather than toward Vocal Substantives — governance-heavy language is more often a step down in disclosed activity than a step up.
+Archetypes are sticky but not permanent: across `{python} n_pairs` consecutive firm-year pairs, `{python} f"{stay_rate:.0f}"`% stay in the same archetype on average, and Vocal Substantives and Defensive Disclosers are the stickiest, each retaining roughly three-quarters of their firms year over year. Governance-Led Disclosers is the least stable category, most often transitioning toward Defensive Disclosers rather than toward Vocal Substantives: governance-heavy language is more often a step down in disclosed activity than a step up.
 
 ### Do the results depend on the rollup method? {.unnumbered}
 
@@ -5127,7 +5169,7 @@ rows = [[ch] + [f"{tbl.loc[ch, c]:.1f}%" for c in tbl.columns] for ch in tbl.ind
 Markdown(tabulate(rows, headers=["Channel"] + list(tbl.columns)))
 ```
 
-Activity-weighted rollups (each disclosed activity counted once, so heavy disclosers dominate) and firm-weighted rollups (each firm-year counted once regardless of how many activities it discloses) answer different questions — "how grounded is the typical disclosed activity?" versus "how grounded is the typical firm's disclosure?" They give different levels here: the firm-weighted grounded share runs roughly 15–18 percentage points below the activity-weighted share in both channels, because firms with fewer disclosed activities tend to ground a smaller share of them.
+Activity-weighted rollups (each disclosed activity counted once, so heavy disclosers dominate) and firm-weighted rollups (each firm-year counted once regardless of how many activities it discloses) answer different questions: "how grounded is the typical disclosed activity?" versus "how grounded is the typical firm's disclosure?" They give different levels here: the firm-weighted grounded share runs roughly 15–18 percentage points below the activity-weighted share in both channels, because firms with fewer disclosed activities tend to ground a smaller share of them.
 
 Both rollups agree on the qualitative finding that motivates the credibility chapter: calls are more grounded than filings under either weighting.
 
@@ -5250,7 +5292,7 @@ from IPython.display import Markdown
 Markdown("\n".join(lines))
 ```
 
-Within the same sector, the same disclosure-intensity scale spans firms with almost nothing grounded behind it and firms with a quantified deployment behind nearly every claim. Same industry, same regulatory environment, same investor audience — the difference is what the firm actually reports having done.
+Within the same sector, the same disclosure-intensity scale spans firms with almost nothing grounded behind it and firms with a quantified deployment behind nearly every claim. Same industry, same regulatory environment, same investor audience: the difference is what the firm actually reports having done.
 
 ```{python}
 #| echo: false
