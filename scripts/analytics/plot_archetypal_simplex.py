@@ -8,35 +8,24 @@ from archetypes import AA
 con = duckdb.connect("duckdb/thesis.duckdb", read_only=True)
 fu = con.execute("SELECT ticker, company_name, sic, industry_group FROM firm_universe WHERE country_code = 'us' AND ticker IS NOT NULL").df()
 con.close()
-fu["sic_int"] = pd.to_numeric(fu["sic"], errors="coerce")
+fu["sic2"] = fu["sic"].astype(str).str.zfill(4).str[:2]
 
-def map_proper_sector(sic):
-    if pd.isna(sic): return "Other / Diversified"
-    s = int(sic)
-    s2 = s // 100
-    if 7370 <= s <= 7379 or 3570 <= s <= 3579 or 3670 <= s <= 3679 or 3660 <= s <= 3669:
-        return "Technology"
-    if 4800 <= s <= 4899:
-        return "Communications"
-    if 2830 <= s <= 2836 or 3840 <= s <= 3851 or 8000 <= s <= 8099:
-        return "Healthcare & Pharma"
-    if 6000 <= s <= 6799:
-        return "Financial Services"
-    if 1000 <= s <= 1499 or s2 == 29 or s == 3533:
-        return "Energy & Mining"
-    if 4900 <= s <= 4999:
-        return "Utilities"
-    if 4000 <= s <= 4799:
-        return "Transportation"
-    if 5000 <= s <= 5999:
-        return "Retail & Wholesale"
-    if 7000 <= s <= 8999:
-        return "Business Services"
-    if 1500 <= s <= 3999:
-        return "Industrials & Mfg"
-    return "Other / Diversified"
+def map_sector(sic2):
+    try: s = int(sic2)
+    except: return "Other / Diversified"
+    if s in [73, 35, 36]: return "Technology"
+    elif s in [48]: return "Communications"
+    elif s in [28, 38, 80]: return "Healthcare & Pharma"
+    elif 60 <= s <= 67: return "Financial Services"
+    elif 20 <= s <= 39: return "Industrials & Mfg"
+    elif 40 <= s <= 47: return "Transportation"
+    elif s == 49: return "Utilities"
+    elif 10 <= s <= 14 or s == 29: return "Energy & Mining"
+    elif 50 <= s <= 59: return "Retail & Wholesale"
+    elif 70 <= s <= 89: return "Business Services"
+    else: return "Other / Diversified"
 
-fu["sector"] = fu["sic_int"].apply(map_proper_sector)
+fu["sector"] = fu["sic2"].apply(map_sector)
 fu_sector_map = fu.set_index("ticker")["sector"].to_dict()
 fu_name_map = fu.set_index("ticker")["company_name"].to_dict()
 
@@ -134,19 +123,19 @@ RIGHT_ORDER = [
     "Healthcare & Pharma",
     "Industrials & Mfg",
     "Retail & Wholesale",
-    "Communications"
+    "Communications",
+    "Business Services"
 ]
 
 # Ordered along the left edge from bottom to top
 LEFT_ORDER = [
-    "Technology",
-    "Business Services"
+    "Technology"
 ]
 
 sec_dict = sec_grp.set_index("sector").to_dict(orient="index")
 
-# Right-side Labels: y from 0.25 to 0.83 for 8 sectors
-y_right = np.linspace(0.25, 0.83, len(RIGHT_ORDER))
+# Right-side Labels: y from 0.20 to 0.83 for 9 sectors
+y_right = np.linspace(0.20, 0.83, len(RIGHT_ORDER))
 for idx, sec in enumerate(RIGHT_ORDER):
     sid = idx + 1
     d = sec_dict[sec]
@@ -174,8 +163,8 @@ for idx, sec in enumerate(RIGHT_ORDER):
             bbox=dict(boxstyle="round,pad=0.25", fc="white", ec=col, lw=1.3, alpha=0.96),
             zorder=8)
 
-# Left-side Labels: Technology & Business Services
-y_left = [0.08, 0.35]
+# Left-side Labels: Technology
+y_left = [0.20]
 for idx, sec in enumerate(LEFT_ORDER):
     sid = len(RIGHT_ORDER) + idx + 1
     d = sec_dict[sec]
