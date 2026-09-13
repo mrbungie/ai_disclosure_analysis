@@ -188,7 +188,7 @@ The resulting AI Disclosure Credibility Framework tracks intensity, posture, act
 
 ## Problem and practical relevance
 
-After the release of ChatGPT, artificial intelligence quickly became a standard topic in corporate disclosures [@anantharaman2026, pp. 1--2]. In the S&P 500, the share of firms mentioning AI in their SEC filings rose from `{python} f"{hd_share[2021]:.0f}"`% in 2021 to `{python} f"{hd_share[2025]:.0f}"`% in 2025, reaching an estimated `{python} f"{hd_share_est_2026:.0f}"`% by the end of 2026. Narrative intensity expanded roughly `{python} f"{hd_int_ratio_est:.0f}"`-fold over the same five years.
+After the release of ChatGPT, artificial intelligence quickly became a standard topic in corporate disclosures [@anantharaman2026, pp. 1--2]. In the S&P 500, the share of firms mentioning AI in their SEC filings rose from `{python} f"{hd_share[2021]:.0f}"`% in 2021 to `{python} f"{hd_share[2025]:.0f}"`% in 2025, with a same-window-adjusted 2026 estimate of `{python} f"{hd_share_est_2026:.0f}"`%. Narrative intensity expanded roughly `{python} f"{hd_int_ratio_est:.0f}"`-fold over the same five years.
 
 When nearly every firm mentions AI, counting words is no longer enough to tell real adoption from marketing. This creates three practical problems:
 
@@ -548,7 +548,7 @@ Candidate passages are screened using a Gradient Boosted Decision Tree (GBDT) pr
 
 ## From paragraphs to individual AI claims: frame extraction
 
-Candidate texts pass to a zero-shot LLM judge (`openai/gpt-5.6-luna`, benchmarked in Appendix A) that acts as a precision filter, discarding roughly `{python} f"{(1 - n_framed / n_prefiltered) * 100:.0f}"`% of candidate passages containing only incidental keywords, macro commentary, or generic disclaimers. For retained disclosures, the model extracts claims using a seven-dimension schema (@tbl-frame-schema); statements describing the firm's own actions or exposures feed directly into Disclosure Intensity ($D$) and Communication Posture ($P$).
+Candidate texts pass to a zero-shot LLM judge (`openai/gpt-5.6-luna`, benchmarked in Appendix A) that acts as a precision filter, discarding roughly `{python} f"{(1 - n_framed / n_prefiltered) * 100:.0f}"`% of candidate passages containing only incidental keywords, macro commentary, or generic disclaimers. For retained disclosures, the model extracts claims using a seven-field schema -- six analytical fields (subject, AI category, temporal stance, functional concepts, specificity signals, promotional register) plus a sentence-level audit anchor for verification (@tbl-frame-schema); statements describing the firm's own actions or exposures feed directly into Disclosure Intensity ($D$) and Communication Posture ($P$).
 
 ```{python}
 #| label: tbl-frame-schema
@@ -562,15 +562,24 @@ con.execute(f"""
     SELECT form, accession_number, paragraph_index, text_hash, frame_id, subject, ai_type, temporal, specificity, rhetoric
     FROM gold_ai_frames WHERE country_code='us' AND has_frame AND {PANEL_DOCS}
 """)
-counts_subj = con.execute("SELECT subject, count(*) n FROM _us_frames GROUP BY 1 ORDER BY 2 DESC").df()
+# Same dedup as n_frames_total in tbl-funnel-summary (DISTINCT text_hash,
+# frame_id, subject): the raw _us_frames table still has a handful of rows
+# where the identical paragraph and frame appear under more than one
+# accession_number, which would otherwise double-count them here and make
+# this table's n diverge from the funnel's.
+con.execute("""
+    CREATE OR REPLACE TEMP TABLE _us_frames_dedup AS
+    SELECT DISTINCT text_hash, frame_id, subject, ai_type, temporal, specificity, rhetoric FROM _us_frames
+""")
+counts_subj = con.execute("SELECT subject, count(*) n FROM _us_frames_dedup GROUP BY 1 ORDER BY 2 DESC").df()
 tot_subj = counts_subj['n'].sum()
 subj_str = "; ".join(f"{r.subject.replace('_', ' ').title()}: {r.n/tot_subj*100:.1f}%" for _, r in counts_subj.iterrows())
 
-counts_ai = con.execute("SELECT ai_type, count(*) n FROM _us_frames GROUP BY 1 ORDER BY 2 DESC").df()
+counts_ai = con.execute("SELECT ai_type, count(*) n FROM _us_frames_dedup GROUP BY 1 ORDER BY 2 DESC").df()
 tot_ai = counts_ai['n'].sum()
 ai_str = "; ".join(f"{r.ai_type.replace('_', ' ').title()}: {r.n/tot_ai*100:.1f}%" for _, r in counts_ai.iterrows())
 
-counts_temp = con.execute("SELECT temporal, count(*) n FROM _us_frames GROUP BY 1 ORDER BY 2 DESC").df()
+counts_temp = con.execute("SELECT temporal, count(*) n FROM _us_frames_dedup GROUP BY 1 ORDER BY 2 DESC").df()
 tot_temp = counts_temp['n'].sum()
 temp_str = "; ".join(f"{r.temporal.title()}: {r.n/tot_temp*100:.1f}%" for _, r in counts_temp.iterrows())
 
@@ -584,7 +593,7 @@ spec_prod, spec_proc, spec_date, spec_metr, spec_vend, rhet_strat, rhet_prom, rh
         round(avg(list_contains(rhetoric, 'strategic')::int)*100, 1),
         round(avg(list_contains(rhetoric, 'promotional')::int)*100, 1),
         round(avg(list_contains(rhetoric, 'hedged')::int)*100, 1)
-    FROM _us_frames
+    FROM _us_frames_dedup
 """).fetchone()
 spec_str = f"Product: {spec_prod}%; Process: {spec_proc}%; Timeline: {spec_date}%; Metric: {spec_metr}%; Vendor: {spec_vend}%"
 rhet_str = f"Strategic importance: {rhet_strat}%; Promotional tone: {rhet_prom}%; Hedged: {rhet_hedg}%"
@@ -661,7 +670,7 @@ $$\underbrace{\text{Semantic frames}}_{\text{frame extraction}} \Longrightarrow 
 
 1. **AI Disclosure Intensity ($D$):** Narrative volume, measured as AI frames per 1,000 words of scorable text to adjust for document length:
    $$D_{it} = \frac{\text{AI frames}_{it}}{\text{words}_{it} / 1{,}000}$$
-2. **Communication Posture ($P$):** A six-dimensional vector capturing *how* the firm discusses AI: realization, risk orientation, governance focus, objective specificity, customer orientation, and promotional tone.
+2. **Communication Posture ($P$):** A seven-dimensional vector capturing *how* the firm discusses AI: promotional tone, hedging, risk orientation, governance focus, claim realization, customer orientation, and claim specificity.
 3. **Disclosed AI Activity ($A$):** Count of discrete operational action triples ($n_{\text{activities}}$) across six business domains.
 4. **AI Activity Grounding ($G$):** A verifiability index in $[0, 1]$ measuring the share of five concrete checks met: specific business function, deployed or scaled stage, named product/process, quantified metric, and named technology provider.
 5. **Disclosed Substance ($S$):** Grounded operational volume, weighting log activity count by grounding:
@@ -3368,7 +3377,7 @@ _pb_sub_p = "< 0.001" if pb_sub["p"] < 0.001 else f"= {pb_sub['p']:.3f}"
 
 ## External characterization of archetypes: fundamental financial profiles
 
-The beta results above test one specific channel: whether post-call systematic risk responds to disclosure posture and substance. This section generalizes that test, unchanged, to six other firm fundamentals: log market capitalization, R&D-to-sales, gross margin, price-to-sales, revenue growth, and ROIC minus WACC. The regressors stay identical to the beta model ($\text{HistD}$, $\text{HistS}$, $\text{SurpriseD}$, $\text{SurpriseS}$, plus the same market and accounting controls), industry-by-year fixed effects and firm-clustered standard errors are unchanged, and only two things are swapped in per target: its own pre-call level (in the role $\beta^{\text{pre}}_{i,t}$ plays for beta) and its post-call value (in the role $\beta^{\text{post}}_{i,t}$ plays for beta). Both come from the closest 10-K to the call on each side -- the last one filed strictly before it, and the first one filed strictly after -- the same filing-date precision the beta model's own accounting controls already use, not a calendar-year approximation.
+The beta results above test one specific channel: whether post-call systematic risk responds to disclosure posture and substance. This section generalizes that test, unchanged, to six other firm fundamentals: log market capitalization, R&D-to-sales, gross margin, price-to-sales, revenue growth, and ROIC minus WACC. The AI regressors stay identical to the beta model ($\text{HistD}$, $\text{HistS}$, $\text{SurpriseD}$, $\text{SurpriseS}$), as do industry-by-year fixed effects and firm-clustered standard errors. Only the outcome changes per target, following one rule throughout: each outcome's own pre-call level replaces pre-call beta ($\beta^{\text{pre}}_{i,t}$) and is dropped from the control vector, so no fundamental enters the regression as both the outcome and a control. The remaining controls (market cap, 60-day return, operating margin, asset turnover) stay fixed across targets except for the one they would otherwise duplicate -- e.g., log market cap is excluded from the control vector precisely when it is the target being predicted. Pre- and post-call values both come from the closest 10-K to the call on each side -- the last one filed strictly before it, and the first one filed strictly after -- the same filing-date precision the beta model's own accounting controls already use, not a calendar-year approximation.
 
 ```{python}
 #| echo: false
@@ -3702,12 +3711,12 @@ By pairing diagnostic questions with concrete implementation guidance, the Credi
 
 # Conclusions
 
-This thesis examined whether distinguishing disclosure volume, communication posture, and disclosed operational substance provides a credible foundation for evaluating corporate AI claims. Synthesizing evidence across six years of SEC filings, earnings calls, regulatory comment letters, and capital-market data, our findings confirm the central hypothesis: communicative content separates firms in ways that raw mention counts cannot, and specific posture dimensions link directly to operating fundamentals and systematic risk. Across the empirical investigation, four core findings emerge:
+This thesis examined whether distinguishing disclosure volume, communication posture, and disclosed operational substance provides a credible foundation for evaluating corporate AI claims. Synthesizing evidence across six years of SEC filings, earnings calls, regulatory comment letters, and capital-market data, our findings partially support the central hypothesis: communicative posture and disclosed activity separate firms in ways that raw mention counts cannot, and link to operating fundamentals and systematic risk -- but grounded operational substance and its decoupling from narrative volume add no incremental signal once posture and activity are in the model. Across the empirical investigation, four core findings emerge:
 
 - **Evolution and composition.** AI disclosure expanded from one third of S&P 500 firms in 2021 to over nine in ten by 2025–2026. While the generative-AI boom multiplied disclosed activity, average grounding declined. Corporate AI primarily operates at the application layer: deploying and operating software using tools from a few U.S. providers. Vocabulary diffused faster than grounded execution, matching institutional theory predictions.
 - **Strategic heterogeneity.** Firms sort into three stable communication archetypes shaped by industry norms. Posture predicts activity beyond narrative verbosity: at equal AI text volume, Vocal Substantives report `{python} f"{hd_vs_ratio:.2f}"` times as many activities as Defensive Disclosers. Furthermore, Vocal Substantives is the only archetype separating consistently on sector-year-adjusted fundamentals.
 - **Credibility and decoupling.** Decoupling is an enduring firm-year attribute (rank correlation `{python} f"{hd_w_rho:.2f}"`). Within the same firm and year, calls and filings share the same activity mix, but quantified outcomes are `{python} f"{hd_gap_quant_pp:.0f}"` percentage points higher in calls: narrative reaches the binding venue, but evidence does not. Direct SEC scrutiny remains singular; in that single case, the issuer responded by curtailing narrative volume and narrowing decoupling.
-- **Market relevance and systematic risk.** Historical AI disclosure posture predicts lower post-call systematic risk, whereas disclosed substance does not. The association reflects cross-sectional sorting rather than causal revision: equity markets sort on established narrative presence rather than verifiable operational grounding.
+- **Market relevance and systematic risk.** Historical AI disclosure intensity predicts *higher*, not lower, post-call systematic risk, whereas disclosed substance does not; the same asymmetry generalizes to market capitalization, price-to-sales, and revenue growth, though not to capital efficiency net of its cost. The association reflects cross-sectional sorting rather than causal revision: equity markets and firm fundamentals alike sort on established narrative presence rather than verifiable operational grounding.
 
 **What managers and investors should do.**
 
@@ -3725,7 +3734,7 @@ Four limitations frame these findings:
 1. **LLM extraction:** Extraction relies on zero-shot inference, audited against human samples (prefilter: 91.2% precision; activity fields: 89.1%–95.8% accuracy; cross-model $\kappa = 0.81\text{--}0.87$).
 2. **Self-reported data:** Disclosed activity reflects corporate assertions rather than an internal engineering census. AI patents provide an independent benchmark ($\rho \approx 0.5$, Appendix B), though patents track technological capacity rather than operational deployment.
 3. **Singular regulatory inquiry:** Direct SEC comment letters on AI claims reached only one firm, making regulatory findings a case study rather than a general econometric test.
-4. **Non-causal market associations:** Market tests examine systematic risk rather than abnormal returns, capturing cross-sectional sorting rather than causal shifts.
+4. **Non-causal market associations:** Market tests examine systematic risk rather than abnormal returns, capturing cross-sectional sorting rather than causal shifts. The generalized fundamentals tests (Chapter 6) also carry a pseudo-replication risk: several calls from the same firm can map to the same next 10-K, so firm-clustered SE understate the loss of information from slow-moving accounting outcomes more than they do for beta; collapsing to one observation per firm-reporting-period is a natural robustness check.
 
 Two natural extensions follow: first, applying synthetic control methods to denser call panels for firm-specific event studies; second, evaluating international panels (such as Chile or Italy) to examine whether cross-venue credibility gaps hold across different regulatory environments.
 

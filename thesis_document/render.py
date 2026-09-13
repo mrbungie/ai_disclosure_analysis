@@ -18,8 +18,11 @@ Pipeline:
      margins, repeating headers, non-splitting rows, and calibrated typography.
   3. Prepend cover.docx, with one blank page in between cover and content.
   4. Mark the document's fields (TOC entries and page numbers) dirty and set
-     <w:updateFields> in settings.xml, so Word recomputes them automatically
-     the moment the file is opened.
+     <w:updateFields> in settings.xml -- belt-and-suspenders for anyone who
+     opens the .docx by hand in Word, since that flag alone doesn't reliably
+     force a recompute during the *scripted* PDF export in step 7 (AppleScript
+     "save as PDF" doesn't always trigger it in time), which is why that step
+     also explicitly updates every field before exporting.
   5. Save as compiled/GermanOviedo_FinalThesis_<YYYYmmdd_HHMMSS>.docx
   6. Remove every intermediate file/dir created along the way.
   7. Convert the final .docx to PDF (headless LibreOffice) and save as
@@ -502,6 +505,24 @@ def convert_to_pdf_via_word(docx_path: Path, pdf_path: Path) -> None:
             set display alerts to false
             open (POSIX file "{docx_path}" as alias)
             set theDoc to active document
+            -- "repeat ... in (get X of theDoc)" silently fails on Word's element
+            -- specifiers (Word chokes trying to enumerate the un-resolved
+            -- reference); resolving it into a plain list first with an explicit
+            -- "set ... to get ..." avoids that. The verb also matters: the
+            -- one-word "update" command doesn't apply to a Field object (it's
+            -- for dialogs/links/TOC-like collections) -- fields need the
+            -- two-word "update field" command. Both commands accept a LIST
+            -- as their direct parameter and apply to every item in one Apple
+            -- Event round trip -- looping "item i of ..." one at a time here
+            -- (a few hundred fields in a ~100-page document) turned each one
+            -- into its own IPC round trip and made this step take minutes
+            -- instead of seconds.
+            try
+                update field (get fields of theDoc)
+            end try
+            try
+                update (get tables of contents of theDoc)
+            end try
             save as theDoc file name (POSIX file "{pdf_path}" as string) file format format PDF
             try
                 close active document saving no
