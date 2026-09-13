@@ -3406,12 +3406,14 @@ Historical disclosure intensity, the same variable that predicts post-call beta 
 
 Historical substantive activity is `{python} _sig2(gm_hs_p)` on gross margin (`{python} f"{gm_hs:+.3f}"`, $p$ `{python} _pfmt(gm_hs_p)`) and `{python} _sig2(rw_hs_p)` on ROIC minus WACC (`{python} f"{rw_hs:+.3f}"`, $p$ `{python} _pfmt(rw_hs_p)`), and neither disclosure nor substance separates firms on ROIC minus WACC at conventional levels. The asymmetry documented for beta mostly generalizes: what recurs across the broader financial profile is how much a firm has historically talked about AI, not how grounded that talk is -- though the effect is not universal, and disappears entirely for the one measure of capital efficiency net of its cost.
 
+Call-specific surprise, in either disclosure or substance, is not statistically significant for any of the seven outcomes in @fig-economic-coefficients. As with beta, what a firm's financial profile tracks is its established historical posture, not the incremental content of any single call.
+
 ```{python}
 #| label: fig-economic-coefficients
-#| fig-cap: "[Effect of historical disclosure intensity and historical substantive activity on beta and six firm fundamentals, same specification as the baseline beta model.]{custom-style=\"CaptionText\"}"
+#| fig-cap: "[Effect of historical and surprise disclosure and substantive activity on beta and six firm fundamentals, same specification as the baseline beta model.]{custom-style=\"CaptionText\"}"
 #| echo: false
 #| fig-width: 8.5
-#| fig-height: 4.8
+#| fig-height: 5.4
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -3422,11 +3424,14 @@ OUTCOMES = [
     ("roic_minus_wacc", "ROIC − WACC"),
 ]
 SERIES = [("hist_disclosure", "Historical disclosure intensity", "#059669"),
-          ("hist_substance", "Historical substantive activity", "#7C3AED")]
+          ("hist_substance", "Historical substantive activity", "#7C3AED"),
+          ("surprise_disclosure", "Call-specific disclosure surprise", "#0EA5E9"),
+          ("surprise_substance", "Call-specific substance surprise", "#F59E0B")]
 
-fig, ax = plt.subplots(figsize=(8.5, 4.8), dpi=300)
+fig, ax = plt.subplots(figsize=(8.5, 5.4), dpi=300)
 y0 = np.arange(len(OUTCOMES))
-offsets = {"hist_disclosure": 0.12, "hist_substance": -0.12}
+offsets = {"hist_disclosure": 0.24, "hist_substance": 0.08,
+           "surprise_disclosure": -0.08, "surprise_substance": -0.24}
 for var, label, color in SERIES:
     ys, xs, xerr = [], [], []
     for i, (key, _) in enumerate(OUTCOMES):
