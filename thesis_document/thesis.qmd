@@ -793,9 +793,7 @@ ax2.set_ylim(0, max_f * 1.25)
 ax2.grid(True, linestyle="--", alpha=0.3)
 ax2.spines[["top", "right"]].set_visible(False)
 
-fig.suptitle("The Diffusion of Corporate AI Disclosure Across the S&P 500 (2021–2025, 2026 YTD)",
-             fontsize=10.5, fontweight="bold", y=0.98)
-plt.tight_layout(rect=[0, 0, 1, 0.94])
+plt.tight_layout()
 plt.show()
 ```
 
@@ -847,8 +845,6 @@ ax.set_yticklabels(LABELS, fontsize=9.0, fontweight="bold")
 ax.invert_yaxis()
 ax.set_xlim(-0.05, 1.05)
 ax.set_xlabel("Dimension Score (Scaled 0 to 1)", fontsize=8.8, fontweight="bold")
-ax.set_title("Distribution of Seven AI Disclosure Posture Dimensions and Disclosure Intensity Across the S&P 500",
-             fontsize=9.8, fontweight="bold", pad=10)
 ax.grid(True, axis="x", linestyle="--", alpha=0.3)
 ax.spines[["top", "right"]].set_visible(False)
 plt.tight_layout()
@@ -1105,9 +1101,6 @@ ax.set_ylim(-0.16, 1.05)
 ax.set_aspect("equal")
 ax.axis("off")
 
-plt.title(f"The S&P 500 AI Disclosure Simplex: Industry Centroids & Boundary Exemplars (k = 3)\n{len(fit_pop)} Active Index Constituents (10-K & DEF 14A Statutory SEC Filings)",
-          fontsize=13, fontweight="bold", pad=25)
-
 ax.text(-0.05, -0.07, "Vocal Substantives\n(Commercial Execution)",
         fontsize=11, fontweight="bold", ha="center", va="top", color="#0F172A")
 ax.text(1.05, -0.07, "Governance-Led Disclosers\n(Institutional Guardrails)",
@@ -1232,7 +1225,6 @@ for i in range(len(FEATURES)):
         v = mat.values[j, i]
         ax.text(j, i, f"{v:+.2f}", ha="center", va="center", fontsize=8.8,
                 color="white" if abs(v) > vmax * 0.55 else "black", fontweight="bold")
-ax.set_title("Standardized Coordinates of Archetypal Vertices (Matrix A, z-scores)", fontsize=10.2, fontweight="bold")
 cbar = fig.colorbar(im, ax=ax, shrink=0.85, pad=0.03)
 cbar.set_label("Standard deviations from pooled mean", fontsize=8.2)
 plt.tight_layout()
@@ -1582,8 +1574,6 @@ cbar.set_ticklabels(["0.4x\n(Under)", "0.6x", "1.0x\n(Neutral)", "1.6x", "2.5x\n
 cbar.ax.tick_params(labelsize=7.5)
 cbar.set_label("Relative Representation vs. Sector Baseline", fontsize=8.5, fontweight="bold")
 
-ax.set_title("Sector Representation by Disclosure Archetype (Observed / Baseline Ratio and Counts)",
-             fontsize=9.8, fontweight="bold", pad=12)
 plt.tight_layout()
 plt.show()
 ```
@@ -1828,11 +1818,13 @@ cbar.set_ticklabels(["0%", "25%", "50%", "75%", "Row max"])
 cbar.ax.tick_params(labelsize=8)
 cbar.set_label("Within-row intensity (% of row maximum)", fontsize=8.5, fontweight="bold")
 
-ax.set_title(f"Corporate AI Activity Map: Business Purpose × Action Type (n = {int(total_acts):,} AI activities)\n[Cells report counts and row percentages; shading normalized row-by-row]",
-             fontsize=9.5, fontweight="bold", pad=12)
 plt.tight_layout()
 plt.show()
 ```
+
+::: {custom-style="FigureNote"}
+*Notes:* n = `{python} f"{int(total_acts):,}"` AI activities. Cells report counts and row percentages; shading normalized row-by-row.
+:::
 
 Corporate AI is mostly an application-layer story (@fig-activity-map). S&P 500 firms describe deploying and integrating commercial AI tools into the products and workflows they already have. Developing foundation models or building core computing infrastructure is a tiny share of total activity.
 
@@ -1952,8 +1944,6 @@ for i in range(len(act_features)):
 
 cbar = fig.colorbar(im, ax=ax, shrink=0.85, pad=0.03)
 cbar.set_label("Standardized difference (z-score)", fontsize=8.0)
-ax.set_title("Disclosed AI Activity Profile Across Communication Archetypes",
-             fontsize=9.8, fontweight="bold", pad=12)
 plt.tight_layout()
 plt.show()
 ```
@@ -2111,8 +2101,6 @@ ax.set_yticklabels(ARCH, fontsize=9.0, fontweight="bold")
 ax.invert_yaxis()
 ax.set_xlim(0, 100)
 ax.set_xlabel("% of Disclosed AI Activities", fontsize=8.8, fontweight="bold")
-ax.set_title("Mix of Disclosed Corporate AI Activities by Disclosure Archetype (100% Stacked)",
-             fontsize=10.0, fontweight="bold", pad=12)
 ax.legend(bbox_to_anchor=(0.5, -0.22), loc="upper center", ncol=3, fontsize=8.0, frameon=False)
 ax.spines[["top", "right"]].set_visible(False)
 plt.tight_layout()
@@ -2386,9 +2374,7 @@ ax2.set_title("Panel B: Marginal Concreteness Weakens\nGrounding and Specificity
 ax2.grid(True, linestyle="--", alpha=0.3)
 ax2.spines[["top", "right"]].set_visible(False)
 
-fig.suptitle("The Paradox of the GenAI Boom: Disclosed AI Activity Expanded Faster than Observable Grounding",
-             fontsize=10.5, fontweight="bold", y=0.98)
-plt.tight_layout(rect=[0, 0, 1, 0.94])
+plt.tight_layout()
 plt.show()
 ```
 
@@ -2479,8 +2465,6 @@ for b, v in zip(bars, values[::-1]):
 
 ax.set_xlim(0, max(values) * 1.15)
 ax.set_xlabel(f"% of all disclosed AI activity statements (n = {n_activities_total:,})", fontsize=9.0, fontweight="bold")
-ax.set_title("Technology Provenance: Proprietary Branding vs. External Technology Attribution",
-             fontsize=10.2, fontweight="bold")
 ax.grid(True, axis="x", linestyle="--", alpha=0.3)
 ax.spines[["top", "right"]].set_visible(False)
 
@@ -2709,7 +2693,6 @@ ax.axvline(0, color="#334155", lw=1)
 ax.set_yticks(y0); ax.set_yticklabels([lbl for _, lbl in OUTCOMES], fontsize=9.5)
 ax.invert_yaxis()
 ax.set_xlabel("Sector-year-adjusted effect vs. No AI (standard deviations)", fontsize=9.5, fontweight="bold")
-ax.set_title("Vocal Substantives is the most consistently, economically distinct archetype", fontsize=10.5, fontweight="bold")
 ax.legend(fontsize=8.5, loc="lower right", framealpha=0.9)
 ax.grid(True, axis="x", linestyle="--", alpha=0.3)
 plt.tight_layout()
@@ -2907,8 +2890,6 @@ ax.text(0.04, 0.50, stats_text, transform=ax.transAxes, fontsize=8.0,
 ax.set_xlabel('Disclosure\u2013Substance Decoupling Index (W = pct_rank(Disclosure) \u2212 pct_rank(Substance))',
               fontsize=9.0, fontweight='bold')
 ax.set_ylabel('Density', fontsize=9.0, fontweight='bold')
-ax.set_title('Distribution of Corporate AI Disclosure\u2013Substance Decoupling (W)',
-             fontsize=10.2, fontweight='bold')
 ax.set_xlim(-0.75, 0.95)
 ax.grid(True, linestyle=':', alpha=0.45)
 ax.spines[['top', 'right']].set_visible(False)
@@ -3052,7 +3033,6 @@ ax2.set_ylim(-0.5, 5.7)
 ax2.grid(True, axis='x', linestyle=':', alpha=0.5)
 ax2.spines[['top', 'right']].set_visible(False)
 
-plt.suptitle('The AI Activity Story Survives; the Evidence Changes', fontsize=10.2, fontweight='bold', y=0.98)
 plt.tight_layout()
 plt.show()
 ```
@@ -5163,7 +5143,6 @@ ax.axvline(g3["med_activities"].median(), color="#94A3B8", lw=1.0, ls=":")
 ax.axhline(g3["mean_grounding"].median(), color="#94A3B8", lw=1.0, ls=":")
 ax.set_xlabel("Median disclosed AI activities per firm", fontsize=9.0, fontweight="bold")
 ax.set_ylabel("Mean AI activity grounding ($G$)", fontsize=9.0, fontweight="bold")
-ax.set_title("Sector Disclosure Volume vs. Grounding", fontsize=10.0, fontweight="bold")
 ax.spines[["top", "right"]].set_visible(False)
 plt.tight_layout()
 plt.show()
@@ -5305,7 +5284,6 @@ ax.axvline(0, color="#0F172A", lw=1.0, ls="--")
 ax.set_yticks(y)
 ax.set_yticklabels([f"{r.label} (n={r.n})" for r in fdf.itertuples()], fontsize=8.5)
 ax.set_xlabel("Call minus filing gap in grounded-evidence share (pp, 95% CI)", fontsize=9.0, fontweight="bold")
-ax.set_title("Call-Filing Grounding Gap by Sector", fontsize=10.0, fontweight="bold")
 ax.spines[["top", "right"]].set_visible(False)
 plt.tight_layout()
 plt.show()
