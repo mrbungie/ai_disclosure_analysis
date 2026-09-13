@@ -3743,16 +3743,6 @@ Four limitations frame these findings:
 
 Two natural extensions follow: first, applying synthetic control methods to denser call panels for firm-specific event studies; second, evaluating international panels (such as Chile or Italy) to examine whether cross-venue credibility gaps hold across different regulatory environments.
 
-# AI Statement {.unnumbered}
-
-Generative AI served two roles in this thesis. Both are declared here under program rules.
-
-First, large language models served as measurement tools. A zero-shot LLM judge (gpt-5.6-luna) classified candidate paragraphs into semantic frames. It was accessed via an API with schema-constrained outputs. The same judge extracted the inventory of disclosed AI activities. A second model (Gemini) served only as an independent judge for agreement benchmarks.
-
-The models did not produce empirical results directly. Both acted as annotators running a fixed, documented prompt. We checked their outputs against two human-audited samples (300 paragraphs for the prefilter, 120 paragraphs / 267 activities for extracted activity fields). We also checked cross-model agreement. Deterministic code then computed every downstream construct from these structured outputs.
-
-Second, AI coding assistants (Anthropic Claude, via Claude Code) served as tools while preparing this text. They helped write and debug pipeline scripts. They helped draft figures and tables from computed data. They also helped check references, find source PDFs, and edit prose for clarity. All research questions, hypotheses, design choices, interpretations, and conclusions are the author's own. Every number reported comes from the author's code on the author's data. The author reviewed and approved all text. The author takes full responsibility for its content.
-
 {{< pagebreak >}}
 
 # References {.unnumbered}
@@ -5482,3 +5472,13 @@ def _gdir():
     "file\tslide_topic\tvisualization\n" + "\n".join(_manifest_rows) + "\n"
 )
 ```
+
+# AI Statement {.unnumbered}
+
+Generative AI served two roles in this thesis. Both are declared here under program rules.
+
+First, large language models served as measurement tools. A zero-shot LLM judge (gpt-5.6-luna) classified candidate paragraphs into semantic frames. It was accessed via an API with schema-constrained outputs. The same judge extracted the inventory of disclosed AI activities. A second model (Gemini) served only as an independent judge for agreement benchmarks.
+
+The models did not produce empirical results directly. Both acted as annotators running a fixed, documented prompt. We checked their outputs against two human-audited samples (300 paragraphs for the prefilter, 120 paragraphs / 267 activities for extracted activity fields). We also checked cross-model agreement. Deterministic code then computed every downstream construct from these structured outputs.
+
+Second, AI coding assistants (Anthropic Claude, via Claude Code) served as tools while preparing this text. They helped write and debug pipeline scripts. They helped draft figures and tables from computed data. They also helped check references, find source PDFs, and edit prose for clarity. All research questions, hypotheses, design choices, interpretations, and conclusions are the author's own. Every number reported comes from the author's code on the author's data. The author reviewed and approved all text. The author takes full responsibility for its content.
