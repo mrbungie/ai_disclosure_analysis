@@ -65,11 +65,9 @@ def _frame_counts(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     return con.execute("""
         SELECT accession_number,
                count(*) AS n_frames,
-               sum(rhetoric_promotional::INT) AS n_promo,
-               sum(specificity_quantified_metric::INT) AS n_quant,
-               sum((specificity_business_process::INT + specificity_product_or_system::INT
-                    + specificity_vendor_or_partner::INT + specificity_quantified_metric::INT
-                    + specificity_date_or_timeline::INT) / 5.0) AS n_spec,
+               sum(list_contains(rhetoric, 'promotional')::INT) AS n_promo,
+               sum(list_contains(specificity, 'metric')::INT) AS n_quant,
+               sum(len(specificity) / 5.0) AS n_spec,
                sum(list_bool_or(list_transform(concepts, c -> c LIKE 'risk_%'))::INT) AS n_risk,
                sum(list_bool_or(list_transform(concepts, c -> c LIKE 'gov_%'))::INT) AS n_gov,
                sum((temporal = 'hypothetical')::INT) AS n_hyp,
@@ -77,8 +75,8 @@ def _frame_counts(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
                sum(list_contains(concepts, 'deployed')::INT) AS n_deployed,
                sum(list_contains(concepts, 'revenue_outcome')::INT) AS n_revenue_outcome,
                sum(list_contains(concepts, 'cost_outcome')::INT) AS n_cost_outcome,
-               sum(list_contains(concepts, 'ai_investment')::INT) AS n_ai_investment,
-               sum(list_contains(concepts, 'ai_infrastructure')::INT) AS n_ai_infrastructure
+               sum(list_contains(concepts, 'investment')::INT) AS n_ai_investment,
+               sum(list_contains(concepts, 'infrastructure')::INT) AS n_ai_infrastructure
         FROM gold_ai_frames WHERE country_code = 'us' AND has_frame
         GROUP BY 1
     """).df()

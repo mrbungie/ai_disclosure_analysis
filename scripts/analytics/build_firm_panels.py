@@ -1,9 +1,9 @@
 """Re-merges the firm-year panel with the financial/market tables.
 
-`build_firm_clusters.py` produces the TEXT side (archetypes, behavior
-shares, the firm-year panel). This joins that to the accounting and market
-side, producing the four label-carrying tables every downstream analytics
-doc reads:
+`build_strategy_dimensions.py` produces the TEXT side (the k=3 posture
+archetype and its 8 dimensions, the firm-year panel). This joins that to
+the accounting and market side, producing the four label-carrying tables
+every downstream analytics doc reads:
 
   firm_year_full_crosscheck  panel + raw XBRL levels + next-year growth +
                              filing-window return  (docs 02, 03)
@@ -11,8 +11,9 @@ doc reads:
                              (docs 04, 05)
   cohort_2021_crosscheck     the subset of firms already present in 2021
                              (doc 03)
-  segment_financials         one row per firm: mean ratios/market metrics
-                             carrying both cluster labels  (docs 07, 08)
+  segment_financials         one row per firm: median ratios/market metrics
+                             carrying its (pooled) archetype label
+                             (docs 07, 08)
 
 Why this is a separate script from the clustering: the financial inputs
 (`firm_year_financials*`, `firm_year_market_factors`,
@@ -21,6 +22,23 @@ DEF 14A and 8-K entered the corpus — no new prices, no new XBRL. Only the
 LABELS moved. Keeping the join separate makes that explicit and means a
 re-label never risks rewriting the financial tables themselves; this
 script only ever reads them.
+
+2026-09-13 (docs/migration_v1_to_v2_analytics.md): this used to read
+`firm_year_archetype_behaviors.parquet`/`voice_x_behavior.parquet`, the
+outputs of the now-deprecated `build_firm_clusters.py` (the old Chapter 4
+A/B/C/D archetypes + 0-3 behavior clusters, already superseded in
+`thesis.qmd` by `build_strategy_dimensions.py`'s k=3 posture archetype).
+That meant `firm_year_master_v2.parquet`'s `archetype` column was silently
+a DIFFERENT construct from the one the rest of the thesis calls
+`archetype` -- `thesis.qmd` had grown a defensive comment ("the year-level
+letter codes in the master panel ... are not used here") to route around
+it. Fixed by sourcing the text side from `firm_year_strategy_dimensions.
+parquet`/`firm_strategy_dimensions.parquet` directly, so there is exactly
+one `archetype` construct everywhere. The old adoption-concept behavior
+shares, domain shares and entity-mention counts have no equivalent in the
+posture-dimension framework and are not reconstructed here (not used by
+`thesis.qmd`); `segment_financials` now carries the pooled archetype label
+instead of the old voice/behavior cross-cluster label.
 
 Like the clustering script, this reconstructs a step whose original code
 was never versioned, from the column schemas of the stored outputs and the
@@ -41,15 +59,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CLUSTERS = REPO_ROOT / "data" / "processed" / "clusters"
 
 PANEL_TEXT_COLUMNS = [
-    "ticker", "cik", "year", "n_frames", "archetype", "archetype_dist",
-    "specificity_index", "quantified_rate", "promotional_rate", "strategic_rate",
-    "realized_share", "hypothetical_share", "risk_share", "gov_share",
-    "firm_subject_share",
+    "ticker", "year", "n_frames", "archetype", "cluster",
+    "promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
+    "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity",
 ]
-BEHAVIOR_SHARE_PREFIX = "behavior_share_"
-DOMAIN_SHARE_COLUMNS = ["domain_share_customer_facing", "domain_share_internal",
-                        "domain_share_unspecified"]
-MENTION_COLUMNS = ["n_entity_mentions", "entities_named"]
 
 GROWTH_COLUMNS = ["next_revenue_yoy", "next_rd_expense_yoy", "next_capex_yoy",
                   "next_sga_expense_yoy"]
@@ -77,16 +90,17 @@ def main() -> None:
     parser.add_argument("--clusters-dir", type=Path, default=CLUSTERS)
     args = parser.parse_args()
 
-    panel = read("firm_year_archetype_behaviors", args.clusters_dir)
-    behavior_columns = [c for c in panel.columns if c.startswith(BEHAVIOR_SHARE_PREFIX)]
-    text_side = panel[PANEL_TEXT_COLUMNS + behavior_columns
-                      + DOMAIN_SHARE_COLUMNS + MENTION_COLUMNS]
+    panel = read("firm_year_strategy_dimensions", args.clusters_dir)
+    text_side = panel[PANEL_TEXT_COLUMNS]
 
     financials = read("firm_year_financials", args.clusters_dir)
     ratios = read("firm_year_financials_ratios", args.clusters_dir)
     market = read("firm_year_market_factors", args.clusters_dir)
     returns = read("firm_year_filing_returns", args.clusters_dir)
-    crossed = read("voice_x_behavior", args.clusters_dir)
+    # Pooled (not panel) archetype: one label per firm, for `segment_financials`
+    # below -- the same construct `firm_strategy_dimensions.parquet` uses
+    # everywhere else, not the old voice/behavior cross-cluster label.
+    firm_archetype = read("firm_strategy_dimensions", args.clusters_dir)[["ticker", "archetype"]]
     print(f"panel: {len(panel):,} filas, {panel['ticker'].nunique():,} empresas | "
           f"financieros: {len(ratios):,} filas, {ratios['ticker'].nunique():,} empresas")
 
@@ -120,13 +134,13 @@ def main() -> None:
     # --- segmentos: una fila por empresa, MEDIANA de sus años (robusta a un
     # año atípico; es lo que 04_perfiles_economicos.md documenta y lo que usan las demás tablas) ---
     per_firm = (master.groupby("ticker")[SEGMENT_COLUMNS].median().reset_index()
-                .merge(crossed, on="ticker", how="inner"))
-    print(f"segment_financials: {len(per_firm):,} empresas con ambas etiquetas y financieros")
+                .merge(firm_archetype, on="ticker", how="inner"))
+    print(f"segment_financials: {len(per_firm):,} empresas con arquetipo y financieros")
 
     # --- MODO FINAL: el panel son TODAS las empresas-año con filings, con ceros ---
     # Cada empresa-año con al menos un filing puntuable entra, con intensidad de
     # IA por 1.000 palabras (cero si no habla) desde ai_intensity.py. Las tasas
-    # de texto (promotional_rate, behavior_share_*) y las etiquetas de
+    # de texto (posture dims) y las etiquetas de
     # arquetipo vienen del panel condicionado y quedan NaN donde la empresa no
     # habló de IA: son propiedades de CÓMO se habla, no existen para el cero.
     # `year` = año de presentación, igual que los financieros.
@@ -153,7 +167,7 @@ def main() -> None:
           f"({master['operating_margin'].notna().mean()*100:.0f}% con ratios)")
     cohort = full[full["ticker"].isin(cohort_tickers)].copy()
     per_firm = (master[master["in_text_panel"]].groupby("ticker")[SEGMENT_COLUMNS].median().reset_index()
-                .merge(crossed, on="ticker", how="inner"))
+                .merge(firm_archetype, on="ticker", how="inner"))
 
     for name, table in (("firm_year_full_crosscheck", full),
                         ("firm_year_master_v2", master),

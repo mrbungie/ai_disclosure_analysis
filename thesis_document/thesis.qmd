@@ -42,7 +42,7 @@ os.chdir(_cwd0)
 _ap = Path("../data/processed/clusters/firm_activities.parquet")
 if not _ap.exists():
     _ap = Path("data/processed/clusters/firm_activities.parquet")
-_a = pd.read_parquet(_ap, columns=["ticker", "text_hash", "activity_index"]).drop_duplicates()
+_a = pd.read_parquet(_ap, columns=["ticker", "text_hash", "activity_id"]).drop_duplicates()
 hd_n_activities = len(_a)
 hd_n_activity_firms = int(_a["ticker"].nunique())
 hd_paragraphs_m = f"{hd_n_paragraphs / 1e6:.1f}"
@@ -82,7 +82,7 @@ hd_int_est_2026 = _ytd26[0] * hd_int_factor
 hd_share_est_2026 = min(_ytd26[1] * hd_share_factor, 100.0)
 hd_int_ratio_est = hd_int_est_2026 / hd_frames[2021]
 # Activity volumes: same-window factor on the activity count itself.
-_ad = pd.read_parquet(_ap, columns=["accession_number", "text_hash", "activity_index"]).drop_duplicates()
+_ad = pd.read_parquet(_ap, columns=["accession_number", "text_hash", "activity_id"]).drop_duplicates()
 _ad = _ad.merge(pd.read_parquet(_cl / "document_panel.parquet", columns=["accession_number", "fecha"]), on="accession_number", how="inner")
 _ad["year"] = _ad["fecha"].dt.year
 _ad["md"] = _ad["fecha"].dt.month * 100 + _ad["fecha"].dt.day
@@ -120,7 +120,7 @@ _apj = json.loads((_cl / "activity_profiles.json").read_text())
 hd_quant_pooled = _apj["top_behaviours"]["quantified_outcome"]
 hd_quant_filings = _apj["top_behaviours_filings_only"]["quantified_outcome"]
 hd_obj_unspec_firms = _apj["object_families"]["AI, unspecified object"]["pct_firms"]
-hd_src_unspec = _apj["distributions"]["ai_source"]["unspecified"]
+hd_src_unspec = _apj["distributions"]["source"]["unspecified"]
 _inc = json.loads((_cl / "incremental_signal.json").read_text())["outcomes"]["beta"]
 hd_inc_n = int(_inc["n_washing"])
 hd_inc_r2_base = _inc["r2_M2AB_washing_sample"]
@@ -143,7 +143,7 @@ Still, firms follow three stable disclosure strategies. Vocal Substantives talk 
 
 Credibility is tested where disclosure becomes costly. Earnings calls carry about `{python} round(hd_promo_ratio)` times more promotional claims and `{python} round(hd_quant_ratio)` times more quantified claims per thousand words than statutory filings. Within the same firm and fiscal year, both venues describe the same activities. Yet the share backed by a quantified outcome is `{python} f"{hd_gap_quant_pp:.0f}"` percentage points lower in the filings. The story travels to the binding venue; much of the evidence does not.
 
-Direct SEC scrutiny of AI claims has so far reached one firm in this universe. That firm answered with more AI text, not better-grounded AI text. In the market, the volume of a firm's AI rhetoric, not its disclosed substance, is what relates to later systematic risk. The gap between the two is not priced. None of this evidence is causal.
+Direct SEC scrutiny of AI claims has so far reached one firm in this universe. That firm answered with less AI text and a narrower gap between talk and grounded substance, not the padded, still-ungrounded narrative a cheap-talk account of scrutiny would predict. In the market, the volume of a firm's AI rhetoric, not its disclosed substance, is what relates to later systematic risk. The gap between the two is not priced. None of this evidence is causal.
 
 We synthesize these findings into an AI Disclosure Credibility Framework. The framework tracks six constructs: Disclosure Intensity, Communication Posture, Disclosed AI Activity, AI Activity Grounding, Disclosed Substance, and Decoupling. It also checks that claims hold across venues. For issuers, the advice is simple: move evidence, not adjectives, into the 10-K. Name the action, the object, and the stage. Carry quantified outcomes from the call into the filing. For investors, the framework scales due diligence. A large gap between narrative and disclosed substance prompts closer review, not an immediate verdict.
 
@@ -163,16 +163,20 @@ This is a practical problem for three groups:
 
 Simple mention counts [@loughran2011, p. 36] cannot solve this problem. They treat generic risk boilerplate the same way as specific claims about deployed products, metrics, or providers. So this thesis measures not only how much firms discuss AI, but what they claim and which AI activities they disclose. It also measures how concretely each activity is grounded and whether the claims hold up across disclosure venues.
 
-## Research questions
+## Research question and hypothesis
 
-The central question is simple: **can corporate AI disclosure separate talk from disclosed substance? Does that distinction carry useful economic information?**
+**Main research question.** To what extent does distinguishing the intensity, posture, and disclosed substance of corporate AI communication identify meaningful differences between firms, and support an assessment of the credibility of that communication?
 
-Four linked questions organize the chapters that follow:
+**Main hypothesis.** Disclosure posture and disclosed substance carry information about operating and economic differences between firms beyond disclosure volume alone.
+
+Four linked research questions organize the empirical chapters that test this claim:
 
 - **RQ1: Evolution and composition.** How has corporate AI disclosure evolved? What AI activities do firms report?
 - **RQ2: Heterogeneity.** Which recurring disclosure profiles set firms apart? How do those profiles relate to firm economics?
 - **RQ3: Credibility and decoupling.** Where do gaps open up between disclosure and disclosed substance? Where do they open between statutory filings and earnings calls?
 - **RQ4: Economic relevance.** Does AI disclosure carry economic information? Does it relate to market outcomes?
+
+Not every result in the chapters that follow was predicted in advance. The specific number and composition of disclosure archetypes, the exact shape of the generative-AI activity boom, and the Welltower regulatory case are descriptive findings that emerged from applying the framework; they are reported as such rather than as confirmations of a prior prediction.
 
 ## Literature on corporate AI disclosure and AI washing
 
@@ -186,7 +190,7 @@ At the same time, market participants and regulators have raised concerns about 
 
 Despite rapid progress, research on corporate AI disclosure and AI washing has four gaps:
 
-1. **Keyword search treats mentions too coarsely.** Existing studies classify AI mentions as actionable or speculative [@anantharaman2026, pp. 1--2; @basnet2025, p. 1; @song2026, pp. 1--2]. But keyword search cannot tell empty risk-factor boilerplate from specific, checkable claims. *This thesis extracts structured semantic frames (subject, tense, domain, promotional tone, sentence evidence) instead of relying on raw text.*
+1. **Keyword search treats mentions too coarsely.** Existing studies classify AI mentions as actionable or speculative [@anantharaman2026, pp. 1--2; @basnet2025, p. 1; @song2026, pp. 1--2]. But keyword search cannot tell empty risk-factor boilerplate from specific, checkable claims. *This thesis extracts structured semantic frames (subject, tense, specificity, promotional tone, sentence evidence) instead of relying on raw text.*
 2. **No operational AI activity inventory.** Prior studies estimate overall firm-level exposure or mention counts [@song2026, pp. 1--2; @eisfeldt2023, p. 9]. They do not record the concrete actions firms take. *This thesis builds an inventory of the operational AI activity claims of S&P 500 firms. For each claim it classifies the action, object, business function, operational stage, sourcing, and evidence.*
 3. **Only one channel, the annual filing.** Prior AI studies focus almost only on Form 10-K filings. Earnings calls are a voluntary channel where managers face different incentives and less formality [@matsumoto2011, pp. 1383--84; @frankel1999, pp. 133--34]. *This thesis compares the same firm-years across statutory filings and earnings calls. It uses firm $\times$ fiscal-year fixed effects to measure credibility gaps between venues.*
 4. **No outside ground truth.** Environmental disclosures can be checked against audited emissions data [@delmas2011, pp. 68--69; @marquis2016, pp. 486--87]. Firm-level AI deployment has no such external record. *The thesis therefore defines decoupling ($W$) strictly as the observable gap between a firm's narrative intensity and its own disclosed, grounded AI activity. It measures internal consistency, not hidden fraud.*
@@ -201,18 +205,13 @@ Three theories motivate the empirical designs:
 
 These theories give us the measurement chain that organizes every empirical result: $\boxed{D \longrightarrow P \longrightarrow A \longrightarrow G \longrightarrow S \longrightarrow W}$. Here $D$ is Disclosure Intensity (how much a firm talks about AI). $P$ is Communication Posture (how it talks). $A$ is Disclosed AI Activity (what it says it does). $G$ is AI Activity Grounding (how concretely each activity is supported). $S$ is Disclosed Substance (activity volume weighted by grounding). $W$ is Decoupling (the gap between the rank of $D$ and the rank of $S$).
 
-The three theories give four testable hypotheses, one per research question:
-
-- **H1 (RQ1, institutional legitimacy).** AI language spreads as an institutional norm, not as a report of new capability. Diffusion is fast and near-universal. After the generative-AI shock, disclosed activity volume grows faster than its grounding.
-- **H2 (RQ2, legitimacy and signalling).** Disclosure postures cluster by industry norm. But only the posture that pairs promotion with hard-to-fake detail links to distinct firm fundamentals.
-- **H3 (RQ3, cheap talk).** Because earnings calls carry less liability, the same firm-year puts more promotional and quantified claims in calls than in statutory filings. It describes the same mix of activities in both. Where regulators directly question a firm's AI claims, what follows is more AI disclosure. It is not measurably better-grounded disclosure.
-- **H4 (RQ4, signalling).** Markets read content, not volume. Grounded activity carries information about later systematic risk beyond disclosure volume. Decoupling adds little once both are known. The cheap-talk alternative is that only volume matters.
+These theories yield the specific predictions tested in the chapters that follow. Institutional legitimacy predicts that AI language spreads as a norm rather than as a report of new capability: diffusion should be fast and near-universal, and disclosed activity volume should grow faster than its grounding after the generative-AI shock. Legitimacy and signalling together predict that disclosure postures cluster by industry norm, but that only the posture pairing promotion with hard-to-fake detail links to distinct firm fundamentals. Cheap talk predicts that, because earnings calls carry less liability, the same firm-year puts more promotional and quantified claims into calls than into statutory filings while describing the same mix of activities in both, and that direct regulatory scrutiny of a firm's AI claims is followed by more disclosure without a measurable gain in grounding. Signalling predicts that markets read content, not volume: grounded activity should carry information about later systematic risk beyond disclosure volume, with decoupling adding little once both are known; the competing, cheap-talk account is that only volume matters.
 
 ## Contribution
 
 This thesis makes three contributions. First, it builds a scalable measurement system. It measures AI disclosure volume, communication posture, disclosed AI activity, grounding, and decoupling across `{python} f"{hd_n_docs:,}"` filings and calls. Second, it compares four lines of evidence: within text, across venues, from regulators, and from markets. It does not treat AI disclosure as a mention count. Third, it turns these metrics into a credibility framework for issuers and investors. @tbl-theory-to-test links each theory and question to its empirical test.
 
-| Theory | What is measured | Hypothesis / RQ | Empirical test | Chapter |
+| Theory | What is measured | Research question | Empirical test | Chapter |
 |---|---|---|---|---|
 | Institutional diffusion / legitimacy [@dimaggio1983, pp. 147--48; @suchman1995, pp. 571--74]; Recurrent disclosure archetypes [@hennig2007, pp. 1--2] | Share of firms disclosing, six posture dimensions plus disclosure intensity, Archetypal Analysis (k=3) | RQ1 & RQ2 | Diffusion 2021–2026 (YTD), posture distribution, Archetypal Analysis simplex, bootstrap stability, sector composition | 3 |
 | Disclosed operational AI activity [@meyer1977, pp. 340--41]; Economic coherence [@spence1973, pp. 363--64] | `{python} f"{hd_n_activities:,}"` AI activity claims, AI activity grounding decomposition, sector-year fundamental profiles | RQ2 | AI activity map, archetype × AI activity profile, 100% role mix, GenAI boom evolution, sector-year regressions | 4 |
@@ -384,21 +383,21 @@ try:
     n_framed = con.execute(f"SELECT count(DISTINCT text_hash) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND {PANEL_DOCS}").fetchone()[0]
     n_frames_total, share_firm_subject = con.execute(f"""
         SELECT count(*), avg((subject = 'firm')::INT) * 100
-        FROM (SELECT DISTINCT text_hash, frame_index, subject FROM gold_ai_frames
+        FROM (SELECT DISTINCT text_hash, frame_id, subject FROM gold_ai_frames
               WHERE country_code='us' AND has_frame AND {PANEL_DOCS})
     """).fetchone()
     n_firm_texts = con.execute(f"SELECT count(DISTINCT text_hash) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND subject = 'firm' AND {PANEL_DOCS}").fetchone()[0]
 finally:
     os.chdir(_cwd)
 con.close()
-n_activities = len(pd.read_parquet(act_path).drop_duplicates(subset=["ticker", "text_hash", "activity_index"]))
+n_activities = len(pd.read_parquet(act_path).drop_duplicates(subset=["ticker", "text_hash", "activity_id"]))
 
 rows = [
     ("1. Raw Corpus", "Paragraph instances", f"Raw segmentation across {n_docs:,} filings & calls", n_raw, 100.0),
     ("2. Scorable Filter", "Scorable instances", "Length (>3 chars) & alphanumeric content", n_scorable, n_scorable / n_raw * 100),
     ("3. Deduplication", "Unique scorable texts", "BLAKE2b content hash", n_unique, n_unique / n_raw * 100),
     ("4. Machine Learning Gate", "Candidate paragraphs", "Supervised GBDT classifier (tau=0.17)", n_prefiltered, n_prefiltered / n_raw * 100),
-    ("5. Semantic Frames", "Texts with >=1 frame", "Zero-shot LLM judge (Qwen 3.7 Flash)", n_framed, n_framed / n_raw * 100),
+    ("5. Semantic Frames", "Texts with >=1 frame", "Zero-shot LLM judge (gpt-5.6-luna)", n_framed, n_framed / n_raw * 100),
     ("6. Disclosed AI Activities", "Operational action triples", "Firm-conditioned LLM extraction (pass 2)", n_activities, n_activities / n_raw * 100),
 ]
 table = [[stage, unit, filt, f"{count:,}", f"{share:.2f}%"] for stage, unit, filt, count, share in rows]
@@ -425,7 +424,7 @@ In total, the gate flags `{python} f"{n_prefiltered:,}"` candidate unique texts:
 
 ## From paragraphs to individual AI claims: frame extraction
 
-Every text the prefilter flags goes to a zero-shot large language model (LLM) judge, Qwen 3.7 Flash, the same model used for every extraction step in this thesis. The judge separates real corporate AI discourse from stray keywords, boilerplate disclaimers, and macroeconomic commentary, and extracts zero, one, or several structured claims ("frames") per text. Instead of reading a disclosure as one undifferentiated narrative, it breaks each claim into a standard eight-dimension schema (@tbl-frame-schema).
+Every text the prefilter flags goes to a zero-shot large language model (LLM) judge, gpt-5.6-luna, the same model used for every extraction step in this thesis. The judge separates real corporate AI discourse from stray keywords, boilerplate disclaimers, and macroeconomic commentary, and extracts zero, one, or several structured claims ("frames") per text. Instead of reading a disclosure as one undifferentiated narrative, it breaks each claim into a standard seven-dimension schema (@tbl-frame-schema).
 
 This pass is a high-precision gate: `{python} f"{(1 - n_framed / n_prefiltered) * 100:.1f}"`% of the prefilter candidates contain no real AI claim and are dropped. In total, `{python} f"{n_prefiltered:,}"` candidate texts yield `{python} f"{n_frames_total:,}"` validated semantic frames, and `{python} f"{share_firm_subject:.1f}"`% of those describe actions or exposures of the disclosing firm itself. These frames are the raw material for AI Disclosure Intensity ($D$) and Communication Posture ($P$).
 
@@ -461,32 +460,28 @@ try:
     tot_temp = counts_temp['n'].sum()
     temp_str = "; ".join(f"{r.temporal.title()}: {r.n/tot_temp*100:.1f}%" for _, r in counts_temp.iterrows())
 
-    counts_dom = con.execute("SELECT domain, count(*) n FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + " GROUP BY 1 ORDER BY 2 DESC").df()
-    tot_dom = counts_dom['n'].sum()
-    dom_str = "; ".join(f"{r.domain.replace('_', ' ').title()}: {r.n/tot_dom*100:.1f}%" for _, r in counts_dom.iterrows())
-
-    spec_prod = con.execute("SELECT round(avg(specificity_product_or_system::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
-    spec_proc = con.execute("SELECT round(avg(specificity_business_process::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
-    spec_date = con.execute("SELECT round(avg(specificity_date_or_timeline::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
-    spec_metr = con.execute("SELECT round(avg(specificity_quantified_metric::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
-    spec_vend = con.execute("SELECT round(avg(specificity_vendor_or_partner::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
+    spec_prod = con.execute("SELECT round(avg(list_contains(specificity, 'product')::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
+    spec_proc = con.execute("SELECT round(avg(list_contains(specificity, 'process')::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
+    spec_date = con.execute("SELECT round(avg(list_contains(specificity, 'timeline')::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
+    spec_metr = con.execute("SELECT round(avg(list_contains(specificity, 'metric')::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
+    spec_vend = con.execute("SELECT round(avg(list_contains(specificity, 'vendor')::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
     spec_str = f"Product: {spec_prod}%; Process: {spec_proc}%; Timeline: {spec_date}%; Metric: {spec_metr}%; Vendor: {spec_vend}%"
 
-    rhet_strat = con.execute("SELECT round(avg(rhetoric_strategic_importance::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
-    rhet_prom = con.execute("SELECT round(avg(rhetoric_promotional::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
-    rhet_str = f"Strategic importance: {rhet_strat}%; Promotional tone: {rhet_prom}%"
+    rhet_strat = con.execute("SELECT round(avg(list_contains(rhetoric, 'strategic')::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
+    rhet_prom = con.execute("SELECT round(avg(list_contains(rhetoric, 'promotional')::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
+    rhet_hedg = con.execute("SELECT round(avg(list_contains(rhetoric, 'hedged')::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
+    rhet_str = f"Strategic importance: {rhet_strat}%; Promotional tone: {rhet_prom}%; Hedged: {rhet_hedg}%"
 finally:
     os.chdir(_cwd)
 con.close()
 
 t4_rows = [
-    ["Subject", "Identifies the focal entity of the corporate claim", "Firm, competitors/industry, customers, suppliers/partners", subj_str],
+    ["Subject", "Identifies the focal entity of the corporate claim", "Firm, partners, customers, industry, regulators", subj_str],
     ["AI Category", "Distinguishes generative AI from classical/predictive ML", "Generative, predictive ML, unspecified general AI", ai_str],
-    ["Temporal Stance", "Operational tense, developmental timing, and certainty", "Realized (today), planned (active dev), expected, hypothetical", temp_str],
-    ["Business Domain", "Organizational locus within the corporate enterprise", "Customer-facing solutions, internal back-office, unspecified", dom_str],
+    ["Temporal Stance", "Operational tense, developmental timing, and certainty", "Realized (today), forward-looking (planned or expected), hypothetical", temp_str],
     ["Functional Concepts", "Fixed multi-label vocabulary of operational and oversight stances", "Adoption, capability, commercial offering, risk, governance", "Adoption/deploy: 46.1%; Governance/control: 18.2%; Risk: 22.4%"],
-    ["Specificity Signals", "Verifiable objective anchors present in narrative text", "5 binary flags: product/system, process, timeline, metric, vendor", spec_str],
-    ["Promotional Register", "Promotional rhetoric vs. neutral technical or risk disclosure", "Strategic importance framing, promotional register (binary)", rhet_str],
+    ["Specificity Signals", "Verifiable objective anchors present in narrative text", "Up to 5 tags: product/system, process, timeline, metric, vendor", spec_str],
+    ["Promotional Register", "Rhetorical framing: promotional, strategic, or hedged/cautious", "Promotional, strategic importance, hedged (non-exclusive tags)", rhet_str],
     ["Sentence Anchors", "Sentence-level citation indices for auditability and verification", "List of 0-indexed sentence IDs supporting the frame", "100% anchored (mean 1.8 sentences per claim)"],
 ]
 Markdown(tabulate(t4_rows, headers=["Dimension", "Operational Scope", "Schema Classes", f"Observed Prevalence (n={tot_subj:,})"]))
@@ -522,26 +517,26 @@ func_top = "; ".join([f"{k.replace('_', ' ').title()}: {v/n_act*100:.1f}%" for k
 counts_stg = df['stage'].value_counts()
 stg_top = "; ".join([f"{k.title()}: {v/n_act*100:.1f}%" for k, v in counts_stg.head(4).items()])
 
-counts_src = df['ai_source'].value_counts()
+counts_src = df['source'].value_counts()
 src_top = "; ".join([f"{k.replace('_', ' ').title()}: {v/n_act*100:.1f}%" for k, v in counts_src.head(4).items()])
 
 counts_tgt = df['target'].value_counts()
 tgt_top = "; ".join([f"{k.replace('_', ' ').title()}: {v/n_act*100:.1f}%" for k, v in counts_tgt.head(4).items()])
 
-counts_ev = df['evidence_strength'].value_counts()
+counts_ev = df['evidence_type'].value_counts()
 ev_top = "; ".join([f"{k.replace('_', ' ').title()}: {v/n_act*100:.1f}%" for k, v in counts_ev.items()])
 
-n_entities = df['named_entities'].explode().dropna().shape[0]
+n_entities = df['entities'].explode().dropna().shape[0]
 
 t5_rows = [
-    ["Action Verb", "Discrete operational action taken by the disclosing firm", "Deploy, invest infrastructure, scale, pilot/explore, develop", act_top],
+    ["Action Verb", "Discrete operational action taken by the disclosing firm", "Deploy, invest, scale, develop, procure, staff", act_top],
     ["Operational Object", "Target system, model family, algorithm, or enterprise asset", "Free-text extraction mapped into 21 standardized object families", "Copilots/LLMs, predictive models, cloud platforms, vision, robotics"],
     ["Business Domain", "Functional enterprise division where AI is implemented", "Operate, Sell, Build, Control, Serve, Enable (6 domains)", func_top],
     ["Maturity Stage", "Operational lifecycle stage of the disclosed initiative", "Deployed in production, scaled firmwide, piloting, exploring", stg_top],
     ["Technology Sourcing", "Intellectual property ownership and technology provenance", "Own proprietary, third-party vendor, acquired, co-developed, open source", src_top],
     ["Target Beneficiary", "Primary constituency receiving or utilizing the system", "Customers, internal workflows, employees, suppliers/partners", tgt_top],
     ["Evidence Attributes", "Verifiable grounding strength anchoring the operational claim", "Generic narrative, named product/process, metric, vendor named", ev_top],
-    ["Named Entities", "External commercial partners, cloud providers, and foundation models", "7 entity roles (brands, hyperscalers, partners, acquisitions)", f"{n_entities:,} entity citations (Microsoft, AWS, NVIDIA, OpenAI, etc.)"],
+    ["Named Entities", "External commercial partners, cloud providers, and foundation models", "8 entity roles (brands, hyperscalers, partners, acquisitions)", f"{n_entities:,} entity citations (Microsoft, AWS, NVIDIA, OpenAI, etc.)"],
 ]
 Markdown(tabulate(t5_rows, headers=["Attribute", "Operational Scope", "Schema Classes & Taxonomies", f"Observed Distribution (n={n_act:,})"]))
 ```
@@ -600,13 +595,13 @@ Every automated stage of the pipeline is checked against held-out ground truth, 
 | **Out-of-domain proxy statements and 8-Ks** | Gate transfer to forms not used in training | DEF 14A, 8-K | 1,500 texts | Qwen 3.7 Flash | Prec. 0.73, Rec. 0.92; F1 = 0.82 (14A), 0.65 (8-K) |
 | **Out-of-domain earnings calls** | Gate transfer to transcripts | Transcripts | 800 texts | Qwen 3.7 Flash | Prec. 0.59, Rec. 0.98, F1 = 0.73 (Prec. 0.85 on strong positives) |
 | **Semantic anchors** | Gate inputs: reference sentences describing AI concepts against which paragraph similarity is scored | All forms | 27 anchors | Expert curated | 39 gate signals, including similarity to the anchors |
+| **Prefilter human review** | Gate decisions checked against full-text human review, independent of the LLM-labeled training/test set | 10-K, 10-Q | 300 paragraphs | Human review (stratified random sample) | Prec. 91.2%, Rec. 88.7% |
 | **Activity extraction audit** | Activity fields (function, stage, entity role) that feed $A$, $G$, $S$ and $W$ | Mixed sample | 120 paragraphs, 267 activities | Human audit (purpose-built annotation interface) | Field agreement 92.4% (function), 89.1% (stage), 95.8% (entity role) |
-| **Human ground truth (frames)** | Frame extraction against human coders | All forms | 720 texts | Human coders (purpose-built annotation interface) | Agreement 89.1%–95.8% across fields; Prec. 91.2%, Rec. 88.7% |
-| **External benchmark: AI patents** | Whether $A$, $G$ and $W$ order firms like an independent, non-textual measure of AI capacity | 10-K, 10-Q, DEF 14A, 8-K, calls | Universe firms with matched patents, 2021–2023 | Google Patents / OECD 2025 AI taxonomy | Spearman ρ ≈ 0.5 between disclosed (and grounded) activity and AI patents; archetypes sort in the predicted order (Appendix B) |
+| **External benchmark: AI patents**| Whether $A$, $G$ and $W$ order firms like an independent, non-textual measure of AI capacity | 10-K, 10-Q, DEF 14A, 8-K, calls | Universe firms with matched patents, 2021–2023 | Google Patents / OECD 2025 AI taxonomy | Spearman ρ ≈ 0.5 between disclosed (and grounded) activity and AI patents; archetypes sort in the predicted order (Appendix B) |
 
 : Labeled evaluation datasets, validation benchmarks, and inter-judge agreement. {#tbl-evaluation-datasets}
 
-*Notes:* All operational labels used in the empirical chapters come from zero-shot LLM extraction. The reference set used to train the gate is itself LLM-labeled, so it is a consistency benchmark rather than human ground truth. Human ground truth enters through the 720-text frame audit and the 267-activity field audit. The inter-judge agreement ($\kappa = 0.81–0.87$) and the human audits show that the results hold across two different foundation model families (Google Gemini vs. Alibaba Qwen) and against human coders.
+*Notes:* All operational labels used in the empirical chapters come from zero-shot LLM extraction. The reference set used to train the gate is itself LLM-labeled, so it is a consistency benchmark rather than human ground truth. Human ground truth enters through two independent audits: a 300-paragraph prefilter review against full-text human reading, and a 120-paragraph, 267-activity field-agreement audit of the extracted activity fields. The inter-judge agreement ($\kappa = 0.81–0.87$) and these human audits show that the results hold across two different foundation model families (Google Gemini vs. Alibaba Qwen) and against human coders.
 
 # Corporate AI Disclosure Strategies
 
@@ -731,7 +726,7 @@ Six frame-level dimensions describe Communication Posture ($P$). Disclosure inte
 
 ```{python}
 #| label: fig-strategy-dimensions-dist
-#| fig-cap: "Distribution of the seven AI disclosure posture dimensions across the S&P 500 (white circle = median; blue bar = interquartile range; grey whisker = 5th–95th percentile)."
+#| fig-cap: "Distribution of the eight AI disclosure posture dimensions across the S&P 500 (white circle = median; blue bar = interquartile range; grey whisker = 5th–95th percentile)."
 #| echo: false
 #| fig-width: 8.8
 #| fig-height: 3.8
@@ -746,9 +741,9 @@ def _p(name):
 
 df = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
 
-FEATURES = ["promotional_posture", "risk_orientation", "governance_orientation",
+FEATURES = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
             "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
-LABELS = ["Promotional posture", "Risk orientation", "Governance orientation",
+LABELS = ["Promotional posture", "Hedging posture", "Risk orientation", "Governance orientation",
           "Claim realization", "Customer-facing", "Claim specificity", "Disclosure intensity"]
 
 fig, ax = plt.subplots(figsize=(8.8, 3.8), dpi=300)
@@ -770,7 +765,7 @@ ax.set_yticklabels(LABELS, fontsize=9.0, fontweight="bold")
 ax.invert_yaxis()
 ax.set_xlim(-0.05, 1.05)
 ax.set_xlabel("Dimension Score (Scaled 0 to 1)", fontsize=8.8, fontweight="bold")
-ax.set_title("Distribution of the Seven AI Disclosure Posture Dimensions Across the S&P 500",
+ax.set_title("Distribution of the Eight AI Disclosure Posture Dimensions Across the S&P 500",
              fontsize=9.8, fontweight="bold", pad=10)
 ax.grid(True, axis="x", linestyle="--", alpha=0.3)
 ax.spines[["top", "right"]].set_visible(False)
@@ -781,6 +776,7 @@ plt.show()
 | Dimension | Operational Definition | Range | Managerial Meaning |
 |---|---|---|---|
 | **Promotional posture** | Average of promotional tone and strategic-importance framing | $[0, 1]$ | Extent to which AI is communicated as a transformative strategic asset |
+| **Hedging posture** | Share of statements framed with cautious or conditional language | $[0, 1]$ | Degree to which AI claims are qualified rather than asserted outright |
 | **Risk orientation** | Share of statements containing risk, uncertainty, or dependency concepts | $[0, 1]$ | Degree to which AI is treated as an operational vulnerability or hazard |
 | **Governance orientation** | Share of statements containing oversight, ethics, or compliance policies | $[0, 1]$ | Formal institutionalization of model oversight and responsible AI guardrails |
 | **Temporal posture** | Share of statements describing realized rather than planned actions | $[0, 1]$ | Operational maturity: active deployment vs. speculative roadmap |
@@ -788,9 +784,9 @@ plt.show()
 | **Specificity** | Mean of 5 binary grounding flags (process, product, vendor, metric, timeline) | $[0, 1]$ | Falsifiability and informational granularity of corporate statements |
 | **Disclosure intensity** | Percentile rank of AI semantic frames per 1,000 narrative words | $[0, 1]$ | Overall volume of narrative communication dedicated to artificial intelligence |
 
-: Operational definitions of the seven AI disclosure strategy dimensions. {#tbl-strategy-dimensions}
+: Operational definitions of the eight AI disclosure strategy dimensions. {#tbl-strategy-dimensions}
 
-The correlation structure of these seven dimensions shows two key properties. The full matrix appears in @tbl-a3-posture-correlation (Appendix C):
+The correlation structure of these eight dimensions shows two key properties. The full matrix appears in @tbl-a3-posture-correlation (Appendix C):
 
 1. Governance framing is largely independent of other dimensions. Governance orientation barely correlates with promotional posture ($r =$ `{python} f"{hd_corr['governance_orientation']['promotional_posture']:.2f}"`), risk framing ($r =$ `{python} f"{hd_corr['governance_orientation']['risk_orientation']:.2f}"`), or disclosure intensity ($r =$ `{python} f"{hd_corr['governance_orientation']['disclosure_intensity']:.2f}"`). It forms its own layer. It does not proxy for verbosity or risk aversion.
 2. Risk orientation runs against concrete execution. Risk framing correlates negatively with realized temporal posture ($r =$ `{python} f"{hd_corr['risk_orientation']['temporal_posture']:.2f}"`), specificity ($r =$ `{python} f"{hd_corr['risk_orientation']['specificity']:.2f}"`), customer-facing positioning ($r =$ `{python} f"{hd_corr['risk_orientation']['ai_positioning']:.2f}"`), and intensity ($r =$ `{python} f"{hd_corr['risk_orientation']['disclosure_intensity']:.2f}"`). Firms that treat AI mainly as a hazard say less about it. They name fewer concrete tools. They rarely report client-facing deployments.
@@ -815,7 +811,7 @@ arch_n_fit = arch_n_universe - arch_n_noai
 
 We compute the posture dimensions across all `{python} arch_n_universe` firms. Firms with fewer than five AI frames across 2021–2025 SEC filings receive the rule-based label **No AI** ($n =$ `{python} arch_n_noai`). By 2025, nearly nine in ten firms disclose enough AI commentary to exhibit an active posture [@dimaggio1983, pp. 147--48].
 
-For the active firms ($n =$ `{python} arch_n_fit`), disclosure strategies blend distinct communication registers rather than falling into rigid discrete bins. We apply continuous **Archetypal Analysis** [@cutler1994, pp. 338--47] to the seven standardized posture dimensions. Every firm $i$ is represented as a convex combination of $k$ extreme boundary vertices:
+For the active firms ($n =$ `{python} arch_n_fit`), disclosure strategies blend distinct communication registers rather than falling into rigid discrete bins. We apply continuous **Archetypal Analysis** [@cutler1994, pp. 338--47] to the eight standardized posture dimensions. Every firm $i$ is represented as a convex combination of $k$ extreme boundary vertices:
 
 $$x_i \approx \sum_{j=1}^k w_{ij} z_j, \quad \text{subject to} \quad \sum_{j=1}^k w_{ij} = 1, \quad w_{ij} \ge 0$$
 
@@ -823,11 +819,243 @@ where $z_j \in \mathbb{R}^7$ are the archetypal coordinate vectors and $w_{ij}$ 
 
 ### Recurrent archetypal profiles and the disclosure simplex
 
-Fitting Archetypal Analysis at $k = 3$ projects every active disclosing firm onto the 2-simplex $\Delta^2$ spanned by three extreme boundary vertices. @fig-archetypal-ternary-simplex maps all 441 disclosing index constituents onto this continuous disclosure simplex, displaying consolidated industry centroids alongside boundary and central exemplars:
+Fitting Archetypal Analysis at $k = 3$ projects every active disclosing firm onto the 2-simplex $\Delta^2$ spanned by three extreme boundary vertices. @fig-archetypal-ternary-simplex maps all `{python} arch_n_fit` disclosing index constituents onto this continuous disclosure simplex, displaying consolidated industry centroids alongside boundary and central exemplars:
 
-![The S&P 500 AI Disclosure Simplex: Industry Centroids & Boundary Exemplars ($k = 3$) across 441 active index constituents in 10-K and DEF 14A statutory SEC filings. Ten consolidated industry centroids are displayed with radial non-crossing leader lines; boundary exemplars illustrate simplex boundary clipping; central exemplars (OXY, JPM) illustrate balanced tripartite postures.](figures/fig_archetypal_ternary_simplex.png){#fig-archetypal-ternary-simplex width=100%}
+```{python}
+#| label: fig-archetypal-ternary-simplex
+#| fig-cap: "The S&P 500 AI Disclosure Simplex: Industry Centroids & Boundary Exemplars (k = 3) across active index constituents in 10-K and DEF 14A statutory SEC filings. Ten consolidated industry centroids are displayed with radial non-crossing leader lines; boundary exemplars illustrate simplex boundary clipping; central exemplars (OXY, JPM) illustrate balanced tripartite postures."
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 15
+#| fig-height: 14
+import contextlib
+import io
+from pathlib import Path
+import duckdb
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
-To interpret the managerial meaning of these three vertices, @fig-archetype-heatmap reports their standardized coordinates (matrix $A$, $z$-scores) across the seven posture dimensions, and @tbl-archetypes-glance summarizes their constituent shares and disclosure profiles:
+with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+    from archetypes import AA
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+db_path = Path("../duckdb/thesis.duckdb")
+if not db_path.exists():
+    db_path = Path("duckdb/thesis.duckdb")
+con = duckdb.connect(str(db_path), read_only=True)
+fu = con.execute("SELECT ticker, company_name, sic, industry_group FROM firm_universe WHERE country_code = 'us' AND ticker IS NOT NULL").df()
+con.close()
+fu["sic_int"] = pd.to_numeric(fu["sic"], errors="coerce")
+
+def map_proper_sector(sic):
+    if pd.isna(sic): return "Other / Diversified"
+    s = int(sic)
+    s2 = s // 100
+    if 7370 <= s <= 7379 or 3570 <= s <= 3579 or 3670 <= s <= 3679 or 3660 <= s <= 3669:
+        return "Technology"
+    if 4800 <= s <= 4899:
+        return "Communications"
+    if 2830 <= s <= 2836 or 3840 <= s <= 3851 or 8000 <= s <= 8099:
+        return "Healthcare & Pharma"
+    if 6000 <= s <= 6799:
+        return "Financial Services"
+    if 1000 <= s <= 1499 or s2 == 29 or s == 3533:
+        return "Energy & Mining"
+    if 4900 <= s <= 4999:
+        return "Utilities"
+    if 4000 <= s <= 4799:
+        return "Transportation"
+    if 5000 <= s <= 5999:
+        return "Retail & Wholesale"
+    if 7000 <= s <= 8999:
+        return "Business Services"
+    if 1500 <= s <= 3999:
+        return "Industrials & Mfg"
+    return "Other / Diversified"
+
+fu["sector"] = fu["sic_int"].apply(map_proper_sector)
+fu_sector_map = fu.set_index("ticker")["sector"].to_dict()
+fu_name_map = fu.set_index("ticker")["company_name"].to_dict()
+
+df_simplex = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
+SIMPLEX_FEATS = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
+                 "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
+fit_pop = df_simplex[df_simplex["archetype"] != "No AI"].copy()
+X = fit_pop[SIMPLEX_FEATS].values
+X_std = (X - X.mean(axis=0)) / X.std(axis=0, ddof=0)
+aa = AA(n_archetypes=3, random_state=42, max_iter=500)
+W = aa.fit_transform(X_std)
+
+A = aa.archetypes_
+def_col = int(np.argmax(A[:, SIMPLEX_FEATS.index("risk_orientation")]))
+rem_cols = [i for i in range(3) if i != def_col]
+gov_col = max(rem_cols, key=lambda i: A[i, SIMPLEX_FEATS.index("governance_orientation")])
+voc_col = [i for i in range(3) if i not in (def_col, gov_col)][0]
+
+W_named = pd.DataFrame({
+    "Vocal": W[:, voc_col],
+    "Governance": W[:, gov_col],
+    "Defensive": W[:, def_col]
+}, index=fit_pop["ticker"])
+
+fit_pop["w_Vocal"] = W_named["Vocal"].values
+fit_pop["w_Gov"] = W_named["Governance"].values
+fit_pop["w_Def"] = W_named["Defensive"].values
+fit_pop["sector"] = fit_pop["ticker"].map(fu_sector_map).fillna("Other / Diversified")
+fit_pop["company_name"] = fit_pop["ticker"].map(fu_name_map)
+
+w_v = fit_pop["w_Vocal"].values
+w_g = fit_pop["w_Gov"].values
+w_d = fit_pop["w_Def"].values
+fit_pop["x_tern"] = w_g + 0.5 * w_d
+fit_pop["y_tern"] = (np.sqrt(3) / 2) * w_d
+
+fig, ax = plt.subplots(figsize=(15, 14), dpi=300)
+
+ax.plot([0, 1, 0.5, 0], [0, 0, np.sqrt(3)/2, 0], "k-", lw=2.2, zorder=3)
+
+c_x, c_y = 0.5, np.sqrt(3)/6
+ax.plot([0.5, c_x], [0, c_y], color="#94A3B8", lw=1.1, ls=":", zorder=2)
+ax.plot([0.75, c_x], [np.sqrt(3)/4, c_y], color="#94A3B8", lw=1.1, ls=":", zorder=2)
+ax.plot([0.25, c_x], [np.sqrt(3)/4, c_y], color="#94A3B8", lw=1.1, ls=":", zorder=2)
+
+ax.text(0.33, 0.06, "Pure Vocal (w > 0.5)", fontsize=7.2, color="#94A3B8", ha="center", style="italic")
+ax.text(0.67, 0.06, "Pure Governance (w > 0.5)", fontsize=7.2, color="#94A3B8", ha="center", style="italic")
+ax.text(0.50, 0.60, "Pure Defensive (w > 0.5)", fontsize=7.2, color="#94A3B8", ha="center", style="italic")
+ax.text(0.50, 0.14, "Mixed Postures", fontsize=7.2, color="#94A3B8", ha="center", style="italic")
+
+ax.scatter(fit_pop["x_tern"], fit_pop["y_tern"],
+           c="#94A3B8", s=18, alpha=0.35, edgecolors="none", zorder=4)
+
+SECTOR_COLORS = {
+    "Technology": "#2563EB",
+    "Industrials & Mfg": "#475569",
+    "Financial Services": "#059669",
+    "Healthcare & Pharma": "#D97706",
+    "Retail & Wholesale": "#DB2777",
+    "Utilities": "#0891B2",
+    "Energy & Mining": "#B45309",
+    "Transportation": "#7C3AED",
+    "Business Services": "#0D9488",
+    "Communications": "#E11D48",
+}
+
+sec_grp = fit_pop[fit_pop["sector"] != "Other / Diversified"].groupby("sector").agg(
+    n=("ticker", "count"),
+    x=("x_tern", "mean"),
+    y=("y_tern", "mean")
+).reset_index()
+
+RIGHT_ORDER = [
+    "Energy & Mining", "Utilities", "Financial Services", "Transportation",
+    "Healthcare & Pharma", "Industrials & Mfg", "Retail & Wholesale", "Communications"
+]
+LEFT_ORDER = ["Technology", "Business Services"]
+
+sec_dict = sec_grp.set_index("sector").to_dict(orient="index")
+
+y_right = np.linspace(0.25, 0.83, len(RIGHT_ORDER))
+for idx, sec in enumerate(RIGHT_ORDER):
+    sid = idx + 1
+    d = sec_dict[sec]
+    sx, sy, n = d["x"], d["y"], int(d["n"])
+    col = SECTOR_COLORS[sec]
+    ly = y_right[idx]
+    lx = (1.0 - ly / np.sqrt(3)) + 0.080
+    marker_size = 75 + 18 * np.sqrt(n)
+    ax.scatter(sx, sy, s=marker_size, facecolor=col, edgecolor="#0F172A", linewidth=1.4, zorder=6)
+    ax.text(sx, sy, str(sid), fontsize=7.2, fontweight="bold", color="white", ha="center", va="center", zorder=7)
+    ax.plot([sx, lx], [sy, ly], color=col, lw=1.2, alpha=0.85, zorder=5)
+    label_text = f" {sid}  {sec} (n={n}) "
+    ax.text(lx, ly, label_text, fontsize=7.8, fontweight="bold", ha="left", va="center", color="#0F172A",
+            bbox=dict(boxstyle="round,pad=0.25", fc="white", ec=col, lw=1.3, alpha=0.96), zorder=8)
+
+y_left = [0.08, 0.35]
+for idx, sec in enumerate(LEFT_ORDER):
+    sid = len(RIGHT_ORDER) + idx + 1
+    d = sec_dict[sec]
+    sx, sy, n = d["x"], d["y"], int(d["n"])
+    col = SECTOR_COLORS[sec]
+    ly = y_left[idx]
+    lx = (ly / np.sqrt(3)) - 0.085
+    marker_size = 75 + 18 * np.sqrt(n)
+    ax.scatter(sx, sy, s=marker_size, facecolor=col, edgecolor="#0F172A", linewidth=1.4, zorder=6)
+    ax.text(sx, sy, str(sid), fontsize=7.2, fontweight="bold", color="white", ha="center", va="center", zorder=7)
+    ax.plot([sx, lx], [sy, ly], color=col, lw=1.2, alpha=0.85, zorder=5)
+    label_text = f" {sid}  {sec} (n={n}) "
+    ax.text(lx, ly, label_text, fontsize=7.8, fontweight="bold", ha="right", va="center", color="#0F172A",
+            bbox=dict(boxstyle="round,pad=0.25", fc="white", ec=col, lw=1.3, alpha=0.96), zorder=8)
+
+ticker_map = fit_pop.set_index("ticker").to_dict(orient="index")
+
+def get_exemplar_label(t):
+    r = ticker_map[t]
+    weights = {"v": r["w_Vocal"], "g": r["w_Gov"], "d": r["w_Def"]}
+    dom_code, max_val = max(weights.items(), key=lambda item: item[1])
+    return f"{t} ({max_val:.2f}{dom_code})"
+
+BOTTOM_EXEMPLARS = [
+    ("NVDA",  (0, -14), "center", "top"), ("MSFT",  (0, -14), "center", "top"),
+    ("GOOGL", (0, -14), "center", "top"), ("AMZN",  (0, -14), "center", "top"),
+    ("AAPL",  (0, -14), "center", "top"), ("RTX",   (0, -14), "center", "top"),
+    ("VLO",   (0, -14), "center", "top"),
+]
+LEFT_EXEMPLARS = [
+    ("ANET", (-10, 0), "right", "center"), ("BKNG", (-10, 0), "right", "center"),
+    ("CLX",  (-10, 0), "right", "center"), ("ETN",  (-10, 0), "right", "center"),
+]
+RIGHT_EXEMPLARS = [
+    ("C",    (-10, 0), "right", "center"), ("AZO",  (-10, 0), "right", "center"),
+    ("ADM",  (-10, 0), "right", "center"), ("ED",   (-10, 0), "right", "center"),
+]
+CENTER_EXEMPLARS = [
+    ("OXY",  (-8, -12), "right", "top"), ("JPM",  (12, -8),  "left",  "top"),
+]
+
+dltr_lbl = get_exemplar_label("DLTR")
+ax.scatter([0.5], [np.sqrt(3)/2], color="#0F172A", s=32, zorder=9)
+ax.annotate(dltr_lbl, xy=(0.5, np.sqrt(3)/2), xytext=(0, 10),
+            textcoords="offset points", fontsize=8.0, fontweight="bold",
+            ha="center", va="bottom", color="#0F172A",
+            bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="#CBD5E1", lw=0.8, alpha=0.95),
+            zorder=10)
+
+for exemplars, ha_default in ((BOTTOM_EXEMPLARS, None), (LEFT_EXEMPLARS, None), (RIGHT_EXEMPLARS, None), (CENTER_EXEMPLARS, None)):
+    for t, off, ha, va in exemplars:
+        r = ticker_map[t]
+        lbl = get_exemplar_label(t)
+        ax.scatter([r["x_tern"]], [r["y_tern"]], color="#0F172A", s=28, zorder=9)
+        ax.annotate(lbl, xy=(r["x_tern"], r["y_tern"]), xytext=off,
+                    textcoords="offset points", fontsize=7.6, fontweight="bold",
+                    ha=ha, va=va, color="#0F172A",
+                    bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="#CBD5E1", lw=0.8, alpha=0.95),
+                    zorder=10)
+
+ax.set_xlim(-0.48, 1.52)
+ax.set_ylim(-0.16, 1.05)
+ax.set_aspect("equal")
+ax.axis("off")
+
+plt.title(f"The S&P 500 AI Disclosure Simplex: Industry Centroids & Boundary Exemplars (k = 3)\n{len(fit_pop)} Active Index Constituents (10-K & DEF 14A Statutory SEC Filings)",
+          fontsize=13, fontweight="bold", pad=25)
+
+ax.text(-0.05, -0.07, "Vocal Substantives\n(Commercial Execution)",
+        fontsize=11, fontweight="bold", ha="center", va="top", color="#0F172A")
+ax.text(1.05, -0.07, "Governance-Led Disclosers\n(Institutional Guardrails)",
+        fontsize=11, fontweight="bold", ha="center", va="top", color="#0F172A")
+ax.text(0.5, np.sqrt(3)/2 + 0.05, "Defensive Disclosers\n(Risk-Framed)",
+        fontsize=11, fontweight="bold", ha="center", va="bottom", color="#0F172A")
+
+plt.tight_layout()
+plt.show()
+```
+
+To interpret the managerial meaning of these three vertices, @fig-archetype-heatmap reports their standardized coordinates (matrix $A$, $z$-scores) across the eight posture dimensions, and @tbl-archetypes-glance summarizes their constituent shares and disclosure profiles:
 
 ```{python}
 #| label: fig-archetype-heatmap
@@ -853,9 +1081,9 @@ def _p(name):
 
 df = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
 
-FEATURES = ["promotional_posture", "risk_orientation", "governance_orientation",
+FEATURES = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
            "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
-LABELS = ["Promotional", "Risk", "Governance", "Temporal\n(realized)", "Customer-\nfacing", "Specificity", "Intensity"]
+LABELS = ["Promotional", "Hedging", "Risk", "Governance", "Temporal\n(realized)", "Customer-\nfacing", "Specificity", "Intensity"]
 ARCHETYPES = ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]
 
 fit_pop = df[df["archetype"] != "No AI"]
@@ -904,25 +1132,44 @@ def _p(name):
     return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _g = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
-_feats = {"promotional_posture": "promotional", "risk_orientation": "risk", "governance_orientation": "governance",
+_feats = {"promotional_posture": "promotional", "hedging_posture": "hedging", "risk_orientation": "risk", "governance_orientation": "governance",
           "temporal_posture": "realized", "ai_positioning": "customer-facing", "specificity": "specificity",
           "disclosure_intensity": "intensity"}
 _fit = _g[_g["archetype"] != "No AI"]
 _n = _g["archetype"].value_counts()
-_stab = {"Vocal Substantives": 0.75, "Governance-Led Disclosers": 0.64, "Defensive Disclosers": 0.76, "No AI": 1.00}
+# Stability read live from build_strategy_dimensions.py's own bootstrap output
+# (`archetype_stability`, constant within an archetype -- one mean Jaccard
+# per cluster, broadcast to its members), not a value typed in here by hand.
+_stab = _g.groupby("archetype")["archetype_stability"].first().to_dict()
 arch_share = (_n / len(_g) * 100).round(1).to_dict()
 
-_profiles = {
-    "Vocal Substantives": "High customer-facing (+2.31 SD), specificity (+1.96 SD), intensity (+1.54 SD), promotional (+1.39 SD); low risk (-1.61 SD)",
-    "Governance-Led Disclosers": "High governance (+2.32 SD), realized (+1.21 SD); low customer-facing (-0.98 SD), intensity (-0.85 SD), risk (-0.53 SD)",
-    "Defensive Disclosers": "High risk (+1.60 SD); low temporal realized (-1.74 SD), specificity (-1.34 SD), governance (-1.12 SD), promotional (-0.79 SD)"
-}
+# Archetypal profile text generated from the actual fitted z-scores, not
+# hand-typed: standardize each of the 8 posture dimensions over the active
+# population (same standardization `build_strategy_dimensions.py` clusters
+# on), take each archetype's mean z per dimension, and report the
+# dimensions that separate it most (|z| >= 0.5), strongest first.
+_z = (_fit[list(_feats)] - _fit[list(_feats)].mean()) / _fit[list(_feats)].std(ddof=0)
+_z["archetype"] = _fit["archetype"].values
+_zmean = _z.groupby("archetype")[list(_feats)].mean()
+
+def _profile_text(archetype: str, threshold: float = 0.5) -> str:
+    row = _zmean.loc[archetype].sort_values(key=lambda s: -s.abs())
+    high = [(_feats[c], v) for c, v in row.items() if v >= threshold]
+    low = [(_feats[c], v) for c, v in row.items() if v <= -threshold]
+    parts = []
+    if high:
+        parts.append("High " + ", ".join(f"{name} ({v:+.2f} SD)" for name, v in high))
+    if low:
+        parts.append("low " + ", ".join(f"{name} ({v:+.2f} SD)" for name, v in low))
+    return "; ".join(parts) if parts else "No dimension separates by >=0.5 SD"
+
+_profiles = {a: _profile_text(a) for a in ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]}
 
 _rows = []
 for a in ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]:
     _rows.append([f"**{a}**", int(_n[a]), f"{arch_share[a]:.1f}%", _profiles[a], f"{_stab[a]:.2f}"])
 _rows.append(["**No AI**", int(_n["No AI"]), f"{arch_share['No AI']:.1f}%",
-              "Fewer than 5 pooled AI frames across 2021–2025 SEC filings (rule-based filter)", "1.00"])
+              "Fewer than 5 pooled AI frames across 2021–2025 SEC filings (rule-based filter)", f"{_stab['No AI']:.2f}"])
 Markdown(tabulate(_rows, headers=["Archetype", "Firms ($n$)", "Share (%)", "Archetypal disclosure profile", "Stability (Jaccard)"]))
 ```
 
@@ -959,7 +1206,7 @@ fu["sic2"] = fu["sic"].astype(str).str.zfill(4).str[:2]
 df_strat = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
 df_sec = df_strat.merge(fu, on="ticker", how="left")
 
-_feat_cols = ["promotional_posture", "risk_orientation", "governance_orientation", "temporal_posture",
+_feat_cols = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation", "temporal_posture",
               "ai_positioning", "specificity", "disclosure_intensity"]
 _fit = df_sec[df_sec["archetype"] != "No AI"].copy()
 _zz = (_fit[_feat_cols] - _fit[_feat_cols].mean()) / _fit[_feat_cols].std()
@@ -979,8 +1226,8 @@ def _closest(a, k=4):
 
 prominent = {
     "Vocal Substantives": "Microsoft (`MSFT`), NVIDIA (`NVDA`), Alphabet (`GOOGL`), Meta (`META`), Amazon (`AMZN`)",
-    "Governance-Led Disclosers": "JPMorgan Chase (`JPM`), Bank of America (`BAC`), Apple (`AAPL`), UnitedHealth (`UNH`), Walmart (`WMT`)",
-    "Defensive Disclosers": "Goldman Sachs (`GS`), Morgan Stanley (`MS`), Johnson & Johnson (`JNJ`), Disney (`DIS`), Eli Lilly (`LLY`)",
+    "Governance-Led Disclosers": "Citigroup (`C`), BlackRock (`BLK`), Apple (`AAPL`), UnitedHealth (`UNH`), Walmart (`WMT`)",
+    "Defensive Disclosers": "Goldman Sachs (`GS`), Morgan Stanley (`MS`), Johnson & Johnson (`JNJ`), American Express (`AXP`), Eli Lilly (`LLY`)",
     "No AI": "Costco (`COST`), Texas Instruments (`TXN`), O'Reilly Automotive (`ORLY`), NVR (`NVR`)"
 }
 
@@ -1003,7 +1250,7 @@ Individual firms illustrate how the taxonomy distinguishes communication strateg
 Two high-profile classifications illustrate the distinction between SEC disclosure posture and commercial reputation:
 
 - **Apple** clusters as Governance-Led: while it deploys proprietary AI across its consumer devices, its statutory SEC filings concentrate AI mentions on board oversight, privacy policies, and responsible-use shareholder proposals, reserving product marketing for consumer keynotes outside EDGAR.
-- **Goldman Sachs** clusters as Defensive: over 60% of its AI-bearing text resides in Item 1A risk factors (model risk, cybersecurity, and vendor dependencies) with minimal operational disclosure, in sharp contrast to peers like JPMorgan Chase that disclose concrete platform investments.
+- **Goldman Sachs** clusters as Defensive: over 60% of its AI-bearing text resides in Item 1A risk factors (model risk, cybersecurity, and vendor dependencies), with minimal operational disclosure of the kind Vocal Substantives report in the same filings.
 
 Capital-intensive firms with little digital-transformation discourse, such as Costco, Texas Instruments, O'Reilly Automotive, and NVR, make up the No AI group. It also absorbs firms that left the index through acquisition or delisting before the generative-AI boom: `{python} int(df_sec.loc[df_sec["archetype"] == "No AI", "ticker"].isin(fu_delisted).sum())` of the `{python} int((df_sec["archetype"] == "No AI").sum())` No AI firms are delisted. They never had a post-2023 filing in which to adopt the new vocabulary. Keeping them avoids survivorship bias, but it means "No AI" partly reflects exit timing rather than a deliberate stance.
 
@@ -1073,13 +1320,51 @@ plt.tight_layout()
 plt.show()
 ```
 
+```{python}
+#| echo: false
+#| warning: false
+#| message: false
+# Live k=2 fit (same population, same 8 posture dimensions, same seed as the
+# k=3 fit above) purely to source the substantive-rejection footnote below
+# from real z-scores instead of hand-typed ones. Self-contained (re-reads
+# and re-standardizes rather than reusing another chunk's variables) so it
+# doesn't depend on chunk execution order elsewhere on the page.
+import contextlib as _contextlib
+import io as _io
+from pathlib import Path as _Path
+import pandas as _pd
+
+with _contextlib.redirect_stdout(_io.StringIO()), _contextlib.redirect_stderr(_io.StringIO()):
+    from archetypes import AA as _AA
+
+def _p_k2(name):
+    p = _Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else _Path(f"data/processed/clusters/{name}")
+
+_df_k2 = _pd.read_parquet(_p_k2("firm_strategy_dimensions.parquet"))
+_k2_feats = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
+             "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
+_fit_k2 = _df_k2[_df_k2["archetype"] != "No AI"]
+_X_k2 = _fit_k2[_k2_feats].values
+_X_k2_std = (_X_k2 - _X_k2.mean(axis=0)) / _X_k2.std(axis=0, ddof=0)
+
+with _contextlib.redirect_stdout(_io.StringIO()), _contextlib.redirect_stderr(_io.StringIO()):
+    aa_k2 = _AA(n_archetypes=2, random_state=42, max_iter=500)
+    aa_k2.fit_transform(_X_k2_std)
+A_k2 = aa_k2.archetypes_
+k2_promo = A_k2[:, _k2_feats.index("promotional_posture")]
+k2_risk = A_k2[:, _k2_feats.index("risk_orientation")]
+k2_gov = A_k2[:, _k2_feats.index("governance_orientation")]
+k2_spec = A_k2[:, _k2_feats.index("specificity")]
+```
+
 The bootstrap evidence establishes three empirical conclusions (@fig-archetype-stability):
 
 1. **$k = 3$ is robust across resampling regimes:** It is the only candidate model where every archetype clears the 0.60 reproducibility floor under both frame-level measurement error and firm-level sample composition sensitivity.
 2. **Failed falsification at $k = 4$:** Partition stability breaks down globally at $k = 4$. The fourth vertex isolates ungrounded promotional rhetoric without technical specificity, anchored by only a handful of firms. Rather than an autonomous statutory posture, isolated promotional hype represents sampling noise, confirming that AI washing is better modeled as inter-channel decoupling (Chapter 5).
 3. **Rejection of $k = 2$ on substantive grounds:** Although mathematically stable, collapsing to two poles eliminates governance orientation entirely, erasing the institutional distinction between board oversight and statutory risk warnings.[^k2-note]
 
-[^k2-note]: In $k = 2$, Archetype 0 exhibits promotional $=-0.76$, risk $=+1.09$, governance $=+0.08$, specificity $=-1.12$; Archetype 1 exhibits promotional $=+1.23$, risk $=-1.67$, governance $=-0.14$, specificity $=+1.81$. Discrete K-means clustering benchmarks and exploratory 25-replicate stability screenings are detailed in Appendix C (@tbl-a3-kmeans-stability).
+[^k2-note]: In $k = 2$, Archetype 0 exhibits promotional $=$ `{python} f"{k2_promo[0]:+.2f}"`, risk $=$ `{python} f"{k2_risk[0]:+.2f}"`, governance $=$ `{python} f"{k2_gov[0]:+.2f}"`, specificity $=$ `{python} f"{k2_spec[0]:+.2f}"`; Archetype 1 exhibits promotional $=$ `{python} f"{k2_promo[1]:+.2f}"`, risk $=$ `{python} f"{k2_risk[1]:+.2f}"`, governance $=$ `{python} f"{k2_gov[1]:+.2f}"`, specificity $=$ `{python} f"{k2_spec[1]:+.2f}"`. Discrete K-means clustering benchmarks and exploratory 25-replicate stability screenings are detailed in Appendix C (@tbl-a3-kmeans-stability).
 
 A principal components diagnostic confirms that the space cannot be collapsed into one score without heavy information loss: the first two components capture `{python} f"{hd_pca_ev[0] + hd_pca_ev[1]:.1f}"`% of the variance (PC1: `{python} f"{hd_pca_ev[0]:.1f}"`%, PC2: `{python} f"{hd_pca_ev[1]:.1f}"`%; @tbl-a3-pca-diagnostic, Appendix C).
 
@@ -1106,7 +1391,7 @@ def _p(name):
     return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _fy = pd.read_parquet(_p("firm_year_strategy_dimensions.parquet"))
-_FE = ["promotional_posture", "risk_orientation", "governance_orientation", "temporal_posture",
+_FE = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation", "temporal_posture",
        "ai_positioning", "specificity", "disclosure_intensity"]
 _fy = _fy[(_fy["archetype"] != "No AI") & _fy[_FE].notna().all(axis=1)]
 
@@ -1174,6 +1459,7 @@ Industry economics and regulatory exposure shape the archetypes strongly, though
 #| echo: false
 #| fig-width: 8.5
 #| fig-height: 4.6
+import os
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -1190,6 +1476,21 @@ if not db_path.exists():
 
 con = duckdb.connect(str(db_path), read_only=True)
 fu = con.execute("SELECT ticker, company_name, sic, active_status FROM firm_universe WHERE country_code = 'us'").df()
+_disclosing = set(pd.read_parquet(_p("firm_strategy_dimensions.parquet")).loc[lambda d: d["archetype"] != "No AI", "ticker"])
+_ch_n_disclosing = len(_disclosing)
+_ch_has_def14a = set(con.execute("SELECT ticker FROM filing_manifest WHERE country_code = 'us' AND form_type = 'DEF 14A'").df()["ticker"].dropna())
+_ch_coverage = _disclosing & _ch_has_def14a
+_ch_n_coverage_pct = round(100 * len(_ch_coverage) / _ch_n_disclosing)
+_ch_cwd0 = Path.cwd()
+os.chdir(db_path.resolve().parent.parent)  # gold_ai_frames view reads part files by repo-relative path
+_ch_mentions = set(con.execute("""
+    SELECT DISTINCT fm.ticker FROM gold_ai_frames f
+    JOIN filing_manifest fm USING (country_code, accession_number)
+    WHERE fm.form_type = 'DEF 14A' AND f.has_frame
+""").df()["ticker"].dropna())
+os.chdir(_ch_cwd0)
+_ch_n_mention = len(_ch_coverage & _ch_mentions)
+_ch_n_omit = len(_ch_coverage) - _ch_n_mention
 con.close()
 fu_delisted = set(fu.loc[fu["active_status"] == "delisted", "ticker"])
 
@@ -1262,17 +1563,102 @@ This sorting aligns with institutional theory: firms facing shared regulatory sc
 
 #### Institutional channels: where vs. how firms disclose
 
-The empirical correlations between archetypal weights and regulatory document sources reveal that *where* a firm discloses and *how* it discloses are not separable. Across all $N = 441$ disclosing firms, archetypal weights exhibit substantial correlations with specific statutory channels:
+The empirical correlations between archetypal weights and regulatory document sources reveal that *where* a firm discloses and *how* it discloses are not separable. Across all $N =$ `{python} _ch_n_disclosing` disclosing firms, archetypal weights exhibit substantial correlations with specific statutory channels:
 
 - **Defensive Disclosers ($w_{\text{Def}}$):** Aligns strongly ($r = +0.763, R^2 = 58.2\%$) with Form 10-K Item 1A (Risk Factors), where disclosures focus exclusively on regulatory hazards, liabilities, and vendor dependencies in the absence of promotional language.
 - **Governance-Led Disclosers ($w_{\text{Gov}}$):** Aligns strongly ($r = +0.607, R^2 = 36.8\%$) with Form DEF 14A proxy statements, where communication centers on board committee charters, supervisory accountability, and executive oversight.
 - **Vocal Substantives ($w_{\text{Vocal}}$):** Aligns positively ($r = +0.575, R^2 = 33.1\%$) with Form 10-K Item 1 (Business Description) and Item 7 (MD&A), which serve as the primary statutory vehicles for articulating commercial strategy and operational milestones.
 
-These correlations confirm that the archetypes represent *postures in channel*. Statutory channel selection is a primary strategic choice [@campbell2014, pp. 396--98]: restricting AI mentions to Item 1A is an inherently defensive posture, while elevating AI to proxy statements is an active governance choice. An audit confirms 100% DEF 14A filing coverage for all $N = 441$ disclosing firms (381 mention AI, 60 omit it), proving that low $w_{\text{Gov}}$ reflects an active corporate omission rather than missing filing data.
+These correlations confirm that the archetypes represent *postures in channel*. Statutory channel selection is a primary strategic choice [@campbell2014, pp. 396--98]: restricting AI mentions to Item 1A is an inherently defensive posture, while elevating AI to proxy statements is an active governance choice. An audit confirms `{python} _ch_n_coverage_pct`% DEF 14A filing coverage for all $N =$ `{python} _ch_n_disclosing` disclosing firms (`{python} _ch_n_mention` mention AI, `{python} _ch_n_omit` omit it), proving that low $w_{\text{Gov}}$ reflects an active corporate omission rather than missing filing data.
 
-Recomputing the archetypes on Form 10-K frames alone confirms that corporate governance is, by design, a proxy-channel posture. While Vocal Substantives ($r = 0.935$) and Defensive Disclosers ($r = 0.692$) replicate robustly, the governance vertex reallocates ($r = 0.448$, with $z_{\text{gov}} = +3.63$ SD concentrated in a few regulated firms). Without DEF 14A, the governance vertex absorbs $+0.44$ SD of risk orientation while the defensive vertex attenuates from $+1.60$ to $+1.00$ SD; proxy statements are essential to disentangle board oversight from statutory risk-listing.
+```{python}
+#| echo: false
+#| output: false
+import os
+from archetypes import AA as _AA10k
 
-# From Disclosure Strategy to Disclosed AI Activity
+_posture_cols_10k = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
+                     "temporal_posture", "ai_positioning", "specificity"]
+
+def _posture_10k(d):
+    d = d.copy()
+    concepts = d["concepts"].apply(lambda c: set(c) if c is not None else set())
+    d["promotional_posture"] = d["rhetoric"].apply(
+        lambda r: np.mean([x in list(r) if r is not None else False for x in ("promotional", "strategic")]))
+    d["hedging_posture"] = d["rhetoric"].apply(lambda r: float("hedged" in list(r)) if r is not None else 0.0)
+    d["risk_orientation"] = concepts.apply(lambda s: float(any(str(c).startswith("risk_") for c in s)))
+    d["governance_orientation"] = concepts.apply(lambda s: float(any(str(c).startswith("gov_") for c in s)))
+    d["temporal_posture"] = (d["temporal"] == "realized").astype(float)
+    d["ai_positioning"] = d["is_customer_facing"].astype(float)
+    d["specificity"] = d["specificity"].apply(lambda s: len(s) / 5.0 if s is not None else 0.0)
+    out = d.groupby("ticker")[_posture_cols_10k].mean()
+    out["n_frames_10k"] = d.groupby("ticker").size()
+    return out.reset_index()
+
+def _shrink_10k(rates, counts):
+    out = {}
+    for col in rates.columns:
+        p = rates[col]
+        mean, var = float(p.mean()), float(p.var(ddof=1))
+        if var <= 0 or not 0 < mean < 1:
+            out[col] = p
+            continue
+        strength = max(mean * (1 - mean) / var - 1, 1e-6)
+        alpha, beta = mean * strength, (1 - mean) * strength
+        out[col] = (p * counts + alpha) / (counts + alpha + beta)
+    return pd.DataFrame(out, index=rates.index)
+
+_cwd10k = Path.cwd()
+_abs_db10k = db_path.resolve()
+os.chdir(_abs_db10k.parent.parent)  # gold_ai_frames view reads part files by repo-relative path
+_con10k = duckdb.connect(str(_abs_db10k), read_only=True)
+_frames_10k = _con10k.execute("""
+    WITH frame_domains AS (
+        SELECT text_hash, frame_id, bool_or(domain = 'customer_facing') AS is_customer_facing
+        FROM gold_ai_activities WHERE has_activity GROUP BY text_hash, frame_id
+    )
+    SELECT fm.ticker, f.concepts, f.temporal, f.specificity, f.rhetoric,
+           COALESCE(fd.is_customer_facing, false) AS is_customer_facing
+    FROM gold_ai_frames f
+    LEFT JOIN frame_domains fd ON fd.text_hash = f.text_hash AND fd.frame_id = f.frame_id
+    JOIN filing_manifest fm USING (country_code, accession_number)
+    WHERE f.country_code = 'us' AND f.has_frame AND fm.ticker IS NOT NULL AND fm.form_type = '10-K'
+""").fetchdf()
+_con10k.close()
+os.chdir(_cwd10k)
+
+_p10k = _posture_10k(_frames_10k)
+_p10k = _p10k[_p10k["n_frames_10k"] >= 5].reset_index(drop=True)
+_shrunk10k = _shrink_10k(_p10k[_posture_cols_10k], _p10k["n_frames_10k"])
+_shrunk10k["disclosure_intensity"] = _p10k["n_frames_10k"].rank(pct=True).values
+_feats10k = _posture_cols_10k + ["disclosure_intensity"]
+_X10k_raw = _shrunk10k[_feats10k].values
+_X10k = (_X10k_raw - _X10k_raw.mean(axis=0)) / _X10k_raw.std(axis=0, ddof=0)
+_aa10k = _AA10k(n_archetypes=3, random_state=42, max_iter=500)
+_W10k = _aa10k.fit_transform(_X10k)
+_A10k = _aa10k.archetypes_
+_def_col10k = int(np.argmax(_A10k[:, _feats10k.index("risk_orientation")]))
+_rem10k = [i for i in range(3) if i != _def_col10k]
+_gov_col10k = max(_rem10k, key=lambda i: _A10k[i, _feats10k.index("governance_orientation")])
+_voc_col10k = [i for i in range(3) if i not in (_def_col10k, _gov_col10k)][0]
+
+_w10k_named = pd.DataFrame({
+    "Vocal": _W10k[:, _voc_col10k], "Governance": _W10k[:, _gov_col10k], "Defensive": _W10k[:, _def_col10k],
+}, index=_p10k["ticker"])
+
+_common10k = W_named.index.intersection(_w10k_named.index)
+_r_vocal_10k = W_named.loc[_common10k, "Vocal"].corr(_w10k_named.loc[_common10k, "Vocal"])
+_r_gov_10k = W_named.loc[_common10k, "Governance"].corr(_w10k_named.loc[_common10k, "Governance"])
+_r_def_10k = W_named.loc[_common10k, "Defensive"].corr(_w10k_named.loc[_common10k, "Defensive"])
+_z_gov10k_on_gov = _A10k[_gov_col10k, _feats10k.index("governance_orientation")]
+_z_gov10k_on_risk = _A10k[_gov_col10k, _feats10k.index("risk_orientation")]
+_z_def_full_on_risk = A[def_col, SIMPLEX_FEATS.index("risk_orientation")]
+_z_def10k_on_risk = _A10k[_def_col10k, _feats10k.index("risk_orientation")]
+```
+
+Recomputing the archetypes on Form 10-K frames alone (`{python} len(_common10k)` firms with >= 5 10-K-only frames) confirms that corporate governance is, by design, a proxy-channel posture. While Vocal Substantives ($r =$ `{python} f"{_r_vocal_10k:.3f}"`) and Defensive Disclosers ($r =$ `{python} f"{_r_def_10k:.3f}"`) replicate robustly, the governance vertex reallocates ($r =$ `{python} f"{_r_gov_10k:.3f}"`, with $z_{\text{gov}} =$ `{python} f"{_z_gov10k_on_gov:+.2f}"` SD concentrated in a few regulated firms). Without DEF 14A, the governance vertex absorbs `{python} f"{_z_gov10k_on_risk:+.2f}"` SD of risk orientation while the defensive vertex attenuates from `{python} f"{_z_def_full_on_risk:+.2f}"` to `{python} f"{_z_def10k_on_risk:+.2f}"` SD; proxy statements are essential to disentangle board oversight from statutory risk-listing.
+
+# AI Activity, Business Models, and Economic Profiles
 
 ## What corporate AI activity actually consists of
 
@@ -1324,19 +1710,24 @@ def get_domain(row):
 def get_action(row):
     a = str(row["action"])
     obj = str(row["object_family"])
+    stage = str(row["stage"])
+    # `pilot_or_explore` (v1 action) has no v2 equivalent: piloting/exploring
+    # is now a `stage`, not an action of its own (docs/migration_v1_to_v2_
+    # analytics.md §1.2) -- checked first so it still reads as its own
+    # bucket on this map, same as it did as a standalone v1 action.
+    if stage in ("exploring", "piloting"):
+        return "Pilot / Explore"
     if a in ["deploy", "scale", "integrate"]:
         if "automation" in obj:
             return "Automate"
         return "Deploy / Integrate"
-    elif a in ["develop", "invest_infrastructure"]:
+    elif a in ["develop", "invest"]:
         return "Develop / Build"
-    elif a in ["partner", "buy_or_license"]:
+    elif a in ["partner", "procure"]:
         return "Partner / Buy"
-    elif a in ["pilot_or_explore"]:
-        return "Pilot / Explore"
-    elif a in ["measure_outcome"]:
+    elif a in ["measure"]:
         return "Analyze / Measure"
-    elif a in ["govern_or_control", "restrict"]:
+    elif a in ["govern", "restrict"]:
         return "Govern / Control"
     return "Deploy / Integrate"
 
@@ -1438,9 +1829,9 @@ ARCH = ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers
 n_activities = act.groupby("ticker").size()
 per_firm = df_strat.set_index("ticker")["archetype"].to_frame().join(n_activities.rename("n_activities")).fillna(0)
 
-act["proprietary_ai"] = (act["action"] == "develop") | (act["ai_source"] == "own")
+act["proprietary_ai"] = (act["action"] == "develop") | (act["source"] == "own")
 act["own_brand_named"] = act["own_brands"].map(lambda v: len(v) > 0)
-act["quantified_outcome"] = (act["action"] == "measure_outcome") | (act["evidence_strength"] == "metric")
+act["quantified_outcome"] = (act["action"] == "measure") | (act["evidence_type"] == "metric")
 act["deployed_or_scaled"] = act["stage"].isin(["deployed", "scaled"])
 act["customer_target"] = act["target"] == "customers"
 
@@ -1506,9 +1897,9 @@ per_firm = strat.set_index("ticker")["archetype"].to_frame().join(n_activities.r
 def share(col):
     return [f"{act[act.archetype == a][col].mean() * 100:.1f}%" for a in ARCH]
 
-act["proprietary_ai"] = (act["action"] == "develop") | (act["ai_source"] == "own")
+act["proprietary_ai"] = (act["action"] == "develop") | (act["source"] == "own")
 act["own_brand_named"] = act["own_brands"].map(lambda v: len(v) > 0)
-act["quantified_outcome"] = (act["action"] == "measure_outcome") | (act["evidence_strength"] == "metric")
+act["quantified_outcome"] = (act["action"] == "measure") | (act["evidence_type"] == "metric")
 act["deployed_or_scaled"] = act["stage"].isin(["deployed", "scaled"])
 act["customer_target"] = act["target"] == "customers"
 
@@ -1684,17 +2075,17 @@ n_total = len(df)
 c1 = n_total
 c2 = len(df[df["function_family"] != "unspecified"])
 c3 = len(df[(df["function_family"] != "unspecified") & df["stage"].isin(["deployed", "scaled"])])
-c4 = len(df[(df["function_family"] != "unspecified") & df["stage"].isin(["deployed", "scaled"]) & df["evidence_strength"].isin(["named_product_or_process", "metric"])])
-c5 = len(df[(df["function_family"] != "unspecified") & df["stage"].isin(["deployed", "scaled"]) & (df["evidence_strength"] == "metric")])
+c4 = len(df[(df["function_family"] != "unspecified") & df["stage"].isin(["deployed", "scaled"]) & df["evidence_type"].isin(["named", "metric"])])
+c5 = len(df[(df["function_family"] != "unspecified") & df["stage"].isin(["deployed", "scaled"]) & (df["evidence_type"] == "metric")])
 
 pcts_nested = [c / n_total * 100 for c in [c1, c2, c3, c4, c5]]
 
 # Independent component rates
 p_func = (df["function_family"] != "unspecified").mean() * 100
 p_stage = df["stage"].isin(["deployed", "scaled"]).mean() * 100
-p_named = df["evidence_strength"].isin(["named_product_or_process", "metric"]).mean() * 100
-p_metric = (df["evidence_strength"] == "metric").mean() * 100
-p_vendor = (df["ai_source"] == "third_party").mean() * 100
+p_named = df["evidence_type"].isin(["named", "metric"]).mean() * 100
+p_metric = (df["evidence_type"] == "metric").mean() * 100
+p_vendor = (df["source"] == "third_party").mean() * 100
 
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9.6, 3.8), dpi=300)
 
@@ -1743,7 +2134,7 @@ Only `{python} f"{c5 / c1 * 100:.1f}"`% of disclosed AI activities reach the top
 
 The generative-AI boom multiplied the volume of disclosed AI activity and lowered its average grounding. Between 2021 and 2026 the number of disclosed activities per year rose several-fold. Over the same period three grounding shares fell (@fig-volume-vs-grounding). Fewer activities were at a deployed or scaled stage, fewer named a specific product or process, and fewer had an identified business function. The activities added after 2023 are, on average, less concrete than what firms were already disclosing.
 
-This is what H1 predicts. Once a vocabulary becomes an institutional expectation, the language spreads faster than the grounded activity behind it [@meyer1977, pp. 340--41]. Activity counts build up over the year. So the 2026 volume is shown both as observed year to date and as a full-year estimate using the same-window seasonal factor. The 2026 grounding shares are rates, so we read them as observed.
+This is what institutional-legitimacy theory predicts. Once a vocabulary becomes an institutional expectation, the language spreads faster than the grounded activity behind it [@meyer1977, pp. 340--41]. Activity counts build up over the year. So the 2026 volume is shown both as observed year to date and as a full-year estimate using the same-window seasonal factor. The 2026 grounding shares are rates, so we read them as observed.
 
 ```{python}
 #| label: fig-volume-vs-grounding
@@ -1785,8 +2176,8 @@ both["year"] = both["year"].astype(int)
 
 vol = both.groupby("year").size()
 dep_share = both.groupby("year")["stage"].apply(lambda s: s.isin(["deployed", "scaled"]).mean() * 100)
-gen_ev = both.groupby("year")["evidence_strength"].apply(lambda s: (s == "generic").mean() * 100)
-named_prod = both.groupby("year")["evidence_strength"].apply(lambda s: (s == "named_product_or_process").mean() * 100)
+gen_ev = both.groupby("year")["evidence_type"].apply(lambda s: (s == "generic").mean() * 100)
+named_prod = both.groupby("year")["evidence_type"].apply(lambda s: (s == "named").mean() * 100)
 ident_func = both.groupby("year")["function_family"].apply(lambda s: (s != "unspecified").mean() * 100)
 
 # Full-year 2026 projection with the same-window seasonal factor (activities
@@ -1887,11 +2278,11 @@ def check_role(entities, roles):
         return False
     return any(e.get("role") in roles for e in entities)
 
-own_brand_pct = df["named_entities"].apply(lambda l: check_role(l, ["own_product_or_brand"])).mean() * 100
-ext_vendor_pct = df["named_entities"].apply(lambda l: check_role(l, ["external_provider", "external_model"])).mean() * 100
-partner_pct = df["named_entities"].apply(lambda l: check_role(l, ["partner"])).mean() * 100
-third_party_src = (df["ai_source"] == "third_party").mean() * 100
-any_ext_provider = df.groupby("ticker")["named_entities"].apply(lambda s: s.apply(lambda l: check_role(l, ["external_provider", "external_model", "partner"])).any())
+own_brand_pct = df["entities"].apply(lambda l: check_role(l, ["own_brand"])).mean() * 100
+ext_vendor_pct = df["entities"].apply(lambda l: check_role(l, ["provider", "model"])).mean() * 100
+partner_pct = df["entities"].apply(lambda l: check_role(l, ["partner"])).mean() * 100
+third_party_src = (df["source"] == "third_party").mean() * 100
+any_ext_provider = df.groupby("ticker")["entities"].apply(lambda s: s.apply(lambda l: check_role(l, ["provider", "model", "partner"])).any())
 ext_provider_firm_pct = 100 * any_ext_provider.mean()
 
 _VENDOR_PATTERNS = {
@@ -1906,8 +2297,8 @@ def _vendor_firm_pct(pattern):
     def has_vendor(entities):
         if entities is None or len(entities) == 0:
             return False
-        return any(e.get("role") in ("external_provider", "external_model", "partner") and re.search(pattern, str(e.get("name", "")).lower()) for e in entities)
-    by_firm = df.groupby("ticker")["named_entities"].apply(lambda s: s.apply(has_vendor).any())
+        return any(e.get("role") in ("provider", "model", "partner") and re.search(pattern, str(e.get("name", "")).lower()) for e in entities)
+    by_firm = df.groupby("ticker")["entities"].apply(lambda s: s.apply(has_vendor).any())
     return 100 * by_firm.mean()
 
 vendor_pcts = {name: _vendor_firm_pct(pat) for name, pat in _VENDOR_PATTERNS.items()}
@@ -1942,7 +2333,7 @@ bars = ax.barh(categories[::-1], values[::-1], color=colors[::-1], height=0.55)
 for b, v in zip(bars, values[::-1]):
     ax.text(v + 0.8, b.get_y() + b.get_height() / 2, f"{v:.1f}%", va="center", fontsize=8.8, fontweight="bold", color="#0F172A")
 
-ax.set_xlim(0, 45)
+ax.set_xlim(0, max(values) * 1.15)
 ax.set_xlabel(f"% of all disclosed AI activity statements (n = {n_activities_total:,})", fontsize=9.0, fontweight="bold")
 ax.set_title("Technology Provenance: Proprietary Branding vs. External Technology Attribution",
              fontsize=10.2, fontweight="bold")
@@ -2177,9 +2568,38 @@ plt.tight_layout()
 plt.show()
 ```
 
+### A same-sector pair: posture, activity, and economics together
+
+```{python}
+#| echo: false
+#| output: false
+from pathlib import Path
+import pandas as pd
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+_m26 = pd.read_parquet(_p("firm_year_master_v2.parquet"))
+_m26 = _m26[_m26["year"] == _m26["year"].max()]
+_wy26 = pd.read_parquet(_p("firm_year_washing_score.parquet"))
+_wy26 = _wy26[_wy26["year"] == _wy26["year"].max()]
+
+pair_year = int(_m26["year"].iloc[0])
+pair = {}
+for t in ["MA", "TYL"]:
+    row_m, row_w = _m26[_m26["ticker"] == t].iloc[0], _wy26[_wy26["ticker"] == t].iloc[0]
+    pair[t] = {"archetype": row_m["archetype"], "sic2": row_m["sic2"], "d": row_m["disclosure_intensity"],
+               "market_cap": row_m["market_cap"], "beta": row_m["beta"],
+               "g": row_w["grounding_index"], "w": row_w["w"]}
+pair_mktcap_ratio = pair["MA"]["market_cap"] / pair["TYL"]["market_cap"]
+```
+
+Two firms in the same two-digit SIC sector (73, business services) in the `{python} pair_year` filing year illustrate why posture, disclosed activity, and economics need to be read together rather than sector alone: Mastercard (`{python} pair["MA"]["archetype"]`) and Tyler Technologies (`{python} pair["TYL"]["archetype"]`) disclose AI at a similar intensity ($D =$ `{python} f"{pair['MA']['d']:.2f}"` and `{python} f"{pair['TYL']['d']:.2f}"`), but Mastercard's disclosed activity is more than twice as grounded ($G =$ `{python} f"{pair['MA']['g']:.2f}"` versus `{python} f"{pair['TYL']['g']:.2f}"`) and its decoupling runs in the opposite direction ($W =$ `{python} f"{pair['MA']['w']:+.2f}"` versus `{python} f"{pair['TYL']['w']:+.2f}"`). The two firms also differ sharply in scale, with Mastercard's market capitalization roughly `{python} f"{pair_mktcap_ratio:.0f}"` times Tyler's, and in market beta (`{python} f"{pair['MA']['beta']:.2f}"` versus `{python} f"{pair['TYL']['beta']:.2f}"`). Same sector, same regulatory environment, similar disclosure volume — the gap sits in what each firm reports having grounded behind that volume, and it lines up with the gap in their economics. (Appendix G disaggregates this comparison, and others like it, across sectors.)
+
 ## What disclosed AI activity adds to disclosure posture
 
-Disclosed activity carries information that posture alone does not. That settles H2. At equal disclosure volume, Vocal Substantives report `{python} f"{hd_vs_ratio:.2f}"` times as many AI activities as Defensive Disclosers. Archetypes do not simply proxy for verbosity. What firms report doing is similar across groups. They sell and operate with AI. Only the archetype pairing promotion with grounded activity stands out on sector-year-adjusted fundamentals. For an investor or issuer, archetype status offers a first screen. Deeper information sits in grounding attributes. These attributes feed the credibility tests that follow.
+Disclosed activity carries information that posture alone does not. At equal disclosure volume, Vocal Substantives report `{python} f"{hd_vs_ratio:.2f}"` times as many AI activities as Defensive Disclosers. Archetypes do not simply proxy for verbosity. What firms report doing is similar across groups. They sell and operate with AI. Only the archetype pairing promotion with grounded activity stands out on sector-year-adjusted fundamentals. For an investor or issuer, archetype status offers a first screen. Deeper information sits in grounding attributes. These attributes feed the credibility tests that follow.
 
 # Credibility Under Increasing Disclosure Commitment
 
@@ -2474,7 +2894,13 @@ ax2.set_yticks(y2)
 ax2.set_yticklabels(labels2, fontsize=8.5, fontweight='bold')
 ax2.set_title('Panel B: Evidentiary Grounding (Verifiable proof dropped in formal filings)', fontsize=9.2, fontweight='bold', loc='left')
 ax2.set_xlabel('Call Minus Filing Difference (Percentage Points, 95% Confidence Interval)', fontsize=8.8, fontweight='bold')
-ax2.set_xlim(-6, 16)
+# Computed from the actual CIs, not hardcoded -- a hardcoded (-6, 16) here
+# once silently clipped `governance_or_restriction` (gap -10.1pp, CI down to
+# -11.3) entirely off the visible axis: its point and error bar vanished
+# while its text label (clip_on=False by default) kept floating past the
+# left spine, looking like a rendering bug rather than an axis-range one.
+_pad2 = 0.12 * (max(ci_hi2) - min(ci_lo2))
+ax2.set_xlim(min(ci_lo2) - _pad2, max(ci_hi2) + _pad2)
 ax2.set_ylim(-0.5, 5.7)
 ax2.grid(True, axis='x', linestyle=':', alpha=0.5)
 ax2.spines[['top', 'right']].set_visible(False)
@@ -2614,6 +3040,11 @@ def _wv(m, k, who="treated"):
 def _wd(m, who="treated"):
     a, b = _w[who][m][_wk[-1]], _w[who][m][_wk[0]]
     return "n/a" if a is None or b is None else f"{b - a:+.3f}"
+def _trend(m, who="treated"):
+    a, b = _w[who][m][_wk[-1]], _w[who][m][_wk[0]]
+    return "fell" if b < a else ("rose" if b > a else "stayed flat")
+_well_same_direction = (_w["treated"]["claim_density"][_wk[0]] - _w["treated"]["claim_density"][_wk[-1]] > 0) == \
+                       (_w["controls_mean"]["claim_density"][_wk[0]] - _w["controls_mean"]["claim_density"][_wk[-1]] > 0)
 _a = sec_cases["cases"]["ANET"]
 _ak = {k: i for i, k in enumerate(_a["k"])}
 def _ad(m, who="treated"):
@@ -2652,15 +3083,15 @@ plt.tight_layout()
 plt.show()
 ```
 
-The one direct case shows more AI text, not more grounded AI text (@fig-sec-welltower; full measures for both cases in @tbl-g2-sec-cases, Appendix F). In the first annual report filed after the letter, Welltower's AI claim density rose from `{python} _wv("claim_density", -1)` to `{python} _wv("claim_density", 0)` claims per thousand words (`{python} _wd("claim_density")`). That is the same size of rise as its matched peers' (`{python} _wd("claim_density", "controls_mean")`), so the firm added AI text at the industry's pace. The dimension the staff asked about, realized integration, moved from `{python} _wv("realized_density", -1)` to `{python} _wv("realized_density", 0)` (`{python} _wd("realized_density")`), less than at peers (`{python} _wd("realized_density", "controls_mean")`). A first quantified metric appeared (`{python} _wv("quant_density", 0)` per thousand words). Decoupling moved from `{python} _wv("w", -1)` to `{python} _wv("w", 0)`: the firm's disclosure rank rose faster than its substance rank.
+The one direct case moves against a simple "more talk" account of scrutiny (@fig-sec-welltower; full measures for both cases in @tbl-g2-sec-cases, Appendix F). In the first annual report filed after the letter, Welltower's AI claim density `{python} _trend("claim_density")` from `{python} _wv("claim_density", -1)` to `{python} _wv("claim_density", 0)` claims per thousand words (`{python} _wd("claim_density")`), while its matched peers' claim density `{python} _trend("claim_density", "controls_mean")` over the same window (`{python} _wd("claim_density", "controls_mean")`) -- the firm's narrative moved `{python} "with" if _well_same_direction else "against"` the industry trend. The dimension the staff asked about, realized integration, `{python} _trend("realized_density")` from `{python} _wv("realized_density", -1)` to `{python} _wv("realized_density", 0)` (`{python} _wd("realized_density")`), while peers' `{python} _trend("realized_density", "controls_mean")` (`{python} _wd("realized_density", "controls_mean")`). No quantified metric appeared in either report (`{python} _wv("quant_density", 0)` per thousand words). Decoupling narrowed sharply, from `{python} _wv("w", -1)` to `{python} _wv("w", 0)`: the firm's disclosure rank and substance rank converged rather than diverging further.
 
-The adjacent Arista case has the same shape. Claim density rose by `{python} _ad("claim_density")` after the segment-reporting letters against `{python} _ad("claim_density", "controls_mean")` at peers, with no change in quantified-metric density (`{python} _ad("quant_density")`).
+The adjacent Arista case follows the opposite pattern. Claim density rose by `{python} _ad("claim_density")` after the segment-reporting letters, alongside a `{python} _ad("claim_density", "controls_mean")` rise at peers, with no change in quantified-metric density (`{python} _ad("quant_density")`).
 
-Two cases cannot test H3's regulatory clause; they are consistent with it. Where substantiation was requested, the observable response was more AI text rather than measurably more grounded AI text. The cheap-talk account of scrutiny survives the only direct test the data allow.
+Two cases cannot test whether direct regulatory scrutiny prompts more empty talk, and the one letter that actually questioned a firm's own AI claims does not fit that cheap-talk account of scrutiny. After being asked to substantiate its platform claims, Welltower added less AI text, not more, and its disclosure-substance gap narrowed rather than widened. The adjacent case, asked about segment reporting rather than AI substantiation, shows AI narrative rising alongside its peers instead. With only one directly relevant observation, and that observation pointing away from cheap talk, the data do not support a simple "more scrutiny, more empty talk" story.
 
 ## What credibility means in this thesis
 
-Three things survive the climb up the ladder. Decoupling between narrative intensity and grounded substance is persistent (year-over-year $\rho =$ `{python} f"{hd_w_rho:.2f}"`). The cross-venue gap comes from missing evidence in statutory filings, not from a different mix of activities. And direct regulatory scrutiny of AI claims is so rare among large issuers that it amounts to a single case. In that case the response was more AI text rather than a narrower gap between talk and grounded activity. AI washing in this thesis therefore means an observable, persistent Decoupling ($W$) between narrative intensity and grounded operational substance, not legal proof of fraud or nonimplementation.
+Three things survive the climb up the ladder. Decoupling between narrative intensity and grounded substance is persistent (year-over-year $\rho =$ `{python} f"{hd_w_rho:.2f}"`). The cross-venue gap comes from missing evidence in statutory filings, not from a different mix of activities. And direct regulatory scrutiny of AI claims is so rare among large issuers that it amounts to a single case. In that case the response was less AI text and a narrower gap between talk and grounded activity, not the padded, still-ungrounded narrative a cheap-talk account would predict. AI washing in this thesis therefore means an observable, persistent Decoupling ($W$) between narrative intensity and grounded operational substance, not legal proof of fraud or nonimplementation.
 
 # Market Relevance of Disclosure Signals
 
@@ -2714,7 +3145,7 @@ base_df["label"] = base_df["variable"].map(AI_LABELS)
 base_df["model"] = "beta_post_126_baseline"
 ai_vars = list(AI_LABELS)
 base_ai = base_df[base_df["variable"].isin(ai_vars)].copy()
-samples = pd.read_csv(find_path("data/processed/clusters/call_beta_clean_regression_samples.csv"))  # accounting-control subsample sizes
+samples = pd.read_csv(find_path("data/processed/clusters/call_beta_regression_samples.csv"))  # accounting-control subsample sizes
 
 rows = []
 for _, r in base_ai.iterrows():
@@ -2827,14 +3258,14 @@ def find_path(rel):
     return p if p.exists() else Path(rel)
 
 win = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_windows.csv"))
-acct = pd.read_csv(find_path("data/processed/clusters/call_beta_clean_regressions.csv"))
+acct = pd.read_csv(find_path("data/processed/clusters/call_beta_regressions.csv"))
 fe = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_firm_fe.csv"))
 delta = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_delta_beta.csv"))
 ff = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_market_model.csv"))
 
 base_win = win[win["block"] == "beta_window[post_126]"].set_index("variable")
 win252 = win[win["block"] == "beta_window[post_252]"].set_index("variable")
-acct_m1 = acct[acct["model"] == "beta_post_126_accounting_M1"].set_index("variable")
+acct_m1 = acct[acct["model"] == "accounting_M1"].set_index("variable")
 fe_df = fe.set_index("variable")
 delta_df = delta.set_index("variable")
 ff3_df = ff[ff["block"] == "ff3"].set_index("variable")
@@ -2866,7 +3297,7 @@ rows.append(["Market controls", "✓", "✓", "✓", "✓", "✓", "✓"])
 rows.append(["Accounting (ROA, Lev)", "—", "✓", "—", "—", "—", "—"])
 rows.append(["SIC2 × CallYear FE", "✓", "✓", "✓", "✓", "—", "✓"])
 rows.append(["Firm FE", "—", "—", "—", "—", "✓", "—"])
-_acct_n = int(samples.set_index("model").loc["beta_post_126_accounting_M1", "n_calls"])
+_acct_n = int(samples.set_index("model").loc["accounting_M1", "n_calls"])
 rows.append(["N",
              f"{int(base_win.loc['hist_disclosure', 'n_calls']):,}" if "n_calls" in win.columns else "—",
              f"{_acct_n:,}",
@@ -2976,9 +3407,10 @@ for t, name, y in CASES:
     rows["arch"].append(_dim.get((t, y), "—"))
     if len(r):
         r = r.iloc[0]
+        r["n_activities_all"] = len(a)
         cv[t] = r
         rows["D"].append(f"{_ord(r['pct_d'])} percentile ({r['frames_per_1k']:.3f} frames/1k)")
-        rows["A"].append(f"{int(r['n_activities'])} disclosed AI activities ({len(a_f)} in statutory filings, {len(a) - len(a_f)} on calls)")
+        rows["A"].append(f"{len(a)} disclosed AI activities ({len(a_f)} in statutory filings, {len(a) - len(a_f)} on calls)")
         rows["G"].append(f"{r['grounding_index']:.3f}")
         rows["S"].append(f"{r['substance']:.3f} ({_ord(r['pct_s'])} percentile)")
         rows["W"].append(f"{r['w']:+.3f}")
@@ -2988,7 +3420,7 @@ for t, name, y in CASES:
     if len(a):
         rows["dep"].append(f"{a['stage'].isin(['deployed', 'scaled']).mean() * 100:.1f}% deployed / scaled")
         rows["focus"].append(f"{(a['target'] == 'internal_process').mean() * 100:.1f}% internal / {(a['target'] == 'customers').mean() * 100:.1f}% customer")
-        rows["prop"].append(f"{(a['ai_source'] == 'own').mean() * 100:.1f}% proprietary")
+        rows["prop"].append(f"{(a['source'] == 'own').mean() * 100:.1f}% proprietary")
     else:
         for k in ["dep", "focus", "prop"]:
             rows[k].append("—")
@@ -3023,9 +3455,9 @@ table = [
 Markdown(tabulate(table, headers=["Feature / Dimension"] + cols))
 ```
 
-**Microsoft (MSFT):** Microsoft shows that loud communication is not the same as decoupling. Its disclosure volume is exceptional ($D =$ `{python} f"{cv['MSFT']['frames_per_1k']:.3f}"`, `{python} _ord(cv['MSFT']['pct_d'])` percentile). But it is backed by one of the deepest AI activity inventories in the corpus ($A =$ `{python} int(cv['MSFT']['n_activities'])` in the 2024 filing year) and strong operational grounding ($S =$ `{python} f"{cv['MSFT']['substance']:.3f}"`). The talk and the substance match ($W =$ `{python} f"{cv['MSFT']['w']:+.3f}"`).
+**Microsoft (MSFT):** Microsoft shows that loud communication is not the same as decoupling. Its disclosure volume is exceptional ($D =$ `{python} f"{cv['MSFT']['frames_per_1k']:.3f}"`, `{python} _ord(cv['MSFT']['pct_d'])` percentile). But it is backed by one of the deepest AI activity inventories in the corpus ($A =$ `{python} int(cv['MSFT']['n_activities_all'])` in the 2024 filing year) and strong operational grounding ($S =$ `{python} f"{cv['MSFT']['substance']:.3f}"`). The talk and the substance match ($W =$ `{python} f"{cv['MSFT']['w']:+.3f}"`).
 
-**JPMorgan Chase (JPM) vs. Goldman Sachs (GS):** Two banks with similar disclosure intensity can look very different underneath. In the 2024 filing year both report moderate intensity ($D =$ `{python} f"{cv['JPM']['frames_per_1k']:.3f}"` and `{python} f"{cv['GS']['frames_per_1k']:.3f}"`). JPM anchors its communication in formal governance oversight ($G =$ `{python} f"{cv['JPM']['grounding_index']:.3f}"`) and internal workflow integration. Goldman's AI disclosures sit mostly in defensive legal risk factors. Its grounding is lower and its gap between talk and disclosed substance wider ($G =$ `{python} f"{cv['GS']['grounding_index']:.3f}"`, $W =$ `{python} f"{cv['GS']['w']:+.3f}"` versus `{python} f"{cv['JPM']['w']:+.3f}"` for JPM).
+**JPMorgan Chase (JPM) vs. Goldman Sachs (GS):** Two banks with similar disclosure intensity differ in vocabulary, not in underlying grounding. In the 2024 filing year both report moderate intensity ($D =$ `{python} f"{cv['JPM']['frames_per_1k']:.3f}"` and `{python} f"{cv['GS']['frames_per_1k']:.3f}"`). JPM anchors its communication in formal governance oversight and internal workflow integration ($G =$ `{python} f"{cv['JPM']['grounding_index']:.3f}"`), while Goldman's AI disclosures sit mostly in defensive legal risk factors but are, if anything, somewhat more grounded ($G =$ `{python} f"{cv['GS']['grounding_index']:.3f}"`). Their decoupling is essentially identical ($W =$ `{python} f"{cv['GS']['w']:+.3f}"` for GS versus `{python} f"{cv['JPM']['w']:+.3f}"` for JPM): the two banks' governance and risk-factor postures read differently, but neither is more or less internally consistent than the other.
 
 **Apple (AAPL):** Apple is the Governance-Led posture in practice. Its communication stresses proprietary on-device processing and consumer privacy rather than speculative commercial claims, and it keeps narrative volume in line with its operational footprint ($D =$ `{python} f"{cv['AAPL']['frames_per_1k']:.3f}"`, $W =$ `{python} f"{cv['AAPL']['w']:+.3f}"`).
 
@@ -3170,8 +3602,10 @@ for _, r in s3.iterrows():
     rows.append(["3. Quiet Substance", name, r['arch_label'], f"{r['frames_per_1k']:.3f}", f"{r['n_activities']:.0f}", f"{r['grounding_index']:.2f}", f"{r['substance']:.2f}", f"{r['w']:+.2f}", "—", "EXPLORE"])
 
 # The two FY2026 dual-reporting issuers with the largest call-minus-filing
-# promotional gap (computed, not hand-picked).
-_gap_rank = (gap26[gap26['ticker'].isin(w26_valid['ticker'])]
+# promotional gap (computed, not hand-picked). Welltower is examined in full,
+# with quotes and dates, in the worked-examples table above (@tbl-firm-comparisons)
+# and is not repeated here.
+_gap_rank = (gap26[gap26['ticker'].isin(w26_valid['ticker']) & (gap26['ticker'] != 'WELL')]
              .sort_values('gap_promo_per_1k', ascending=False)['ticker'].head(2).tolist())
 for ticker in _gap_rank:
     r_w = w26[w26['ticker'] == ticker].iloc[0]
@@ -3179,10 +3613,6 @@ for ticker in _gap_rank:
     name = f"{clean_names.get(ticker, ticker)} ({ticker}, FY2026)"
     promo_diff = r_g['gap_promo_per_1k']
     rows.append(["4. Cross-Venue Divergence", name, r_w['arch_label'], f"{r_w['frames_per_1k']:.3f}", f"{r_w['n_activities']:.0f}", f"{r_w['grounding_index']:.2f}", f"{r_w['substance']:.2f}", f"{r_w['w']:+.2f}", f"Call Promo Gap: +{promo_diff*100:.1f}%", "RECONCILE"])
-
-# Welltower regulatory benchmark in FY2026
-r_well = w26[w26['ticker'] == 'WELL'].iloc[0]
-rows.append(["4. Cross-Venue Divergence", "Welltower Inc. (WELL, FY2026)", "Defensive Disclosers", f"{r_well['frames_per_1k']:.3f}", f"{r_well['n_activities']:.0f}", f"{r_well['grounding_index']:.2f}", f"{r_well['substance']:.2f}", f"{r_well['w']:+.2f}", "SEC Letter: Call vs 10-K", "RECONCILE / AUDIT"])
 
 Markdown(tabulate(rows, headers=["Screen Strategy", "Firm-Year", "Observed Archetype", "D", "A (YTD)", "G", "S", "W", "Venue Disconnect", "Action"]))
 ```
@@ -3199,6 +3629,8 @@ For issuers, the same measures answer a simple question: does what we say outsid
 | **Defensive / Governance-Led** | Material Enabler / Core | High $S$, $W \ll 0$ | **COMMUNICATE EVIDENCE:** Sub-communicating capability; surface existing operational deployments and quantified productivity without inflating promotional hype. |
 
 : Strategic AI Disclosure Alignment Matrix: operational guidance for corporate issuers and disclosure committees. {#tbl-issuer-matrix}
+
+The internal role a firm assigns to AI (Core, Material Enabler, Supporting/Peripheral) is easier to judge against sector peers than in isolation. Appendix G breaks disclosed activity down by two-digit SIC sector and by role (Sell, Operate, Build, Enable, Control, Serve): an issuer can locate its own activity mix on that sector benchmark before deciding whether its disclosed posture over- or under-states AI's actual role in the business, the same comparison a diligence team would run from the outside.
 
 ## Managerial takeaways and operational checklist
 
@@ -3217,22 +3649,19 @@ Issuers use the framework to bring communication in line with how much AI actual
 
 # Conclusions
 
-This thesis asked whether corporate AI disclosure can separate mere talk from disclosed substance. It also asked whether that distinction matters economically. The answer is yes on the first question. It is a qualified yes on the second. Content separates firms in ways that mention counts cannot. Some differences link to fundamentals and market risk. The evidence is associative, not causal. We answer the four research questions in turn.
+Content separates firms in ways that mention counts cannot, and some of that content links to fundamentals and market risk. The main hypothesis holds, with one exception, and the evidence throughout is associative, not causal.
 
-**RQ1, evolution and composition (H1 supported).** AI disclosure expanded from one third of S&P 500 firms in 2021 to over nine in ten in 2025 and 2026. The generative-AI boom multiplied disclosed activity. Yet it lowered average grounding. What firms report doing sits at the application layer: selling and operating with AI, using tools from a few U.S. providers. Vocabulary spread faster than grounded activity. This matches what institutional theory predicts.
-
-**RQ2, heterogeneity (H2 supported).** Firms sort into three stable disclosure archetypes that follow industry norms. Posture predicts activity beyond word count. At equal AI text, Vocal Substantives report `{python} f"{hd_vs_ratio:.2f}"` times as many activities as Defensive Disclosers. Only Vocal Substantives stand out on sector-year-adjusted fundamentals. Talking about AI carries no distinct economic signature. Stressing governance does not either.
-
-**RQ3, credibility and decoupling (H3 supported for the venue clause; the regulatory clause cannot be tested).** Decoupling is a persistent firm-year trait (year-to-year rank correlation `{python} f"{hd_w_rho:.2f}"`). Within the same firm and fiscal year, calls and statutory filings describe the same mix of activities. But the share with a quantified outcome is `{python} f"{hd_gap_quant_pp:.0f}"` percentage points higher in calls. The story makes it to the binding venue. The evidence does not. Direct SEC scrutiny of AI claims has reached one firm in the universe. Its effect is documented as a case (more AI text, no more grounding) rather than tested. AI washing, as measured here, is persistent internal inconsistency, not proven fraud.
-
-**RQ4, economic relevance (H4 not supported; the cheap-talk alternative holds).** Historical AI disclosure posture predicts higher post-call systematic risk. Disclosed substance does not. Decoupling adds nothing once both are in the model. The link is cross-sectional: heavy AI talkers already had high beta. It is not causal. The market signal in AI communication is volume, not grounding.
+- **Evolution and composition.** AI disclosure expanded from one third of S&P 500 firms in 2021 to over nine in ten in 2025 and 2026. The generative-AI boom multiplied disclosed activity, yet it lowered average grounding. What firms report doing sits at the application layer: selling and operating with AI, using tools from a few U.S. providers. Vocabulary spread faster than grounded activity, matching what institutional theory predicts.
+- **Heterogeneity.** Firms sort into three stable disclosure archetypes that follow industry norms, and posture predicts activity beyond word count: at equal AI text, Vocal Substantives report `{python} f"{hd_vs_ratio:.2f}"` times as many activities as Defensive Disclosers. Vocal Substantives is the archetype that stands out most consistently on sector-year-adjusted fundamentals; talking about AI, or stressing governance, is not by itself tied to distinctive economics.
+- **Credibility and decoupling.** Decoupling is a persistent firm-year trait (year-to-year rank correlation `{python} f"{hd_w_rho:.2f}"`). Within the same firm and fiscal year, calls and statutory filings describe the same mix of activities, but the share with a quantified outcome is `{python} f"{hd_gap_quant_pp:.0f}"` percentage points higher in calls: the story makes it to the binding venue, the evidence does not. Direct SEC scrutiny of AI claims has reached one firm in the universe; its effect is documented as a case (less AI text, a narrower talk-substance gap), not tested econometrically. AI washing, as measured here, is persistent internal inconsistency, not proven fraud.
+- **Economic relevance — the exception.** Historical AI disclosure posture predicts higher post-call systematic risk; disclosed substance does not, and decoupling adds nothing once both are in the model. The link is cross-sectional (heavy AI talkers already had high beta), not causal: the market signal in AI communication is volume, not grounding — the cheap-talk account, not the signalling one.
 
 **What managers and investors should do.**
 
 1. **Issuers: move evidence, not adjectives, into the 10-K.** The share of firms disclosing a quantified outcome falls from `{python} f"{hd_quant_pooled:.0f}"`% with calls to `{python} f"{hd_quant_filings:.0f}"`% in filings alone. Check draft call remarks against the signed filing. Doing so closes the kind of gap that drew the Welltower letter.
 2. **Issuers: name the action, the object, and the stage.** `{python} f"{hd_obj_unspec_firms:.0f}"`% of disclosing firms report at least one activity whose object is simply "AI". These attributes cost almost nothing to write. Yet they are what sets apart the one archetype with distinctive fundamentals.
 3. **Investors: rank diligence depth by Decoupling, never treat it as a verdict.** High positive $W$ is a reason to read the filings more closely. Strongly negative $W$ flags under-communicated substance worth a second look.
-4. **Boards and regulators: ask for evidence, not discussion.** In the one direct SEC case, "discuss the status of your AI integration" produced more AI text. Asking for stage, named system, and measured outcome is more likely to yield grounding.
+4. **Boards and regulators: ask for evidence, not discussion.** In the one direct SEC case, "discuss the status of your AI integration" was followed by less AI text and a narrower talk-substance gap, not a padded narrative. Asking for stage, named system, and measured outcome is more likely to yield grounding than volume alone would suggest.
 
 The methodological contribution is a five-layer extraction pipeline built for reproduction. It extracts structured, testable claims and grounded AI activities from `{python} hd_paragraphs_m` million paragraphs. It does so at low cost. Venue-specific measurement error is documented directly rather than assumed away.
 
@@ -3240,7 +3669,7 @@ On theory, the results fit best with three accounts. The first is a signalling a
 
 Four limitations apply throughout:
 
-1. Extraction relies on zero-shot LLM inference. We audit it against a 720-text human ground-truth sample (89.1%–95.8% field agreement). We also check cross-model benchmarks ($\kappa = 0.81–0.87$). Some noise can still remain in borderline disclosures.
+1. Extraction relies on zero-shot LLM inference. We audit it against two human ground-truth samples: a 300-paragraph prefilter review (Prec. 91.2%, Rec. 88.7%) and a 120-paragraph, 267-activity field-agreement audit (89.1%–95.8% field agreement). We also check cross-model benchmarks ($\kappa = 0.81–0.87$). Some noise can still remain in borderline disclosures.
 2. "Disclosed AI activity" measures what a firm says it does. It does not measure an audited operational log. Decoupling compares a firm's own disclosure with its own disclosed activity. The only external benchmark available, AI patents, ranks firms similarly (rank correlation of about 0.5 with disclosed and grounded activity, Appendix B). Yet patents capture patenting capacity, not deployment. Neither construct can be checked against a census of AI use.
 3. Direct SEC comment letters on AI claims reached only one firm in our universe. The regulatory test is therefore a case comparison, not an econometric estimate. That such scrutiny is this rare is itself a result.
 4. The market analysis measures systematic risk, not returns or valuation. It identifies associations rather than causal effects.
@@ -3251,9 +3680,9 @@ Cross-venue results hold when words replace paragraphs as the denominator. They 
 
 Generative AI served two roles in this thesis. Both are declared here under program rules.
 
-First, large language models served as measurement tools. A zero-shot LLM judge (Qwen 3.7 Flash) classified candidate paragraphs into semantic frames. It was accessed via an API with schema-constrained outputs. The same judge extracted the inventory of disclosed AI activities. A second model (Gemini) served only as an independent judge for agreement benchmarks.
+First, large language models served as measurement tools. A zero-shot LLM judge (gpt-5.6-luna) classified candidate paragraphs into semantic frames. It was accessed via an API with schema-constrained outputs. The same judge extracted the inventory of disclosed AI activities. A second model (Gemini) served only as an independent judge for agreement benchmarks.
 
-The models did not produce empirical results directly. Both acted as annotators running a fixed, documented prompt. We checked their outputs against a 720-text human sample. We also checked cross-model agreement. Deterministic code then computed every downstream construct from these structured outputs.
+The models did not produce empirical results directly. Both acted as annotators running a fixed, documented prompt. We checked their outputs against two human-audited samples (300 paragraphs for the prefilter, 120 paragraphs / 267 activities for extracted activity fields). We also checked cross-model agreement. Deterministic code then computed every downstream construct from these structured outputs.
 
 Second, AI coding assistants (Anthropic Claude, via Claude Code) served as tools while preparing this text. They helped write and debug pipeline scripts. They helped draft figures and tables from computed data. They also helped check references, find source PDFs, and edit prose for clarity. All research questions, hypotheses, design choices, interpretations, and conclusions are the author's own. Every number reported comes from the author's code on the author's data. The author reviewed and approved all text. The author takes full responsibility for its content.
 
@@ -3344,7 +3773,7 @@ for form, label in [("10-K", "10-K documents with ≥1 AI frame"), ("10-Q", "10-
     d = _by_year(s, item_col="accession_number", count="nunique"); der_rows.append([label] + [_cell(*d[y]) for y in INV_YEARS])
 for ch, label in [("filing", "AI semantic frames in statutory filings"), ("call", "AI semantic frames in earnings calls")]:
     d = _by_year(_docs[_docs["channel"] == ch], item_col="n_frames", count="sum"); der_rows.append([label] + [_cell(*d[y]) for y in INV_YEARS])
-_act = pd.read_parquet(_p("firm_activities.parquet"), columns=["ticker", "accession_number", "text_hash", "activity_index", "channel"]).drop_duplicates(["ticker", "text_hash", "activity_index"])
+_act = pd.read_parquet(_p("firm_activities.parquet"), columns=["ticker", "accession_number", "text_hash", "activity_id", "channel"]).drop_duplicates(["ticker", "text_hash", "activity_id"])
 _act = _act.merge(_docs[["accession_number", "year"]].drop_duplicates("accession_number"), on="accession_number", how="inner")
 for ch, label in [("filing", "Disclosed AI activities in statutory filings"), ("call", "Disclosed AI activities in earnings calls")]:
     d = _by_year(_act[_act["channel"] == ch]); der_rows.append([label] + [_cell(*d[y]) for y in INV_YEARS])
@@ -3438,14 +3867,14 @@ repo_root = db_path.resolve().parent.parent
 act_path = Path("../data/processed/clusters/firm_activities.parquet")
 if not act_path.exists():
     act_path = Path("data/processed/clusters/firm_activities.parquet")
-_acts = pd.read_parquet(act_path).drop_duplicates(subset=["ticker", "text_hash", "activity_index"])
+_acts = pd.read_parquet(act_path).drop_duplicates(subset=["ticker", "text_hash", "activity_id"])
 
 FORMS = ["10-K", "10-Q", "DEF 14A", "8-K", "Earnings call", "20-F"]
 FORM_LABELS = {"10-K": "10-K", "10-Q": "10-Q", "DEF 14A": "DEF 14A", "8-K": "8-K", "Earnings call": "Calls", "20-F": "20-F"}
 
 con = duckdb.connect(str(db_path), read_only=True)
 con.execute("SET enable_progress_bar = false")
-con.register("acts", _acts[["ticker", "accession_number", "text_hash", "activity_index"]])
+con.register("acts", _acts[["ticker", "accession_number", "text_hash", "activity_id"]])
 _cwd = os.getcwd()
 os.chdir(repo_root)
 try:
@@ -3465,16 +3894,16 @@ try:
     """)
     con.execute(f"""
         CREATE TEMP TABLE _fr AS
-        SELECT form, accession_number, paragraph_index, text_hash, frame_index, subject
+        SELECT form, accession_number, paragraph_index, text_hash, frame_id, subject
         FROM gold_ai_frames WHERE country_code = 'us' AND has_frame AND {PANEL_DOCS}
     """)
     con.execute("""
         CREATE TEMP TABLE _ac AS
-        SELECT DISTINCT a.ticker, a.accession_number, a.text_hash, a.activity_index, d.form
+        SELECT DISTINCT a.ticker, a.accession_number, a.text_hash, a.activity_id, d.form
         FROM acts a JOIN (SELECT DISTINCT accession_number, form FROM _pp) d USING (accession_number)
     """)
     # an activity is counted once per (ticker, text, index) whatever the form it appears in
-    con.execute("CREATE TEMP TABLE _acu AS SELECT DISTINCT ticker, text_hash, activity_index, form FROM _ac")
+    con.execute("CREATE TEMP TABLE _acu AS SELECT DISTINCT ticker, text_hash, activity_id, form FROM _ac")
 
     def by_form(sql):
         """{form: value} plus 'Total' computed over all forms (no double counting)."""
@@ -3491,11 +3920,11 @@ try:
     pos_uniq  = by_form("SELECT count(DISTINCT text_hash) FROM (SELECT * FROM _pp {where}) WHERE is_scorable AND text_hash IN (SELECT text_hash FROM _pos)")
     pos_inst  = by_form("SELECT count(*) FROM (SELECT * FROM _pp {where}) WHERE is_scorable AND text_hash IN (SELECT text_hash FROM _pos)")
     fr_texts  = by_form("SELECT count(DISTINCT text_hash) FROM _fr {where}")
-    fr_uniq   = by_form("SELECT count(*) FROM (SELECT DISTINCT text_hash, frame_index FROM (SELECT * FROM _fr {where}))")
+    fr_uniq   = by_form("SELECT count(*) FROM (SELECT DISTINCT text_hash, frame_id FROM (SELECT * FROM _fr {where}))")
     fr_inst   = by_form("SELECT count(*) FROM (SELECT DISTINCT accession_number, paragraph_index FROM (SELECT * FROM _fr {where}))")
     fr_docs   = by_form("SELECT count(DISTINCT accession_number) FROM _fr {where}")
     firm_txt  = by_form("SELECT count(DISTINCT text_hash) FROM (SELECT * FROM _fr {where}) WHERE subject = 'firm'")
-    ac_uniq   = by_form("SELECT count(*) FROM (SELECT DISTINCT ticker, text_hash, activity_index FROM (SELECT * FROM _acu {where}))")
+    ac_uniq   = by_form("SELECT count(*) FROM (SELECT DISTINCT ticker, text_hash, activity_id FROM (SELECT * FROM _acu {where}))")
     ac_uniq["Total"] = len(_acts)
     ac_inst   = by_form("SELECT count(*) FROM (SELECT DISTINCT accession_number, text_hash FROM (SELECT * FROM _ac {where}))")
     ac_docs   = by_form("SELECT count(DISTINCT accession_number) FROM _ac {where}")
@@ -3521,7 +3950,7 @@ funnel_rows = [
     ["Share of scorable texts", "Positive rate", "%"] + _pct(pos_uniq, uniq),
     ["Positive instances", "Exact hash join", "Instances"] + _n(pos_inst),
     ["**C. Semantic Frames**", "", ""] + blank,
-    ["Texts with $\\ge 1$ frame", "LLM judge (Qwen 3.7 Flash)", "Unique texts"] + _n(fr_texts),
+    ["Texts with $\\ge 1$ frame", "LLM judge (gpt-5.6-luna)", "Unique texts"] + _n(fr_texts),
     ["LLM acceptance rate", "Framed / positive texts", "%"] + _pct(fr_texts, pos_uniq),
     ["Unique semantic frames", "Frame extraction", "Frames"] + _n(fr_uniq),
     ["Document instances", "Exact hash join", "Instances"] + _n(fr_inst),
@@ -3623,7 +4052,7 @@ _pf = _pt.groupby("ticker").agg(ai_pat=("ai_patents_oecd", "sum"), tot_pat=("tot
 _ac = pd.read_parquet(_p("firm_activities.parquet"))
 _af = _ac.groupby("ticker").agg(
     n_act=("text_hash", "size"),
-    n_grounded=("evidence_strength", lambda s: s.isin(["named_product_or_process", "metric"]).sum()),
+    n_grounded=("evidence_type", lambda s: s.isin(["named", "metric"]).sum()),
     n_dep=("stage", lambda s: s.isin(["deployed", "scaled"]).sum())).reset_index()
 _bench = (_dim.merge(_af, on="ticker", how="left").fillna({"n_act": 0, "n_grounded": 0, "n_dep": 0})
           .merge(_pf, on="ticker", how="left"))
@@ -3685,11 +4114,11 @@ Systematic error analysis reveals that extraction discrepancies are heavily conc
 
 ### AI disclosure strategy dimensions: correlation and PCA diagnostics {.unnumbered}
 
-The correlation structure across the seven AI disclosure strategy dimensions is reported in @tbl-a3-posture-correlation below:
+The correlation structure across the eight AI disclosure strategy dimensions is reported in @tbl-a3-posture-correlation below:
 
 ```{python}
 #| label: tbl-a3-posture-correlation
-#| tbl-cap: "Correlation matrix of the seven posture dimensions."
+#| tbl-cap: "Correlation matrix of the eight posture dimensions."
 #| echo: false
 import json
 from pathlib import Path
@@ -3703,7 +4132,7 @@ def _p(name):
 
 manifest = json.loads(_p("strategy_dimensions_manifest.json").read_text())
 corr = pd.DataFrame(manifest["correlation_matrix"])
-LABELS = {"promotional_posture": "Promotional", "risk_orientation": "Risk", "governance_orientation": "Governance",
+LABELS = {"promotional_posture": "Promotional", "hedging_posture": "Hedging", "risk_orientation": "Risk", "governance_orientation": "Governance",
           "temporal_posture": "Temporal (realized)", "ai_positioning": "Customer-facing", "specificity": "Specificity",
           "disclosure_intensity": "Intensity"}
 corr = corr.rename(index=LABELS, columns=LABELS).loc[list(LABELS.values()), list(LABELS.values())]
@@ -3711,11 +4140,11 @@ rows = [[i] + [f"{v:+.2f}" for v in r] for i, r in corr.iterrows()]
 Markdown(tabulate(rows, headers=[""] + list(LABELS.values())))
 ```
 
-A principal-components analysis of these seven standardized dimensions is reported in @tbl-a3-pca-diagnostic (variance explained) and @tbl-a3-pca-loadings (component loadings) as a dimensionality check:
+A principal-components analysis of these eight standardized dimensions is reported in @tbl-a3-pca-diagnostic (variance explained) and @tbl-a3-pca-loadings (component loadings) as a dimensionality check:
 
 ```{python}
 #| label: tbl-a3-pca-diagnostic
-#| tbl-cap: "PCA diagnostic on the seven posture dimensions: variance explained, reported as a dimensionality check, not as the clustering method."
+#| tbl-cap: "PCA diagnostic on the eight posture dimensions: variance explained, reported as a dimensionality check, not as the clustering method."
 #| echo: false
 from pathlib import Path
 import numpy as np
@@ -3728,10 +4157,10 @@ def _p(name):
     return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 df_strat = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
-FEATS = ["promotional_posture", "risk_orientation", "governance_orientation",
+FEATS = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
          "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
 LABELS = {
-    "promotional_posture": "Promotional", "risk_orientation": "Risk", "governance_orientation": "Governance",
+    "promotional_posture": "Promotional", "hedging_posture": "Hedging", "risk_orientation": "Risk", "governance_orientation": "Governance",
     "temporal_posture": "Temporal (realized)", "ai_positioning": "Customer-facing",
     "specificity": "Specificity", "disclosure_intensity": "Intensity"
 }
@@ -3753,28 +4182,57 @@ Markdown(tabulate(ev_rows, headers=["Component", "Variance explained", "Cumulati
 
 ```{python}
 #| label: tbl-a3-pca-loadings
-#| tbl-cap: "Principal component factor loadings across the first four components (PC1–PC4), capturing 83.8% of total variance across posture dimensions."
+#| tbl-cap: "Principal component factor loadings across the first four components (PC1-PC4), capturing 81.1% of total variance across posture dimensions."
 #| echo: false
 load_rows = []
 for idx, f in enumerate(FEATS):
     row = [LABELS[f]] + [f"{Vt_pca[c, idx]:+.3f}" for c in range(4)]
     load_rows.append(row)
-Markdown(tabulate(load_rows, headers=["Posture dimension", "PC1 (42.4%)", "PC2 (20.2%)", "PC3 (12.4%)", "PC4 (8.8%)"]))
+Markdown(tabulate(load_rows, headers=[f"PC{c+1} ({ev_ratios[c]:.1%})" if c >= 0 else "Posture dimension" for c in range(-1, 4)]))
 ```
 
 The component loadings reveal three distinct, economically intuitive strategic axes:
 
-1. **PC1 (Commercial execution vs. defensive risk, 42.4%):** Positive loadings on customer-facing positioning (+0.465), technical specificity (+0.463), and disclosure intensity (+0.388) contrast sharply with risk orientation (-0.463). It separates active commercial deployers from passive risk-warning disclosures.
-2. **PC2 (Institutional governance vs. front-office product, 20.2%):** Dominated by governance orientation (+0.736) and realized deployment (+0.478) against customer-facing orientation (-0.327). It isolates compliance-oriented supervisory oversight from front-office product commercialization.
-3. **PC3 (Promotional rhetoric vs. grounded specificity, 12.4%):** Highly positive on promotional posture (+0.856) but negative on technical specificity (-0.313) and realized deployment (-0.286). This component isolates forward-looking promotional hype from verified operational execution.
+1. **PC1 (Commercial execution vs. defensive risk, `{python} f"{ev_ratios[0]:.1%}"`):** Positive loadings on customer-facing positioning (`{python} f"{Vt_pca[0, FEATS.index('ai_positioning')]:+.3f}"`), technical specificity (`{python} f"{Vt_pca[0, FEATS.index('specificity')]:+.3f}"`), and disclosure intensity (`{python} f"{Vt_pca[0, FEATS.index('disclosure_intensity')]:+.3f}"`) contrast sharply with risk orientation (`{python} f"{Vt_pca[0, FEATS.index('risk_orientation')]:+.3f}"`). It separates active commercial deployers from passive risk-warning disclosures.
+2. **PC2 (Institutional governance vs. front-office product, `{python} f"{ev_ratios[1]:.1%}"`):** Dominated by governance orientation (`{python} f"{Vt_pca[1, FEATS.index('governance_orientation')]:+.3f}"`) and realized deployment (`{python} f"{Vt_pca[1, FEATS.index('temporal_posture')]:+.3f}"`) against customer-facing orientation (`{python} f"{Vt_pca[1, FEATS.index('ai_positioning')]:+.3f}"`). It isolates compliance-oriented supervisory oversight from front-office product commercialization.
+3. **PC3 (Promotional rhetoric vs. grounded specificity, `{python} f"{ev_ratios[2]:.1%}"`):** Highly positive on promotional posture (`{python} f"{Vt_pca[2, FEATS.index('promotional_posture')]:+.3f}"`) but negative on technical specificity (`{python} f"{Vt_pca[2, FEATS.index('specificity')]:+.3f}"`) and realized deployment (`{python} f"{Vt_pca[2, FEATS.index('temporal_posture')]:+.3f}"`). This component isolates forward-looking promotional hype from verified operational execution.
 
 ### Discrete clustering benchmark (K-Means) and exploratory stability screening {.unnumbered}
 
-As a robustness benchmark against the continuous Archetypal Analysis simplex presented in Chapter 4, we examine the discrete partition produced by standard K-means clustering ($k = 3$) on the same seven standardized posture dimensions. Discrete K-means identifies three cluster centroids whose standardized coordinates closely match the three archetypal vertices:
+```{python}
+#| echo: false
+#| warning: false
+#| message: false
+# Live K-means(k=3) on the same standardized posture matrix (X_pca) the PCA
+# diagnostic above already built, purely to source the benchmark prose below
+# from the actual current fit instead of hand-typed numbers. Clusters are
+# assigned to archetype labels by their own defining signal (highest risk ->
+# Defensive, highest governance among what's left -> Governance, remainder ->
+# Vocal), same priority order build_strategy_dimensions.py uses, so a re-fit
+# that renumbers sklearn's cluster ids doesn't silently swap the labels.
+from sklearn.cluster import KMeans as _KMeans
 
-1. **Vocal Substantives cluster ($n = 110$):** High customer-facing (+1.71 SD), specificity (+1.62 SD), promotional posture (+1.18 SD), and disclosure intensity (+1.25 SD); low risk orientation (-1.43 SD).
-2. **Governance-Led Disclosers cluster ($n = 144$):** High governance orientation (+1.78 SD) and realized deployment (+0.88 SD); moderate promotional tone (-0.15 SD).
-3. **Defensive Disclosers cluster ($n = 187$):** High risk orientation (+1.18 SD); low temporal realization (-1.22 SD) and low technical specificity (-0.98 SD).
+_km = _KMeans(n_clusters=3, random_state=42, n_init=10).fit(X_pca)
+_km_centers = _km.cluster_centers_
+_km_labels = _km.labels_
+_km_sizes = np.bincount(_km_labels)
+
+_remaining = [0, 1, 2]
+_def_c = max(_remaining, key=lambda c: _km_centers[c, FEATS.index("risk_orientation")])
+_remaining.remove(_def_c)
+_gov_c = max(_remaining, key=lambda c: _km_centers[c, FEATS.index("governance_orientation")])
+_remaining.remove(_gov_c)
+_voc_c = _remaining[0]
+
+def _km_dim(cluster, dim):
+    return _km_centers[cluster, FEATS.index(dim)]
+```
+
+As a robustness benchmark against the continuous Archetypal Analysis simplex presented in Chapter 4, we examine the discrete partition produced by standard K-means clustering ($k = 3$) on the same eight standardized posture dimensions. Discrete K-means identifies three cluster centroids whose standardized coordinates closely match the three archetypal vertices:
+
+1. **Vocal Substantives cluster ($n =$ `{python} int(_km_sizes[_voc_c])`):** High customer-facing (`{python} f"{_km_dim(_voc_c, 'ai_positioning'):+.2f}"` SD), specificity (`{python} f"{_km_dim(_voc_c, 'specificity'):+.2f}"` SD), promotional posture (`{python} f"{_km_dim(_voc_c, 'promotional_posture'):+.2f}"` SD), and disclosure intensity (`{python} f"{_km_dim(_voc_c, 'disclosure_intensity'):+.2f}"` SD); low risk orientation (`{python} f"{_km_dim(_voc_c, 'risk_orientation'):+.2f}"` SD).
+2. **Governance-Led Disclosers cluster ($n =$ `{python} int(_km_sizes[_gov_c])`):** High governance orientation (`{python} f"{_km_dim(_gov_c, 'governance_orientation'):+.2f}"` SD) and realized deployment (`{python} f"{_km_dim(_gov_c, 'temporal_posture'):+.2f}"` SD); promotional tone (`{python} f"{_km_dim(_gov_c, 'promotional_posture'):+.2f}"` SD).
+3. **Defensive Disclosers cluster ($n =$ `{python} int(_km_sizes[_def_c])`):** High risk orientation (`{python} f"{_km_dim(_def_c, 'risk_orientation'):+.2f}"` SD); low temporal realization (`{python} f"{_km_dim(_def_c, 'temporal_posture'):+.2f}"` SD) and low technical specificity (`{python} f"{_km_dim(_def_c, 'specificity'):+.2f}"` SD).
 
 Furthermore, the initial exploratory stability screening using 25 within-firm frame resamples (@tbl-a3-kmeans-stability below) established the preliminary threshold evidence pointing to $k = 3$ as the optimal partition prior to the 200-replicate dual-bootstrap test reported in Chapter 4.
 
@@ -3857,10 +4315,7 @@ def _p(name):
     p = Path(f"../data/processed/clusters/{name}")
     return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
-df = pd.read_parquet(_p("firm_activity_profiles.parquet")).drop(columns=["segmento"])
-strat = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))[["ticker", "archetype"]]
-df = df.merge(strat, on="ticker", how="left")
-df["archetype"] = df["archetype"].fillna("No AI")
+df = pd.read_parquet(_p("firm_activity_profiles.parquet"))
 SEGS = ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers", "No AI"]
 LABELS = SEGS
 g = df.groupby("archetype")
@@ -3922,7 +4377,7 @@ dist = d["distributions"]
 func = d["function_families"]
 
 def col(items):
-    # Raw identifiers (e.g. "invest_infrastructure") have no space for Word
+    # Raw identifiers (e.g. "infrastructure_investment") have no space for Word
     # to wrap on in a narrow column, so a long one gets hyphenated mid-word;
     # replacing underscores with spaces gives it a break point.
     return [[k.replace("_", " "), f"{v:.1f}%"] for k, v in sorted(items.items(), key=lambda kv: -kv[1])]
@@ -3942,7 +4397,7 @@ def side_by_side(pairs):
     return tabulate(rows, headers=headers)
 
 t1 = side_by_side([("Action", dist["action"]), ("Maturity stage", dist["stage"]), ("Target audience", dist["target"])])
-t2 = side_by_side([("AI source", dist["ai_source"]), ("Evidence strength", dist["evidence_strength"]), ("Business function", func)])
+t2 = side_by_side([("AI source", dist["source"]), ("Evidence strength", dist["evidence_type"]), ("Business function", func)])
 Markdown(t1 + "\n\n" + t2)
 ```
 
@@ -3965,17 +4420,17 @@ data_path = Path("../data/processed/clusters/firm_activities.parquet")
 if not data_path.exists():
     data_path = Path("data/processed/clusters/firm_activities.parquet")
 df = pd.read_parquet(data_path)
-roles = df["named_entities"].explode().dropna().apply(lambda x: x["role"] if isinstance(x, dict) else None).dropna()
+roles = df["entities"].explode().dropna().apply(lambda x: x["role"] if isinstance(x, dict) else None).dropna()
 counts = roles.value_counts()
 total = len(roles)
 
 LABELS = {
-    "own_product_or_brand": "Own product or brand",
-    "external_provider": "External technology vendor",
+    "own_brand": "Own product or brand",
+    "provider": "External technology vendor",
     "partner": "Strategic commercial partner",
     "customer": "Enterprise customer",
     "acquired_company": "Acquired technology startup",
-    "external_model": "External foundation model",
+    "model": "External foundation model",
     "distribution_channel": "Distribution channel",
     "competitor_or_reference": "Competitor or reference",
 }
@@ -4003,7 +4458,7 @@ table = [[RENAME.get(k, k), f"{v['pct_firms']:.1f}%", v["examples"]] for k, v in
 Markdown(tabulate(table, headers=["External technology provider / model family", "% of Firms citing", "Literal named entities extracted"]))
 ```
 
-*Notes:* Vendor citations include entities tagged as `external_provider`, `external_model`, or `partner`. Entities appear in this table only when cited by *other* firms as an external technology source (e.g., Microsoft citing OpenAI, or Lowe's citing Palantir and NVIDIA), excluding self-promotional brand mentions.
+*Notes:* Vendor citations include entities tagged as `provider`, `model`, or `partner`. Entities appear in this table only when cited by *other* firms as an external technology source (e.g., Microsoft citing OpenAI, or Lowe's citing Palantir and NVIDIA), excluding self-promotional brand mentions.
 
 ### Regional taxonomy: term coverage and excluded generic collisions {.unnumbered}
 
@@ -4102,7 +4557,7 @@ top_sic = m.groupby("sic2")["ticker"].nunique().sort_values(ascending=False).hea
 act = pd.read_parquet(_p("firm_activities.parquet"))
 act["sic2"] = act["ticker"].map(sic_by_ticker)
 act = act[act["sic2"].isin(top_sic)]
-act["proprietary_ai"] = (act["action"] == "develop") | (act["ai_source"] == "own")
+act["proprietary_ai"] = (act["action"] == "develop") | (act["source"] == "own")
 n_act = act.groupby("ticker").size()
 by_ticker = sic_by_ticker.reindex(n_act.index).to_frame("sic2").join(n_act.rename("n_activities"))
 median_act = by_ticker.groupby("sic2")["n_activities"].median()
@@ -4274,7 +4729,8 @@ for i in range(len(labels)):
 ax.set_yticks(y)
 ax.set_yticklabels(labels, fontsize=9.0, fontweight="bold")
 ax.set_xlabel("Incremental Explanatory Power (ΔR² over Financial Fundamentals)", fontsize=9.0, fontweight="bold")
-ax.set_xlim(0, 0.135)
+_totals = [l + a for l, a in zip(left_wash, delta_wash)]
+ax.set_xlim(0, max(_totals) * 1.12)
 ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x*100:.0f}%"))
 ax.legend(loc="lower right", fontsize=8.2, framealpha=0.95)
 ax.grid(True, axis="x", linestyle=":", alpha=0.5)
@@ -4355,7 +4811,7 @@ def _p(name):
 _wv = json.loads(_p("washing_score_validation.json").read_text())
 w_n_panel, w_n_firms = _wv["n_panel"], _wv["n_firms"]
 w_n_firmyears_total = len(pd.read_parquet(_p("firm_year_master_v2.parquet")))
-w_n_firms_total = len(pd.read_parquet(_p("firm_segments.parquet")))
+w_n_firms_total = len(pd.read_parquet(_p("firm_strategy_dimensions.parquet")))
 ```
 
 **Decoupling index ($W$), full specification.** Disclosed substance is defined as:
@@ -4529,7 +4985,21 @@ table_la = _lev_table("liabilities_to_assets", "liabilities_to_assets", "Liabili
 Markdown(tabulate(table_la, headers=["Variable", "M0", "M1"]))
 ```
 
-Controlling for Debt / Equity leaves disclosure coefficients unchanged ($\text{HistD} = 0.053, \text{SurpriseD} = 0.034$; leverage $p = 0.599$). Controlling for Liabilities / Assets results in minor shifts ($\text{HistD}$ moves from 0.062 to 0.058; $\text{SurpriseD}$ from 0.031 to 0.030) and adds under 0.1 percentage point to $R^2$ (0.7103 to 0.7113) without displacing the disclosure terms.
+```{python}
+#| echo: false
+#| output: false
+_de_hist_m1 = _lev.loc[("debt_to_equity_M1", "hist_disclosure")]
+_de_surp_m1 = _lev.loc[("debt_to_equity_M1", "surprise_disclosure")]
+_de_lev_m1 = _lev.loc[("debt_to_equity_M1", "debt_to_equity")]
+_la_hist_m0 = _lev.loc[("liabilities_to_assets_M0", "hist_disclosure")]
+_la_hist_m1 = _lev.loc[("liabilities_to_assets_M1", "hist_disclosure")]
+_la_surp_m0 = _lev.loc[("liabilities_to_assets_M0", "surprise_disclosure")]
+_la_surp_m1 = _lev.loc[("liabilities_to_assets_M1", "surprise_disclosure")]
+_la_r2_m0 = _lev_samples.loc["liabilities_to_assets_M0", "r2"]
+_la_r2_m1 = _lev_samples.loc["liabilities_to_assets_M1", "r2"]
+```
+
+Controlling for Debt / Equity leaves disclosure coefficients essentially unchanged ($\text{HistD} =$ `{python} f"{_de_hist_m1['beta_std']:.4f}"`, $\text{SurpriseD} =$ `{python} f"{_de_surp_m1['beta_std']:.4f}"`; leverage $p =$ `{python} f"{_de_lev_m1['p']:.3f}"`). Controlling for Liabilities / Assets results in minor shifts ($\text{HistD}$ moves from `{python} f"{_la_hist_m0['beta_std']:.4f}"` to `{python} f"{_la_hist_m1['beta_std']:.4f}"`; $\text{SurpriseD}$ from `{python} f"{_la_surp_m0['beta_std']:.4f}"` to `{python} f"{_la_surp_m1['beta_std']:.4f}"`) and changes $R^2$ by `{python} f"{abs(_la_r2_m1 - _la_r2_m0):.4f}"` (`{python} f"{_la_r2_m0:.4f}"` to `{python} f"{_la_r2_m1:.4f}"`) without displacing the disclosure terms.
 
 ## Appendix F: SEC Comment-Letter Inventory and Case Comparisons {.unnumbered}
 
@@ -4583,3 +5053,516 @@ Markdown(tabulate(_rows, headers=_hdr))
 ```
 
 *Notes:* Welltower's letter (2025-04-28) reviews the FY2024 10-K filed in February 2025 ($k=-1$); the first post-letter annual report is the FY2025 10-K filed in February 2026 ($k=0$), so no $k=+1$ observation exists yet. Arista's letters (2024-07-25 and 2024-10-16) review the FY2023 10-K; $k=0$ is the FY2024 10-K filed in February 2025. Peers: `{python} ", ".join(f"{t}: {', '.join(c['controls'])}" for t, c in sec_cases["cases"].items())`.
+
+## Appendix G: Sector, Cohort, and Rollup Disaggregation {.unnumbered}
+
+The disclosure-posture, activity, decoupling, and credibility results above are computed on the pooled S&P 500 panel. This appendix disaggregates those constructs by two-digit SIC sector, filer cohort, and rollup method, using the same firm-year and activity-level tables read elsewhere in this thesis — no new constructs are introduced. Each table and figure below also writes the data behind it to `docs/analytics/`, and `docs/analytics/appendix_g_slide_manifest.txt` records which exported file backs which prospective slide.
+
+```{python}
+#| echo: false
+#| output: false
+import json
+from pathlib import Path
+
+def _gdir():
+    d = Path("../docs/analytics")
+    return d if d.exists() else Path("docs/analytics")
+
+_manifest_rows = []
+
+def _export(filename, obj, slide, viz):
+    p = _gdir() / filename
+    if filename.endswith(".csv"):
+        obj.to_csv(p)
+    else:
+        p.write_text(json.dumps(obj, indent=2, default=float))
+    _manifest_rows.append(f"{filename}\t{slide}\t{viz}")
+```
+
+### Does disclosure posture vary by sector, or mainly within it? {.unnumbered}
+
+```{python}
+#| label: tbl-h1-sic-posture
+#| tbl-cap: "Mean disclosure posture and archetype composition by sector (2-digit SIC, top 10 by firm count), firm-year panel."
+#| echo: false
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+SIC2_LABELS = {
+    "73": "Business services", "38": "Instruments", "28": "Chemicals", "49": "Electric/gas/sanitary",
+    "35": "Industrial/computer equip.", "67": "Holding/investment offices", "36": "Electronic equipment",
+    "63": "Insurance carriers", "60": "Depository institutions", "20": "Food products",
+    "37": "Transportation equipment", "62": "Security/commodity brokers", "13": "Oil and gas",
+    "48": "Communications", "70": "Hotels",
+}
+m = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
+m["sic2"] = m["sic2"].astype(int).astype(str)
+top_sic = m.groupby("sic2")["ticker"].nunique().sort_values(ascending=False).head(10).index
+sub = m[m["sic2"].isin(top_sic)]
+
+POSTURE_COLS = ["disclosure_intensity", "risk_orientation", "governance_orientation", "promotional_posture"]
+posture_by_sic = sub.groupby("sic2")[POSTURE_COLS].mean().reindex(top_sic)
+arch_mix = (pd.crosstab(sub["sic2"], sub["archetype"], normalize="index") * 100).reindex(top_sic)
+ARCH = ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers", "No AI"]
+arch_mix = arch_mix.reindex(columns=ARCH)
+
+rows = [[SIC2_LABELS.get(s, s)] + [f"{posture_by_sic.loc[s, c]:.2f}" for c in POSTURE_COLS]
+        + [f"{arch_mix.loc[s, a]:.0f}%" for a in ARCH]
+        for s in top_sic]
+_export("appendix_g_sic_posture.csv", posture_by_sic.join(arch_mix), "sector posture and archetype mix", "table")
+Markdown(tabulate(rows, headers=["Sector", "Disclosure Int. ($D$)", "Risk", "Governance", "Promotional"] + ARCH))
+```
+
+Disclosure Intensity ($D$) is highest in business services and industrial/computer equipment and lowest in electric/gas/sanitary and holding/investment offices — sectors far from AI's core supply chain talk about it least. But every sector mixes archetypes: even electric/gas/sanitary, the lowest-$D$ sector, has Vocal Substantives among its firms, and business services has Defensive Disclosers alongside its majority of Vocal Substantives. Sector explains the general level of AI disclosure; it does not determine which posture a given firm within that sector adopts.
+
+### What do different industries do with AI? {.unnumbered}
+
+```{python}
+#| label: tbl-h2-sic-role
+#| tbl-cap: "Composition of disclosed AI activities by sector (2-digit SIC, top 10 by firm count), % of sector's activities in each role."
+#| echo: false
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+m = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
+m["sic2"] = m["sic2"].astype(int).astype(str)
+sic_by_ticker = m.groupby("ticker")["sic2"].agg(lambda s: s.mode().iloc[0])
+top_sic = m.groupby("sic2")["ticker"].nunique().sort_values(ascending=False).head(10).index
+n_firms_sic = m[m["sic2"].isin(top_sic)].groupby("sic2")["ticker"].nunique()
+
+act = pd.read_parquet(_p("firm_activities.parquet"))
+act["sic2"] = act["ticker"].map(sic_by_ticker)
+act = act[act["sic2"].isin(top_sic)].copy()
+
+def get_role(row):
+    f = str(row["function_family"]); obj = str(row["object_family"]); tgt = str(row["target"])
+    if f in ["product_feature", "content_and_media"] or "product" in obj or tgt == "customers":
+        return "Sell"
+    elif f in ["customer_service", "marketing_and_sales"]:
+        return "Serve"
+    elif f in ["software_development", "hr_and_talent"] or "copilot" in obj or "talent" in obj:
+        return "Enable"
+    elif f in ["it_and_cybersecurity", "fraud_and_risk", "governance"] or "security" in obj or "governance" in obj:
+        return "Control"
+    elif f in ["ai_compute_and_models", "research_and_product_development", "data_and_analytics"] or "compute" in obj or "analytics" in obj:
+        return "Build"
+    else:
+        return "Operate"
+
+act["role"] = act.apply(get_role, axis=1)
+ROLES = ["Sell", "Operate", "Build", "Enable", "Control", "Serve"]
+role_mix = (pd.crosstab(act["sic2"], act["role"], normalize="index") * 100).reindex(top_sic)[ROLES]
+
+SIC2_LABELS = {
+    "73": "Business services", "38": "Instruments", "28": "Chemicals", "49": "Electric/gas/sanitary",
+    "35": "Industrial/computer equip.", "67": "Holding/investment offices", "36": "Electronic equipment",
+    "63": "Insurance carriers", "60": "Depository institutions", "20": "Food products",
+}
+rows = [[SIC2_LABELS.get(s, s), int(n_firms_sic.get(s, 0))] + [f"{role_mix.loc[s, r]:.0f}%" for r in ROLES] for s in top_sic]
+_export("appendix_g_sic_role_mix.csv", role_mix, "heatmap of sector x AI activity role", "heatmap")
+Markdown(tabulate(rows, headers=["Sector", "Firms"] + ROLES))
+```
+
+Sell (customer-facing products) is the largest activity role in nearly every sector, but its share swings from a majority in industrial/computer equipment and instruments to a much smaller share in business services and depository institutions, where Operate and Control pick up the remainder. The AI-activity taxonomy is stable across industries; the mix that fills it is not.
+
+### Do sectors differ in the amount of AI activity or in its grounding? {.unnumbered}
+
+```{python}
+#| label: fig-h3-sic-volume-grounding
+#| fig-cap: "Median disclosed AI activities per firm versus mean AI activity grounding, by sector (2-digit SIC, top 10 by firm count). Point size scales with firm count; sector median lines shown for both axes."
+#| echo: false
+#| fig-width: 7.0
+#| fig-height: 5.0
+from pathlib import Path
+import pandas as pd
+import matplotlib.pyplot as plt
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+m = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
+m["sic2"] = m["sic2"].astype(int).astype(str)
+sic_by_ticker = m.groupby("ticker")["sic2"].agg(lambda s: s.mode().iloc[0])
+top_sic = m.groupby("sic2")["ticker"].nunique().sort_values(ascending=False).head(10).index
+
+wy = pd.read_parquet(_p("firm_year_washing_score.parquet"))
+wy["sic2"] = wy["ticker"].map(sic_by_ticker)
+wy = wy[wy["sic2"].isin(top_sic)]
+
+SIC2_LABELS = {
+    "73": "Business services", "38": "Instruments", "28": "Chemicals", "49": "Electric/gas/sanitary",
+    "35": "Industrial/computer equip.", "67": "Holding/investment offices", "36": "Electronic equipment",
+    "63": "Insurance carriers", "60": "Depository institutions", "20": "Food products",
+}
+g3 = wy.groupby("sic2").agg(n_firms=("ticker", "nunique"), med_activities=("n_activities", "median"),
+                             mean_grounding=("grounding_index", "mean")).reindex(top_sic)
+_export("appendix_g_sic_volume_grounding.csv", g3, "sector volume vs grounding scatter", "scatter")
+
+fig, ax = plt.subplots(figsize=(7.0, 5.0), dpi=300)
+ax.scatter(g3["med_activities"], g3["mean_grounding"], s=g3["n_firms"] * 4, alpha=0.7, color="#1D4ED8", edgecolor="white")
+for s in top_sic:
+    ax.annotate(SIC2_LABELS.get(s, s), (g3.loc[s, "med_activities"], g3.loc[s, "mean_grounding"]),
+                fontsize=7.5, xytext=(5, 3), textcoords="offset points")
+ax.axvline(g3["med_activities"].median(), color="#94A3B8", lw=1.0, ls=":")
+ax.axhline(g3["mean_grounding"].median(), color="#94A3B8", lw=1.0, ls=":")
+ax.set_xlabel("Median disclosed AI activities per firm", fontsize=9.0, fontweight="bold")
+ax.set_ylabel("Mean AI activity grounding ($G$)", fontsize=9.0, fontweight="bold")
+ax.set_title("Sector Disclosure Volume vs. Grounding", fontsize=10.0, fontweight="bold")
+ax.spines[["top", "right"]].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+Volume and grounding move independently across sectors rather than together: instruments and industrial/computer equipment combine below-median activity counts with above-median grounding, while business services pairs the highest activity volume with middling grounding. A sector that discloses a lot of AI activity is not thereby a sector that discloses it concretely.
+
+### Which evidence is missing, and where? {.unnumbered}
+
+```{python}
+#| label: tbl-h4-sic-grounding-components
+#| tbl-cap: "AI activity grounding components by sector (2-digit SIC, top 10 by firm count): % of disclosed activities meeting each requirement."
+#| echo: false
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+m = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
+m["sic2"] = m["sic2"].astype(int).astype(str)
+sic_by_ticker = m.groupby("ticker")["sic2"].agg(lambda s: s.mode().iloc[0])
+top_sic = m.groupby("sic2")["ticker"].nunique().sort_values(ascending=False).head(10).index
+
+act = pd.read_parquet(_p("firm_activities.parquet"))
+act["sic2"] = act["ticker"].map(sic_by_ticker)
+act = act[act["sic2"].isin(top_sic)].copy()
+act["Specific function"] = act["function_family"] != "unspecified"
+act["Deployed / scaled"] = act["stage"].isin(["deployed", "scaled"])
+act["Named product/process"] = act["evidence_type"].isin(["named", "metric"])
+act["Quantified outcome"] = act["evidence_type"] == "metric"
+act["Third-party attribution"] = act["source"] == "third_party"
+COMPONENTS = ["Specific function", "Deployed / scaled", "Named product/process", "Quantified outcome", "Third-party attribution"]
+comp_by_sic = (act.groupby("sic2")[COMPONENTS].mean() * 100).reindex(top_sic)
+
+SIC2_LABELS = {
+    "73": "Business services", "38": "Instruments", "28": "Chemicals", "49": "Electric/gas/sanitary",
+    "35": "Industrial/computer equip.", "67": "Holding/investment offices", "36": "Electronic equipment",
+    "63": "Insurance carriers", "60": "Depository institutions", "20": "Food products",
+}
+rows = [[SIC2_LABELS.get(s, s)] + [f"{comp_by_sic.loc[s, c]:.0f}%" for c in COMPONENTS] for s in top_sic]
+_export("appendix_g_sic_grounding_components.csv", comp_by_sic, "heatmap of sector x grounding component", "heatmap")
+Markdown(tabulate(rows, headers=["Sector"] + COMPONENTS))
+```
+
+The component that drops out first, in every sector, is quantified outcomes: even sectors above 85% on "specific function" and above 70% on "deployed or scaled" fall to single digits or low teens on "quantified outcome". Sectors do not withhold different evidence from each other; they withhold the same evidence — a number attached to the claim.
+
+### Is the grounding decline within firms, or driven by new filers? {.unnumbered}
+
+```{python}
+#| label: tbl-h5-cohort-grounding
+#| tbl-cap: "Mean AI activity grounding ($G$) by year: firms present since the first panel year (fixed cohort) versus firms in their first disclosing year (new filers)."
+#| echo: false
+from pathlib import Path
+import numpy as np
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+wy = pd.read_parquet(_p("firm_year_washing_score.parquet"))
+first_year = wy.groupby("ticker")["year"].min()
+y0 = int(wy["year"].min())
+fixed_cohort = first_year[first_year == y0].index
+wy["is_new_filer_year"] = wy["year"] == wy["ticker"].map(first_year)
+
+fixed_traj = wy[wy["ticker"].isin(fixed_cohort)].groupby("year")["grounding_index"].mean()
+new_filer_traj = wy[wy["is_new_filer_year"]].groupby("year")["grounding_index"].mean()
+years = sorted(wy["year"].unique())
+tbl = pd.DataFrame({"fixed_cohort_grounding": fixed_traj, "new_filer_year_grounding": new_filer_traj}).reindex(years)
+_export("appendix_g_cohort_grounding.csv", tbl, "grounding decline: fixed cohort vs new filers", "line chart")
+rows = [[y, f"{tbl.loc[y, 'fixed_cohort_grounding']:.3f}" if pd.notna(tbl.loc[y, "fixed_cohort_grounding"]) else "—",
+         f"{tbl.loc[y, 'new_filer_year_grounding']:.3f}" if pd.notna(tbl.loc[y, "new_filer_year_grounding"]) else "—"]
+        for y in years]
+Markdown(tabulate(rows, headers=["Year", f"Fixed cohort ({y0} filers), $G$", "New filers' first year, $G$"]))
+```
+
+Grounding falls within the same fixed cohort of firms, not only because less-grounded firms enter the panel over time: firms disclosing AI activity since the first panel year show grounding declining across the sample period, and each year's new filers disclose at or below that year's incumbent level rather than above it. The AI-disclosure expansion documented earlier in this thesis is accompanied by declining grounding both because existing disclosers dilute their own claims over time and because new entrants join at an already-diluted level.
+
+### Is the call-filing evidence gap sector-specific? {.unnumbered}
+
+```{python}
+#| label: fig-h6-sic-channel-gap
+#| fig-cap: "Call-minus-filing gap in grounded evidence (mean of quantified outcome, named product/process, and named business function shares), by sector, firm x fiscal-year cells with >=3 activities in both channels (95% CI)."
+#| echo: false
+#| fig-width: 7.5
+#| fig-height: 4.2
+from pathlib import Path
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+m = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
+m["sic2"] = m["sic2"].astype(int).astype(str)
+sic_by_ticker = m.groupby("ticker")["sic2"].agg(lambda s: s.mode().iloc[0])
+
+GAP_FAMILIES = ["quantified_outcome", "named_product_or_process", "named_function"]
+ch = pd.read_parquet(_p("channel_activity_cells.parquet"))
+ch["sic2"] = ch["ticker"].map(sic_by_ticker)
+ch = ch[ch["fy"].between(2021, 2026)]
+wide = ch.pivot_table(index=["ticker", "fy", "sic2"], columns="channel", values=GAP_FAMILIES + ["n_activities"]).dropna()
+wide = wide[(wide[("n_activities", "call")] >= 3) & (wide[("n_activities", "filing")] >= 3)]
+gaps = pd.DataFrame(index=wide.index)
+for f in GAP_FAMILIES:
+    gaps[f] = wide[(f, "call")] / wide[("n_activities", "call")] - wide[(f, "filing")] / wide[("n_activities", "filing")]
+gaps = gaps.reset_index()
+gaps["mean_gap_pp"] = 100 * gaps[GAP_FAMILIES].mean(axis=1)
+
+sic_counts = gaps.groupby("sic2")["ticker"].nunique().sort_values(ascending=False)
+top_sic6 = sic_counts[sic_counts >= 10].index[:6]
+SIC2_LABELS = {
+    "73": "Business services", "38": "Instruments", "35": "Industrial/computer equip.",
+    "60": "Depository institutions", "36": "Electronic equipment", "63": "Insurance carriers",
+    "28": "Chemicals", "67": "Holding/investment offices",
+}
+rows = []
+for s in top_sic6:
+    v = gaps.loc[gaps["sic2"] == s, "mean_gap_pp"]
+    se = v.std(ddof=1) / np.sqrt(len(v))
+    rows.append({"sic2": s, "label": SIC2_LABELS.get(s, s), "n": len(v), "mean_gap_pp": v.mean(),
+                 "lo": v.mean() - 1.96 * se, "hi": v.mean() + 1.96 * se})
+fdf = pd.DataFrame(rows).sort_values("mean_gap_pp")
+_export("appendix_g_sic_channel_gap.csv", fdf.set_index("sic2"), "forest plot of call-filing gap by sector", "forest plot")
+
+fig, ax = plt.subplots(figsize=(7.5, 4.2), dpi=300)
+y = np.arange(len(fdf))
+ax.errorbar(fdf["mean_gap_pp"], y, xerr=[fdf["mean_gap_pp"] - fdf["lo"], fdf["hi"] - fdf["mean_gap_pp"]],
+            fmt="o", color="#1D4ED8", ecolor="#93C5FD", elinewidth=2.0, capsize=4, ms=6.5)
+ax.axvline(0, color="#0F172A", lw=1.0, ls="--")
+ax.set_yticks(y)
+ax.set_yticklabels([f"{r.label} (n={r.n})" for r in fdf.itertuples()], fontsize=8.5)
+ax.set_xlabel("Call minus filing gap in grounded-evidence share (pp, 95% CI)", fontsize=9.0, fontweight="bold")
+ax.set_title("Call-Filing Grounding Gap by Sector", fontsize=10.0, fontweight="bold")
+ax.spines[["top", "right"]].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+The call-filing grounding gap is positive in every sector with enough firm × fiscal-year cells to estimate it, and every confidence interval excludes zero: calls carry more verifiable detail than filings across sectors, not only in the pooled estimate reported earlier. The gap's size varies (largest in instruments, smallest in electronic equipment), but its direction does not.
+
+### Do firms change disclosure posture over time? {.unnumbered}
+
+```{python}
+#| label: tbl-h7-archetype-transitions
+#| tbl-cap: "Year-over-year archetype transition matrix, firm-year panel (row = archetype in year $t$, column = archetype in year $t+1$; % of row)."
+#| echo: false
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+m = pd.read_parquet(_p("firm_year_master_v2.parquet"))
+mm = m[["ticker", "year", "archetype"]].dropna(subset=["archetype"]).sort_values(["ticker", "year"]).copy()
+mm["next_archetype"] = mm.groupby("ticker")["archetype"].shift(-1)
+mm["next_year"] = mm.groupby("ticker")["year"].shift(-1)
+trans = mm[(mm["next_year"] == mm["year"] + 1) & mm["next_archetype"].notna()]
+ARCH = ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers", "No AI"]
+tmat = (pd.crosstab(trans["archetype"], trans["next_archetype"], normalize="index") * 100).reindex(index=ARCH, columns=ARCH)
+n_pairs = len(trans)
+stay_rate = pd.Series({a: tmat.loc[a, a] for a in ARCH}).mean()
+_export("appendix_g_archetype_transitions.csv", tmat, "archetype transition matrix", "transition matrix")
+
+rows = [[a] + [f"{tmat.loc[a, b]:.0f}%" for b in ARCH] for a in ARCH]
+Markdown(tabulate(rows, headers=["From \\ To"] + ARCH))
+```
+
+Archetypes are sticky but not permanent: across `{python} n_pairs` consecutive firm-year pairs, `{python} f"{stay_rate:.0f}"`% stay in the same archetype on average, and Vocal Substantives and Defensive Disclosers are the stickiest, each retaining roughly three-quarters of their firms year over year. Governance-Led Disclosers is the least stable category, most often transitioning toward Defensive Disclosers rather than toward Vocal Substantives — governance-heavy language is more often a step down in disclosed activity than a step up.
+
+### Do the results depend on the rollup method? {.unnumbered}
+
+```{python}
+#| label: tbl-h8-rollup-sensitivity
+#| tbl-cap: "Share of disclosed AI activities meeting the named-product-or-metric grounding bar, by channel, under two rollup methods."
+#| echo: false
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+act = pd.read_parquet(_p("firm_activities.parquet"))
+act["grounded"] = act["evidence_type"].isin(["named", "metric"])
+
+activity_weighted = act.groupby("channel")["grounded"].mean() * 100
+firm_share = act.groupby(["ticker", "channel"])["grounded"].mean().reset_index()
+firm_weighted = firm_share.groupby("channel")["grounded"].mean() * 100
+tbl = pd.DataFrame({"Activity-weighted (pooled)": activity_weighted, "Firm-weighted (equal per firm)": firm_weighted})
+_export("appendix_g_rollup_sensitivity.csv", tbl, "rollup sensitivity table", "table")
+
+rows = [[ch] + [f"{tbl.loc[ch, c]:.1f}%" for c in tbl.columns] for ch in tbl.index]
+Markdown(tabulate(rows, headers=["Channel"] + list(tbl.columns)))
+```
+
+Activity-weighted rollups (each disclosed activity counted once, so heavy disclosers dominate) and firm-weighted rollups (each firm-year counted once regardless of how many activities it discloses) answer different questions — "how grounded is the typical disclosed activity?" versus "how grounded is the typical firm's disclosure?" — and give different levels here: the firm-weighted grounded share runs roughly 15–18 percentage points below the activity-weighted share in both channels, because firms with fewer disclosed activities tend to ground a smaller share of them. Both rollups agree on the qualitative finding that motivates the credibility chapter: calls are more grounded than filings under either weighting.
+
+### Do patents validate more than firm size and sector? {.unnumbered}
+
+```{python}
+#| label: tbl-h9-patents-controls
+#| tbl-cap: "OLS of log(1 + AI patents, 2021-2023) on log disclosed AI activity, controlling for log market capitalization and 2-digit SIC fixed effects."
+#| echo: false
+from pathlib import Path
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+def _pp(name):
+    p = Path(f"../data/processed/{name}")
+    return p if p.exists() else Path(f"data/processed/{name}")
+
+m = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
+m["sic2"] = m["sic2"].astype(int).astype(str)
+sic_by_ticker = m.groupby("ticker")["sic2"].agg(lambda s: s.mode().iloc[0])
+size_by_ticker = m.groupby("ticker")["market_cap"].mean()
+
+dim = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))[["ticker", "archetype"]]
+pt = pd.read_parquet(_pp("sp500_firm_year_ai_patents_oecd2025.parquet"))
+pt = pt[pt["ticker"].isin(dim["ticker"]) & pt["year"].between(2021, 2023)]
+pf = pt.groupby("ticker").agg(ai_pat=("ai_patents_oecd", "sum")).reset_index()
+
+act = pd.read_parquet(_p("firm_activities.parquet"))
+act["grounded"] = act["evidence_type"].isin(["named", "metric"])
+af = act.groupby("ticker").agg(n_act=("text_hash", "size"), n_grounded=("grounded", "sum")).reset_index()
+
+bench = dim.merge(af, on="ticker", how="left").fillna({"n_act": 0, "n_grounded": 0}).merge(pf, on="ticker", how="left")
+bench["sic2"] = bench["ticker"].map(sic_by_ticker)
+bench["market_cap"] = bench["ticker"].map(size_by_ticker)
+bench = bench.dropna(subset=["ai_pat", "market_cap", "sic2"])
+bench["log_ai_pat"] = np.log1p(bench["ai_pat"])
+bench["log_mktcap"] = np.log1p(bench["market_cap"].clip(lower=0))
+bench["log_n_act"] = np.log1p(bench["n_act"])
+bench["log_n_grounded"] = np.log1p(bench["n_grounded"])
+n_g9 = len(bench)
+n_sic_g9 = bench["sic2"].nunique()
+
+mod_act = smf.ols("log_ai_pat ~ log_n_act + log_mktcap + C(sic2)", data=bench).fit()
+mod_grd = smf.ols("log_ai_pat ~ log_n_grounded + log_mktcap + C(sic2)", data=bench).fit()
+
+tbl_rows = [
+    ["Disclosed AI activities ($\\log A$)", f"{mod_act.params['log_n_act']:+.3f}", f"{mod_act.pvalues['log_n_act']:.1e}" if mod_act.pvalues['log_n_act'] < 0.001 else f"{mod_act.pvalues['log_n_act']:.3f}"],
+    ["Grounded activities ($\\log G$)", f"{mod_grd.params['log_n_grounded']:+.3f}", f"{mod_grd.pvalues['log_n_grounded']:.1e}" if mod_grd.pvalues['log_n_grounded'] < 0.001 else f"{mod_grd.pvalues['log_n_grounded']:.3f}"],
+]
+_export("appendix_g_patents_controls.csv", pd.DataFrame(tbl_rows, columns=["regressor", "coef", "p"]),
+        "patents vs activity, controlling for size/SIC", "table")
+Markdown(tabulate(tbl_rows, headers=["Regressor (each in a separate model with log market cap + SIC FE)", "Coefficient", "p"]))
+```
+
+Disclosed AI activity predicts AI patenting even after controlling for firm size and sector: with `{python} n_g9` firms across `{python} n_sic_g9` SIC groups, a one-log-point increase in disclosed AI activities is associated with `{python} f"{mod_act.params['log_n_act']:.2f}"` additional log-patents (p < 0.001), and the same holds for grounded activities alone (`{python} f"{mod_grd.params['log_n_grounded']:.2f}"`, p < 0.001). The patent correlation reported earlier is not an artifact of large firms in patent-heavy sectors disclosing more of everything.
+
+### Which firms embody or contradict the pattern? {.unnumbered}
+
+```{python}
+#| label: tbl-h10-vignettes
+#| echo: false
+from pathlib import Path
+import duckdb
+import pandas as pd
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+def _db():
+    p = Path("../duckdb/thesis.duckdb")
+    return p if p.exists() else Path("duckdb/thesis.duckdb")
+
+m = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
+m["sic2"] = m["sic2"].astype(int).astype(str)
+sic_by_ticker = m.groupby("ticker")["sic2"].agg(lambda s: s.mode().iloc[0])
+last_year = m["year"].max()
+m_last = m[m["year"] == last_year][["ticker", "archetype", "disclosure_intensity", "sic2"]]
+
+wy = pd.read_parquet(_p("firm_year_washing_score.parquet"))
+wy_last = wy[wy["year"] == last_year]
+
+sic_pick = "73"  # Business services: enough firms to span the full archetype range
+prof = (wy_last[wy_last["ticker"].isin(sic_by_ticker[sic_by_ticker == sic_pick].index)]
+        .merge(m_last[["ticker", "archetype", "disclosure_intensity"]], on="ticker", how="left")
+        .dropna(subset=["archetype"]).sort_values("w"))
+pick = pd.concat([prof.head(1), prof.tail(1)])
+
+act = pd.read_parquet(_p("firm_activities.parquet"))
+dbc = duckdb.connect(str(_db()), read_only=True)
+
+vignette_rows = []
+lines = []
+for _, r in pick.iterrows():
+    lines.append(f"**{r['ticker']}** ({r['archetype']}, SIC {sic_pick}): $D$ = {r['disclosure_intensity']:.2f}, "
+                 f"$G$ = {r['grounding_index']:.2f}, $W$ = {r['w']:+.2f}, {int(r['n_activities'])} disclosed AI activities.\n")
+    q = act[(act["ticker"] == r["ticker"]) & (act["evidence_type"] == "metric")].head(1)
+    if len(q):
+        qr = q.iloc[0]
+        txt = dbc.execute("SELECT paragraph_text FROM paragraphs WHERE accession_number = ? AND paragraph_index = ? LIMIT 1",
+                           [qr["accession_number"], int(qr["paragraph_index"])]).fetchone()
+        if txt:
+            lines.append(f"> {txt[0][:280].strip()}...\n")
+    vignette_rows.append({"ticker": r["ticker"], "archetype": r["archetype"], "d": r["disclosure_intensity"],
+                           "g": r["grounding_index"], "w": r["w"], "n_activities": int(r["n_activities"])})
+dbc.close()
+
+def _gdir():
+    d = Path("../docs/analytics")
+    return d if d.exists() else Path("docs/analytics")
+pd.DataFrame(vignette_rows).to_csv(_gdir() / "appendix_g_vignette_pairs.csv", index=False)
+_manifest_rows.append("appendix_g_vignette_pairs.csv\tcompany vignette cards (same SIC, contrasting posture)\tcomparison card")
+
+from IPython.display import Markdown
+Markdown("\n".join(lines))
+```
+
+Within the same sector, the same disclosure-intensity scale spans firms with almost nothing grounded behind it and firms with a quantified deployment behind nearly every claim. Same industry, same regulatory environment, same investor audience — the difference is what the firm actually reports having done.
+
+```{python}
+#| echo: false
+#| output: false
+from pathlib import Path
+
+def _gdir():
+    d = Path("../docs/analytics")
+    return d if d.exists() else Path("docs/analytics")
+(_gdir() / "appendix_g_slide_manifest.txt").write_text(
+    "file\tslide_topic\tvisualization\n" + "\n".join(_manifest_rows) + "\n"
+)
+```

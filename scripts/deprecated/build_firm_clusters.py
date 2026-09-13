@@ -63,27 +63,24 @@ POOLED_MIN_FRAMES = 5   # docs/analytics/01, "Método"
 PANEL_MIN_FRAMES = 3    # docs/analytics/01, "Construcción del panel"
 SEED = 42
 
-SPECIFICITY_FLAGS = [
-    "specificity_business_process", "specificity_product_or_system",
-    "specificity_vendor_or_partner", "specificity_quantified_metric",
-    "specificity_date_or_timeline",
-]
 VOICE_FEATURES = [
     "specificity_index", "quantified_rate", "promotional_rate", "strategic_rate",
     "realized_share", "hypothetical_share", "risk_share", "gov_share",
     "firm_subject_share",
 ]
-# `use_stage_unspecified` is deliberately absent: it is the residual bucket,
-# so including it would let "we didn't say" act as a behavior of its own.
+# v1's `use_stage_unspecified` (the adoption-stage residual bucket, "we
+# didn't say") has no v2 equivalent: v2 moved adoption stage off frame
+# concepts entirely, onto the activity-level `stage` field (see
+# docs/migration_v1_to_v2_analytics.md §1.2) -- there is no longer a
+# frame-concept residual to carry here.
 BEHAVIOR_CONCEPTS = [
-    "deployed", "pilot_or_testing", "exploring", "ai_investment",
-    "ai_infrastructure", "ai_talent", "proprietary_ai", "third_party_ai",
-    "expansion_or_scaling", "productivity_outcome", "revenue_outcome",
+    "deployed", "pilot", "exploring", "investment",
+    "infrastructure", "talent", "proprietary_ai", "third_party_ai",
+    "scaling", "productivity_outcome", "revenue_outcome",
     "cost_outcome", "customer_outcome",
 ]
 BEHAVIOR_FEATURES = BEHAVIOR_CONCEPTS + ["domain_customer_facing", "domain_internal"]
-# The panel carries the residual too — there it is descriptive, not an input.
-PANEL_BEHAVIOR_CONCEPTS = BEHAVIOR_CONCEPTS + ["use_stage_unspecified"]
+PANEL_BEHAVIOR_CONCEPTS = BEHAVIOR_CONCEPTS
 DOMAINS = ["customer_facing", "internal", "unspecified"]
 
 
@@ -93,16 +90,30 @@ def load_frames(con) -> pd.DataFrame:
     The JOIN to `filing_manifest` is what scopes this to 10-K + DEF 14A +
     8-K: the 10-Q lives in `filing_manifest_10q` and is a separate
     instrument by project scope, so it drops out here by construction
-    rather than by a filter someone has to remember to write."""
+    rather than by a filter someone has to remember to write.
+
+    `domain` no longer lives on the frame in v2 (see
+    docs/migration_v1_to_v2_analytics.md §1.3) -- it's a proxy computed on
+    gold_ai_activities from pass-2's `target`, joined back by (text_hash,
+    frame_id). A frame with no matching activity (or none of its activities
+    has a customer-facing/internal target) reads as 'unspecified'."""
     return con.execute("""
+        WITH frame_domains AS (
+            SELECT text_hash, frame_id,
+                   CASE WHEN bool_or(domain = 'customer_facing') THEN 'customer_facing'
+                        WHEN bool_or(domain = 'internal') THEN 'internal'
+                        ELSE 'unspecified' END AS domain
+            FROM gold_ai_activities
+            WHERE has_activity
+            GROUP BY text_hash, frame_id
+        )
         SELECT fm.ticker, fm.cik, fm.form_type, fm.accession_number,
                extract(year from fm.filing_date)::INT AS year,
-               f.text_hash, f.frame_index, f.subject, f.temporal, f.domain, f.concepts,
-               f.rhetoric_promotional, f.rhetoric_strategic_importance,
-               f.specificity_business_process, f.specificity_product_or_system,
-               f.specificity_vendor_or_partner, f.specificity_quantified_metric,
-               f.specificity_date_or_timeline
+               f.text_hash, f.frame_id, f.subject, f.temporal,
+               COALESCE(fd.domain, 'unspecified') AS domain, f.concepts,
+               f.rhetoric, f.specificity
         FROM gold_ai_frames f
+        LEFT JOIN frame_domains fd ON fd.text_hash = f.text_hash AND fd.frame_id = f.frame_id
         JOIN filing_manifest fm USING (country_code, accession_number)
         WHERE f.country_code = 'us' AND f.has_frame AND fm.ticker IS NOT NULL
         -- ORDER BY is load-bearing, not cosmetic. Without it DuckDB returns
@@ -111,7 +122,7 @@ def load_frames(con) -> pd.DataFrame:
         -- different order and land on different last digits. That was enough
         -- to move the K-means centroids and reshuffle cluster labels between
         -- two runs of an otherwise seeded, deterministic script.
-        ORDER BY fm.ticker, fm.accession_number, f.text_hash, f.frame_index
+        ORDER BY fm.ticker, fm.accession_number, f.text_hash, f.frame_id
     """).fetchdf()
 
 
@@ -141,10 +152,10 @@ def voice_metrics(frames: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
     each group's frames. Every one is a rate in [0, 1], so they are
     comparable before standardization and interpretable after it."""
     df = frames.copy()
-    df["specificity_index"] = df[SPECIFICITY_FLAGS].astype(float).mean(axis=1)
-    df["quantified_rate"] = df["specificity_quantified_metric"].astype(float)
-    df["promotional_rate"] = df["rhetoric_promotional"].astype(float)
-    df["strategic_rate"] = df["rhetoric_strategic_importance"].astype(float)
+    df["specificity_index"] = df["specificity"].apply(lambda s: len(s) / 5.0 if s is not None else 0.0)
+    df["quantified_rate"] = df["specificity"].apply(lambda s: "metric" in list(s) if s is not None else False).astype(float)
+    df["promotional_rate"] = df["rhetoric"].apply(lambda r: "promotional" in list(r) if r is not None else False).astype(float)
+    df["strategic_rate"] = df["rhetoric"].apply(lambda r: "strategic" in list(r) if r is not None else False).astype(float)
     df["realized_share"] = (df["temporal"] == "realized").astype(float)
     df["hypothetical_share"] = (df["temporal"] == "hypothetical").astype(float)
     concepts = df["concepts"].apply(lambda c: list(c) if c is not None else [])

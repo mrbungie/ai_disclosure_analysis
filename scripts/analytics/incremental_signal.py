@@ -11,7 +11,7 @@ empresa no habla de IA), ejercicios 2021-2025:
     M2  M1 + bloque semántico: log(1 + x por 1.000 palabras) para
         realizado, despliegue, capacidad (inversión + infraestructura),
         riesgo, gobernanza, promocional, especificidad              (contenido)
-    M3  M1 + dummies de segmento (`firm_year_segments`)            (arquetipos)
+    M3  M1 + dummies de archetype (`firm_year_strategy_dimensions`)
 
 Lo que se reporta no son 80 coeficientes sino ΔR² = R²(M2) − R²(M1) y el R²
 parcial del bloque semántico, (R²M2 − R²M1)/(1 − R²M1), con intervalo
@@ -90,9 +90,7 @@ def load(con) -> pd.DataFrame:
     m = pd.read_parquet(OUT_DIR / "firm_year_master_v2.parquet")
     m = m[m["year"].isin(YEARS)].copy()
     m["capability_per_1k"] = m["ai_investment_per_1k"] + m["ai_infrastructure_per_1k"]
-    seg = pd.read_parquet(OUT_DIR / "firm_year_segments.parquet")[["ticker", "year", "segmento"]]
-    m = m.merge(seg, on=["ticker", "year"], how="left")
-    m["segmento"] = m["segmento"].fillna("sin_ia")
+    m["archetype"] = m["archetype"].fillna("No AI")
     m["log_market_cap"] = np.log(m["market_cap"])
     for c in ["gross_margin", "operating_margin", "debt_to_equity", "asset_turnover", "capex_intensity", "rd_intensity",
               "beta", "idio_vol_252d", "vol_pre_60d", "ps_ratio", "next_revenue_yoy"]:
@@ -155,9 +153,9 @@ def design(d: pd.DataFrame, y: str, block: str, fe: str, suffix: str = "") -> tu
         for name, col in ACTIVITY.items():
             X[name] = np.log1p(d[col])
     if block == "M3":
-        for s in sorted(d["segmento"].unique()):
-            if s != "sin_ia":
-                X[f"seg_{s}"] = (d["segmento"] == s).astype(float)
+        for s in sorted(d["archetype"].unique()):
+            if s != "No AI":
+                X[f"arch_{s}"] = (d["archetype"] == s).astype(float)
     if block == "M4":
         # Y = Volume + Specificity/content(M2) + Behavior(activities) + Washing.
         X["washing"] = d["washing_z"]
@@ -249,9 +247,9 @@ def permutation_semantic(d: pd.DataFrame, y: str, fe: str, suffix: str, observed
 
 def nested(d: pd.DataFrame, y: str, fe: str = "sector_year", suffix: str = "") -> dict:
     if suffix == "__share":
-        need = [y] + [c for c in FUNDAMENTALS if c != y] + ["frames_per_1k"] + [f"share_{n}" for n in SEMANTIC] + [fe, "ticker", "segmento"] + list(ACTIVITY.values())
+        need = [y] + [c for c in FUNDAMENTALS if c != y] + ["frames_per_1k"] + [f"share_{n}" for n in SEMANTIC] + [fe, "ticker", "archetype"] + list(ACTIVITY.values())
     else:
-        need = [y] + [c for c in FUNDAMENTALS if c != y] + [f"frames_per_1k{suffix}"] + [f"{c}{suffix}" for c in SEMANTIC.values()] + [fe, "ticker", "segmento"] + list(ACTIVITY.values())
+        need = [y] + [c for c in FUNDAMENTALS if c != y] + [f"frames_per_1k{suffix}"] + [f"{c}{suffix}" for c in SEMANTIC.values()] + [fe, "ticker", "archetype"] + list(ACTIVITY.values())
     d = d.dropna(subset=need)
     d = d[d.groupby(fe)[y].transform("size") >= 2]
     out = {"n": int(len(d)), "n_firms": int(d["ticker"].nunique())}
@@ -264,7 +262,7 @@ def nested(d: pd.DataFrame, y: str, fe: str = "sector_year", suffix: str = "") -
     out["delta_r2_semantica"] = out["r2_M2"] - out["r2_M1"]
     out["partial_r2_semantica"] = out["delta_r2_semantica"] / (1 - out["r2_M1"]) if out["r2_M1"] < 1 else np.nan
     out["delta_r2_volumen"] = out["r2_M1"] - out["r2_M0"]
-    out["delta_r2_segmentos"] = out["r2_M3"] - out["r2_M1"]
+    out["delta_r2_arquetipos"] = out["r2_M3"] - out["r2_M1"]
 
     # Washing (M4) sólo está definido en la submuestra con divulgación de IA
     # (washing_z no-NaN): una empresa-año sin divulgación de IA no tiene una
@@ -356,7 +354,7 @@ def main() -> None:
               f"{res['delta_r2_semantica']:+8.4f} [{ci[0]:+.4f},{ci[1]:+.4f}] {res['delta_adj_r2_semantica']:+9.4f} "
               f"{res['partial_r2_semantica']:7.4f} {wald['F']:7.2f} {wald['p']:6.3f} {perm['p']:7.3f}")
         print(f"    R² ajustado M0/M1/M2/M3: {res['adj_r2_M0']:.3f} / {res['adj_r2_M1']:.3f} / {res['adj_r2_M2']:.3f} / {res['adj_r2_M3']:.3f} "
-              f"| ΔR² volumen {res['delta_r2_volumen']:+.4f} | ΔR² segmentos {res['delta_r2_segmentos']:+.4f} | ΔR² nulo (perm) media {perm['null_mean']:+.4f}, p95 {perm['null_p95']:+.4f}")
+              f"| ΔR² volumen {res['delta_r2_volumen']:+.4f} | ΔR² arquetipos {res['delta_r2_arquetipos']:+.4f} | ΔR² nulo (perm) media {perm['null_mean']:+.4f}, p95 {perm['null_p95']:+.4f}")
         print(f"    Y = Volume + content + behavior + Washing (M4, submuestra con divulgación de IA, n={res['n_washing']}): "
               f"R²={res['r2_M4']:.3f} | ΔR² washing sobre volume+content+behavior = {res['delta_r2_washing']:+.4f} "
               f"(Wald F={wald_washing['F']:.2f}, p={wald_washing['p']:.3f})")
@@ -382,7 +380,7 @@ def main() -> None:
             except Exception as e:  # noqa: BLE001
                 print(f"{label:26s} sin muestra ({e})"); continue
             print(f"{label:26s} {res['n']:5d} {res['r2_M1']:6.3f} {res['r2_M2']:6.3f} {res['delta_r2_semantica']:+8.4f} {res['delta_adj_r2_semantica']:+7.4f} {res['partial_r2_semantica']:7.4f} {wald['p']:7.3f}")
-            report["robustez"][vname][label] = {**{k: res[k] for k in ("n", "r2_M0", "r2_M1", "r2_M2", "r2_M3", "adj_r2_M1", "adj_r2_M2", "delta_r2_semantica", "delta_adj_r2_semantica", "partial_r2_semantica", "delta_r2_volumen", "delta_r2_segmentos")}, "wald": wald}
+            report["robustez"][vname][label] = {**{k: res[k] for k in ("n", "r2_M0", "r2_M1", "r2_M2", "r2_M3", "adj_r2_M1", "adj_r2_M2", "delta_r2_semantica", "delta_adj_r2_semantica", "partial_r2_semantica", "delta_r2_volumen", "delta_r2_arquetipos")}, "wald": wald}
     print("\nDESCOMPOSICIÓN — ¿estilo semántico o actividad identificable? ΔR² sobre M1, misma muestra principal")
     print(f"{'outcome':26s} {'semánt.':>8s} {'activ.':>8s} {'ambos':>8s} {'act|sem':>8s} {'sem|act':>8s} {'p act':>6s} {'p act|sem':>9s} {'p sem|act':>9s}")
     report["descomposicion"] = {}

@@ -10,6 +10,9 @@
 Render the thesis into a final, submission-ready .docx.
 
 Pipeline:
+  0. Refresh every deterministic analytics output the thesis cites
+     (`make analytics`) so the render can never bake in stale numbers from
+     a script someone forgot to re-run -- see `refresh_analytics()`.
   1. Render thesis.qmd with Quarto (executing inline Python blocks for all figures).
   2. Post-process all data tables in docx: compact booktabs styling, tight cell
      margins, repeating headers, non-splitting rows, and calibrated typography.
@@ -366,11 +369,35 @@ def resize_oversized_images(document: Document, max_width_emu: int) -> None:
                 xfrm_ext.set("cy", str(new_cy))
 
 
+def refresh_analytics() -> None:
+    """Rebuild every deterministic data/processed/clusters/ output the thesis
+    cites (`make analytics`, see the repo Makefile), before Quarto ever
+    reads them.
+
+    Without this, a render is only as fresh as whoever last remembered to
+    re-run the right scripts by hand -- exactly how `call_beta_*`,
+    `strategy_economic_profiles.json`, and `bootstrap_jaccard_200_results.
+    json` went stale for days after `activity_profiles.py`/
+    `build_strategy_dimensions.py` changed (2026-09-13). No LLM calls, no
+    API spend: everything here reads `gold_ai_frames`/`gold_ai_activities`
+    (which DID cost LLM calls and are never touched) and the raw XBRL/
+    market data, and is safe to re-run on every render.
+
+    Does NOT run `duckdb-text` (rebuilding `gold_ai_frames` itself from the
+    raw corpus, minutes-long) or `b2-check` (multi-session B2 sync) -- run
+    `make refresh-stale` by hand first if the underlying corpus or the AI
+    classify/activities runs themselves changed, not just the analytics
+    layer built on top of them.
+    """
+    repo_root = ROOT.parent
+    subprocess.run(["make", "analytics"], check=True, cwd=repo_root)
+
+
 def render_quarto_content(tmp_dir: Path) -> Path:
     env = os.environ.copy()
     if VENV_PYTHON.exists():
         env["QUARTO_PYTHON"] = str(VENV_PYTHON)
-    
+
     subprocess.run(
         ["quarto", "render", str(QMD), "--output-dir", str(tmp_dir)],
         check=True,
@@ -516,26 +543,34 @@ def cleanup_quarto_artifacts() -> None:
 
 
 def main() -> None:
+    import sys
+
     COMPILED_DIR.mkdir(exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     final_path = COMPILED_DIR / f"{AUTHOR_SLUG}_FinalThesis_{timestamp}.docx"
 
+    if "--skip-analytics" in sys.argv:
+        print("[0/6] Skipping analytics refresh (--skip-analytics) -- numbers may be stale.")
+    else:
+        print("[0/6] Refreshing analytics outputs (make analytics)...")
+        refresh_analytics()
+
     with tempfile.TemporaryDirectory(prefix="thesis_render_") as tmp:
         tmp_dir = Path(tmp)
 
-        print("[1/5] Rendering Quarto content with inline Python figures...")
+        print("[1/6] Rendering Quarto content with inline Python figures...")
         content_docx = render_quarto_content(tmp_dir)
 
-        print("[2/5] Merging cover + blank page + styled content...")
+        print("[2/6] Merging cover + blank page + styled content...")
         merged_docx = merge_cover_and_content(content_docx, tmp_dir)
 
-        print("[3/5] Marking fields dirty so Word recomputes the TOC on open...")
+        print("[3/6] Marking fields dirty so Word recomputes the TOC on open...")
         mark_fields_dirty_and_save(Document(str(merged_docx)), final_path)
 
-    print("[4/5] Cleaning up intermediates...")
+    print("[4/6] Cleaning up intermediates...")
     cleanup_quarto_artifacts()
 
-    print("[5/5] Converting to PDF...")
+    print("[5/6] Converting to PDF...")
     pdf_path = convert_to_pdf(final_path, COMPILED_PDF_DIR)
 
     print(f"Done: {final_path}")

@@ -1143,31 +1143,19 @@ def main(with_text_tables: bool = False):
     # is in `paragraphs` — Chile (or any later country) starts appearing the
     # moment its own paragraphs enter the underlying is_ai_prefiltered
     # population or get an entity-mention run, no view change needed here.
-    # Pipeline v1 deprecado (2026-09-12): ver scripts/deprecated/ai_classify.py y
-    # data/deprecated/POINTER.json. Este glob apunta a la foto congelada de v1
-    # para que gold_ai_frames siga resolviendo mientras no exista un v2 real;
-    # no se le suma nada nuevo.
-    frames_glob = "data/deprecated/ai_classify/ai_frames__session=*.parquet"
+    # Pipeline v2 (2026-09-12, ver docs/migration_v1_to_v2_analytics.md): frames
+    # de ai_classify.py sobre el corpus real. v1 queda congelado en
+    # data/deprecated/ai_classify/ (ver data/deprecated/POINTER.json) y no se
+    # lee más aquí.
+    frames_glob = "data/interim/ai_classify/ai_frames__session=*.parquet"
     if with_text_tables and _existing(frames_glob):
-        # Dedup por LLAMADA al juez, no por (text_hash, frame_index).
+        # Dedup por LLAMADA al juez, no por (text_hash, frame_id).
         #
-        # La versión anterior particionaba por (text_hash, frame_index) y
-        # ordenaba sólo por session_id. Dos problemas, ambos reales sobre
-        # este corpus: (a) un mismo texto se clasifica varias veces DENTRO
-        # de una sesión, porque instancias de párrafo distintas
-        # (accession_number distinto) comparten text_hash -- 1.225 grupos
-        # empatados, y en 976 de ellos las filas empatadas traen valores
-        # DISTINTOS, así que `row_number()` desempataba al azar y la vista
-        # devolvía números diferentes en cada consulta (medido: el conteo
-        # de `rhetoric_promotional` oscilaba entre 2.903 y 2.911 sobre las
-        # mismas filas). Nada aguas abajo era reproducible.
-        # (b) aun desempatando, particionar por frame_index puede quedarse
-        # con el frame 0 de una llamada y el frame 1 de otra, mezclando dos
-        # lecturas distintas del mismo párrafo en un juego incoherente.
-        #
-        # `classified_at` identifica la llamada y es único por texto
-        # (verificado: cero grupos empatados lo comparten), así que elegir
-        # la última LLAMADA y traer todos sus frames arregla las dos cosas.
+        # Una partición por (text_hash, frame_id) desemparejaría el frame 0
+        # de una llamada con el frame 1 de otra, mezclando dos lecturas
+        # distintas del mismo párrafo en un juego incoherente. `classified_at`
+        # identifica la llamada y es único por texto, así que elegir la
+        # última LLAMADA y traer todos sus frames evita eso.
         views["gold_ai_frames"] = f"""
             WITH all_frames AS (
                 SELECT * FROM read_parquet('{frames_glob}', union_by_name=True)
@@ -1204,13 +1192,9 @@ def main(with_text_tables: bool = False):
                 ) WHERE is_ai_prefiltered
             )
             SELECT p.country_code, p.form, p.accession_number, p.item_key, p.paragraph_index,
-                   f.text_hash, up.duplicate_count, f.frame_index, f.has_frame,
-                   f.subject, f.ai_type, f.temporal, f.domain, f.concepts,
-                   f.specificity_business_process, f.specificity_product_or_system,
-                   f.specificity_vendor_or_partner, f.specificity_quantified_metric,
-                   f.specificity_date_or_timeline,
-                   f.rhetoric_promotional, f.rhetoric_strategic_importance,
-                   f.evidence_sentence_ids, f.sentence_indices,
+                   f.text_hash, up.duplicate_count, f.frame_id, f.has_frame,
+                   f.subject, f.ai_type, f.temporal, f.concepts,
+                   f.specificity, f.rhetoric, f.valence, f.sentence_ids,
                    f.judge_model, f.prompt_version, f.classified_at
             FROM paragraphs p
             JOIN latest_frames f ON f.text_hash = p.text_hash
@@ -1220,6 +1204,69 @@ def main(with_text_tables: bool = False):
     elif with_text_tables:
         print(f"  skipping gold_ai_frames (no files matching {frames_glob} — "
               f"run scripts/common/ai_classify.py first)")
+
+    # Actividades de ai_activities_from_frames.py, unidas por `frame_id` al
+    # frame de pass-1 que las dispara (ver docs/migration_v1_to_v2_analytics.md
+    # §0). `domain` no existe como campo de frame en v2 (§1.3 de ese doc);
+    # acá se reconstruye como proxy desde `target` de pass-2, SOLO para las
+    # filas con actividad -- cobertura parcial respecto al schema de ocho
+    # dimensiones de v1, documentado como tal, no una migración de paridad.
+    activities_glob = "data/interim/ai_activities/ai_activities__session=*.parquet"
+    if with_text_tables and _existing(activities_glob):
+        views["gold_ai_activities"] = f"""
+            WITH all_activities AS (
+                SELECT * FROM read_parquet('{activities_glob}', union_by_name=True)
+                WHERE error IS NULL
+            ), latest_call AS (
+                SELECT text_hash, session_id, classified_at
+                FROM (SELECT DISTINCT text_hash, session_id, classified_at FROM all_activities)
+                QUALIFY row_number() OVER (
+                    PARTITION BY text_hash ORDER BY session_id DESC, classified_at DESC
+                ) = 1
+            ), latest_activities AS (
+                SELECT a.* FROM all_activities a
+                JOIN latest_call c
+                  ON c.text_hash = a.text_hash
+                 AND c.session_id = a.session_id
+                 AND c.classified_at = a.classified_at
+            )
+            , current_population AS (
+                SELECT text_hash FROM (
+                    SELECT text_hash, is_ai_prefiltered FROM read_parquet(
+                        'data/interim/prefilter_predictions_unique/prefilter_predictions__run=*.parquet',
+                        union_by_name=True)
+                    QUALIFY row_number() OVER (
+                        PARTITION BY text_hash ORDER BY model_version DESC) = 1
+                ) WHERE is_ai_prefiltered
+            )
+            SELECT p.country_code, p.form, p.accession_number, p.item_key, p.paragraph_index,
+                   a.text_hash, up.duplicate_count, a.frame_id, a.activity_id, a.has_activity,
+                   a.action, a.object, a.function, a.target, a.stage, a.source,
+                   -- `domain`: quién es el USUARIO/beneficiario de la actividad de
+                   -- IA, no quién la ejecuta (eso ya es `subject` en gold_ai_frames).
+                   -- 'internal'  -- target=employees/internal_process: la IA se usa
+                   --                dentro de la firma (herramientas de staff,
+                   --                automatización de un proceso propio).
+                   -- 'customer_facing' -- target=customers/developers: la IA llega a
+                   --                un tercero externo a la firma (un producto,
+                   --                una API para desarrolladores).
+                   -- 'unspecified' -- target=partners/unspecified, o el texto no lo
+                   --                dice: ni claramente interno ni de cara al cliente.
+                   CASE
+                       WHEN a.target IN ('employees', 'internal_process') THEN 'internal'
+                       WHEN a.target IN ('customers', 'developers') THEN 'customer_facing'
+                       ELSE 'unspecified'
+                   END AS domain,
+                   a.entities, a.metrics, a.evidence_type, a.sentence_ids,
+                   a.firm, a.judge_model, a.prompt_version, a.classified_at
+            FROM paragraphs p
+            JOIN latest_activities a ON a.text_hash = p.text_hash
+            JOIN unique_paragraphs up ON up.text_hash = a.text_hash
+            JOIN current_population cp ON cp.text_hash = a.text_hash
+        """
+    elif with_text_tables:
+        print(f"  skipping gold_ai_activities (no files matching {activities_glob} — "
+              f"run scripts/common/ai_activities_from_frames.py first)")
 
     entity_mentions_glob = "data/interim/ai_entity_mentions/ai_entity_mentions__run=*.parquet"
     if with_text_tables and _existing(entity_mentions_glob):

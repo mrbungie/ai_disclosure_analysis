@@ -113,9 +113,7 @@ def load_frames(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
         )
         SELECT 'filing' AS channel, f.form, m.ticker, m.filing_date AS fecha,
                TRY_CAST(m.period_end_date AS DATE) AS period_end, f.text_hash,
-               f.frame_index, f.rhetoric_promotional, f.specificity_quantified_metric,
-               f.specificity_business_process, f.specificity_product_or_system,
-               f.specificity_vendor_or_partner, f.specificity_date_or_timeline,
+               f.frame_id, f.rhetoric, f.specificity,
                f.temporal, f.concepts
         FROM gold_ai_frames f
         JOIN manifest m USING (country_code, accession_number)
@@ -125,9 +123,7 @@ def load_frames(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     calls = con.execute(f"""
         SELECT 'call' AS channel, f.form, m.ticker, CAST(m.filing_date AS DATE) AS fecha,
                NULL::DATE AS period_end, CAST(regexp_extract(m.document_id, '_([0-9]{{4}})Q', 1) AS INTEGER) AS call_fy,
-               f.text_hash, f.frame_index, f.rhetoric_promotional, f.specificity_quantified_metric,
-               f.specificity_business_process, f.specificity_product_or_system,
-               f.specificity_vendor_or_partner, f.specificity_date_or_timeline,
+               f.text_hash, f.frame_id, f.rhetoric, f.specificity,
                f.temporal, f.concepts
         FROM gold_ai_frames f
         JOIN (SELECT document_id, ticker, filing_date
@@ -136,7 +132,7 @@ def load_frames(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
         WHERE f.country_code = 'us' AND f.has_frame AND f.form = 'Earnings call'
     """).df()
     frames = pd.concat([filings, calls], ignore_index=True)
-    frames = frames.drop_duplicates(["channel", "ticker", "fecha", "text_hash", "frame_index"])
+    frames = frames.drop_duplicates(["channel", "ticker", "fecha", "text_hash", "frame_id"])
     frames["quarter"] = pd.to_datetime(frames["fecha"]).dt.to_period("Q")
     frames["year"] = frames["quarter"].dt.year
     # mes de cierre fiscal por empresa: el de sus 10-K (moda); diciembre si no hay
@@ -156,10 +152,14 @@ def load_frames(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     fy[rest] = fiscal_year(frames.loc[rest, "fecha"], frames.loc[rest, "fye_month"])
     frames["fy"] = fy.astype(int)
     frames["post_doc"] = (pd.to_datetime(frames["fecha"]) >= pd.Timestamp(EVENT_DATE)).astype(float)
-    spec_cols = ["specificity_business_process", "specificity_product_or_system",
-                 "specificity_vendor_or_partner", "specificity_quantified_metric",
-                 "specificity_date_or_timeline"]
-    frames["specificity"] = frames[spec_cols].astype(float).mean(axis=1)
+    frames["is_promo"] = frames["rhetoric"].apply(
+        lambda r: "promotional" in list(r) if r is not None else False)
+    frames["is_quant"] = frames["specificity"].apply(
+        lambda s: "metric" in list(s) if s is not None else False)
+    # `specificity` overwritten in place: from the raw v2 list (process/
+    # product/vendor/metric/timeline, up to 5 entries) to the same 0-1 index
+    # v1 reported (mean of the 5 specificity flags == len(list)/5 here).
+    frames["specificity"] = frames["specificity"].apply(lambda s: len(s) / 5.0 if s is not None else 0.0)
     frames["is_gov"] = frames["concepts"].apply(
         lambda c: any(str(x).startswith("gov_") for x in (list(c) if c is not None else [])))
     return frames
@@ -202,8 +202,8 @@ def load_documents(con: duckdb.DuckDBPyConnection, frames: pd.DataFrame) -> pd.D
     docs["post_doc"] = (d >= pd.Timestamp(EVENT_DATE)).astype(float)
     # frames por documento (0 si no tiene)
     per_doc = frames.groupby(["channel", "ticker", "fy"]).agg(
-        n_frames=("text_hash", "size"), n_promo=("rhetoric_promotional", "sum"),
-        n_quant=("specificity_quantified_metric", "sum"), n_gov=("is_gov", "sum")).reset_index()
+        n_frames=("text_hash", "size"), n_promo=("is_promo", "sum"),
+        n_quant=("is_quant", "sum"), n_gov=("is_gov", "sum")).reset_index()
     cell = docs.groupby(["ticker", "fy", "channel"]).agg(
         n_docs=("accession_number", "nunique"), n_paragraphs=("n_paragraphs", "sum"),
         n_words=("n_words", "sum"),
@@ -237,8 +237,8 @@ def cells(frames: pd.DataFrame, period: str) -> pd.DataFrame:
     g = frames.groupby(["ticker", period, "channel"])
     cell = g.agg(
         n_frames=("text_hash", "size"),
-        promotional_rate=("rhetoric_promotional", "mean"),
-        quantified_rate=("specificity_quantified_metric", "mean"),
+        promotional_rate=("is_promo", "mean"),
+        quantified_rate=("is_quant", "mean"),
         specificity_index=("specificity", "mean"),
         realized_share=("temporal", lambda s: float((s == "realized").mean())),
         hypothetical_share=("temporal", lambda s: float((s == "hypothetical").mean())),

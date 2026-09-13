@@ -1,47 +1,37 @@
-"""La capa de actividades sobre tres análisis existentes: qué acciones hay
-detrás del eje de conducta de la grilla (`03`), qué actividad identificable
-respalda el exceso promocional (`08`) y qué actividades cuenta la misma
-empresa en la call y en el filing del mismo ejercicio (`06`).
+"""La capa de actividades sobre qué actividades cuenta la misma empresa en la
+call y en el filing del mismo ejercicio (`06`).
 
-Insumos: `firm_activities`, `firm_activity_profiles`, `channel_activity_cells`
-(`activity_profiles.py`), `firm_voice_behavior_grid`, `firm_washing_score`,
-`firm_year_master_v2`. Determinístico, sin LLM.
+Insumos: `channel_activity_cells` (`activity_profiles.py`). Determinístico,
+sin LLM.
 
-  1. Concreción conductual por celda de la grilla: media del score de
-     concreción (función declarada, desplegada o escalada, producto con
-     nombre, resultado cuantificado, proveedor nombrado; `activity_profiles.
-     concreteness`) y % de empresas con al menos una actividad desplegada con
-     producto o proceso nombrado. Entre las empresas de voz alta, las que
-     describen actividad identificable contra las que sólo hacen afirmaciones
-     estratégicas.
-  2. Exceso promocional y respaldo conductual: para las colas del test de
-     `08`, cuántas actividades identificables hay detrás; correlación entre el
-     exceso y la concreción sobre las 449.
-  3. Brecha de actividades entre canales: misma empresa, mismo ejercicio
-     fiscal, proporción de actividades de cada familia en la call menos la del
-     filing, sobre celdas con ≥3 actividades en cada canal; por ejercicio.
-     Figura `fig_brecha_actividades.png`.
+  Brecha de actividades entre canales: misma empresa, mismo ejercicio fiscal,
+  proporción de actividades de cada familia en la call menos la del filing,
+  sobre celdas con ≥3 actividades en cada canal; por ejercicio. Figura
+  `fig_brecha_actividades.png`.
 
-Salida: `activity_grounding.json`.
+Salida: `activity_grounding.json` (clave `channel_gap`, la única que lee
+`thesis.qmd`).
+
+2026-09-13 (docs/migration_v1_to_v2_analytics.md): eliminadas
+`grid_grounding` (cruzaba contra `firm_voice_behavior_grid.parquet`, la
+grilla voz×comportamiento de `build_voice_behavior_grid.py`) y
+`washing_grounding` (leía `firm_washing_score_all.parquet`, un score de
+washing beta-binomial superseded por `washing_score.py`'s índice W). Ninguna
+de las dos escribía nada que `thesis.qmd` leyera (solo `["channel_gap"]`
+se usa) -- caracterizar empresas por voz×comportamiento ya no es el método
+vigente; eso lo hace el archetype de `build_strategy_dimensions.py`.
 """
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from activity_profiles import ACTIVITY_FAMILIES, flags  # noqa: E402
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
-CORNERS = {"washing (voz alta, conducta baja)": "desacople absoluto (voz alta, conducta baja)",
-           "sustancia callada (voz baja, conducta alta)": "sustancia callada",
-           "vocales sustantivos": "vocales sustantivos", "silenciosos": "silenciosos"}
 GAP_FAMILIES = ["customer_facing_deployment", "internal_deployment", "quantified_outcome", "infrastructure_investment",
                 "third_party_named_provider", "proprietary_ai", "talent_or_training", "piloting_or_exploring",
                 "governance_or_restriction", "named_product_or_process", "named_function"]
@@ -51,89 +41,6 @@ GAP_LABELS = {"customer_facing_deployment": "customer-facing deployment", "inter
               "talent_or_training": "talent or training", "piloting_or_exploring": "piloting or exploring",
               "governance_or_restriction": "governance or restriction", "named_product_or_process": "named product or process",
               "named_function": "named business function"}
-
-
-def grounded_firms(a: pd.DataFrame) -> pd.Series:
-    """Empresas con al menos una actividad desplegada o escalada CON producto o proceso nombrado."""
-    f = flags(a)
-    g = a["stage"].isin(["deployed", "scaled"]) & (a["evidence_strength"] == "named_product_or_process")
-    return g.groupby(a["ticker"]).any()
-
-
-def grid_grounding(prof: pd.DataFrame, a: pd.DataFrame) -> dict:
-    grid = pd.read_parquet(OUT_DIR / "firm_voice_behavior_grid.parquet")[["ticker", "voz_shrunk", "comportamiento_shrunk", "nivel_voz", "nivel_conducta", "celda"]]
-    m = grid.merge(prof[["ticker", "n_activities", "concrecion_conductual"]], on="ticker", how="left")
-    m["n_activities"] = m["n_activities"].fillna(0).astype(int)
-    m["grounded"] = m["ticker"].map(grounded_firms(a)).fillna(False).astype(bool)
-    m["corner"] = m["celda"].map(CORNERS).fillna("resto de la grilla")
-    m.loc[m["celda"] == "sin IA", "corner"] = "sin IA"
-    rows = m.groupby("corner").agg(firms=("ticker", "size"), median_activities=("n_activities", "median"),
-                                   mean_concreteness=("concrecion_conductual", "mean"), share_grounded=("grounded", "mean"),
-                                   share_no_activity=("n_activities", lambda s: float((s == 0).mean())))
-    order = ["desacople absoluto (voz alta, conducta baja)", "sustancia callada", "vocales sustantivos", "silenciosos", "resto de la grilla", "sin IA"]
-    rows = rows.reindex(order)
-    ok = m["concrecion_conductual"].notna()
-    rho = stats.spearmanr(m.loc[ok, "comportamiento_shrunk"], m.loc[ok, "concrecion_conductual"])
-    # voz alta: identificable contra estratégico
-    hv = m[m["nivel_voz"] == "alta"].copy()
-    med = hv["concrecion_conductual"].median()
-    hv["tipo"] = np.where(hv["grounded"], "con actividad desplegada identificable", "sin actividad desplegada identificable")
-    master = pd.read_parquet(OUT_DIR / "firm_year_master_v2.parquet")
-    fin = master.groupby("ticker")[["rd_intensity", "beta", "ps_ratio", "frames_per_1k"]].median()
-    hv = hv.merge(fin, left_on="ticker", right_index=True, how="left")
-    hv_tbl = hv.groupby("tipo").agg(firms=("ticker", "size"), median_activities=("n_activities", "median"),
-                                    mean_concreteness=("concrecion_conductual", "mean"), rd=("rd_intensity", "median"),
-                                    beta=("beta", "median"), ps=("ps_ratio", "median"), frames_per_1k=("frames_per_1k", "median"),
-                                    examples=("ticker", lambda s: ", ".join(hv.loc[s.index].sort_values("n_activities", ascending=False)["ticker"].head(8))))
-    corner_hv = hv[hv["corner"] == order[0]]
-    print("1. GRILLA — concreción conductual por esquina")
-    print(rows.round(3).to_string())
-    print(f"   Spearman(eje de conducta, concreción) = {rho.statistic:+.3f} (p={rho.pvalue:.1e}, n={int(ok.sum())})")
-    print(f"\n   Voz alta ({len(hv)} empresas): mediana de concreción {med:.2f}")
-    print(hv_tbl.round(3).to_string())
-    print(f"   En la esquina de desacople absoluto: {int(corner_hv['grounded'].sum())} de {len(corner_hv)} tienen alguna actividad desplegada con producto nombrado; "
-          f"{int((corner_hv['n_activities'] == 0).sum())} no tienen ninguna actividad")
-    print("   desacople sin actividad identificable:", ", ".join(corner_hv[~corner_hv.grounded].sort_values("n_activities")["ticker"].tolist()))
-    print("   desacople con actividad identificable:", ", ".join(corner_hv[corner_hv.grounded].sort_values("n_activities", ascending=False)["ticker"].tolist()))
-    return {"by_corner": json.loads(rows.to_json(orient="index")), "spearman_conduct_concreteness": {"rho": float(rho.statistic), "p": float(rho.pvalue)},
-            "high_voice": json.loads(hv_tbl.to_json(orient="index")),
-            "decoupled_corner": {"grounded": corner_hv[corner_hv.grounded]["ticker"].tolist(), "not_grounded": corner_hv[~corner_hv.grounded]["ticker"].tolist()}}
-
-
-def washing_grounding(prof: pd.DataFrame, a: pd.DataFrame) -> dict:
-    # `firm_washing_score.parquet` (washing_score.py) dropped the beta-binomial
-    # exceso/tasa_obs/p_esperada columns in favor of the W percentile-rank
-    # index; `firm_washing_score_all.parquet` still carries the beta-binomial
-    # 'exceso' this function needs, with 'promo_per_1k' standing in for the
-    # old observed-rate threshold ('p_esperada' has no equivalent here, so it
-    # is dropped from the printed columns; this JSON's `washing` block is not
-    # read by thesis.qmd, only `channel_gap` is).
-    w = pd.read_parquet(OUT_DIR / "firm_washing_score_all.parquet")[["ticker", "n_frames", "exceso", "promo_per_1k", "washing", "callada"]]
-    m = w.merge(prof[["ticker", "n_activities", "concrecion_conductual", "share_named_product_or_process", "share_quantified_outcome", "share_deployed_or_scaled"]], on="ticker", how="left")
-    m["n_activities"] = m["n_activities"].fillna(0).astype(int)
-    m["grounded"] = m["ticker"].map(grounded_firms(a)).fillna(False).astype(bool)
-    g = a[a["stage"].isin(["deployed", "scaled"]) & (a["evidence_strength"] == "named_product_or_process")].groupby("ticker").size()
-    m["n_grounded_activities"] = m["ticker"].map(g).fillna(0).astype(int)
-    ok = m["concrecion_conductual"].notna()
-    rho = stats.spearmanr(m.loc[ok, "exceso"], m.loc[ok, "concrecion_conductual"])
-    rho_n = stats.spearmanr(m.loc[ok, "exceso"], np.log1p(m.loc[ok, "n_grounded_activities"]))
-    tails = m[m["washing"] | m["callada"]].copy()
-    tails["cola"] = np.where(tails["washing"], "washing", "sustancia callada")
-    tails = tails.sort_values(["cola", "exceso"], ascending=[False, False])
-    cols = ["ticker", "cola", "n_frames", "promo_per_1k", "exceso", "n_activities", "n_grounded_activities", "concrecion_conductual"]
-    print("\n2. EXCESO PROMOCIONAL Y RESPALDO CONDUCTUAL")
-    print(tails[cols].round(3).to_string(index=False))
-    print(f"   Spearman(exceso, concreción) = {rho.statistic:+.3f} (p={rho.pvalue:.3f}); Spearman(exceso, log actividades desplegadas con nombre) = {rho_n.statistic:+.3f} (p={rho_n.pvalue:.1e}); n={int(ok.sum())}")
-    # entre las 449: promoción alta con y sin respaldo
-    m["promo_alto"] = m["promo_per_1k"] >= m["promo_per_1k"].quantile(0.8)
-    hp = m[m["promo_alto"]]
-    split = hp.groupby("grounded").agg(firms=("ticker", "size"), median_activities=("n_activities", "median"), mean_concreteness=("concrecion_conductual", "mean"),
-                                       examples=("ticker", lambda s: ", ".join(hp.loc[s.index].sort_values("n_activities", ascending=False)["ticker"].head(8))))
-    print(f"   Quintil superior de tasa promocional ({len(hp)} empresas): con y sin actividad desplegada con producto nombrado")
-    print(split.round(3).to_string())
-    return {"tails": json.loads(tails[cols].to_json(orient="records")), "spearman_excess_concreteness": {"rho": float(rho.statistic), "p": float(rho.pvalue)},
-            "spearman_excess_grounded_n": {"rho": float(rho_n.statistic), "p": float(rho_n.pvalue)},
-            "top_promo_quintile": json.loads(split.to_json(orient="index"))}
 
 
 def channel_activity_gap() -> dict:
@@ -181,9 +88,7 @@ def channel_activity_gap() -> dict:
 
 
 def main() -> None:
-    a = pd.read_parquet(OUT_DIR / "firm_activities.parquet")
-    prof = pd.read_parquet(OUT_DIR / "firm_activity_profiles.parquet")
-    out = {"grid": grid_grounding(prof, a), "washing": washing_grounding(prof, a), "channel_gap": channel_activity_gap()}
+    out = {"channel_gap": channel_activity_gap()}
     (OUT_DIR / "activity_grounding.json").write_text(json.dumps(out, indent=2, default=float) + "\n")
     print(f"\n-> {OUT_DIR}/activity_grounding.json, fig_brecha_actividades.png")
 

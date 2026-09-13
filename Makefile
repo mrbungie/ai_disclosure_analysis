@@ -97,43 +97,122 @@ prefilter:
 # no dependen de nada financiero, los ratios sí dependen del manifest de
 # 10-K, el mercado depende de los ratios (necesita shares_out/EPS/equity),
 # ROIC/WACC depende de ambos, y el merge final depende de todo lo anterior.
+# (build_strategy_dimensions.py corre dos veces dentro de analytics-text --
+# ver su comentario ahí.)
 
-analytics-text:
-	@echo "Arquetipos de voz, clusters de comportamiento y panel empresa-año (build_firm_clusters)..."
-	.venv/bin/python scripts/analytics/build_firm_clusters.py $(ARGS)
-	.venv/bin/python scripts/analytics/build_document_panel.py $(ARGS)
-	.venv/bin/python scripts/analytics/build_segments.py $(ARGS)
-	.venv/bin/python scripts/analytics/build_voice_behavior_grid.py $(ARGS)
+# build_firm_clusters.py / build_segments.py / build_voice_behavior_grid.py /
+# economic_profiles.py and their diagnostic-only satellites (behavior_block_eval,
+# washing_hierarchical, segments_no_intensity_robustness, voice_behavior_factors,
+# cluster_diagnostics) are DEPRECATED (2026-09-13, see
+# docs/migration_v1_to_v2_analytics.md §5) -- old Chapter 3/4 clustering,
+# superseded by the k=3 posture archetype below and cited nowhere in
+# thesis.qmd. Moved to scripts/deprecated/, not part of this chain.
+#
+# analytics-text runs build_strategy_dimensions.py TWICE on purpose: pass 1
+# produces the archetype label activity_profiles.py needs as its universe;
+# pass 2 (after activity_profiles.py exists) refreshes the two columns that
+# depend on firm_activities.parquet (n_activities, promotional_excess) --
+# the archetype assignment itself is unaffected by activities and does not
+# change between the two passes.
+# Every analytics-* target below runs through scripts/common/run_cached.sh:
+# a sha256 of (path, size, mtime) over each target's declared inputs (its own
+# scripts + the upstream files it reads) is compared against the hash saved
+# the last time that block actually ran; unchanged inputs skip the block
+# entirely instead of unconditionally re-running it. This is what lets
+# render.py call `make analytics` before EVERY render (see its
+# refresh_analytics()) without paying full pipeline cost -- including the
+# several-minutes 200-replicate bootstrap -- on a render that only changed
+# a sentence of prose. Cache state lives in .make_cache/ (gitignored,
+# harmless to delete to force a full rebuild).
+RUN_CACHED := scripts/common/run_cached.sh
+DUCKDB_FILE := duckdb/thesis.duckdb
 
 analytics-financials:
 	@echo "Contables desde XBRL, mercado/beta/CAR y ROIC-WACC (build_firm_financials -> build_market_factors -> build_roic_wacc)..."
-	.venv/bin/python scripts/analytics/build_firm_financials.py $(ARGS)
-	.venv/bin/python scripts/analytics/build_market_factors.py $(ARGS)
-	.venv/bin/python scripts/analytics/build_roic_wacc.py $(ARGS)
+	@$(RUN_CACHED) financials \
+		scripts/analytics/build_firm_financials.py scripts/analytics/build_market_factors.py scripts/analytics/build_roic_wacc.py \
+		'data/raw/xbrl_facts/us_by_filing/*.parquet' 'data/raw/market/prices/*.parquet' 'data/raw/market/factors/*.parquet' \
+		$(DUCKDB_FILE) \
+		-- bash -c '.venv/bin/python scripts/analytics/build_firm_financials.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/build_market_factors.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/build_roic_wacc.py $(ARGS)'
 
-analytics-panels:
-	@echo "Merge texto x finanzas + score de AI-washing (build_firm_panels, washing_score)..."
-	.venv/bin/python scripts/analytics/build_firm_panels.py $(ARGS)
-	.venv/bin/python scripts/analytics/washing_score.py $(ARGS)
-	.venv/bin/python scripts/analytics/shock_analysis.py $(ARGS)
-	.venv/bin/python scripts/analytics/shock_did_simple.py $(ARGS)
+# Runs build_strategy_dimensions.py TWICE on purpose: pass 1 produces the
+# archetype label activity_profiles.py needs as its universe; pass 2 (after
+# activity_profiles.py exists) refreshes the two columns that depend on
+# firm_activities.parquet (n_activities, promotional_excess) -- the
+# archetype assignment itself is unaffected by activities and does not
+# change between the two passes.
+analytics-text:
+	@echo "Archetype de postura k=3 (pass 1), perfiles de actividad, panel de documentos..."
+	@$(RUN_CACHED) text \
+		scripts/analytics/build_strategy_dimensions.py scripts/analytics/activity_profiles.py \
+		scripts/analytics/build_document_panel.py scripts/analytics/build_geo_provenance.py \
+		scripts/analytics/check_archetype_document_channels.py scripts/analytics/ai_intensity.py \
+		$(DUCKDB_FILE) 'data/interim/ai_classify/*.parquet' 'data/interim/ai_activities/*.parquet' \
+		'data/interim/manifests/*.parquet' \
+		-- bash -c '.venv/bin/python scripts/analytics/build_strategy_dimensions.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/activity_profiles.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/build_strategy_dimensions.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/build_document_panel.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/build_geo_provenance.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/check_archetype_document_channels.py $(ARGS)'
 
-analytics-activities:
-	@echo "Perfiles de actividad por empresa desde gold_ai_frames (activity_profiles)..."
-	.venv/bin/python scripts/analytics/activity_profiles.py $(ARGS)
+analytics-panels: analytics-text analytics-financials
+	@echo "Merge texto x finanzas, score de AI-washing, señal incremental, brecha de canal..."
+	@$(RUN_CACHED) panels \
+		scripts/analytics/build_firm_panels.py scripts/analytics/washing_score.py scripts/analytics/validate_washing_score.py \
+		scripts/analytics/incremental_signal.py scripts/analytics/channel_gap_analysis.py scripts/analytics/channel_gap_words_robustness.py \
+		scripts/analytics/firm_year_aggregation_robustness.py scripts/analytics/activity_grounding.py scripts/analytics/build_strategy_economic_profiles.py \
+		data/processed/clusters/firm_strategy_dimensions.parquet data/processed/clusters/firm_year_strategy_dimensions.parquet \
+		data/processed/clusters/firm_activities.parquet data/processed/clusters/firm_activity_profiles.parquet \
+		data/processed/clusters/firm_year_financials_ratios.parquet data/processed/clusters/firm_year_market_factors.parquet \
+		data/processed/clusters/firm_year_roic_wacc.parquet $(DUCKDB_FILE) \
+		-- bash -c '.venv/bin/python scripts/analytics/build_firm_panels.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/washing_score.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/validate_washing_score.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/incremental_signal.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/channel_gap_analysis.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/channel_gap_words_robustness.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/firm_year_aggregation_robustness.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/activity_grounding.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/build_strategy_economic_profiles.py $(ARGS)'
+
+analytics-activities: analytics-text
+	@echo "Perfiles de actividad por empresa desde gold_ai_frames (ya corrido en analytics-text; target conservado por compatibilidad)..."
 
 # El spine A (call) que leen call_car_regressions.py / call_beta_regressions.py /
-# call_beta_robustness.py. Depende de firm_activities.parquet (analytics-activities)
+# call_beta_robustness.py. Depende de firm_activities.parquet (analytics-text)
 # y firm_year_financials_ratios.parquet (analytics-financials), así que corre
-# después de ambos. Se auto-valida contra la corrida anterior (ver
-# build_call_beta_panel.py::validate) antes de sobrescribirla.
-analytics-call-beta:
+# después de ambos. build_call_beta_panel.py además se auto-valida contra la
+# corrida anterior (ver build_call_beta_panel.py::validate) antes de
+# sobrescribirla.
+analytics-call-beta: analytics-panels
 	@echo "Panel de calls para las regresiones de beta post-call (build_call_beta_panel)..."
-	.venv/bin/python scripts/analytics/build_call_beta_panel.py $(ARGS)
-	@echo "Cartas de comentario SEC sobre IA: inventario verificado y casos (sec_comment_letter_cases)..."
-	.venv/bin/python scripts/analytics/sec_comment_letter_cases.py $(ARGS)
+	@$(RUN_CACHED) call-beta \
+		scripts/analytics/build_call_beta_panel.py scripts/analytics/call_beta_regressions.py \
+		scripts/analytics/call_beta_robustness.py scripts/analytics/sec_comment_letter_cases.py \
+		data/processed/clusters/firm_activities.parquet data/processed/clusters/firm_year_financials_ratios.parquet \
+		data/processed/clusters/firm_year_washing_score.parquet data/processed/clusters/firm_year_master_v2.parquet \
+		data/processed/clusters/document_panel.parquet \
+		'data/raw/xbrl_facts/us_by_filing/*.parquet' 'data/raw/market/prices/*.parquet' 'data/raw/market/factors/*.parquet' \
+		-- bash -c '.venv/bin/python scripts/analytics/build_call_beta_panel.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/call_beta_regressions.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/call_beta_robustness.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/sec_comment_letter_cases.py $(ARGS)'
 
-analytics: analytics-text analytics-financials analytics-panels analytics-activities analytics-call-beta
+# 200-replicate dual bootstrap (frame-level + firm-level) of the k=3 posture
+# archetype -- expensive (minutes, not seconds) even with caching on a cache
+# miss, kept as its own target so a quick `make analytics` iteration only
+# pays for it when the underlying frames actually changed.
+analytics-stability: analytics-text
+	@echo "Bootstrap de estabilidad del archetype (200 réplicas x 2 regímenes x k=2..5)..."
+	@$(RUN_CACHED) stability \
+		scripts/analytics/bootstrap_archetype_stability.py scripts/analytics/build_strategy_dimensions.py scripts/analytics/ai_intensity.py \
+		$(DUCKDB_FILE) 'data/interim/ai_classify/*.parquet' \
+		-- .venv/bin/python scripts/analytics/bootstrap_archetype_stability.py $(ARGS)
+
+analytics: analytics-financials analytics-text analytics-panels analytics-call-beta analytics-stability
 
 # ---- 10_fusion: merging the 10-K text pipeline with market data — not built yet ----
 
