@@ -66,8 +66,8 @@ def load_documents_words(con: duckdb.DuckDBPyConnection, frames: pd.DataFrame) -
     docs["fy"] = np.where(docs["channel"] == "call", docs["call_fy"], np.where(is_pe, fy_pe, fy_date)).astype(int)
 
     per_doc = frames.groupby(["channel", "ticker", "fy"]).agg(
-        n_frames=("text_hash", "size"), n_promo=("rhetoric_promotional", "sum"),
-        n_quant=("specificity_quantified_metric", "sum")).reset_index()
+        n_frames=("text_hash", "size"), n_promo=("is_promo", "sum"),
+        n_quant=("is_quant", "sum")).reset_index()
     cell = docs.groupby(["ticker", "fy", "channel"]).agg(
         n_docs=("accession_number", "nunique"), n_words=("n_words", "sum"),
         n_paragraphs=("n_paragraphs", "sum")).reset_index()

@@ -13,8 +13,8 @@ No hay modelo econométrico ni re-clustering. Cuatro salidas:
      funciones, etapa máxima, mezcla interno/cliente, proveedores, evidencia.
   2. top behaviours del S&P 500: % de empresas (sobre las 510 con filings)
      que divulgan cada tipo de actividad.
-  3. composición conductual de los segmentos de `02_segmentacion.md`.
-  4. fichas de empresas ejemplares por segmento.
+  3. composición conductual de los archetypes de `build_strategy_dimensions.py`.
+  4. fichas de empresas ejemplares por archetype.
 
 `function` y `provider_or_model` vienen libres del LLM; acá se agrupan en
 familias por palabras clave (tablas FUNCTION_FAMILIES y PROVIDER_FAMILIES).
@@ -53,21 +53,6 @@ CALLS_MANIFESTS = [
     REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls_stockanalysis.parquet",
 ]
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
-# `build_segments.py` nombra cada segmento por la dimensión donde más se
-# despega del promedio (ver su docstring): el nombre puede cambiar de una
-# corrida a otra si la dimensión dominante cambia. Este diccionario sólo
-# traduce nombres conocidos a inglés legible; uno nuevo se titleiza genérico.
-_SEGMENT_LABEL_KNOWN = {"desplegadores_de_producto": "Product Deployers", "adoptantes_con_gobernanza": "Governance Adopters",
-                        "listadores_de_riesgo": "Risk Listers", "sin_ia": "No AI", "exploradores": "Explorers",
-                        "promocionales": "Promotional Disclosers"}
-
-
-class _SegmentLabels(dict):
-    def __missing__(self, key):
-        return str(key).replace("_", " ").title()
-
-
-SEGMENT_LABELS = _SegmentLabels(_SEGMENT_LABEL_KNOWN)
 
 FUNCTION_FAMILIES = [
     ("governance", r"govern|oversight|responsible[_ ]ai|ai[_ ]ethic|transparen|trust[_ ]and[_ ]safety|policy|compliance[_ ]program"),
@@ -122,7 +107,7 @@ OBJECT_FAMILIES = [
     ("AI, unspecified object", r"^ai$|^artificial intelligence|^generative ai$|^gen ?ai$|^ai technolog|^ai and|^ai/ml|^machine learning$|^ai initiative|^ai strateg|^ai use|^ai program|^ai investment|^technolog|^new technolog|^ai$"),
 ]
 STAGE_RANK = {"unspecified": 0, "exploring": 1, "piloting": 2, "deployed": 3, "scaled": 4}
-EXTERNAL_ROLES = {"external_provider", "external_model", "partner"}
+EXTERNAL_ROLES = {"provider", "model", "partner"}
 SOURCES = ["own", "third_party", "co_developed", "acquired", "open_source", "mixed", "unspecified"]
 
 
@@ -210,18 +195,18 @@ def load() -> pd.DataFrame:
     a = acts.merge(inst, on="text_hash", how="inner")
     # una actividad única por empresa; si el mismo texto aparece en call y filing, se anota el canal 'filing'
     a["channel_rank"] = (a["channel"] == "call").astype(int)
-    a = a.sort_values("channel_rank").drop_duplicates(["ticker", "text_hash", "activity_index"]).drop(columns="channel_rank")
+    a = a.sort_values("channel_rank").drop_duplicates(["ticker", "text_hash", "activity_id"]).drop(columns="channel_rank")
     a["function_family"] = a["function"].map(lambda v: family(v, FUNCTION_FAMILIES, "unspecified"))
     # proveedores: lista por actividad. `provider_families` es la lista de familias;
     # `provider_family` resume la actividad: la primera familia externa nombrada, si no
     # 'proprietary' si lo declara, si no 'unspecified'. Los conteos por proveedor usan la lista.
-    # entidades nombradas con rol (v2): proveedores externos = external_provider, external_model, partner;
-    # marcas propias = own_product_or_brand. `ai_source` dice de dónde sale la IA.
-    a["named_entities"] = a["named_entities"].map(lambda v: [dict(e) for e in (list(v) if v is not None else [])])
-    a["ai_source"] = a["ai_source"].fillna("unspecified")
-    a["providers_or_models"] = a["named_entities"].map(lambda es: [e["name"] for e in es if e["role"] in EXTERNAL_ROLES])
-    a["own_brands"] = a["named_entities"].map(lambda es: [e["name"] for e in es if e["role"] == "own_product_or_brand"])
-    a["is_own_ai"] = a["ai_source"].isin(["own", "mixed"])
+    # entidades nombradas con rol (v2): proveedores externos = provider, model, partner;
+    # marcas propias = own_brand. `source` dice de dónde sale la IA.
+    a["entities"] = a["entities"].map(lambda v: [dict(e) for e in (list(v) if v is not None else [])])
+    a["source"] = a["source"].fillna("unspecified")
+    a["providers_or_models"] = a["entities"].map(lambda es: [e["name"] for e in es if e["role"] in EXTERNAL_ROLES])
+    a["own_brands"] = a["entities"].map(lambda es: [e["name"] for e in es if e["role"] == "own_brand"])
+    a["is_own_ai"] = a["source"].isin(["own", "mixed"])
     a["provider_or_model"] = a["providers_or_models"].map(lambda v: ", ".join(v) if v else "unspecified")
     a["provider_families"] = a.apply(lambda r: sorted({family(x, PROVIDER_FAMILIES, "unspecified") for x in r["providers_or_models"]} | ({"proprietary"} if r["is_own_ai"] else set())), axis=1)
     def _summary(fams):
@@ -231,7 +216,7 @@ def load() -> pd.DataFrame:
     a["stage_rank"] = a["stage"].map(STAGE_RANK).fillna(0).astype(int)
     a["object_family"] = a["object"].map(lambda v: "AI, unspecified object" if is_generic_object(v) else family(v, OBJECT_FAMILIES, "AI, unspecified object"))
     # lo que no cae en ninguna familia pero trae producto o proceso con nombre es un objeto concreto con marca
-    named = (a["object_family"] == "other") & (a["evidence_strength"] == "named_product_or_process")
+    named = (a["object_family"] == "other") & (a["evidence_type"] == "named")
     a.loc[named, "object_family"] = "named product or platform"
     a["activity"] = a["action"] + " · " + a["object_family"]
     a["activity_function"] = a["activity"] + " · " + a["function_family"]
@@ -239,8 +224,8 @@ def load() -> pd.DataFrame:
     # instancias por documento (una fila por actividad × documento), para paneles por año y por canal
     inst_docs = inst_docs.merge(docs.drop(columns="channel"), on="accession_number", how="inner")
     inst_docs["year"] = inst_docs["fecha"].dt.year
-    a.attrs["instances"] = a[["text_hash", "activity_index", "action", "target", "stage", "provider_or_model", "provider_family",
-                              "provider_families", "own_brands", "is_own_ai", "ai_source", "named_entities", "evidence_strength", "function"]].drop_duplicates(["text_hash", "activity_index"]) \
+    a.attrs["instances"] = a[["text_hash", "activity_id", "action", "target", "stage", "provider_or_model", "provider_family",
+                              "provider_families", "own_brands", "is_own_ai", "source", "entities", "evidence_type", "function"]].drop_duplicates(["text_hash", "activity_id"]) \
         .merge(inst_docs, on="text_hash", how="inner")
     return a
 
@@ -252,20 +237,24 @@ def flags(a: pd.DataFrame) -> pd.DataFrame:
     f["customer_facing_deployment"] = used & (a["target"] == "customers")
     f["internal_deployment"] = used & a["target"].isin(["employees", "internal_process"])
     f["developer_tools"] = used & (a["target"] == "developers")
-    f["proprietary_ai"] = (a["action"] == "develop") | (a["ai_source"] == "own")
+    f["proprietary_ai"] = (a["action"] == "develop") | (a["source"] == "own")
     f["own_brand_named"] = a["own_brands"].map(lambda v: len(v) > 0)
-    f["third_party_ai"] = a["ai_source"].isin(["third_party", "mixed", "open_source"])
-    f["co_developed_or_acquired"] = a["ai_source"].isin(["co_developed", "acquired"])
-    f["named_customer"] = a["named_entities"].map(lambda es: any(e["role"] == "customer" for e in es))
+    f["third_party_ai"] = a["source"].isin(["third_party", "mixed", "open_source"])
+    f["co_developed_or_acquired"] = a["source"].isin(["co_developed", "acquired"])
+    f["named_customer"] = a["entities"].map(lambda es: any(e["role"] == "customer" for e in es))
     f["third_party_named_provider"] = a["provider_families"].map(lambda v: any(x not in ("proprietary", "unspecified", "third_party_unnamed") for x in v))
-    f["infrastructure_investment"] = a["action"] == "invest_infrastructure"
-    f["acquisition_or_licensing"] = a["action"] == "buy_or_license"
+    f["infrastructure_investment"] = a["action"] == "invest"
+    f["acquisition_or_licensing"] = a["action"] == "procure"
     f["partnership"] = a["action"] == "partner"
-    f["talent_or_training"] = a["action"] == "hire_or_train"
-    f["quantified_outcome"] = (a["action"] == "measure_outcome") | (a["evidence_strength"] == "metric")
-    f["governance_or_restriction"] = a["action"].isin(["govern_or_control", "restrict"])
-    f["piloting_or_exploring"] = a["action"] == "pilot_or_explore"
-    f["named_product_or_process"] = a["evidence_strength"] == "named_product_or_process"
+    f["talent_or_training"] = a["action"] == "staff"
+    f["quantified_outcome"] = (a["action"] == "measure") | (a["evidence_type"] == "metric")
+    f["governance_or_restriction"] = a["action"].isin(["govern", "restrict"])
+    # `pilot_or_explore` (v1 action) no tiene equivalente en v2: "pilotar" es
+    # ahora una etapa (stage), no una acción propia -- ver
+    # docs/migration_v1_to_v2_analytics.md §1.2. Se acepta el solapamiento con
+    # otras acciones (un deploy en stage=piloting cuenta como pilotaje).
+    f["piloting_or_exploring"] = a["stage"].isin(["exploring", "piloting"])
+    f["named_product_or_process"] = a["evidence_type"] == "named"
     f["named_function"] = ~a["function"].fillna("unspecified").str.lower().isin(["unspecified", "", "none", "n/a"])
     f["deployed_or_scaled"] = a["stage"].isin(["deployed", "scaled"])
     return f
@@ -336,7 +325,11 @@ def firm_profiles(a: pd.DataFrame, universe: pd.DataFrame) -> pd.DataFrame:
 def main() -> None:
     a = load()
     instances = a.attrs.pop("instances")
-    seg = pd.read_parquet(OUT_DIR / "firm_segments.parquet")[["ticker", "segmento"]]
+    # Universo de empresas + etiqueta de caracterización: `firm_strategy_
+    # dimensions.parquet` (build_strategy_dimensions.py), el mismo archetype
+    # k=3 que usa el resto de la tesis -- no el "segmento" del viejo K-means
+    # de Capítulo 3 (build_segments.py, deprecado 2026-09-13).
+    seg = pd.read_parquet(OUT_DIR / "firm_strategy_dimensions.parquet")[["ticker", "archetype"]]
     prof = firm_profiles(a, seg)
     prof.to_parquet(OUT_DIR / "firm_activity_profiles.parquet", index=False)
     a.drop(columns=["stage_rank"]).to_parquet(OUT_DIR / "firm_activities.parquet", index=False)
@@ -349,13 +342,13 @@ def main() -> None:
           f"{(a.channel == 'call').mean():.0%} provienen sólo de calls")
 
     print("\nACCIONES (% de actividades) y ETAPA, DESTINATARIO, EVIDENCIA")
-    dist = {k: (a[k].value_counts(normalize=True) * 100).round(1).to_dict() for k in ("action", "stage", "target", "evidence_strength", "ai_source")}
+    dist = {k: (a[k].value_counts(normalize=True) * 100).round(1).to_dict() for k in ("action", "stage", "target", "evidence_type", "source")}
     for k, v in dist.items():
         print(f"  {k:18s} " + " | ".join(f"{kk} {vv}" for kk, vv in v.items()))
     fam = (a["function_family"].value_counts(normalize=True) * 100).round(1)
     prov = (a["provider_family"].value_counts(normalize=True) * 100).round(1)
     multi = float(a["provider_families"].map(lambda v: len(set(v) - {"proprietary", "unspecified", "third_party_unnamed"}) >= 2).mean())
-    roles = pd.Series([e["role"] for es in a["named_entities"] for e in es]).value_counts()
+    roles = pd.Series([e["role"] for es in a["entities"] for e in es]).value_counts()
     print(f"  actividades con ≥2 proveedores externos nombrados: {100 * multi:.1f}% | con marca propia nombrada: {100 * (a['own_brands'].map(len) > 0).mean():.1f}% | entidades nombradas por rol: " + ", ".join(f"{k} {v}" for k, v in roles.items()))
     print("  function family    " + " | ".join(f"{k} {v}" for k, v in fam.items()))
     print("  provider family    " + " | ".join(f"{k} {v}" for k, v in prov.items()))
@@ -397,45 +390,45 @@ def main() -> None:
     print(prov_firms[["pct_firms", "firms", "examples"]].to_string())
     print("  empresas que nombran algún proveedor externo:", named["ticker"].nunique(), "de", n_firms)
 
-    print("\nCOMPOSICIÓN CONDUCTUAL DE LOS SEGMENTOS — % de empresas del segmento con ≥1 actividad de cada tipo")
-    by_seg = (prof.groupby("segmento")[any_cols].mean() * 100).round(1).rename(columns=lambda c: c[4:])
-    by_seg["n_firms"] = prof.groupby("segmento").size()
-    by_seg["median_activities"] = prof.groupby("segmento")["n_activities"].median()
-    by_seg["share_customers"] = (prof.groupby("segmento")["share_customers"].mean() * 100).round(1)
-    by_seg["share_internal"] = (prof.groupby("segmento")["share_internal"].mean() * 100).round(1)
-    non_ai = [s for s in prof["segmento"].dropna().unique() if s != "sin_ia"]
-    order = sorted(non_ai, key=lambda s: -int(prof[prof["segmento"] == s].shape[0])) + (["sin_ia"] if "sin_ia" in prof["segmento"].values else [])
+    print("\nCOMPOSICIÓN CONDUCTUAL DE LOS ARQUETIPOS — % de empresas del archetype con ≥1 actividad de cada tipo")
+    by_seg = (prof.groupby("archetype")[any_cols].mean() * 100).round(1).rename(columns=lambda c: c[4:])
+    by_seg["n_firms"] = prof.groupby("archetype").size()
+    by_seg["median_activities"] = prof.groupby("archetype")["n_activities"].median()
+    by_seg["share_customers"] = (prof.groupby("archetype")["share_customers"].mean() * 100).round(1)
+    by_seg["share_internal"] = (prof.groupby("archetype")["share_internal"].mean() * 100).round(1)
+    non_ai = [s for s in prof["archetype"].dropna().unique() if s != "No AI"]
+    order = sorted(non_ai, key=lambda s: -int(prof[prof["archetype"] == s].shape[0])) + (["No AI"] if "No AI" in prof["archetype"].values else [])
     by_seg = by_seg.reindex(order)
     print(by_seg.T.to_string())
-    seg_stage = pd.crosstab(prof["segmento"], prof["max_stage"], normalize="index").reindex(order) * 100
+    seg_stage = pd.crosstab(prof["archetype"], prof["max_stage"], normalize="index").reindex(order) * 100
     aseg = a.merge(seg, on="ticker")
-    seg_func = pd.crosstab(aseg["segmento"], aseg["function_family"], normalize="index").reindex(order[:3]) * 100
+    seg_func = pd.crosstab(aseg["archetype"], aseg["function_family"], normalize="index").reindex(order[:3]) * 100
 
-    print("\nACTIVIDADES CONCRETAS POR SEGMENTO — top 12 acción · objeto, % de empresas del segmento")
+    print("\nACTIVIDADES CONCRETAS POR ARQUETIPO — top 12 acción · objeto, % de empresas del archetype")
     seg_top = {}
     for s in order[:3]:
-        sub = aseg[(aseg["segmento"] == s) & (aseg["object_family"] != "AI, unspecified object")]
+        sub = aseg[(aseg["archetype"] == s) & (aseg["object_family"] != "AI, unspecified object")]
         tbl = firm_share(sub, "activity", int(by_seg.loc[s, "n_firms"]), 12)
         seg_top[s] = json.loads(tbl.to_json(orient="index"))
-        print(f"  [{SEGMENT_LABELS[s]}]")
+        print(f"  [{s}]")
         for k, r in tbl.iterrows():
             print(f"    {r.pct_firms:5.1f}%  {k:45s} e.g. {r.examples}")
     seg_actf = {}
-    print("\nACCIÓN · OBJETO · FUNCIÓN POR SEGMENTO — top 10 con función declarada, % de empresas del segmento")
+    print("\nACCIÓN · OBJETO · FUNCIÓN POR ARQUETIPO — top 10 con función declarada, % de empresas del archetype")
     for s in order[:3]:
-        sub = aseg[(aseg["segmento"] == s) & (aseg["object_family"] != "AI, unspecified object") & ~aseg["function_family"].isin(["unspecified", "other"])]
+        sub = aseg[(aseg["archetype"] == s) & (aseg["object_family"] != "AI, unspecified object") & ~aseg["function_family"].isin(["unspecified", "other"])]
         tbl = firm_share(sub, "activity_function", int(by_seg.loc[s, "n_firms"]), 10)
         seg_actf[s] = json.loads(tbl.to_json(orient="index"))
-        print(f"  [{SEGMENT_LABELS[s]}]")
+        print(f"  [{s}]")
         for k, r in tbl.iterrows():
             print(f"    {r.pct_firms:5.1f}%  {k}")
 
     print("\nFICHAS — inventario de actividades concretas por empresa ejemplar")
     cards = {}
-    exemplars = {s: prof[prof["segmento"] == s].sort_values("n_activities", ascending=False)["ticker"].head(5).tolist()
+    exemplars = {s: prof[prof["archetype"] == s].sort_values("n_activities", ascending=False)["ticker"].head(5).tolist()
                  for s in order[:3]}
     for s, tickers in exemplars.items():
-        print(f"  [{SEGMENT_LABELS[s]}]")
+        print(f"  [{s}]")
         for t_ in tickers:
             sub = a[a.ticker == t_]
             if sub.empty:
@@ -447,14 +440,14 @@ def main() -> None:
                                 "objects": g["object"].apply(lambda x: ", ".join(x.value_counts().index[:3])),
                                 "providers": g["providers_or_models"].apply(lambda x: ", ".join(v for v in pd.Series([p for lst in x for p in lst], dtype=object).value_counts().index[:3] if v.lower() not in ("unspecified", "proprietary"))),
                                 "own": g["own_brands"].apply(lambda x: ", ".join(pd.Series([p for lst in x for p in lst], dtype=object).value_counts().index[:3])),
-                                "source": g["ai_source"].apply(lambda x: x.value_counts().index[0]),
+                                "source": g["source"].apply(lambda x: x.value_counts().index[0]),
                                 "stage": g["stage_rank"].max().map({v: k for k, v in STAGE_RANK.items()}),
-                                "named_or_metric": g["evidence_strength"].apply(lambda x: float(x.isin(["named_product_or_process", "metric", "vendor"]).mean()))
+                                "named_or_metric": g["evidence_type"].apply(lambda x: float(x.isin(["named", "metric", "vendor"]).mean()))
                                 }).sort_values("n", ascending=False).head(8).reset_index()
             lines = [f"{r.action} · {r.object_family} ({r.n}): {r.objects}" + (f" | for {r.functions}" if r.functions else "")
                      + (f" | {r.targets}" if r.targets else "") + f" | {r.stage}" + f" | {r.source}" + (f" | providers: {r.providers}" if r.providers else "") + (f" | own: {r.own}" if r.own else "")
                      + f" | concrete {r.named_or_metric:.0%}" for r in inv.itertuples()]
-            cards[t_] = {"segment": SEGMENT_LABELS[s], "n_activities": int(len(sub)), "lines": lines}
+            cards[t_] = {"archetype": s, "n_activities": int(len(sub)), "lines": lines}
             print(f"    {t_} ({len(sub)} activities)")
             for ln in lines:
                 print(f"      - {ln}")
@@ -463,13 +456,13 @@ def main() -> None:
                "firms_with_activity": int((prof.n_activities > 0).sum()), "share_from_calls": float((a.channel == "call").mean()),
                "distributions": dist, "function_families": fam.to_dict(), "provider_families": prov.to_dict(),
                "top_behaviours": top.to_dict(), "top_behaviours_filings_only": top_f.to_dict(), "max_stage": stage_share.to_dict(),
-               "by_segment": json.loads(by_seg.to_json(orient="index")), "stage_by_segment": json.loads(seg_stage.round(1).to_json(orient="index")),
-               "functions_by_segment": json.loads(seg_func.round(1).to_json(orient="index")), "exemplars": cards,
+               "by_archetype": json.loads(by_seg.to_json(orient="index")), "stage_by_archetype": json.loads(seg_stage.round(1).to_json(orient="index")),
+               "functions_by_archetype": json.loads(seg_func.round(1).to_json(orient="index")), "exemplars": cards,
                "top_concrete_activities": json.loads(top_act.to_json(orient="index")),
                "top_activity_function": json.loads(top_actf.to_json(orient="index")),
                "object_families": json.loads(top_obj.to_json(orient="index")),
                "named_providers": json.loads(prov_firms.to_json(orient="index")), "firms_naming_provider": int(named["ticker"].nunique()),
-               "segment_top_activities": seg_top, "segment_top_activity_function": seg_actf}
+               "archetype_top_activities": seg_top, "archetype_top_activity_function": seg_actf}
     (OUT_DIR / "activity_profiles.json").write_text(json.dumps(payload, indent=2, default=float) + "\n")
     print(f"\n-> {OUT_DIR}/activity_profiles.json, firm_activity_profiles.parquet, firm_activities.parquet")
 

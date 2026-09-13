@@ -1,0 +1,112 @@
+{
+  "correlation_matrix": {
+    "w_Vocal": {
+      "w_Vocal": 1.0,
+      "w_Gov": -0.395,
+      "w_Def": -0.646,
+      "frac_def14a": 0.059,
+      "frac_10k_1a": -0.451,
+      "frac_10k_biz_mda": 0.509
+    },
+    "w_Gov": {
+      "w_Vocal": -0.395,
+      "w_Gov": 1.0,
+      "w_Def": -0.446,
+      "frac_def14a": 0.675,
+      "frac_10k_1a": -0.395,
+      "frac_10k_biz_mda": -0.153
+    },
+    "w_Def": {
+      "w_Vocal": -0.646,
+      "w_Gov": -0.446,
+      "w_Def": 1.0,
+      "frac_def14a": -0.618,
+      "frac_10k_1a": 0.767,
+      "frac_10k_biz_mda": -0.369
+    },
+    "frac_def14a": {
+      "w_Vocal": 0.059,
+      "w_Gov": 0.675,
+      "w_Def": -0.618,
+      "frac_def14a": 1.0,
+      "frac_10k_1a": -0.614,
+      "frac_10k_biz_mda": -0.187
+    },
+    "frac_10k_1a": {
+      "w_Vocal": -0.451,
+      "w_Gov": -0.395,
+      "w_Def": 0.767,
+      "frac_def14a": -0.614,
+      "frac_10k_1a": 1.0,
+      "frac_10k_biz_mda": -0.631
+    },
+    "frac_10k_biz_mda": {
+      "w_Vocal": 0.509,
+      "w_Gov": -0.153,
+      "w_Def": -0.369,
+      "frac_def14a": -0.187,
+      "frac_10k_1a": -0.631,
+      "frac_10k_biz_mda": 1.0
+    }
+  },
+  "rates_by_form": [
+    {
+      "form_type": "10-K",
+      "total_frames": 21739,
+      "risk_rate": 0.561,
+      "gov_rate": 0.058,
+      "promo_rate": 0.065,
+      "spec_rate": 0.548
+    },
+    {
+      "form_type": "DEF 14A",
+      "total_frames": 8062,
+      "risk_rate": 0.262,
+      "gov_rate": 0.38,
+      "promo_rate": 0.147,
+      "spec_rate": 0.567
+    },
+    {
+      "form_type": "8-K",
+      "total_frames": 396,
+      "risk_rate": 0.553,
+      "gov_rate": 0.056,
+      "promo_rate": 0.043,
+      "spec_rate": 0.506
+    },
+    {
+      "form_type": "DEFC14A",
+      "total_frames": 24,
+      "risk_rate": 0.292,
+      "gov_rate": 0.292,
+      "promo_rate": 0.125,
+      "spec_rate": 0.542
+    }
+  ],
+  "rates_10k_by_section": [
+    {
+      "item_key": "1A",
+      "total_frames": 13216,
+      "risk_rate": 0.785,
+      "gov_rate": 0.057,
+      "promo_rate": 0.002,
+      "spec_rate": 0.478
+    },
+    {
+      "item_key": "1",
+      "total_frames": 6261,
+      "risk_rate": 0.198,
+      "gov_rate": 0.065,
+      "promo_rate": 0.182,
+      "spec_rate": 0.68
+    },
+    {
+      "item_key": "7",
+      "total_frames": 2263,
+      "risk_rate": 0.259,
+      "gov_rate": 0.04,
+      "promo_rate": 0.106,
+      "spec_rate": 0.588
+    }
+  ]
+}
