@@ -308,11 +308,12 @@ To guard against survivorship bias, the `{python} uni_frame_delisted` firms subs
 
 ```{python}
 #| label: fig-sic-distribution
-#| fig-cap: "Industrial distribution of the S&P 500 study universe (fixed at 2021-01-01, $N=499$) across broad Standard Industrial Classification (SIC) divisions (Panel A) and two-digit SIC major groups (Panel B: top 12 groups plus remaining industries)."
+#| fig-cap: "Industrial distribution of the S&P 500 study universe (fixed at 2021-01-01, $N=499$) across broad Standard Industrial Classification (SIC) divisions (Panel A), two-digit SIC major groups (Panel B: top 12 groups plus remaining industries), and aggregated economic sectors (Panel C: 11 sector clusters used in corporate disclosure strategy analysis)."
 #| echo: false
-#| fig-width: 9.5
-#| fig-height: 4.4
+#| fig-width: 10.0
+#| fig-height: 7.6
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 
 fu = con.execute("SELECT ticker, company_name, sic, industry_group, active_status FROM firm_universe WHERE country_code = 'us'").df()
 fu["sic2"] = fu["sic"].astype(str).str.zfill(4).str[:2]
@@ -334,17 +335,17 @@ div_counts = fu["division"].value_counts().sort_values(ascending=True)
 
 SIC2_LABELS = {
     "73": "Business Services (73)",
-    "38": "Measuring & Optical Inst. (38)",
-    "28": "Chemicals & Allied Prod. (28)",
+    "38": "Measuring & Optical (38)",
+    "28": "Chemicals & Allied (28)",
     "49": "Electric, Gas & Sanitary (49)",
-    "35": "Industrial & Comp. Mach. (35)",
-    "67": "Holding & Invest. / REITs (67)",
+    "35": "Industrial Machinery (35)",
+    "67": "Holding & Invest. (67)",
     "63": "Insurance Carriers (63)",
     "36": "Electronic Equipment (36)",
     "60": "Depository Institutions (60)",
-    "20": "Food & Kindred Products (20)",
-    "37": "Transportation Equipment (37)",
-    "62": "Security & Commodity Brokers (62)",
+    "20": "Food & Kindred Prod. (20)",
+    "37": "Transportation Equip. (37)",
+    "62": "Security Brokers (62)",
 }
 
 s2_counts = fu["sic2"].value_counts()
@@ -353,51 +354,88 @@ top_s2 = s2_counts.head(top_n).sort_values(ascending=True)
 other_count = s2_counts.iloc[top_n:].sum()
 n_other_groups = len(s2_counts) - top_n
 
-labels_s2 = [f"Other ({n_other_groups} SIC groups)"] + [SIC2_LABELS.get(s, f"SIC {s}") for s in top_s2.index]
+labels_s2 = [f"Other ({n_other_groups} groups)"] + [SIC2_LABELS.get(s, f"SIC {s}") for s in top_s2.index]
 vals_s2 = [other_count] + list(top_s2.values)
 colors_s2 = ["#94A3B8"] + ["#0D9488"] * len(top_s2)
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9.5, 4.4), dpi=300)
+def map_sector(sic2):
+    try: s = int(sic2)
+    except: return "Other / Diversified"
+    if s in [73, 35, 36]: return "Technology"
+    elif s in [48]: return "Communications"
+    elif s in [28, 38, 80]: return "Healthcare & Pharma"
+    elif 60 <= s <= 67: return "Financial Services"
+    elif 20 <= s <= 39: return "Industrials & Mfg"
+    elif 40 <= s <= 47: return "Transportation"
+    elif s == 49: return "Utilities"
+    elif 10 <= s <= 14 or s == 29: return "Energy & Mining"
+    elif 50 <= s <= 59: return "Retail & Wholesale"
+    elif 70 <= s <= 89: return "Business Services"
+    else: return "Other / Diversified"
 
-# Panel A: SIC Divisions
+fu["agg_sector"] = fu["sic2"].apply(map_sector)
+sec_counts = fu["agg_sector"].value_counts().sort_values(ascending=True)
+
+fig = plt.figure(figsize=(10.0, 7.6), dpi=300)
+gs = gridspec.GridSpec(2, 2, height_ratios=[1.25, 1.1], hspace=0.38, wspace=0.45)
+ax1 = fig.add_subplot(gs[0, 0])
+ax2 = fig.add_subplot(gs[0, 1])
+ax3 = fig.add_subplot(gs[1, :])
+
+# Panel A: Broad SIC Divisions
 y1 = range(len(div_counts))
-bars1 = ax1.barh(y1, div_counts.values, color="#1E40AF", alpha=0.85, height=0.62)
+bars1 = ax1.barh(y1, div_counts.values, color="#1E40AF", alpha=0.85, height=0.6)
 ax1.set_yticks(y1)
-ax1.set_yticklabels(div_counts.index, fontsize=8.2)
-ax1.set_xlabel("Number of firms (N)", fontsize=8.5, fontweight="bold")
-ax1.set_title("Panel A: Broad SIC Divisions (N=499)", fontsize=9.2, fontweight="bold", pad=8)
+ax1.set_yticklabels(div_counts.index, fontsize=7.8)
+ax1.set_xlabel("Number of firms (N)", fontsize=8.2, fontweight="bold")
+ax1.set_title("Panel A: Broad SIC Divisions (N=499)", fontsize=9.0, fontweight="bold", pad=6)
 ax1.spines[["top", "right"]].set_visible(False)
 ax1.grid(axis="x", linestyle="--", alpha=0.3)
 for bar in bars1:
     w = bar.get_width()
     pct = w / len(fu) * 100
     ax1.text(w + 3, bar.get_y() + bar.get_height()/2, f"{w} ({pct:.1f}%)",
-             va="center", fontsize=7.5, color="#1E293B")
-ax1.set_xlim(0, max(div_counts.values) * 1.18)
+             va="center", fontsize=7.2, color="#1E293B")
+ax1.set_xlim(0, max(div_counts.values) * 1.25)
 
 # Panel B: Major 2-digit SIC Groups + Others
 y2 = range(len(vals_s2))
-bars2 = ax2.barh(y2, vals_s2, color=colors_s2, alpha=0.85, height=0.62)
+bars2 = ax2.barh(y2, vals_s2, color=colors_s2, alpha=0.85, height=0.6)
 ax2.set_yticks(y2)
-ax2.set_yticklabels(labels_s2, fontsize=7.8)
-ax2.set_xlabel("Number of firms (N)", fontsize=8.5, fontweight="bold")
-ax2.set_title("Panel B: 2-Digit SIC Groups (Top 12 + Others)", fontsize=9.2, fontweight="bold", pad=8)
+ax2.set_yticklabels(labels_s2, fontsize=7.5)
+ax2.set_xlabel("Number of firms (N)", fontsize=8.2, fontweight="bold")
+ax2.set_title("Panel B: 2-Digit Major SIC Groups (Top 12 + Others)", fontsize=9.0, fontweight="bold", pad=6)
 ax2.spines[["top", "right"]].set_visible(False)
 ax2.grid(axis="x", linestyle="--", alpha=0.3)
 for bar in bars2:
     w = bar.get_width()
     pct = w / len(fu) * 100
     ax2.text(w + 2, bar.get_y() + bar.get_height()/2, f"{w} ({pct:.1f}%)",
-             va="center", fontsize=7.3, color="#1E293B")
-ax2.set_xlim(0, max(vals_s2) * 1.18)
+             va="center", fontsize=7.0, color="#1E293B")
+ax2.set_xlim(0, max(vals_s2) * 1.25)
 
-plt.tight_layout()
+# Panel C: Aggregated Economic Sectors
+y3 = range(len(sec_counts))
+bars3 = ax3.barh(y3, sec_counts.values, color="#7C3AED", alpha=0.85, height=0.58)
+ax3.set_yticks(y3)
+ax3.set_yticklabels(sec_counts.index, fontsize=7.8)
+ax3.set_xlabel("Number of firms (N)", fontsize=8.2, fontweight="bold")
+ax3.set_title("Panel C: Aggregated Economic Sectors (Used in Archetype Strategy Analysis, N=499)", fontsize=9.0, fontweight="bold", pad=6)
+ax3.spines[["top", "right"]].set_visible(False)
+ax3.grid(axis="x", linestyle="--", alpha=0.3)
+for bar in bars3:
+    w = bar.get_width()
+    pct = w / len(fu) * 100
+    ax3.text(w + 1.5, bar.get_y() + bar.get_height()/2, f"{w} ({pct:.1f}%)",
+             va="center", fontsize=7.2, color="#1E293B")
+ax3.set_xlim(0, max(sec_counts.values) * 1.15)
+
 plt.show()
 ```
 
-As shown in @fig-sic-distribution, the sample spans diverse industries, led by manufacturing (40.9%), financial intermediaries and real estate (19.0%), and services (14.0%). At the two-digit SIC level, business services (SIC 73, $N=53$), precision instruments (SIC 38, $N=42$), and chemicals/pharmaceuticals (SIC 28, $N=38$) form the largest individual concentrations, with the remaining 45 industry groups accounting for 31.9% ($N=159$) of the universe.
+As shown in @fig-sic-distribution, the sample spans diverse industries across three complementary classification tiers. Panel A presents broad federal SIC divisions, led by manufacturing (40.9%), financial intermediaries and real estate (19.0%), and services (14.0%). Panel B details granular two-digit SIC major groups; business services (SIC 73, $N=53$), precision instruments (SIC 38, $N=42$), and chemicals/pharmaceuticals (SIC 28, $N=38$) form the largest individual concentrations, while the remaining 45 industry groups account for 31.9% ($N=159$) of the universe.
 
-This cross-sector heterogeneity is essential for evaluating whether corporate AI disclosures represent genuine operational adoption or promotional narrative across differing business models.
+Finally, Panel C aggregates these granular codes into 11 economically coherent sectors ($N=499$), led by technology (21.2%), financial services (19.0%), healthcare & pharma (17.0%), and industrials & manufacturing (14.2%). This 11-sector structure maps directly to the corporate strategy archetypes developed in Chapter 3 (@fig-sector-archetype-heatmap) and provides the sectoral controls for empirical regressions. This cross-sector heterogeneity is essential for evaluating whether corporate AI disclosures reflect genuine operational adoption or promotional narrative across differing business models.
 
 ## Data sources and corpus
 
