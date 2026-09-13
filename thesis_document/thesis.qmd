@@ -1683,9 +1683,9 @@ Recomputing the archetypes on Form 10-K frames alone (`{python} len(_common10k)`
 
 Having shown that disclosure archetypes reflect stable, channel-specific postures, the next chapter tests whether these communication strategies correspond to verifiable operational execution.
 
-# AI Activity, Business Models, and Economic Profiles
+# AI Activity and Business Models
 
-A central question in corporate disclosure is whether narrative posture reflects genuine technological execution or ungrounded talk. This chapter examines the concrete operational substance behind corporate AI claims by classifying disclosed activities into functional business roles, evaluating their verification grounding, and testing whether disclosure archetypes cohere with underlying economic fundamentals.
+A central question in corporate disclosure is whether narrative posture reflects genuine technological execution or ungrounded talk. This chapter examines the concrete operational substance behind corporate AI claims by classifying disclosed activities into functional business roles and evaluating their verification grounding.
 
 ## What corporate AI activity actually consists of
 
@@ -2607,133 +2607,11 @@ Two patterns stand out in @fig-geo-provenance, and both show AI disclosure orien
 
 Chinese references represent a stable, low-double-digit minority throughout the sample (`{python} f"{geo_cn_min_share:.1f}"`–`{python} f"{geo_cn_max_share:.1f}"`%). They rose briefly to `{python} f"{geo_cn_2025_share:.1f}"`% in 2025 (coinciding with the release of DeepSeek open-weight models) before settling at `{python} f"{geo_cn_2026_share:.1f}"`% in 2026 year to date.
 
-## External characterization of archetypes: fundamental financial profiles
-
-Financial fundamentals and market prices do not come from disclosure text; they come from XBRL filings and market returns. We test whether the archetypes match economically distinct firms, first on raw medians and then after adjusting for sector and year. The adjusted model is $X = \alpha_{s,y} + \gamma \cdot \text{Archetype} + \varepsilon$, with No AI as the reference group and firm-clustered standard errors [@bertrand2004].
-
-```{python}
-#| echo: false
-#| output: false
-import json
-from pathlib import Path
-
-
-_econ = json.loads(_p("strategy_economic_profiles.json").read_text())
-econ_a = _econ["panel_a"]
-d = _econ["panel_b"]
-
-def _pfmt(p):
-    return "< 0.001" if p < 0.001 else f"= {p:.3g}"
-
-def _reg(key, seg):
-    row = d[key][seg]
-    return row["gamma"], row["se"], row["p"]
-
-vs_mktcap_g, _, vs_mktcap_p = _reg("log_market_cap", "Vocal Substantives")
-vs_rd_g, _, vs_rd_p = _reg("rd_intensity", "Vocal Substantives")
-vs_gm_g, _, vs_gm_p = _reg("gross_margin", "Vocal Substantives")
-vs_beta_g, _, vs_beta_p = _reg("beta", "Vocal Substantives")
-vs_ps_g, _, vs_ps_p = _reg("ps_ratio", "Vocal Substantives")
-
-gov_mktcap_g, _, gov_mktcap_p = _reg("log_market_cap", "Governance-Led Disclosers")
-gov_roic_g, _, gov_roic_p = _reg("roic_minus_wacc", "Governance-Led Disclosers")
-gov_ps_g, _, gov_ps_p = _reg("ps_ratio", "Governance-Led Disclosers")
-
-def_rd_g, _, def_rd_p = _reg("rd_intensity", "Defensive Disclosers")
-
-rd_vs, rd_gov, rd_def = econ_a["Vocal Substantives"]["rd_intensity"], econ_a["Governance-Led Disclosers"]["rd_intensity"], econ_a["Defensive Disclosers"]["rd_intensity"]
-gm_vs, gm_gov, gm_def = econ_a["Vocal Substantives"]["gross_margin"], econ_a["Governance-Led Disclosers"]["gross_margin"], econ_a["Defensive Disclosers"]["gross_margin"]
-beta_vs, beta_gov, beta_def = econ_a["Vocal Substantives"]["beta"], econ_a["Governance-Led Disclosers"]["beta"], econ_a["Defensive Disclosers"]["beta"]
-```
-
-Raw medians place Vocal Substantives ahead on technology-intensive metrics: R&D-to-sales, gross margin, and market beta. The sector-year-adjusted regressions in @fig-economic-coefficients confirm this differentiation across archetypes.
-
-**Vocal Substantives** is the archetype that stands out most consistently, displaying significant premiums across market capitalization (`{python} f"{vs_mktcap_g:+.2f}"` log points, $p$ `{python} _pfmt(vs_mktcap_p)`), R&D intensity, gross margin, beta, and price-to-sales.
-
-**Governance-Led Disclosers** differ from No AI primarily in scale and earnings quality rather than technology intensity: they exhibit market-cap and ROIC-minus-WACC premiums but negligible price-to-sales effects. This aligns with an archetype whose governance discourse tracks firm size and regulatory oversight rather than commercial AI deployment.
-
-**Defensive Disclosers** differ least from No AI, with an R&D effect being the only statistically distinguishable metric.
-
-After sector-year adjustment, the archetype most grounded in disclosed AI activity (Vocal Substantives, @tbl-4-1-archetype-profile) is also the one that separates most consistently on fundamentals. Talking about AI or emphasizing governance is not by itself tied to distinctive economics.
-
-This finding validates signaling theory [@spence1973, pp. 363--64]: informative market signals emerge from costly, verifiable disclosure content rather than narrative volume or rhetorical framing.
-
-```{python}
-#| label: fig-economic-coefficients
-#| fig-cap: "[Sector-year-adjusted effect of disclosure archetype on firm fundamentals, relative to No AI.]{custom-style=\"CaptionText\"}"
-#| echo: false
-#| fig-width: 8.5
-#| fig-height: 4.8
-import numpy as np
-import matplotlib.pyplot as plt
-
-OUTCOMES = [
-    ("log_market_cap", "log(Market cap)"), ("rd_intensity", "R&D / sales"),
-    ("gross_margin", "Gross margin"), ("beta", "Beta"),
-    ("ps_ratio", "Price-to-sales"), ("next_revenue_yoy", "Revenue growth (t+1)"),
-    ("roic_minus_wacc", "ROIC − WACC"),
-]
-ARCHETYPES = [("Vocal Substantives", "Vocal Substantives", "#059669"),
-              ("Governance-Led Disclosers", "Governance-Led Disclosers", "#7C3AED"),
-              ("Defensive Disclosers", "Defensive Disclosers", "#DC2626")]
-
-fig, ax = plt.subplots(figsize=(8.5, 4.8), dpi=300)
-y0 = np.arange(len(OUTCOMES))
-offsets = {"Vocal Substantives": 0.22, "Governance-Led Disclosers": 0.0, "Defensive Disclosers": -0.22}
-for seg, label, color in ARCHETYPES:
-    ys, xs, xerr = [], [], []
-    for i, (key, _) in enumerate(OUTCOMES):
-        row = d[key][seg]
-        sd = d[key]["sd"]
-        ys.append(y0[i] + offsets[seg])
-        xs.append(row["gamma"] / sd)
-        xerr.append(1.96 * row["se"] / sd)
-    ax.errorbar(xs, ys, xerr=xerr, fmt="o", color=color, label=label, capsize=3, ms=6, lw=1.6)
-ax.axvline(0, color="#334155", lw=1)
-ax.set_yticks(y0); ax.set_yticklabels([lbl for _, lbl in OUTCOMES], fontsize=9.5)
-ax.invert_yaxis()
-ax.set_xlabel("Sector-year-adjusted effect vs. No AI (standard deviations)", fontsize=9.5, fontweight="bold")
-ax.legend(fontsize=8.5, loc="lower right", framealpha=0.9)
-ax.grid(True, axis="x", linestyle="--", alpha=0.3)
-plt.tight_layout()
-plt.show()
-```
-
-::: {custom-style="FigureNote"}
-*Notes:* 95% CI, firm-clustered SE.
-:::
-
-### A same-sector pair: posture, activity, and economics together
-
-```{python}
-#| echo: false
-#| output: false
-from pathlib import Path
-import pandas as pd
-
-
-_m26 = pd.read_parquet(_p("firm_year_master_v2.parquet"))
-_m26 = _m26[_m26["year"] == _m26["year"].max()]
-_wy26 = pd.read_parquet(_p("firm_year_washing_score.parquet"))
-_wy26 = _wy26[_wy26["year"] == _wy26["year"].max()]
-
-pair_year = int(_m26["year"].iloc[0])
-pair = {}
-for t in ["MA", "TYL"]:
-    row_m, row_w = _m26[_m26["ticker"] == t].iloc[0], _wy26[_wy26["ticker"] == t].iloc[0]
-    pair[t] = {"archetype": row_m["archetype"], "sic2": row_m["sic2"], "d": row_m["disclosure_intensity"],
-               "market_cap": row_m["market_cap"], "beta": row_m["beta"],
-               "g": row_w["grounding_index"], "w": row_w["w"]}
-pair_mktcap_ratio = pair["MA"]["market_cap"] / pair["TYL"]["market_cap"]
-```
-
-A comparison of two firms within the same two-digit SIC sector (73, business services) illustrates why disclosure posture, grounding, and fundamentals must be evaluated jointly rather than by industry affiliation alone. In `{python} pair_year`, Mastercard (`{python} pair["MA"]["archetype"]`) and Tyler Technologies (`{python} pair["TYL"]["archetype"]`) report comparable disclosure intensity ($D =$ `{python} f"{pair['MA']['d']:.2f}"` vs. `{python} f"{pair['TYL']['d']:.2f}"`), yet Mastercard's activity is more than twice as grounded ($G =$ `{python} f"{pair['MA']['g']:.2f}"` vs. `{python} f"{pair['TYL']['g']:.2f}"`) and its decoupling runs in the opposite direction ($W =$ `{python} f"{pair['MA']['w']:+.2f}"` vs. `{python} f"{pair['TYL']['w']:+.2f}"`). Despite operating in the same sector and regulatory setting, the decisive divergence lies in operational grounding, which mirrors pronounced differences in firm scale (`{python} f"{pair_mktcap_ratio:.0f}"`× market capitalization) and systematic risk ($\beta =$ `{python} f"{pair['MA']['beta']:.2f}"` vs. `{python} f"{pair['TYL']['beta']:.2f}"`; disaggregated sector benchmarks in Appendix G).
-
 ## What disclosed AI activity adds to disclosure posture
 
 Disclosed activity carries information that posture alone does not. At equal disclosure volume, Vocal Substantives report `{python} f"{hd_vs_ratio:.2f}"` times as many AI activities as Defensive Disclosers. Archetypes do not simply proxy for verbosity.
 
-What firms report doing is functionally similar across groups: enterprises primarily sell and operate with AI. However, only the archetype pairing promotional posture with grounded operational execution stands out on sector-year-adjusted fundamentals. For investors and issuers, archetype status offers an effective initial screen, but the decisive signals reside in grounding attributes.
+What firms report doing is functionally similar across groups: enterprises primarily sell and operate with AI. However, only the archetype pairing promotional posture with grounded operational execution stands out on disclosed substance. For investors and issuers, archetype status offers an effective initial screen, but the decisive signals reside in grounding attributes.
 
 Yet, within any single document, firms retain wide discretion over what they emphasize. The crucial empirical question is whether these operational claims survive when legal commitment escalates. The next chapter tests corporate credibility across escalating verification hurdles, examining how disclosures shift between voluntary earnings calls and statutory SEC filings, and how firms respond to direct regulatory inquiries.
 
@@ -3241,7 +3119,7 @@ While promotional claims frequently fail to survive into binding filings, they r
 
 # Market Relevance of Disclosure Signals
 
-This chapter evaluates how equity markets price corporate AI communication by testing whether post-earnings-call systematic risk responds to verifiable operational substance or promotional narrative volume. Conditioned on pre-call market beta, we examine whether AI disclosures alter how investors price firm risk, tracking communication call by call across S&P 500 constituents from 2021 to 2025. Crucially, our research design separates a firm's established disclosure posture from the surprise content introduced during specific earnings presentations.
+This chapter evaluates how equity markets price corporate AI communication by testing whether post-earnings-call systematic risk responds to verifiable operational substance or promotional narrative volume. Conditioned on pre-call market beta, we examine whether AI disclosures alter how investors price firm risk, tracking communication call by call across S&P 500 constituents from 2021 to 2025. Crucially, our research design separates a firm's established disclosure posture from the surprise content introduced during specific earnings presentations. We then generalize the analysis beyond beta to the firm's broader financial profile, testing whether the disclosure archetypes separate firms economically on market capitalization, profitability, and valuation.
 
 ## Empirical strategy and research design
 
@@ -3488,12 +3366,134 @@ _pb_disc_p = "< 0.001" if pb_disc["p"] < 0.001 else f"= {pb_disc['p']:.3f}"
 _pb_sub_p = "< 0.001" if pb_sub["p"] < 0.001 else f"= {pb_sub['p']:.3f}"
 ```
 
+## External characterization of archetypes: fundamental financial profiles
+
+The beta results above test one specific channel: whether post-call systematic risk responds to disclosure posture and substance. This section generalizes that test to the firm's broader financial profile, asking whether the disclosure archetypes established in Chapter 3 also separate firms economically beyond beta. Financial fundamentals and market prices do not come from disclosure text; they come from XBRL filings and market returns. We test whether the archetypes match economically distinct firms, first on raw medians and then after adjusting for sector and year. The adjusted model is $X = \alpha_{s,y} + \gamma \cdot \text{Archetype} + \varepsilon$, with No AI as the reference group and firm-clustered standard errors [@bertrand2004].
+
+```{python}
+#| echo: false
+#| output: false
+import json
+from pathlib import Path
+
+
+_econ = json.loads(_p("strategy_economic_profiles.json").read_text())
+econ_a = _econ["panel_a"]
+d = _econ["panel_b"]
+
+def _pfmt(p):
+    return "< 0.001" if p < 0.001 else f"= {p:.3g}"
+
+def _reg(key, seg):
+    row = d[key][seg]
+    return row["gamma"], row["se"], row["p"]
+
+vs_mktcap_g, _, vs_mktcap_p = _reg("log_market_cap", "Vocal Substantives")
+vs_rd_g, _, vs_rd_p = _reg("rd_intensity", "Vocal Substantives")
+vs_gm_g, _, vs_gm_p = _reg("gross_margin", "Vocal Substantives")
+vs_beta_g, _, vs_beta_p = _reg("beta", "Vocal Substantives")
+vs_ps_g, _, vs_ps_p = _reg("ps_ratio", "Vocal Substantives")
+
+gov_mktcap_g, _, gov_mktcap_p = _reg("log_market_cap", "Governance-Led Disclosers")
+gov_roic_g, _, gov_roic_p = _reg("roic_minus_wacc", "Governance-Led Disclosers")
+gov_ps_g, _, gov_ps_p = _reg("ps_ratio", "Governance-Led Disclosers")
+
+def_rd_g, _, def_rd_p = _reg("rd_intensity", "Defensive Disclosers")
+
+rd_vs, rd_gov, rd_def = econ_a["Vocal Substantives"]["rd_intensity"], econ_a["Governance-Led Disclosers"]["rd_intensity"], econ_a["Defensive Disclosers"]["rd_intensity"]
+gm_vs, gm_gov, gm_def = econ_a["Vocal Substantives"]["gross_margin"], econ_a["Governance-Led Disclosers"]["gross_margin"], econ_a["Defensive Disclosers"]["gross_margin"]
+beta_vs, beta_gov, beta_def = econ_a["Vocal Substantives"]["beta"], econ_a["Governance-Led Disclosers"]["beta"], econ_a["Defensive Disclosers"]["beta"]
+```
+
+Raw medians place Vocal Substantives ahead on technology-intensive metrics: R&D-to-sales, gross margin, and market beta. The sector-year-adjusted regressions in @fig-economic-coefficients confirm this differentiation across archetypes.
+
+**Vocal Substantives** is the archetype that stands out most consistently, displaying significant premiums across market capitalization (`{python} f"{vs_mktcap_g:+.2f}"` log points, $p$ `{python} _pfmt(vs_mktcap_p)`), R&D intensity, gross margin, beta, and price-to-sales.
+
+**Governance-Led Disclosers** differ from No AI primarily in scale and earnings quality rather than technology intensity: they exhibit market-cap and ROIC-minus-WACC premiums but negligible price-to-sales effects. This aligns with an archetype whose governance discourse tracks firm size and regulatory oversight rather than commercial AI deployment.
+
+**Defensive Disclosers** differ least from No AI, with an R&D effect being the only statistically distinguishable metric.
+
+After sector-year adjustment, the archetype most grounded in disclosed AI activity (Vocal Substantives, @tbl-4-1-archetype-profile) is also the one that separates most consistently on fundamentals. Talking about AI or emphasizing governance is not by itself tied to distinctive economics.
+
+This finding validates signaling theory [@spence1973, pp. 363--64]: informative market signals emerge from costly, verifiable disclosure content rather than narrative volume or rhetorical framing.
+
+```{python}
+#| label: fig-economic-coefficients
+#| fig-cap: "[Sector-year-adjusted effect of disclosure archetype on firm fundamentals, relative to No AI.]{custom-style=\"CaptionText\"}"
+#| echo: false
+#| fig-width: 8.5
+#| fig-height: 4.8
+import numpy as np
+import matplotlib.pyplot as plt
+
+OUTCOMES = [
+    ("log_market_cap", "log(Market cap)"), ("rd_intensity", "R&D / sales"),
+    ("gross_margin", "Gross margin"), ("beta", "Beta"),
+    ("ps_ratio", "Price-to-sales"), ("next_revenue_yoy", "Revenue growth (t+1)"),
+    ("roic_minus_wacc", "ROIC − WACC"),
+]
+ARCHETYPES = [("Vocal Substantives", "Vocal Substantives", "#059669"),
+              ("Governance-Led Disclosers", "Governance-Led Disclosers", "#7C3AED"),
+              ("Defensive Disclosers", "Defensive Disclosers", "#DC2626")]
+
+fig, ax = plt.subplots(figsize=(8.5, 4.8), dpi=300)
+y0 = np.arange(len(OUTCOMES))
+offsets = {"Vocal Substantives": 0.22, "Governance-Led Disclosers": 0.0, "Defensive Disclosers": -0.22}
+for seg, label, color in ARCHETYPES:
+    ys, xs, xerr = [], [], []
+    for i, (key, _) in enumerate(OUTCOMES):
+        row = d[key][seg]
+        sd = d[key]["sd"]
+        ys.append(y0[i] + offsets[seg])
+        xs.append(row["gamma"] / sd)
+        xerr.append(1.96 * row["se"] / sd)
+    ax.errorbar(xs, ys, xerr=xerr, fmt="o", color=color, label=label, capsize=3, ms=6, lw=1.6)
+ax.axvline(0, color="#334155", lw=1)
+ax.set_yticks(y0); ax.set_yticklabels([lbl for _, lbl in OUTCOMES], fontsize=9.5)
+ax.invert_yaxis()
+ax.set_xlabel("Sector-year-adjusted effect vs. No AI (standard deviations)", fontsize=9.5, fontweight="bold")
+ax.legend(fontsize=8.5, loc="lower right", framealpha=0.9)
+ax.grid(True, axis="x", linestyle="--", alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+::: {custom-style="FigureNote"}
+*Notes:* 95% CI, firm-clustered SE.
+:::
+
+### A same-sector pair: posture, activity, and economics together
+
+```{python}
+#| echo: false
+#| output: false
+from pathlib import Path
+import pandas as pd
+
+
+_m26 = pd.read_parquet(_p("firm_year_master_v2.parquet"))
+_m26 = _m26[_m26["year"] == _m26["year"].max()]
+_wy26 = pd.read_parquet(_p("firm_year_washing_score.parquet"))
+_wy26 = _wy26[_wy26["year"] == _wy26["year"].max()]
+
+pair_year = int(_m26["year"].iloc[0])
+pair = {}
+for t in ["MA", "TYL"]:
+    row_m, row_w = _m26[_m26["ticker"] == t].iloc[0], _wy26[_wy26["ticker"] == t].iloc[0]
+    pair[t] = {"archetype": row_m["archetype"], "sic2": row_m["sic2"], "d": row_m["disclosure_intensity"],
+               "market_cap": row_m["market_cap"], "beta": row_m["beta"],
+               "g": row_w["grounding_index"], "w": row_w["w"]}
+pair_mktcap_ratio = pair["MA"]["market_cap"] / pair["TYL"]["market_cap"]
+```
+
+A comparison of two firms within the same two-digit SIC sector (73, business services) illustrates why disclosure posture, grounding, and fundamentals must be evaluated jointly rather than by industry affiliation alone. In `{python} pair_year`, Mastercard (`{python} pair["MA"]["archetype"]`) and Tyler Technologies (`{python} pair["TYL"]["archetype"]`) report comparable disclosure intensity ($D =$ `{python} f"{pair['MA']['d']:.2f}"` vs. `{python} f"{pair['TYL']['d']:.2f}"`), yet Mastercard's activity is more than twice as grounded ($G =$ `{python} f"{pair['MA']['g']:.2f}"` vs. `{python} f"{pair['TYL']['g']:.2f}"`) and its decoupling runs in the opposite direction ($W =$ `{python} f"{pair['MA']['w']:+.2f}"` vs. `{python} f"{pair['TYL']['w']:+.2f}"`). Despite operating in the same sector and regulatory setting, the decisive divergence lies in operational grounding, which mirrors pronounced differences in firm scale (`{python} f"{pair_mktcap_ratio:.0f}"`× market capitalization) and systematic risk ($\beta =$ `{python} f"{pair['MA']['beta']:.2f}"` vs. `{python} f"{pair['TYL']['beta']:.2f}"`; disaggregated sector benchmarks in Appendix G).
+
 ## Interpretation and limits
 
 1. **HistDisclosure is not concentrated in a single year, but SurpriseDisclosure never reaches significance on its own:** Leave-one-year-out regressions keep $\text{HistDisclosure}$ `{python} _hd_sig_text` ($p \le$ `{python} f"{_max_p_hd:.3f}" + _hd_detail_text`). $\text{SurpriseDisclosure}$, by contrast, `{python} "reaches p < 0.05 in at least one excluded-year specification" if _any_sd_sig else "never reaches conventional significance in any single-year exclusion"`, consistent with its null in the baseline. The association between call disclosure and post-call beta runs through a firm's persistent historical posture, not through the surprise content of any one call.
 2. **Pre-call beta placebo failure:** Regressing pre-call beta ($\beta^{\text{pre}}_{[-252, -21]}$) on contemporaneous call disclosure yields $\beta =$ `{python} f"{pb_disc['beta_std']:.3f}"` ($p$ `{python} _pb_disc_p`), while substance is null ($p$ `{python} _pb_sub_p`). Firms that talk heavily about AI were already high-beta before the call, which is the cross-sectional reading of the robustness table.
 
-These market results complete our empirical investigations: while equity markets price narrative volume as a general indicator of systematic risk, they do not systematically distinguish grounded operational substance from rhetorical noise. This market friction makes internal due diligence and objective measurement essential. The next chapter translates our empirical findings into an actionable decision framework for corporate executives, boards of directors, and investment professionals.
+These market results complete our empirical investigations: while equity markets price narrative volume as a general indicator of systematic risk, they do not systematically distinguish grounded operational substance from rhetorical noise. The broader fundamentals analysis above reinforces this asymmetry at the archetype level: Vocal Substantives, the archetype most grounded in disclosed AI activity, is also the one that separates most consistently on market capitalization, R&D intensity, gross margin, and price-to-sales — an economically distinct group, not merely a loud one, even though the call-level evidence shows the market prices its narrative volume rather than its grounding. This market friction makes internal due diligence and objective measurement essential. The next chapter translates our empirical findings into an actionable decision framework for corporate executives, boards of directors, and investment professionals.
 
 # From Measurement to Managerial Application
 
