@@ -387,7 +387,7 @@ Markdown(tabulate(table, headers=["Stage", "Unit of Observation", "Operational F
 
 *Notes: High-level overview of the six-stage inference funnel. Granular form-by-form decompositions and model acceptance diagnostics are detailed in Appendix A (@tbl-a1-funnel-full).*
 
-The pipeline (@fig-pipeline-architecture; @tbl-funnel-summary) turns raw corporate text into structured metrics through two intermediate steps:
+Following the principles of Knowledge Discovery in Databases (KDD) [@fayyad1996, pp. 37--40] and the CRISP-DM process model [@shearer2000, pp. 13--15], the pipeline moves systematically from document selection and cleaning to feature modeling and empirical validation. Because this is an academic research study rather than a commercial software system, the cycle ends at the evaluation and econometric analysis stage rather than an operational deployment phase. In practice, this architecture (@fig-pipeline-architecture; @tbl-funnel-summary) turns raw corporate text into structured metrics through two intermediate steps:
 
 $$\text{Raw text} \longrightarrow \text{AI claims (Frames)} \longrightarrow \text{Disclosed AI activities} \longrightarrow \text{Firm-level measures}$$
 
