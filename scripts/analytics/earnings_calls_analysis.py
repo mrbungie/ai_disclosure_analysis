@@ -49,9 +49,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
 OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
 CALLS_MANIFEST = "data/interim/manifests/filing_manifest_earnings_calls.parquet"
-BEHAVIOR = ["deployed", "pilot_or_testing", "exploring", "ai_investment",
-            "ai_infrastructure", "ai_talent", "proprietary_ai", "third_party_ai",
-            "expansion_or_scaling", "productivity_outcome", "revenue_outcome",
+BEHAVIOR = ["deployed", "pilot", "exploring", "investment",
+            "infrastructure", "talent", "proprietary_ai", "third_party_ai",
+            "scaling", "productivity_outcome", "revenue_outcome",
             "cost_outcome", "customer_outcome"]
 
 
@@ -60,13 +60,28 @@ def load_calls(con) -> pd.DataFrame:
 
     El manifiesto de calls no está en `filing_manifest` (que es de formularios
     SEC), así que se lee de su parquet; `filing_date` viene como VARCHAR ahí y
-    como DATE en los otros, de ahí el CAST."""
+    como DATE en los otros, de ahí el CAST.
+
+    `domain` no vive en el frame en v2 (ver
+    docs/migration_v1_to_v2_analytics.md §1.3) -- se trae del join a
+    gold_ai_activities por (text_hash, frame_id), cobertura parcial (solo
+    frames con actividad asociada), 'unspecified' si no hay match."""
     frames = con.execute("""
-        SELECT accession_number, item_key, text_hash, frame_index, subject, ai_type, temporal,
-               domain, concepts, rhetoric_promotional, rhetoric_strategic_importance,
-               specificity_quantified_metric
-        FROM gold_ai_frames
-        WHERE country_code = 'us' AND has_frame AND form = 'Earnings call'
+        WITH frame_domains AS (
+            SELECT text_hash, frame_id,
+                   CASE WHEN bool_or(domain = 'customer_facing') THEN 'customer_facing'
+                        WHEN bool_or(domain = 'internal') THEN 'internal'
+                        ELSE 'unspecified' END AS domain
+            FROM gold_ai_activities
+            WHERE has_activity
+            GROUP BY text_hash, frame_id
+        )
+        SELECT f.accession_number, f.item_key, f.text_hash, f.frame_id, f.subject, f.ai_type, f.temporal,
+               COALESCE(fd.domain, 'unspecified') AS domain,
+               f.concepts, f.rhetoric, f.specificity
+        FROM gold_ai_frames f
+        LEFT JOIN frame_domains fd ON fd.text_hash = f.text_hash AND fd.frame_id = f.frame_id
+        WHERE f.country_code = 'us' AND f.has_frame AND f.form = 'Earnings call'
     """).fetchdf()
     # El manifiesto de calls identifica cada transcripción con `document_id`
     # (ej. "AAP_2022Q3"), que es lo que el extractor usó como
@@ -78,7 +93,7 @@ def load_calls(con) -> pd.DataFrame:
         FROM read_parquet('{REPO_ROOT / CALLS_MANIFEST}') WHERE ticker IS NOT NULL
     """).fetchdf()
     data = frames.merge(manifest, on="accession_number", how="inner")
-    data = data.drop_duplicates(["ticker", "fecha", "item_key", "text_hash", "frame_index"])
+    data = data.drop_duplicates(["ticker", "fecha", "item_key", "text_hash", "frame_id"])
     data["seccion"] = data["item_key"].map({"prepared": "guion", "qa": "improvisado"}).fillna("otro")
     data["anio"] = pd.to_datetime(data["fecha"]).dt.year
     data["trimestre"] = pd.PeriodIndex(pd.to_datetime(data["fecha"]), freq="Q").astype(str)
@@ -88,8 +103,10 @@ def load_calls(con) -> pd.DataFrame:
         lambda s: float(any(str(c).startswith("risk_") for c in s)))
     data["gobernanza"] = concepts.apply(
         lambda s: float(any(str(c).startswith("gov_") for c in s)))
-    data["promocional"] = data["rhetoric_promotional"].astype(float)
-    data["cuantificado"] = data["specificity_quantified_metric"].astype(float)
+    data["promocional"] = data["rhetoric"].apply(
+        lambda r: float("promotional" in list(r)) if r is not None else 0.0)
+    data["cuantificado"] = data["specificity"].apply(
+        lambda s: float("metric" in list(s)) if s is not None else 0.0)
     return data
 
 
@@ -179,8 +196,8 @@ def main() -> None:
     try:
         others = con.execute("""
             SELECT form, count(*) frames,
-                   avg(CASE WHEN rhetoric_promotional THEN 1.0 ELSE 0 END) promocional,
-                   avg(CASE WHEN specificity_quantified_metric THEN 1.0 ELSE 0 END) cuantificado
+                   avg(list_contains(rhetoric, 'promotional')::INT) promocional,
+                   avg(list_contains(specificity, 'metric')::INT) cuantificado
             FROM gold_ai_frames WHERE country_code = 'us' AND has_frame
             GROUP BY 1 ORDER BY 2 DESC
         """).fetchdf()

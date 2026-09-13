@@ -10,7 +10,8 @@ Models:
   baseline              main specification, no leverage control
   debt_to_equity        matched-sample M0 / M1 with LT debt / equity
   liabilities_to_assets matched-sample M0 / M1 with liabilities / assets
-  all                   all three outputs
+  accounting            matched-sample M0 / M1 with ROA + liabilities/assets together
+  all                   all four outputs
 
 Usage:
   source .venv/bin/activate
@@ -40,8 +41,13 @@ LABELS = {
     "beta_pre": "Pre-call beta", "log_market_cap": "Log market capitalization",
     "return60": "Pre-call return (60 trading days)", "operating_margin": "Operating margin",
     "asset_turnover": "Asset turnover", "debt_to_equity": "Debt / equity",
-    "liabilities_to_assets": "Liabilities / assets",
+    "liabilities_to_assets": "Liabilities / assets", "roa": "Return on assets",
 }
+# The combined "accounting controls" model (ROA + liabilities/assets together,
+# not run/M1 per single leverage measure like the M0/M1 pairs below) --
+# thesis.qmd's prose specifically says "accounting controls (ROA and
+# liabilities/assets)".
+ACCOUNTING_VARS = ["roa", "liabilities_to_assets"]
 CONCEPTS = {
     "assets": ["us-gaap:Assets"],
     "liabilities": ["us-gaap:Liabilities"],
@@ -90,6 +96,19 @@ def attach_leverage(panel: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+ROA_PATH = ROOT / "data/processed/clusters/firm_year_financials_ratios.parquet"
+
+
+def attach_roa(panel: pd.DataFrame) -> pd.DataFrame:
+    """ROA per point-in-time filing accession, from the same ratios table
+    `build_firm_panels.py`/economic-profile analyses use elsewhere -- not
+    recomputed from raw XBRL facts here, since `firm_year_financials_ratios.
+    parquet` already carries it keyed by `accession_number`, the same
+    point-in-time filing key `attach_leverage` uses for debt/liabilities."""
+    roa = pd.read_parquet(ROA_PATH, columns=["accession_number", "roa"]).drop_duplicates("accession_number")
+    return panel.merge(roa, on="accession_number", how="left")
+
+
 def fit(panel: pd.DataFrame, variables: list[str]) -> tuple[sm.regression.linear_model.RegressionResultsWrapper, pd.DataFrame]:
     d = panel.dropna(subset=["beta_post_126", "fe", *variables]).copy()
     d = d[d.groupby("fe")["ticker"].transform("size") >= 2].copy()
@@ -116,6 +135,18 @@ def run(panel: pd.DataFrame, model: str) -> tuple[pd.DataFrame, pd.DataFrame]:
             "model": "baseline", "n_calls": len(sample), "n_firms": sample.ticker.nunique(),
             "n_fe_cells": sample.fe.nunique(), "r2": result.rsquared,
         }])
+    if model == "accounting":
+        matched = panel.dropna(subset=ACCOUNTING_VARS).copy()
+        m0, s0 = fit(matched, BASE)
+        m1, s1 = fit(matched, BASE + ACCOUNTING_VARS)
+        assert len(s0) == len(s1), "accounting M0/M1 must use the same ROA+leverage-observed sample"
+        table = pd.concat([coefficient_table(m0, BASE, "accounting_M0"),
+                           coefficient_table(m1, BASE + ACCOUNTING_VARS, "accounting_M1")])
+        summary = pd.DataFrame([
+            {"model": "accounting_M0", "n_calls": len(s0), "n_firms": s0.ticker.nunique(), "n_fe_cells": s0.fe.nunique(), "r2": m0.rsquared},
+            {"model": "accounting_M1", "n_calls": len(s1), "n_firms": s1.ticker.nunique(), "n_fe_cells": s1.fe.nunique(), "r2": m1.rsquared},
+        ])
+        return table, summary
     leverage = model
     # M0 and M1 use exactly the same complete-case sample: only leverage differs.
     matched = panel.dropna(subset=[leverage]).copy()
@@ -133,12 +164,12 @@ def run(panel: pd.DataFrame, model: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", choices=["baseline", "debt_to_equity", "liabilities_to_assets", "all"], default="all")
+    parser.add_argument("--model", choices=["baseline", "debt_to_equity", "liabilities_to_assets", "accounting", "all"], default="all")
     parser.add_argument("--panel", type=Path, default=PANEL)
     parser.add_argument("--output-dir", type=Path, default=OUT)
     args = parser.parse_args()
-    panel = attach_leverage(pd.read_parquet(args.panel))
-    models = ["baseline", "debt_to_equity", "liabilities_to_assets"] if args.model == "all" else [args.model]
+    panel = attach_roa(attach_leverage(pd.read_parquet(args.panel)))
+    models = ["baseline", "debt_to_equity", "liabilities_to_assets", "accounting"] if args.model == "all" else [args.model]
     tables, summaries = zip(*(run(panel, model) for model in models))
     args.output_dir.mkdir(parents=True, exist_ok=True)
     pd.concat(tables).to_csv(args.output_dir / "call_beta_regressions.csv", index=False)

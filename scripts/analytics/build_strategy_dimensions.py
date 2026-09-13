@@ -18,19 +18,25 @@ each other instead of being collapsed together.
 
 This script fixes both:
 
-1. **Clustering uses ONLY disclosure posture** -- six frame-level signals
+1. **Clustering uses ONLY disclosure posture** -- seven frame-level signals
    about HOW a firm communicates, none of them a declared action: promotional
-   register, risk framing, governance framing, temporal stance (realized vs.
-   hypothetical), customer-facing vs. internal positioning, and specificity.
-   Plus disclosure intensity (how much a firm says, at all). Nothing about
-   deployment, capability, or third-party sourcing enters this step -- those
-   live in the disclosed-activity extraction and are reserved for
-   validation, never for defining the archetypes.
-2. K-means on these 7 standardized posture dimensions gives the archetypes.
-   k is chosen the same way as before: resample each firm's own frames,
-   refit the whole pipeline, and keep the largest k whose worst-recovered
-   cluster still clears 0.60 mean Jaccard overlap.
-3. PCA on the same 7 dimensions is reported as a robustness diagnostic, NOT
+   register, hedging register, risk framing, governance framing, temporal
+   stance (realized vs. hypothetical), customer-facing vs. internal
+   positioning, and specificity. Plus disclosure intensity (how much a firm
+   says, at all). Nothing about deployment, capability, or third-party
+   sourcing enters this step -- those live in the disclosed-activity
+   extraction and are reserved for validation, never for defining the
+   archetypes.
+2. Continuous Archetypal Analysis (@cutler1994) on these 8 standardized
+   posture dimensions gives the archetypes: every firm is a convex
+   combination of k extreme vertices, and its DOMINANT vertex (argmax of
+   its weights) is the discrete `archetype` label stored below. k is
+   chosen by resampling each firm's own frames, refitting the whole
+   pipeline, and keeping the largest k whose worst-recovered dominant-
+   vertex partition still clears 0.60 mean Jaccard overlap. K-means never
+   appears in this pipeline -- it exists only as an Appendix C robustness
+   benchmark against this fit, computed independently inside thesis.qmd.
+3. PCA on the same 8 dimensions is reported as a robustness diagnostic, NOT
    as the clustering method: if PC1-2 captured most of the variance, that
    would argue for collapsing to a 2-D space; if it doesn't (it doesn't --
    see the manifest), that supports keeping the dimensions distinct rather
@@ -48,7 +54,7 @@ This script fixes both:
    "operational commitment" score it was regressed against).
 
 Outputs:
-  - `firm_strategy_dimensions.parquet`: one row per firm -- the 7 posture
+  - `firm_strategy_dimensions.parquet`: one row per firm -- the 8 posture
     dimensions, archetype, and promotional_excess (computed once activities
     are joined in a later step, see `build_strategy_economic_profiles.py`
     and the Chapter 4 notebook cells for how the activity-based residual is
@@ -70,7 +76,7 @@ from pathlib import Path
 import duckdb
 import numpy as np
 import pandas as pd
-from sklearn.cluster import KMeans
+from archetypes import AA
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
@@ -80,30 +86,46 @@ OUT_DIR = REPO_ROOT / "data" / "processed" / "clusters"
 SEED = 42
 MIN_FRAMES = 5
 
-SPECIFICITY_FLAGS = ["specificity_business_process", "specificity_product_or_system",
-                     "specificity_vendor_or_partner", "specificity_quantified_metric",
-                     "specificity_date_or_timeline"]
 # Communication POSTURE only -- no declared-action concept (deployed, scaling,
 # own/third-party capability, outcomes) is in this list on purpose. Those
 # live in the disclosed-activity pass and are reserved for validation.
-POSTURE = ["promotional_posture", "risk_orientation", "governance_orientation",
-          "temporal_posture", "ai_positioning", "specificity"]
+#
+# `hedging_posture` (2026-09-13): v2's rhetoric enum adds `hedged` --
+# cautious/conditional framing ("could", "may", "if adopted") -- alongside
+# `promotional`/`strategic`. v1 had no such category, so this dimension did
+# not and could not exist before. Kept as its OWN dimension rather than
+# folded into `promotional_posture`: hedged and promotional describe
+# opposite rhetorical postures (cautious vs. assertive), averaging them
+# would cancel out exactly the contrast a firm's choice between them is
+# meant to reveal.
+POSTURE = ["promotional_posture", "hedging_posture", "risk_orientation",
+          "governance_orientation", "temporal_posture", "ai_positioning", "specificity"]
 INTENSITY = "disclosure_intensity"
 CLUSTER_FEATURES = POSTURE + [INTENSITY]
 
 
 def load_frames(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    # `domain` no longer lives on the frame itself (v2, see
+    # docs/migration_v1_to_v2_analytics.md §1.3) -- it's a proxy computed on
+    # gold_ai_activities from pass-2's `target`, joined back here by
+    # (text_hash, frame_id). A frame with no matching activity (or none of
+    # its activities has a customer-facing target) reads as not customer-
+    # facing here, same partial-coverage caveat as the view itself.
     return con.execute("""
+        WITH frame_domains AS (
+            SELECT text_hash, frame_id, bool_or(domain = 'customer_facing') AS is_customer_facing
+            FROM gold_ai_activities
+            WHERE has_activity
+            GROUP BY text_hash, frame_id
+        )
         SELECT fm.ticker, extract(year from fm.filing_date)::INT AS year,
-               f.concepts, f.temporal, f.domain,
-               f.rhetoric_promotional, f.rhetoric_strategic_importance,
-               f.specificity_business_process, f.specificity_product_or_system,
-               f.specificity_vendor_or_partner, f.specificity_quantified_metric,
-               f.specificity_date_or_timeline
+               f.concepts, f.temporal, f.specificity, f.rhetoric,
+               COALESCE(fd.is_customer_facing, false) AS is_customer_facing
         FROM gold_ai_frames f
+        LEFT JOIN frame_domains fd ON fd.text_hash = f.text_hash AND fd.frame_id = f.frame_id
         JOIN filing_manifest fm USING (country_code, accession_number)
         WHERE f.country_code = 'us' AND f.has_frame AND fm.ticker IS NOT NULL
-        ORDER BY fm.ticker, fm.accession_number, f.text_hash, f.frame_index
+        ORDER BY fm.ticker, fm.accession_number, f.text_hash, f.frame_id
     """).fetchdf()
 
 
@@ -121,15 +143,18 @@ def firm_universe(con: duckdb.DuckDBPyConnection, keys: list[str]) -> pd.DataFra
 
 
 def build_posture(frames: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
-    """The six posture rates, none of them a declared-action concept."""
+    """The seven posture rates, none of them a declared-action concept."""
     df = frames.copy()
     concepts = df["concepts"].apply(lambda c: set(c) if c is not None else set())
-    df["promotional_posture"] = df[["rhetoric_promotional", "rhetoric_strategic_importance"]].astype(float).mean(axis=1)
+    df["promotional_posture"] = df["rhetoric"].apply(
+        lambda r: np.mean([x in list(r) if r is not None else False for x in ("promotional", "strategic")]))
+    df["hedging_posture"] = df["rhetoric"].apply(
+        lambda r: float("hedged" in list(r)) if r is not None else 0.0)
     df["risk_orientation"] = concepts.apply(lambda s: float(any(str(c).startswith("risk_") for c in s)))
     df["governance_orientation"] = concepts.apply(lambda s: float(any(str(c).startswith("gov_") for c in s)))
     df["temporal_posture"] = (df["temporal"] == "realized").astype(float)
-    df["ai_positioning"] = (df["domain"] == "customer_facing").astype(float)
-    df["specificity"] = df[SPECIFICITY_FLAGS].astype(float).mean(axis=1)
+    df["ai_positioning"] = df["is_customer_facing"].astype(float)
+    df["specificity"] = df["specificity"].apply(lambda s: len(s) / 5.0 if s is not None else 0.0)
     out = df.groupby(keys)[POSTURE].mean()
     out["n_posture_frames"] = df.groupby(keys).size()
     return out.reset_index()
@@ -204,6 +229,14 @@ def jaccard(a: np.ndarray, b: np.ndarray) -> float:
 
 
 def fit_pipeline(frames: pd.DataFrame, universe: pd.DataFrame, k: int):
+    """Fits Archetypal Analysis (the thesis's stated method, @cutler1994) and
+    returns each firm's DOMINANT vertex (argmax of its convex weights) as a
+    discrete label -- needed only so bootstrap stability can be scored with
+    the same Jaccard-overlap machinery used for a hard partition. The stored
+    `archetype`/`cluster` columns downstream are this same dominant-vertex
+    assignment, not a separately-fit K-means (that lives only as an
+    Appendix C robustness benchmark inside thesis.qmd, never in this
+    pipeline)."""
     posture = build_posture(frames, ["ticker"])
     merged = universe.merge(posture, on="ticker", how="left")
     merged[POSTURE] = merged[POSTURE].fillna(0.0)
@@ -212,7 +245,8 @@ def fit_pipeline(frames: pd.DataFrame, universe: pd.DataFrame, k: int):
     shrunk = shrink_to_prior(active[POSTURE], active["n_frames"])
     shrunk[INTENSITY] = active["n_frames"].rank(pct=True).values  # frame-count proxy; replaced by frames_per_1k in main()
     X = StandardScaler().fit_transform(shrunk[CLUSTER_FEATURES].values)
-    labels = KMeans(n_clusters=k, random_state=SEED, n_init=10).fit_predict(X)
+    W = AA(n_archetypes=k, random_state=SEED, max_iter=500).fit_transform(X)
+    labels = W.argmax(axis=1)
     return labels, active["ticker"]
 
 
@@ -260,7 +294,7 @@ def main() -> None:
     shrunk = shrink_to_prior(active[POSTURE], active["n_frames"])
     shrunk[INTENSITY] = active["frames_per_1k"].rank(pct=True).values
     corr = shrunk[CLUSTER_FEATURES].corr()
-    print("\n=== correlation matrix of the 7 posture dimensions ===")
+    print("\n=== correlation matrix of the 8 posture dimensions ===")
     print(corr.round(2).to_string())
 
     X = StandardScaler().fit_transform(shrunk[CLUSTER_FEATURES].values)
@@ -281,13 +315,23 @@ def main() -> None:
     k = chosen or 2
     print(f"\nk chosen: {k}")
 
-    model = KMeans(n_clusters=k, random_state=SEED, n_init=10).fit(X)
+    # Archetypal Analysis is the thesis's stated clustering method (see
+    # module docstring): every firm is a convex combination of k extreme
+    # vertices. The stored `archetype`/`cluster` columns take each firm's
+    # DOMINANT vertex (argmax of its convex weights) as a discrete label --
+    # a hard partition derived FROM the continuous fit, not a separately
+    # fit K-means (K-means only appears as an Appendix C robustness
+    # benchmark inside thesis.qmd, computed independently there).
+    aa = AA(n_archetypes=k, random_state=SEED, max_iter=500)
+    W = aa.fit_transform(X)
     active = active.reset_index(drop=True)
     for col in CLUSTER_FEATURES:
         active[col] = shrunk[col].values
-    active["cluster"] = model.labels_
-    profile = active.groupby("cluster")[CLUSTER_FEATURES].mean()
-    z_profile = (profile - profile.mean()) / profile.std(ddof=0)
+    active["cluster"] = W.argmax(axis=1)
+    # aa.archetypes_ (k x features) already lives in standardized space
+    # (X was standardized before fitting), so its rows ARE each vertex's
+    # z-profile directly -- no need to re-derive one from cluster means.
+    z_profile = pd.DataFrame(aa.archetypes_, columns=CLUSTER_FEATURES)
     cluster_names = name_archetypes(z_profile)
     active["archetype"] = active["cluster"].map(cluster_names)
     active["archetype_stability"] = active["cluster"].map(dict(enumerate(stabilities[k])))
@@ -373,7 +417,8 @@ def main() -> None:
         panel.loc[panel_active, col] = panel_shrunk[col].values
     panel[CLUSTER_FEATURES] = panel[CLUSTER_FEATURES].fillna(0.0)
     scaler = StandardScaler().fit(active[CLUSTER_FEATURES].values)
-    panel.loc[panel_active, "cluster"] = model.predict(scaler.transform(panel.loc[panel_active, CLUSTER_FEATURES].values))
+    panel_W = aa.transform(scaler.transform(panel.loc[panel_active, CLUSTER_FEATURES].values))
+    panel.loc[panel_active, "cluster"] = panel_W.argmax(axis=1)
     panel["archetype"] = panel["cluster"].map(cluster_names)
     panel.loc[~panel_active, ["cluster", "archetype"]] = [-1, "No AI"]
 
