@@ -1810,6 +1810,64 @@ plt.show()
 
 Corporate AI is mostly an application-layer story (@fig-activity-map). S&P 500 firms describe deploying and integrating commercial AI tools into the products and workflows they already have. Developing foundation models or building core computing infrastructure is a tiny share of total activity.
 
+## How AI applications differ across industries
+
+The six-role breakdown above pools every sector together. @tbl-4-sic-role-mix splits it by two-digit SIC industry (top 8 by firm count) to ask which roles are universal, present everywhere in roughly the same share, and which are concentrated in specific industries.
+
+```{python}
+#| label: tbl-4-sic-role-mix
+#| tbl-cap: "Composition of disclosed AI activities by role and sector (2-digit SIC, top 8 by firm count), % of each sector's activities."
+#| echo: false
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+m4 = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
+m4["sic2"] = m4["sic2"].astype(int).astype(str)
+sic4_by_ticker = m4.groupby("ticker")["sic2"].agg(lambda s: s.mode().iloc[0])
+top_sic4 = m4.groupby("sic2")["ticker"].nunique().sort_values(ascending=False).head(8).index
+n_firms_sic4 = m4[m4["sic2"].isin(top_sic4)].groupby("sic2")["ticker"].nunique()
+
+act4 = pd.read_parquet(_p("firm_activities.parquet"))
+act4["sic2"] = act4["ticker"].map(sic4_by_ticker)
+act4 = act4[act4["sic2"].isin(top_sic4)].copy()
+
+def _get_role4(row):
+    f = str(row["function_family"]); obj = str(row["object_family"]); tgt = str(row["target"])
+    if f in ["product_feature", "content_and_media"] or "product" in obj or tgt == "customers":
+        return "Sell"
+    elif f in ["customer_service", "marketing_and_sales"]:
+        return "Serve"
+    elif f in ["software_development", "hr_and_talent"] or "copilot" in obj or "talent" in obj:
+        return "Enable"
+    elif f in ["it_and_cybersecurity", "fraud_and_risk", "governance"] or "security" in obj or "governance" in obj:
+        return "Control"
+    elif f in ["ai_compute_and_models", "research_and_product_development", "data_and_analytics"] or "compute" in obj or "analytics" in obj:
+        return "Build"
+    else:
+        return "Operate"
+
+act4["role"] = act4.apply(_get_role4, axis=1)
+ROLES4 = ["Sell", "Operate", "Build", "Enable", "Control", "Serve"]
+mix4 = (pd.crosstab(act4["sic2"], act4["role"], normalize="index") * 100).reindex(top_sic4)[ROLES4]
+role_range = (mix4.max() - mix4.min()).round(1)
+
+SIC4_LABELS = {
+    "73": "Business services", "38": "Instruments", "28": "Chemicals", "49": "Electric/gas/sanitary",
+    "35": "Industrial/computer equip.", "67": "Holding/investment offices", "36": "Electronic equipment",
+    "63": "Insurance carriers",
+}
+rows4 = [[SIC4_LABELS.get(s, s), int(n_firms_sic4.get(s, 0))] + [f"{mix4.loc[s, r]:.0f}%" for r in ROLES4] for s in top_sic4]
+Markdown(tabulate(rows4, headers=["Sector", "Firms"] + ROLES4))
+```
+
+Sell and Operate trade off by sector and account for most of the spread: Sell ranges from `{python} f"{mix4['Sell'].min():.0f}"`% to `{python} f"{mix4['Sell'].max():.0f}"`% of a sector's activities, highest in electronic equipment and industrial/computer equipment, lowest in electric/gas/sanitary and insurance, where Operate takes up the slack instead. Build, Enable, Control, and Serve are comparatively universal: each stays within a `{python} f"{max(role_range['Build'], role_range['Enable'], role_range['Control'], role_range['Serve']):.0f}"`-point band across every sector in the table, the kind of AI activity most firms do a little of regardless of industry. Control is the partial exception, running highest in the two financial-services sectors (insurance, holding/investment offices), consistent with a regulatory-compliance function rather than a commercial one. The full breakdown across all sectors, plus the same cut by disclosure posture and grounding, is in Appendix G.
+
 ## Disclosure strategy meets disclosed AI activity
 
 The central test links communication posture to disclosed AI activity. The activity inventory was never an input to the clustering. The archetypes come only from frame-level communication posture. Crossing the archetypes with activity features shows that posture maps directly onto operational disclosure (@fig-archetype-activity-heatmap and @tbl-4-1-archetype-profile):
