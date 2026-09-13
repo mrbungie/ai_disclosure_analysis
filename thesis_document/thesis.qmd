@@ -196,9 +196,7 @@ When nearly every firm mentions AI, counting words is no longer enough to tell r
 - **Managers and boards** must communicate technical initiatives without raising unrealistic expectations or creating legal risks.
 - **Regulators** increasingly monitor whether corporate claims reflect real organizational work or amount to "AI washing" [@gensler2023, pp. 4--5; @sec2024pressrelease, pp. 1--2]. Recent SEC comment letters show that gaps between promotional earnings calls and formal filings can prompt direct regulatory inquiries [@welltower2025letter, p. 1].
 
-Standard textual methods in finance rely on keyword counts or dictionary sentiment [@loughran2011, p. 36]. These approaches treat routine risk disclaimers identically to concrete statements about software deployments, budgets, or commercial partners.
-
-Assessing corporate credibility requires measuring not just how much firms talk about AI, but how they frame it, what specific activities they report, and how well those claims are grounded in evidence.
+Standard textual methods in finance rely on keyword counts or dictionary sentiment [@loughran2011, p. 36], treating routine risk disclaimers identically to concrete statements about software deployments, budgets, or commercial partners. Assessing corporate credibility instead requires measuring how firms frame their claims, what specific operational activities they report, and how well those claims are grounded in verifiable evidence.
 
 ## Main research question
 
@@ -220,13 +218,9 @@ The thesis makes three main contributions:
 
 ### What the literature knows and prior empirical evidence
 
-This thesis connects with research using computational linguistics in corporate disclosure and finance [@li2008, pp. 1--3; @loughran2011, pp. 35--36; @gentzkow2019, pp. 1--2; @hoberg2016; @hassan2019]. Recent studies document the rapid rise of corporate AI mentions following the generative AI shock [@anantharaman2026, pp. 1--2].
+This thesis connects with computational linguistics in corporate finance [@li2008, pp. 1--3; @loughran2011, pp. 35--36; @gentzkow2019, pp. 1--2; @hoberg2016; @hassan2019]. Following the generative AI shock, recent studies document an unprecedented surge in corporate AI discussions [@anantharaman2026, pp. 1--2]. Scholars have sought to characterize this expansion by classifying disclosure into actionable versus speculative text [@basnet2025, pp. 1--2], measuring planned versus implemented AI using patents and job postings [@song2026, pp. 1--2; @babina2024], and estimating firm exposure via occupational tasks [@eisfeldt2023, p. 9].
 
-Researchers have classified AI statements into actionable versus speculative text [@basnet2025, pp. 1--2], measured planned versus implemented AI using patents and job postings [@song2026, pp. 1--2; @babina2024], and estimated firm-level exposure from occupational tasks [@eisfeldt2023, p. 9].
-
-At the same time, growing market hype has focused attention on "AI washing"—corporate claims that lack operational substance [@gensler2023, pp. 4--5; @sec2024pressrelease, pp. 1--2].
-
-This work builds on research on greenwashing and symbolic management [@delmas2011, pp. 64--68; @lyon2015, pp. 1--3; @marquis2016, pp. 483--85], alongside evidence that managers strategically adjust qualitative disclosure tone independently of fundamentals [@huang2014] and expand speculative talk during technology booms [@cheng2019].
+Concurrently, market enthusiasm has heightened regulatory and academic scrutiny over "AI washing"—corporate claims that lack operational substance [@gensler2023, pp. 4--5; @sec2024pressrelease, pp. 1--2]. This connects directly to foundational research on greenwashing and symbolic impression management [@delmas2011, pp. 64--68; @lyon2015, pp. 1--3; @marquis2016, pp. 483--85], alongside evidence that managers strategically adjust qualitative disclosure tone independently of fundamentals [@huang2014] and expand speculative talk during technology booms [@cheng2019].
 
 ### Theoretical concepts and mechanisms
 
@@ -298,13 +292,9 @@ cov_calls_2026 = int(_cov.loc["Earnings call transcript", "firms"]) if "Earnings
 cov_months_2026 = pd.to_datetime(cov_last_date).month
 ```
 
-The empirical investigation focuses on the constituents of the S&P 500 index fixed as of January 1, 2021 (`{python} uni_frame_total` firms). Fixing the cohort at the start of the observation period provides an ex-ante baseline of large-cap U.S. enterprises prior to the commercial diffusion of generative AI.
+The empirical investigation focuses on constituents of the S&P 500 index fixed as of January 1, 2021 (`{python} uni_frame_total` firms). Fixing the cohort at the start of the observation period provides an ex-ante baseline of large-cap U.S. enterprises prior to the commercial diffusion of generative AI. The archived constituent roster as of December 31, 2020 [@wikipedia2020sp500], cross-validated against S&P Dow Jones' replacement announcements, contains 499 unique issuers and 504 trading lines (reflecting minor M&A divisor adjustments).
 
-The archived constituent list as of 31 December 2020 (Wikipedia revision 997494787 [@wikipedia2020sp500]), cross-validated against S&P Dow Jones' announced Tiffany--Enphase replacement, contains 499 unique issuers and 504 trading lines. This minor difference from the nominal 500-firm benchmark reflects index divisor adjustments during corporate M&A transitions and is econometrically negligible.
-
-Crucially, this ex-ante specification avoids look-ahead selection bias. Defining the universe ex-post using later index rosters (e.g., 2024 or 2025) would systematically oversample firms that entered the index precisely because of market capitalization gains fueled by AI market enthusiasm.
-
-To guard against survivorship bias, the `{python} uni_frame_delisted` firms subsequently acquired, merged, or delisted after 2021-01-01 remain in the panel until their exit date, rather than being expunged retrospectively. In total, `{python} uni_n_firms` firms have processed narrative records, `{python} uni_n_activity_firms` report concrete operational AI activities, and `{python} bal_n` firms form a balanced panel observed continuously across all six years (2021–2026).
+This ex-ante construction prevents look-ahead selection bias: defining the universe using later rosters would systematically oversample technology winners that entered the index due to AI-driven market capitalization gains. Furthermore, to guard against survivorship bias, the `{python} uni_frame_delisted` firms subsequently acquired or delisted remain in the panel until their exit date. In total, `{python} uni_n_firms` firms have processed narrative records, `{python} uni_n_activity_firms` report concrete operational AI activities, and `{python} bal_n` firms form a balanced panel observed continuously across all six years (2021–2026).
 
 ```{python}
 #| label: fig-sic-distribution
@@ -548,13 +538,11 @@ $$\text{Raw text} \longrightarrow \text{AI claims (Frames)} \longrightarrow \tex
 
 Before scoring, scorable paragraphs ($>3$ characters, alphanumeric content) are normalized and hashed with BLAKE2b signatures. Deduplication scores repeated boilerplate once per unique text and maps it across filings, preventing boilerplate from distorting downstream measures.
 
-Candidate passages are screened using a Gradient Boosted Decision Tree (GBDT) prefilter [@friedman2001, pp. 1189--95] trained on 39 lexical, structural, and embedding features. We calibrate the prefilter for high recall ($\ge 0.92$, threshold $\tau = 0.17$) to avoid discarding relevant disclosures prior to LLM evaluation. Documents lacking AI discussion enter as true zeros rather than missing values (@tbl-funnel-summary; Appendix A, @tbl-evaluation-datasets).
+Candidate passages are screened using a Gradient Boosted Decision Tree (GBDT) prefilter [@friedman2001, pp. 1189--95] trained on 39 lexical, structural, and embedding features. We calibrate the prefilter for high recall ($\ge 0.92$, threshold $\tau = 0.17$) to avoid discarding relevant disclosures prior to LLM evaluation. Documents lacking AI discussion enter as true zeros rather than missing values (@tbl-funnel-summary; Appendix B, @tbl-evaluation-datasets).
 
 ## From paragraphs to individual AI claims: frame extraction
 
-Candidate texts pass to a zero-shot LLM judge (`openai/gpt-5.6-luna`, benchmarked in Appendix A). Acting as a precision filter, the judge discards roughly `{python} f"{(1 - n_framed / n_prefiltered) * 100:.0f}"`% of candidate passages containing only incidental keywords, macro commentary, or generic disclaimers.
-
-For retained disclosures, the model extracts claims using a seven-dimension schema (@tbl-frame-schema). Claims describing the firm's own actions or exposures feed directly into Disclosure Intensity ($D$) and Communication Posture ($P$).
+Candidate texts pass to a zero-shot LLM judge (`openai/gpt-5.6-luna`, benchmarked in Appendix A) that acts as a precision filter, discarding roughly `{python} f"{(1 - n_framed / n_prefiltered) * 100:.0f}"`% of candidate passages containing only incidental keywords, macro commentary, or generic disclaimers. For retained disclosures, the model extracts claims using a seven-dimension schema (@tbl-frame-schema); statements describing the firm's own actions or exposures feed directly into Disclosure Intensity ($D$) and Communication Posture ($P$).
 
 ```{python}
 #| label: tbl-frame-schema
@@ -609,9 +597,7 @@ Markdown(tabulate(t4_rows, headers=["Dimension", "Operational Scope", "Schema Cl
 
 ## From claims to concrete AI activities: action, object, and function
 
-Claims attributing operational action to the firm (deploying, developing, partnering, investing) pass to a second prompt conditioned on firm identity. The prompt extracts an action triple (action, object, function), deployment stage, technology source, target user, and supporting sentence evidence (@tbl-activity-schema).
-
-This second pass identifies `{python} f"{hd_n_activities:,}"` operational AI activity records across `{python} hd_n_activity_firms` firms. These records supply the inputs for Disclosed AI Activity ($A$) and Activity Grounding ($G$).
+Claims attributing operational action to the firm (deploying, developing, partnering, investing) pass to a second extraction prompt conditioned on firm identity. This stage extracts an operational triple (action, object, function), deployment maturity, technology provenance, target user, and supporting sentence evidence (@tbl-activity-schema). In total, this second pass identifies `{python} f"{hd_n_activities:,}"` concrete operational AI activities across `{python} hd_n_activity_firms` firms, providing the empirical foundation for Disclosed AI Activity ($A$) and Activity Grounding ($G$).
 
 ```{python}
 #| label: tbl-activity-schema
@@ -688,9 +674,7 @@ Baseline controls comprise market capitalization, R&D-to-sales, gross margin, op
 
 ## Measurement validation
 
-Each pipeline step was evaluated against holdout sets, multi-model benchmarks, and blind human audits.
-
-Independent model evaluations demonstrate high inter-rater agreement (Gemini and Qwen $\kappa = 0.81\text{--}0.87$). Human audits confirm 91.2% precision on prefiltering and 89.1%–95.8% field accuracy on activity extraction (Appendix A, @tbl-evaluation-datasets).
+Each pipeline stage was rigorously benchmarked against holdout evaluations and blind human audits (@tbl-evaluation-datasets, Appendix B). Cross-model comparisons confirm strong inter-rater reliability (Gemini and Qwen agreement $\kappa = 0.81\text{--}0.87$), while manual audits establish 91.2% precision on GBDT prefiltering and 89.1%–95.8% field-level accuracy across extracted activity parameters.
 
 With the measurement pipeline calibrated and validated, we turn to our empirical analyses. The next chapter examines how corporate AI disclosure diffused across the S&P 500 from 2021 through 2026, and maps the distinct communication archetypes that emerged as AI language expanded across the market.
 
@@ -700,17 +684,9 @@ How did corporate artificial intelligence communication evolve as the technology
 
 ## The expansion and diffusion of AI disclosures
 
-AI went from a niche topic to a standard item of corporate disclosure between 2021 and 2026. The share of S&P 500 firms making at least one AI statement in their SEC filings rose from `{python} f"{hd_share[2021]:.1f}"`% in 2021 to `{python} f"{hd_share[2025]:.1f}"`% in 2025, the last complete year, and reached `{python} f"{hd_share[2026]:.1f}"`% in the 2026 year-to-date sample (@fig-ai-diffusion).
+Between 2021 and 2025, corporate AI disclosure transitioned from an emerging topic to a standard corporate reporting item (@fig-ai-diffusion). The share of S&P 500 firms mentioning AI rose from `{python} f"{hd_share[2021]:.1f}"`% to `{python} f"{hd_share[2025]:.1f}"`%, while narrative intensity expanded `{python} f"{hd_frames_ratio:.1f}"`-fold (from `{python} f"{hd_frames[2021]:.3f}"` to `{python} f"{hd_frames[2025]:.3f}"` frames per 1,000 words). The sharpest inflection occurred during the 2023–2024 filing season, when 10-K participation surged from `{python} f"{hd_tenk_share[2023]:.0f}"`% to `{python} f"{hd_tenk_share[2024]:.0f}"`% following the commercial release of generative AI.
 
-Narrative intensity, AI semantic frames per 1,000 words of corporate text, climbed from `{python} f"{hd_frames[2021]:.3f}"` in 2021 to `{python} f"{hd_frames[2025]:.3f}"` in 2025 (`{python} f"{hd_frames_ratio:.1f}"`-fold), and stands at `{python} f"{hd_frames[2026]:.3f}"` in 2026 year to date.
-
-Year-to-date values are not directly comparable with full years because the document mix is seasonal, with annual reports clustering in the first quarter. We therefore estimate full-year 2026 using a same-window adjustment.
-
-In 2025, the change from the window ending on `{python} hd_cutoff_str` to the full year was a factor of `{python} f"{hd_int_factor:.3f}"` for intensity and `{python} f"{hd_share_factor:.3f}"` for participation. Applying these factors to the 2026 year-to-date values yields an estimated `{python} f"{hd_int_est_2026:.3f}"` frames per 1,000 words (`{python} f"{hd_int_ratio_est:.1f}"`-fold since 2021) and `{python} f"{hd_share_est_2026:.1f}"`% participation at the close of 2026.
-
-The sharpest increase occurs in the 2023–2024 filing season, when fiscal-year-2023 10-Ks became the first annual reports written after a full year of generative AI commercialization. The share of 10-Ks with any AI content rose from `{python} f"{hd_tenk_share[2023]:.0f}"`% to `{python} f"{hd_tenk_share[2024]:.0f}"`% in a single season.
-
-A balanced cohort of the `{python} bal_n` firms observed continuously from 2021 to 2026 follows an identical path (`{python} f"{bal_share[2021]:.0f}"`% to `{python} f"{bal_share[2025]:.0f}"`%). This confirms market-wide adoption rather than survivorship or index rebalancing.
+Because filings cluster heavily in the first quarter, full-year 2026 is projected via same-window adjustment to `{python} f"{hd_int_est_2026:.3f}"` frames per 1,000 words and `{python} f"{hd_share_est_2026:.1f}"`% participation. Tracking a balanced cohort of the `{python} bal_n` firms observed continuously from 2021 to 2026 yields an identical path (`{python} f"{bal_share[2021]:.0f}"`% to `{python} f"{bal_share[2025]:.0f}"`%), confirming that growth reflects market-wide corporate adoption rather than survivorship or index rebalancing.
 
 ```{python}
 #| label: fig-ai-diffusion
@@ -821,11 +797,11 @@ Once almost every large firm talks about AI, presence alone says little. At `{py
 
 ## The dimensions of AI disclosure strategy
 
-Six frame-level dimensions describe Communication Posture ($P$). Disclosure intensity $D$ completes the set. @tbl-strategy-dimensions defines each dimension and its managerial meaning. @fig-strategy-dimensions-dist shows their distribution across the S&P 500.
+Seven frame-level dimensions describe Communication Posture ($P$). Disclosure intensity ($D$) captures narrative volume, completing the eight-dimensional strategy space. @tbl-strategy-dimensions defines each dimension and its operational meaning. @fig-strategy-dimensions-dist shows their distribution across the S&P 500.
 
 ```{python}
 #| label: fig-strategy-dimensions-dist
-#| fig-cap: "Distribution of the eight AI disclosure posture dimensions across the S&P 500 (white circle = median; blue bar = interquartile range; grey whisker = 5th–95th percentile)."
+#| fig-cap: "Distribution of Seven AI Disclosure Posture Dimensions and Disclosure Intensity Across the S&P 500."
 #| echo: false
 #| fig-width: 8.8
 #| fig-height: 3.8
@@ -861,7 +837,7 @@ ax.set_yticklabels(LABELS, fontsize=9.0, fontweight="bold")
 ax.invert_yaxis()
 ax.set_xlim(-0.05, 1.05)
 ax.set_xlabel("Dimension Score (Scaled 0 to 1)", fontsize=8.8, fontweight="bold")
-ax.set_title("Distribution of the Eight AI Disclosure Posture Dimensions Across the S&P 500",
+ax.set_title("Distribution of Seven AI Disclosure Posture Dimensions and Disclosure Intensity Across the S&P 500",
              fontsize=9.8, fontweight="bold", pad=10)
 ax.grid(True, axis="x", linestyle="--", alpha=0.3)
 ax.spines[["top", "right"]].set_visible(False)
@@ -869,20 +845,24 @@ plt.tight_layout()
 plt.show()
 ```
 
+*Notes:* White circles denote medians; blue bars interquartile ranges; grey whiskers the 5th–95th percentile. All measures are scaled from 0 to 1.
+
 | Dimension | Operational Definition | Range | Managerial Meaning |
 |---|---|---|---|
 | **Promotional posture** | Average of promotional tone and strategic-importance framing | $[0, 1]$ | Extent to which AI is communicated as a transformative strategic asset |
 | **Hedging posture** | Share of statements framed with cautious or conditional language | $[0, 1]$ | Degree to which AI claims are qualified rather than asserted outright |
 | **Risk orientation** | Share of statements containing risk, uncertainty, or dependency concepts | $[0, 1]$ | Degree to which AI is treated as an operational vulnerability or hazard |
 | **Governance orientation** | Share of statements containing oversight, ethics, or compliance policies | $[0, 1]$ | Formal institutionalization of model oversight and responsible AI guardrails |
-| **Temporal posture** | Share of statements describing realized rather than planned actions | $[0, 1]$ | Operational maturity: active deployment vs. speculative roadmap |
-| **AI positioning** | Share of statements framed toward clients and external products | $[0, 1]$ | Commercial orientation: revenue generation vs. internal cost-cutting |
-| **Specificity** | Mean of 5 binary grounding flags (process, product, vendor, metric, timeline) | $[0, 1]$ | Falsifiability and informational granularity of corporate statements |
-| **Disclosure intensity** | Percentile rank of AI semantic frames per 1,000 narrative words | $[0, 1]$ | Overall volume of narrative communication dedicated to artificial intelligence |
+| **Claim realization** | Share of statements describing current, realized usage rather than planned/future intentions | $[0, 1]$ | Operational maturity: active/realized deployment vs. future roadmap or intent |
+| **Customer-facing** | Share of statements oriented toward external clients and commercial offerings | $[0, 1]$ | Commercial orientation: external client products vs. internal operating workflows |
+| **Claim specificity** | Mean of 5 binary grounding flags (process, product, vendor, metric, timeline) | $[0, 1]$ | Falsifiability and informational granularity of corporate statements |
+| **Disclosure intensity** | Percentile rank of AI semantic frames per 1,000 narrative words | $[0, 1]$ | Overall narrative volume dedicated to artificial intelligence |
 
 : Operational definitions of the eight AI disclosure strategy dimensions. {#tbl-strategy-dimensions}
 
-The correlation structure of these eight dimensions shows two key properties. The full matrix appears in @tbl-a3-posture-correlation (Appendix C):
+The empirical distribution across the S&P 500 reveals substantial structural heterogeneity across dimensions (@fig-strategy-dimensions-dist). Risk orientation and disclosure intensity exhibit broad cross-sectional dispersion, spanning virtually the entire range from minimal to extensive discussion. In contrast, promotional posture, hedging, and customer-facing positioning remain compressed near the lower bound for the typical firm, with medians below 0.15. This asymmetry confirms that corporate disclosure strategies cannot be understood as mere differences in verbosity ("talking more or less"); rather, firms differentiate through distinct combinations of thematic emphasis, evidentiary concreteness, temporal commitment, and functional orientation.
+
+The correlation structure of these eight dimensions shows two key properties (@tbl-a3-posture-correlation, Appendix C):
 
 1. **Governance framing operates independently.** Governance orientation barely correlates with promotional posture ($r =$ `{python} f"{hd_corr['governance_orientation']['promotional_posture']:.2f}"`), risk framing ($r =$ `{python} f"{hd_corr['governance_orientation']['risk_orientation']:.2f}"`), or disclosure intensity ($r =$ `{python} f"{hd_corr['governance_orientation']['disclosure_intensity']:.2f}"`). It constitutes an autonomous disclosure dimension rather than a proxy for general verbosity or risk aversion.
 2. **Risk orientation counterbalances operational execution.** Risk framing correlates negatively with realized temporal posture ($r =$ `{python} f"{hd_corr['risk_orientation']['temporal_posture']:.2f}"`), specificity ($r =$ `{python} f"{hd_corr['risk_orientation']['specificity']:.2f}"`), customer positioning ($r =$ `{python} f"{hd_corr['risk_orientation']['ai_positioning']:.2f}"`), and intensity ($r =$ `{python} f"{hd_corr['risk_orientation']['disclosure_intensity']:.2f}"`). Firms framing AI as an operational hazard report fewer deployments and concrete initiatives.
@@ -1127,7 +1107,58 @@ plt.tight_layout()
 plt.show()
 ```
 
-To interpret the managerial meaning of these three vertices, @fig-archetype-heatmap reports their standardized coordinates (matrix $A$, $z$-scores) across the eight posture dimensions, and @tbl-archetypes-glance summarizes their constituent shares and disclosure profiles:
+Archetypal Analysis reveals that corporate AI communication organizes around three distinct, highly stable strategic orientations, alongside a non-disclosing baseline. @tbl-archetypes-glance summarizes the empirical composition, index shares, bootstrap stability, and defining profiles of each archetype:
+
+```{python}
+#| label: tbl-archetypes-glance
+#| tbl-cap: "AI corporate disclosure archetypes at a glance. Archetypal disclosure profile reports the standardized coordinate score (SD from the pooled mean of active firms) on the dimensions that define each archetype; stability reports the mean bootstrap Jaccard reproducibility under frame-level resampling."
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+
+_g = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
+_feats = {"promotional_posture": "promotional", "hedging_posture": "hedging", "risk_orientation": "risk", "governance_orientation": "governance",
+          "temporal_posture": "realized", "ai_positioning": "customer-facing", "specificity": "specificity",
+          "disclosure_intensity": "intensity"}
+_fit = _g[_g["archetype"] != "No AI"]
+_n = _g["archetype"].value_counts()
+_stab = _g.groupby("archetype")["archetype_stability"].first().to_dict()
+arch_share = (_n / len(_g) * 100).round(1).to_dict()
+
+_z = (_fit[list(_feats)] - _fit[list(_feats)].mean()) / _fit[list(_feats)].std(ddof=0)
+_z["archetype"] = _fit["archetype"].values
+_zmean = _z.groupby("archetype")[list(_feats)].mean()
+
+def _profile_text(archetype: str, threshold: float = 0.5) -> str:
+    row = _zmean.loc[archetype].sort_values(key=lambda s: -s.abs())
+    high = [(_feats[c], v) for c, v in row.items() if v >= threshold]
+    low = [(_feats[c], v) for c, v in row.items() if v <= -threshold]
+    parts = []
+    if high:
+        parts.append("High " + ", ".join(f"{name} ({v:+.2f} SD)" for name, v in high))
+    if low:
+        parts.append("low " + ", ".join(f"{name} ({v:+.2f} SD)" for name, v in low))
+    return "; ".join(parts) if parts else "No dimension separates by >=0.5 SD"
+
+_profiles = {a: _profile_text(a) for a in ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]}
+
+_rows = []
+for a in ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]:
+    _rows.append([f"**{a}**", int(_n[a]), f"{arch_share[a]:.1f}%", _profiles[a], f"{_stab[a]:.2f}"])
+_rows.append(["**No AI**", int(_n["No AI"]), f"{arch_share['No AI']:.1f}%",
+              "Fewer than 5 pooled AI frames across 2021–2025 SEC filings (rule-based filter)", f"{_stab['No AI']:.2f}"])
+Markdown(tabulate(_rows, headers=["Archetype", "Firms ($n$)", "Share (%)", "Archetypal disclosure profile", "Stability (Jaccard)"]))
+```
+
+The three active archetypes reflect fundamentally different managerial disclosure strategies:
+
+- **Vocal Substantives:** Commercial execution and product differentiation. Issuers at this pole actively commercialize AI for external clients, pairing promotional forward guidance with verifiable technical claims (naming concrete systems, partner ecosystems, and performance metrics) to establish market credibility.
+- **Governance-Led Disclosers:** Institutional oversight and risk containment. Rather than marketing commercial tools, these issuers prioritize supervisory guardrails, emphasizing board committee charters, model-risk auditing protocols, and responsible AI frameworks.
+- **Defensive Disclosers:** Passive regulatory compliance. These firms treat AI primarily as an operational hazard, satisfying statutory disclosure mandates by listing boilerplate risks in Item 1A without committing management to operational milestones or concrete deployments.
+
+To inspect how these strategic postures map onto the underlying measurement space, @fig-archetype-heatmap displays the standardized coordinates (matrix $A$, $z$-scores) of the three archetypal vertices across all eight dimensions. The heatmap confirms that each vertex represents an extreme, interpretable configuration: Vocal Substantives anchors customer positioning, temporal realization, and specificity; Governance-Led Disclosers peaks on governance orientation (+2.40 SD); and Defensive Disclosers concentrates heavily on risk framing (+1.83 SD) with negative disclosure intensity.
 
 ```{python}
 #| label: fig-archetype-heatmap
@@ -1152,7 +1183,7 @@ df = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
 
 FEATURES = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
            "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
-LABELS = ["Promotional", "Hedging", "Risk", "Governance", "Temporal\n(realized)", "Customer-\nfacing", "Specificity", "Intensity"]
+LABELS = ["Promotional", "Hedging", "Risk", "Governance", "Claim\nrealization", "Customer-\nfacing", "Claim\nspecificity", "Intensity"]
 ARCHETYPES = ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]
 
 fit_pop = df[df["archetype"] != "No AI"]
@@ -1188,62 +1219,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-```{python}
-#| label: tbl-archetypes-glance
-#| tbl-cap: "AI corporate disclosure archetypes at a glance. Archetypal disclosure profile reports the standardized coordinate score (SD from the pooled mean of active firms) on the dimensions that define each archetype; stability reports the mean bootstrap Jaccard reproducibility under frame-level resampling."
-from pathlib import Path
-import pandas as pd
-from tabulate import tabulate
-from IPython.display import Markdown
-
-
-_g = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
-_feats = {"promotional_posture": "promotional", "hedging_posture": "hedging", "risk_orientation": "risk", "governance_orientation": "governance",
-          "temporal_posture": "realized", "ai_positioning": "customer-facing", "specificity": "specificity",
-          "disclosure_intensity": "intensity"}
-_fit = _g[_g["archetype"] != "No AI"]
-_n = _g["archetype"].value_counts()
-# Stability read live from build_strategy_dimensions.py's own bootstrap output
-# (`archetype_stability`, constant within an archetype -- one mean Jaccard
-# per cluster, broadcast to its members), not a value typed in here by hand.
-_stab = _g.groupby("archetype")["archetype_stability"].first().to_dict()
-arch_share = (_n / len(_g) * 100).round(1).to_dict()
-
-# Archetypal profile text generated from the actual fitted z-scores, not
-# hand-typed: standardize each of the 8 posture dimensions over the active
-# population (same standardization `build_strategy_dimensions.py` clusters
-# on), take each archetype's mean z per dimension, and report the
-# dimensions that separate it most (|z| >= 0.5), strongest first.
-_z = (_fit[list(_feats)] - _fit[list(_feats)].mean()) / _fit[list(_feats)].std(ddof=0)
-_z["archetype"] = _fit["archetype"].values
-_zmean = _z.groupby("archetype")[list(_feats)].mean()
-
-def _profile_text(archetype: str, threshold: float = 0.5) -> str:
-    row = _zmean.loc[archetype].sort_values(key=lambda s: -s.abs())
-    high = [(_feats[c], v) for c, v in row.items() if v >= threshold]
-    low = [(_feats[c], v) for c, v in row.items() if v <= -threshold]
-    parts = []
-    if high:
-        parts.append("High " + ", ".join(f"{name} ({v:+.2f} SD)" for name, v in high))
-    if low:
-        parts.append("low " + ", ".join(f"{name} ({v:+.2f} SD)" for name, v in low))
-    return "; ".join(parts) if parts else "No dimension separates by >=0.5 SD"
-
-_profiles = {a: _profile_text(a) for a in ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]}
-
-_rows = []
-for a in ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]:
-    _rows.append([f"**{a}**", int(_n[a]), f"{arch_share[a]:.1f}%", _profiles[a], f"{_stab[a]:.2f}"])
-_rows.append(["**No AI**", int(_n["No AI"]), f"{arch_share['No AI']:.1f}%",
-              "Fewer than 5 pooled AI frames across 2021–2025 SEC filings (rule-based filter)", f"{_stab['No AI']:.2f}"])
-Markdown(tabulate(_rows, headers=["Archetype", "Firms ($n$)", "Share (%)", "Archetypal disclosure profile", "Stability (Jaccard)"]))
-```
-
-The three archetypes reflect distinct strategic orientations (@tbl-archetypes-glance):
-
-- **Vocal Substantives:** Commercial execution and product differentiation. Issuers at this pole actively commercialize AI for external clients, pairing promotional forward guidance with verifiable technical claims (naming concrete systems, partner ecosystems, and performance metrics) to establish market credibility.
-- **Governance-Led Disclosers:** Institutional oversight and risk containment. Rather than marketing commercial tools, these issuers prioritize supervisory guardrails, emphasizing board committee charters, model-risk auditing protocols, and responsible AI frameworks.
-- **Defensive Disclosers:** Passive regulatory compliance. These firms treat AI primarily as an operational hazard, satisfying statutory disclosure mandates by listing boilerplate risks in Item 1A without committing management to operational milestones or concrete deployments.
+Individual firms illustrate how the taxonomy distinguishes communication strategies in practice (@tbl-representative-firms). Vocal Substantives concentrate among infrastructure and platform providers that monetize AI directly. Governance-Led Disclosers span heavily regulated institutions that emphasize supervisory guardrails and fiduciary compliance. Defensive Disclosers encompass consumer and industrial firms that treat AI primarily as a competitive exposure or operational dependency:
 
 ```{python}
 #| label: tbl-representative-firms
@@ -1305,9 +1281,7 @@ Two high-profile classifications illustrate the distinction between SEC disclosu
 - **Apple** clusters as Governance-Led: while it deploys proprietary AI across its consumer devices, its statutory SEC filings concentrate AI mentions on board oversight, privacy policies, and responsible-use shareholder proposals, reserving product marketing for consumer keynotes outside EDGAR.
 - **Goldman Sachs** clusters as Defensive: over 60% of its AI-bearing text resides in Item 1A risk factors (model risk, cybersecurity, and vendor dependencies), with minimal operational disclosure of the kind Vocal Substantives report in the same filings.
 
-Capital-intensive firms with little digital-transformation discourse, such as Costco, Texas Instruments, O'Reilly Automotive, and NVR, make up the No AI group.
-
-The segment also absorbs firms that left the index through acquisition or delisting before the generative-AI boom: `{python} int(df_sec.loc[df_sec["archetype"] == "No AI", "ticker"].isin(fu_delisted).sum())` of the `{python} int((df_sec["archetype"] == "No AI").sum())` No AI firms are delisted. Because they lack post-2023 filings, their classification reflects exit timing rather than an explicit communication strategy. Retaining them maintains panel integrity without survivorship bias.
+Capital-intensive firms with minimal digital-transformation discourse (such as Costco, Texas Instruments, O'Reilly Automotive, and NVR) constitute the No AI group. This segment also absorbs `{python} int(df_sec.loc[df_sec["archetype"] == "No AI", "ticker"].isin(fu_delisted).sum())` firms that exited the S&P 500 through acquisition or delisting prior to the generative AI boom. Because these firms lack post-2023 filings, their classification reflects historical exit timing rather than an active managerial policy; retaining them preserves panel integrity without introducing survivorship bias.
 
 ### Model selection: bootstrap stability and falsification
 
@@ -1596,15 +1570,13 @@ This sorting aligns with institutional theory: firms facing shared regulatory sc
 
 #### Institutional channels: where vs. how firms disclose
 
-The empirical correlations between archetypal weights and regulatory document sources reveal that *where* a firm discloses and *how* it discloses are not separable. Across all $N =$ `{python} _ch_n_disclosing` disclosing firms, archetypal weights exhibit substantial correlations with specific statutory channels:
+Where a firm discloses and how it discloses are empirically inseparable. Across all $N =$ `{python} _ch_n_disclosing` disclosing firms, archetypal weights correlate strongly with specific statutory channels:
 
-- **Defensive Disclosers ($w_{\text{Def}}$):** Aligns strongly ($r = +0.763, R^2 = 58.2\%$) with Form 10-K Item 1A (Risk Factors), where disclosures focus exclusively on regulatory hazards, liabilities, and vendor dependencies in the absence of promotional language.
-- **Governance-Led Disclosers ($w_{\text{Gov}}$):** Aligns strongly ($r = +0.607, R^2 = 36.8\%$) with Form DEF 14A proxy statements, where communication centers on board committee charters, supervisory accountability, and executive oversight.
-- **Vocal Substantives ($w_{\text{Vocal}}$):** Aligns positively ($r = +0.575, R^2 = 33.1\%$) with Form 10-K Item 1 (Business Description) and Item 7 (MD&A), which serve as the primary statutory vehicles for articulating commercial strategy and operational milestones.
+- **Defensive Disclosers ($w_{\text{Def}}$):** Aligns with Form 10-K Item 1A Risk Factors ($r = +0.763, R^2 = 58.2\%$), confining claims to liabilities, regulatory hazards, and vendor dependencies without promotional rhetoric.
+- **Governance-Led Disclosers ($w_{\text{Gov}}$):** Aligns with Form DEF 14A proxy statements ($r = +0.607, R^2 = 36.8\%$), focusing on board committee charters, supervisory accountability, and executive oversight.
+- **Vocal Substantives ($w_{\text{Vocal}}$):** Aligns with Form 10-K Item 1 (Business Description) and Item 7 (MD&A) ($r = +0.575, R^2 = 33.1\%$), which articulate commercial strategy and product milestones.
 
-These correlations confirm that the archetypes represent *postures in channel*. Statutory channel selection is a strategic choice [@campbell2014, pp. 396--98]: restricting AI mentions to Item 1A is an inherently defensive posture, whereas elevating AI to proxy statements represents deliberate governance positioning.
-
-Filing audits confirm `{python} _ch_n_coverage_pct`% DEF 14A coverage across all $N =$ `{python} _ch_n_disclosing` disclosing firms (`{python} _ch_n_mention` mention AI, `{python} _ch_n_omit` omit it). Low $w_{\text{Gov}}$ thus reflects active corporate omission rather than missing filing records.
+Statutory channel selection is thus an explicit strategic choice [@campbell2014, pp. 396--98]. Because DEF 14A coverage reaches `{python} _ch_n_coverage_pct`% across disclosing firms (`{python} _ch_n_mention` mention AI, `{python} _ch_n_omit` omit it), a low $w_{\text{Gov}}$ weight reflects active corporate omission rather than missing filings.
 
 ```{python}
 #| echo: false
@@ -1685,11 +1657,9 @@ _z_def_full_on_risk = A[def_col, SIMPLEX_FEATS.index("risk_orientation")]
 _z_def10k_on_risk = _A10k[_def_col10k, _feats10k.index("risk_orientation")]
 ```
 
-Recomputing the archetypes on Form 10-K frames alone (`{python} len(_common10k)` firms with >= 5 10-K-only frames) confirms that corporate governance is, by design, a proxy-channel posture. Vocal Substantives ($r =$ `{python} f"{_r_vocal_10k:.3f}"`) and Defensive Disclosers ($r =$ `{python} f"{_r_def_10k:.3f}"`) replicate robustly, but the governance vertex reallocates ($r =$ `{python} f"{_r_gov_10k:.3f}"`, with $z_{\text{gov}} =$ `{python} f"{_z_gov10k_on_gov:+.2f}"` SD concentrated in a few regulated firms).
+Recomputing the archetypes on Form 10-K frames alone (`{python} len(_common10k)` firms) confirms that governance disclosure is inherently channel-specific. While Vocal Substantives ($r =$ `{python} f"{_r_vocal_10k:.3f}"`) and Defensive Disclosers ($r =$ `{python} f"{_r_def_10k:.3f}"`) replicate robustly, the governance vertex collapses ($r =$ `{python} f"{_r_gov_10k:.3f}"`), absorbing `{python} f"{_z_gov10k_on_risk:+.2f}"` SD of risk orientation while the defensive vertex attenuates from `{python} f"{_z_def_full_on_risk:+.2f}"` to `{python} f"{_z_def10k_on_risk:+.2f}"` SD ($z_{\text{gov}} =$ `{python} f"{_z_gov10k_on_gov:+.2f}"` SD). Proxy statements are therefore indispensable to disentangle board oversight from statutory risk warnings.
 
-Without DEF 14A, the governance vertex absorbs `{python} f"{_z_gov10k_on_risk:+.2f}"` SD of risk orientation while the defensive vertex attenuates from `{python} f"{_z_def_full_on_risk:+.2f}"` to `{python} f"{_z_def10k_on_risk:+.2f}"` SD; proxy statements are essential to disentangle board oversight from statutory risk-listing.
-
-These archetypal profiles demonstrate that firms adopt stable, multi-dimensional communication strategies reflecting industry norms rather than random noise. However, posture captures only *how* managers talk about AI, not *what* operational initiatives they actually undertake. To evaluate whether these rhetorical strategies correspond to real organizational deployment, the next chapter examines the concrete AI activities disclosed by these firms.
+Having shown that disclosure archetypes reflect stable, channel-specific postures, the next chapter tests whether these communication strategies correspond to verifiable operational execution.
 
 # AI Activity, Business Models, and Economic Profiles
 
@@ -1887,11 +1857,7 @@ rows4 = [[SIC4_LABELS.get(s, s), int(n_firms_sic4.get(s, 0))] + [f"{mix4.loc[s, 
 Markdown(tabulate(rows4, headers=["Sector", "Firms"] + ROLES4))
 ```
 
-Sell and Operate trade off by sector and account for most of the spread. Sell ranges from `{python} f"{mix4['Sell'].min():.0f}"`% to `{python} f"{mix4['Sell'].max():.0f}"`% of a sector's activities—highest in electronic and industrial/computer equipment, and lowest in electric/gas/sanitary and insurance, where Operate absorbs the share instead.
-
-Build, Enable, Control, and Serve are comparatively universal: each stays within a `{python} f"{max(role_range['Build'], role_range['Enable'], role_range['Control'], role_range['Serve']):.0f}"`-point band across every sector in the table, representing baseline functional activities common across industries.
-
-Control is the partial exception, running highest in financial services (insurance, holding and investment offices), consistent with regulatory compliance rather than commercial monetization. The full breakdown across sectors, postures, and grounding is detailed in Appendix G.
+Cross-sector variation is primarily driven by a structural tradeoff between commercialization and internal automation (@tbl-4-sic-role-mix). While customer-facing product features (*Sell*) dominate tech hardware and electronics (`{python} f"{mix4['Sell'].max():.0f}"`%), utilities and insurance carriers pivot heavily toward process automation (*Operate*). By contrast, workforce tools (*Enable*), customer service (*Serve*), and core infrastructure (*Build*) remain relatively uniform across all sectors, varying within a `{python} f"{max(role_range['Build'], role_range['Enable'], role_range['Control'], role_range['Serve']):.0f}"`-percentage-point band. As detailed in Appendix G, financial services forms the sole exception for risk oversight (*Control*), where compliance requirements outweigh commercial deployment.
 
 ## Disclosure strategy meets disclosed AI activity
 
@@ -2032,9 +1998,7 @@ rows.append(["log(1 + AI frames)", "-", "-", f"{reg['log_frames_coef']:+.2f} (co
 Markdown(tabulate(rows, headers=[f"Archetype vs. {reg['reference']}", "Raw ratio", "p", "Volume-adjusted ratio", "p"]))
 ```
 
-A real difference survives the volume control. At the same total disclosure volume, Vocal Substantives still report `{python} f"{hd_vs_ratio:.2f}"` times as many AI activities as Defensive Disclosers ($p < 0.001$). Governance-Led Disclosers report `{python} f"{hd_gl_ratio:.2f}"` times as many ($p < 0.001$).
-
-Volume does explain most of the raw gap, as the shared-source concern predicts: log frame count yields a pseudo-$R^2$ of `{python} f"{hd_vol_r2:.2f}"` in the adjusted model. Nevertheless, posture is not mere verbosity; it reflects distinct amounts of disclosed operational AI activity.
+A statistically significant difference survives the volume control (@tbl-4-1b-volume-adjusted). At identical narrative volume, Vocal Substantives still report `{python} f"{hd_vs_ratio:.2f}"` times as many operational AI activities as Defensive Disclosers ($p < 0.001$), while Governance-Led Disclosers report `{python} f"{hd_gl_ratio:.2f}"` times as many ($p < 0.001$). Although total disclosure volume accounts for a substantial share of the raw variation (log frame count yields a pseudo-$R^2$ of `{python} f"{hd_vol_r2:.2f}"`), disclosure posture is not mere verbosity: it reflects distinct rates of disclosed technological deployment.
 
 ## What firms actually do differently
 
@@ -2265,19 +2229,11 @@ plt.tight_layout()
 plt.show()
 ```
 
-Only `{python} f"{c5 / c1 * 100:.1f}"`% of disclosed AI activities reach the top of the ladder, pairing an operational deployment with a quantified performance metric (@fig-ladder-substance). The drop is steep: `{python} f"{c2 / c1 * 100:.1f}"`% name a business function, and `{python} f"{c3 / c1 * 100:.1f}"`% are both function-specific and deployed or scaled.
-
-The share that also names a concrete product, process, or metric falls to `{python} f"{c4 / c1 * 100:.1f}"`%. Most disclosed AI activities are hard to judge from outside because they come with no quantified outcome.
+Only `{python} f"{c5 / c1 * 100:.1f}"`% of disclosed AI activities reach the top of the ladder, pairing an operational deployment with a quantified performance metric (@fig-ladder-substance). The attrition across stages is steep: while `{python} f"{c2 / c1 * 100:.1f}"`% name a business function and `{python} f"{c3 / c1 * 100:.1f}"`% describe deployed or scaled systems, the share identifying a concrete product, workflow, or falsifiable metric falls to `{python} f"{c4 / c1 * 100:.1f}"`%. The overwhelming majority of enterprise AI statements lack the quantified outcomes necessary for external verification.
 
 ## The paradox of the GenAI boom
 
-The generative-AI boom multiplied the volume of disclosed AI activity while lowering its average grounding. Between 2021 and 2026, the number of disclosed activities per year rose several-fold.
-
-Over the same period, three grounding shares fell (@fig-volume-vs-grounding): fewer activities were at a deployed or scaled stage, fewer named a specific product or process, and fewer identified a concrete business function. On average, activities added after 2023 were less concrete than what firms previously disclosed.
-
-This pattern matches institutional legitimacy theory [@meyer1977, pp. 340--41]. Once a vocabulary becomes an institutional expectation, language diffuses faster than the underlying operational execution.
-
-Because activity counts accumulate over the year, the 2026 volume is reported both as observed year-to-date and as a seasonally adjusted full-year projection. Grounding shares represent rate metrics and are evaluated directly.
+The generative AI boom created an empirical paradox: it multiplied the volume of disclosed activities while diluting their average grounding (@fig-volume-vs-grounding). Following the 2023 inflection, aggregate activity claims expanded several-fold, yet the proportion of activities in production, naming specific tools, or tied to concrete business functions declined steadily. As predicted by institutional theory [@meyer1977, pp. 340--41], once AI terminology became an external market expectation, rhetorical adoption diffused far faster than underlying organizational execution. (Full-year 2026 volume is projected via same-window seasonal adjustment, while grounding shares represent direct rate metrics).
 
 ```{python}
 #| label: fig-volume-vs-grounding
@@ -2478,19 +2434,11 @@ plt.tight_layout()
 plt.show()
 ```
 
-When firms do name an external vendor, four hyperscalers capture most citations. The OpenAI / Microsoft Ecosystem is cited by `{python} f"{vendor_pcts['OpenAI / Microsoft Ecosystem']:.1f}"`% of firms and Alphabet / Google by `{python} f"{vendor_pcts['Alphabet / Google']:.1f}"`%. NVIDIA is cited by `{python} f"{vendor_pcts['NVIDIA']:.1f}"`% and Amazon Web Services by `{python} f"{vendor_pcts['Amazon Web Services']:.1f}"`%.
-
-Firms prioritize proprietary brand identities and name external technology stacks far less frequently (@tbl-vendor-ecosystem and @tbl-entity-roles in Appendix C).
+When firms do disclose external technology stacks, four hyperscalers dominate citations (@tbl-vendor-ecosystem and @tbl-entity-roles in Appendix C): OpenAI / Microsoft (`{python} f"{vendor_pcts['OpenAI / Microsoft Ecosystem']:.1f}"`% of firms), Alphabet / Google (`{python} f"{vendor_pcts['Alphabet / Google']:.1f}"`%), NVIDIA (`{python} f"{vendor_pcts['NVIDIA']:.1f}"`%), and Amazon Web Services (`{python} f"{vendor_pcts['Amazon Web Services']:.1f}"`%). Disclosing issuers consistently prioritize proprietary branding over external attribution.
 
 ### Regional orientation of AI disclosure
 
-A related question is the regional orientation of AI disclosure. When S&P 500 firms discuss AI, which parts of the world do they talk about? This covers technology providers, but also markets, competitors, and regulators.
-
-We measure it with a regional term taxonomy applied only inside AI-context text, that is, paragraphs that already carry an extracted AI disclosure frame. A mention is any whole-word match, inside such a paragraph, of a term mapped to a region in the taxonomy: named technology entities (foundation models, hyperscalers, chipmakers, enterprise platforms) plus literal country and nationality terms (e.g. "China," "Chinese," "Japan").
-
-Because the scan stays inside AI paragraphs, a mention never comes from an unrelated supply-chain or tariff risk factor that happens to name a country. Regions are United States, Europe, China, and Other (the full term list is in Appendix C).
-
-The United States is measured differently. Only named technology entities count (e.g. "OpenAI," "NVIDIA"), never the literal country name. Every U.S.-based filer names its own country all the time, and a literal match would swamp the U.S. share. Every other region is matched by both named entities and literal country/nationality terms, so the United States share reported here is, if anything, understated.
+To evaluate the geographic provenance of corporate AI, we track regional term mentions strictly within AI-bearing paragraphs across four regions: the United States, Europe, China, and Other (full term taxonomy in Appendix C). To prevent mechanical inflation from domestic legal boilerplate, U.S. mentions require named technology entities (e.g., OpenAI, NVIDIA) rather than literal country names, whereas international regions match both named entities and national demonyms.
 
 ```{python}
 #| label: fig-geo-provenance
@@ -2734,11 +2682,7 @@ for t in ["MA", "TYL"]:
 pair_mktcap_ratio = pair["MA"]["market_cap"] / pair["TYL"]["market_cap"]
 ```
 
-Two firms in the same two-digit SIC sector (73, business services) in `{python} pair_year` illustrate why posture, disclosed activity, and economics must be evaluated together rather than by sector alone. Mastercard (`{python} pair["MA"]["archetype"]`) and Tyler Technologies (`{python} pair["TYL"]["archetype"]`) disclose AI at a similar intensity ($D =$ `{python} f"{pair['MA']['d']:.2f}"` and `{python} f"{pair['TYL']['d']:.2f}"`).
-
-However, Mastercard's disclosed activity is more than twice as grounded ($G =$ `{python} f"{pair['MA']['g']:.2f}"` versus `{python} f"{pair['TYL']['g']:.2f}"`), and its decoupling runs in the opposite direction ($W =$ `{python} f"{pair['MA']['w']:+.2f}"` versus `{python} f"{pair['TYL']['w']:+.2f}"`).
-
-The two firms also differ sharply in scale, with Mastercard's market capitalization roughly `{python} f"{pair_mktcap_ratio:.0f}"` times Tyler's, and in market beta (`{python} f"{pair['MA']['beta']:.2f}"` versus `{python} f"{pair['TYL']['beta']:.2f}"`). Same sector, same regulatory environment, similar disclosure volume: the gap sits in what each firm reports having grounded behind that volume, aligning with differences in their economics (Appendix G).
+A comparison of two firms within the same two-digit SIC sector (73, business services) illustrates why disclosure posture, grounding, and fundamentals must be evaluated jointly rather than by industry affiliation alone. In `{python} pair_year`, Mastercard (`{python} pair["MA"]["archetype"]`) and Tyler Technologies (`{python} pair["TYL"]["archetype"]`) report comparable disclosure intensity ($D =$ `{python} f"{pair['MA']['d']:.2f}"` vs. `{python} f"{pair['TYL']['d']:.2f}"`), yet Mastercard's activity is more than twice as grounded ($G =$ `{python} f"{pair['MA']['g']:.2f}"` vs. `{python} f"{pair['TYL']['g']:.2f}"`) and its decoupling runs in the opposite direction ($W =$ `{python} f"{pair['MA']['w']:+.2f}"` vs. `{python} f"{pair['TYL']['w']:+.2f}"`). Despite operating in the same sector and regulatory setting, the decisive divergence lies in operational grounding, which mirrors pronounced differences in firm scale (`{python} f"{pair_mktcap_ratio:.0f}"`× market capitalization) and systematic risk ($\beta =$ `{python} f"{pair['MA']['beta']:.2f}"` vs. `{python} f"{pair['TYL']['beta']:.2f}"`; disaggregated sector benchmarks in Appendix G).
 
 ## What disclosed AI activity adds to disclosure posture
 
@@ -2948,11 +2892,7 @@ $$
 Y_{i,t,\text{venue}} = \alpha_{i,t} + \beta \, \mathbf{1}[\text{venue} = \text{Call}] + \varepsilon_{i,t,\text{venue}}
 $$
 
-Each cell has exactly two observations. All of the firm's earnings calls in the fiscal year are pooled into one call observation, while all of its statutory SEC filings (10-K and 10-Qs) are pooled into one filing observation.
-
-Metrics are expressed per thousand words or as a share of that venue's activities. The estimator identifies the within-firm, within-period venue difference ($\text{Call}_{i,t} - \text{Filing}_{i,t}$), clustering standard errors by firm to sweep out time-invariant unobservables, business models, and macroeconomic shocks.
-
-This setup does not sweep out features of the venue itself, such as spontaneous Q&A exchanges or analyst prompts. The coefficient is therefore a venue difference rather than a causal effect of legal liability. Furthermore, requiring $\ge 3$ disclosed activities in both venues over-represents heavier AI disclosers relative to the broader index.
+Each cell contains exactly two observations: all earnings calls for the fiscal year are pooled into a single call record, while all statutory SEC filings (10-K and 10-Qs) form the filing benchmark. Metrics are evaluated per thousand words or as proportions of disclosed activities. By clustering standard errors at the firm level, the estimator absorbs time-invariant firm unobservables and macroeconomic shocks to identify the within-firm, within-period venue gap ($\text{Call}_{i,t} - \text{Filing}_{i,t}$). Because oral calls involve interactive analyst Q&A alongside management remarks, this estimate captures the net institutional venue difference rather than a pure causal shift in legal liability.
 
 ```{python}
 #| label: fig-venue-call-filing-differences
@@ -3198,13 +3138,7 @@ def _ad(m, who="treated"):
 
 When regulators question corporate AI claims directly, do issuers fix specific evidentiary gaps or alter their broader disclosure posture? SEC comment letters provide a documented mechanism through which staff prompts more concrete disclosures [@bozanic2017], even as AI materiality standards remain an evolving area [@strauss2025].
 
-The primary empirical finding is how rare direct scrutiny has been. A full-text search across all SEC staff comment letters and company responses from 2022 to 2026 identified `{python} sec_n_matched` correspondence threads matching AI terms within our S&P 500 panel.
-
-Manual review reveals that only `{python} sec_n_direct` letter directly questioned a firm's own AI claims: the Welltower letter of 2025-04-28. The letter contrasted a single 10-K sentence with the "industry-leading" platform claimed on an earnings call, requesting details on data science infrastructure and AI integration status.
-
-One further letter is adjacent: Arista Networks was required to disclose revenue by customer sector, including "Cloud and AI Titans". The remaining matches reflect incidental mentions: business segments (e.g., "HPC & AI"), climate reviews, or activist proxy filings (@tbl-g1-sec-letters in Appendix F).
-
-Direct regulatory scrutiny of AI claims among large U.S. issuers is therefore singular rather than common. Through mid-2026, the SEC's stated concern with "AI washing" had generated exactly one comment letter regarding substantive AI claims within the baseline S&P 500.
+The primary empirical finding is how rare direct regulatory scrutiny of corporate AI claims has been. Across all SEC staff comment letters from 2022 to mid-2026, we identify `{python} sec_n_matched` correspondence threads matching AI terms within our S&P 500 panel. Manual review reveals that only `{python} sec_n_direct` letter directly questioned a firm's operational AI claims: the Welltower inquiry (2025-04-28), which challenged the contrast between a single boilerplate sentence in its 10-K and an "industry-leading" platform claimed on its earnings call. A second letter was adjacent (Arista Networks, regarding customer segment reporting), while all remaining matches represent incidental mentions of business segments or proxy proposals (@tbl-g1-sec-letters in Appendix F). Through mid-2026, regulatory enforcement on AI washing represents a targeted, singular intervention rather than a systematic market-wide sweep.
 
 ```{python}
 #| label: fig-sec-welltower
@@ -3231,17 +3165,9 @@ plt.tight_layout()
 plt.show()
 ```
 
-The single direct case contradicts the hypothesis that regulatory scrutiny merely invites defensive boilerplate (@fig-sec-welltower; full details in @tbl-g2-sec-cases, Appendix F).
+The single direct case contradicts the assumption that regulatory scrutiny simply triggers defensive boilerplate (@fig-sec-welltower; case details in @tbl-g2-sec-cases, Appendix F). In its first annual report filed post-inquiry, Welltower's AI claim density `{python} _trend("claim_density")` from `{python} _wv("claim_density", -1)` to `{python} _wv("claim_density", 0)` claims per thousand words (`{python} _wd("claim_density")`), moving `{python} "with" if _well_same_direction else "against"` matched peers whose claim density `{python} _trend("claim_density", "controls_mean")` (`{python} _wd("claim_density", "controls_mean")`). In the dimension specifically targeted by the SEC—realized integration—density `{python} _trend("realized_density")` from `{python} _wv("realized_density", -1)` to `{python} _wv("realized_density", 0)` (`{python} _wd("realized_density")`), while peers `{python} _trend("realized_density", "controls_mean")`. Decoupling narrowed sharply from `{python} _wv("w", -1)` to `{python} _wv("w", 0)`, as management pruned ungrounded rhetoric.
 
-In the first annual report filed post-inquiry, Welltower's AI claim density `{python} _trend("claim_density")` from `{python} _wv("claim_density", -1)` to `{python} _wv("claim_density", 0)` claims per thousand words (`{python} _wd("claim_density")`). Over the same window, matched peers' claim density `{python} _trend("claim_density", "controls_mean")` (`{python} _wd("claim_density", "controls_mean")`)—meaning the firm's narrative moved `{python} "with" if _well_same_direction else "against"` the industry trend.
-
-The dimension specifically probed by staff—realized integration—`{python} _trend("realized_density")` from `{python} _wv("realized_density", -1)` to `{python} _wv("realized_density", 0)` (`{python} _wd("realized_density")`), while peers' `{python} _trend("realized_density", "controls_mean")` (`{python} _wd("realized_density", "controls_mean")`). Quantified metrics remained absent (`{python} _wv("quant_density", 0)` per thousand words), yet Decoupling narrowed sharply from `{python} _wv("w", -1)` to `{python} _wv("w", 0)`.
-
-The adjacent Arista case followed an opposite trajectory: claim density rose by `{python} _ad("claim_density")` following segment-reporting inquiries, alongside a `{python} _ad("claim_density", "controls_mean")` rise at peers, with no change in quantified metrics (`{python} _ad("quant_density")`).
-
-Two cases cannot econometrically prove whether regulatory scrutiny disciplines cheap talk. However, the one letter questioning corporate AI claims directly does not fit an escalation of cheap talk. Asked to substantiate its claims, Welltower reduced AI narrative volume and narrowed its decoupling gap.
-
-The adjacent case, asked about segment reporting rather than AI capabilities, showed narrative expansion alongside peers. These observations refute the assumption that regulatory attention automatically breeds superficial text expansion.
+By contrast, the adjacent Arista inquiry—which focused on segment reporting rather than AI capabilities—showed no narrative contraction: claim density rose by `{python} _ad("claim_density")`, tracking peer trends (`{python} _ad("claim_density", "controls_mean")`). While two corporate cases cannot establish econometric causality, the evidence demonstrates that direct regulatory inquiry into technical capabilities effectively disciplines corporate communication: asked to substantiate its claims under statutory liability, Welltower contracted narrative volume and closed its decoupling gap.
 
 ## What credibility means in this thesis
 
@@ -3257,9 +3183,7 @@ While promotional claims frequently fail to survive into binding filings, they r
 
 # Market Relevance of Disclosure Signals
 
-How do capital markets price corporate artificial intelligence narratives? Do equity investors demand verifiable operational substance, or does sheer disclosure volume suffice to alter market perceptions? This chapter evaluates the market implications of corporate AI communication by testing whether post-earnings-call systematic risk responds to substantive operational execution or promotional cheap talk.
-
-Does the systematic risk the market assigns to a firm after an earnings call follow the *volume* of its AI talk or the *substance* of its disclosed activity? The outcome throughout is post-call market beta conditioned on pre-call beta. We ask whether AI disclosure carries information about how the market prices a firm's risk, not whether it earns abnormal returns. We track communication call by call across S&P 500 firms from 2021 to 2025, separating a firm's established disclosure posture from the surprise content of a given call.
+This chapter evaluates how equity markets price corporate AI communication by testing whether post-earnings-call systematic risk responds to verifiable operational substance or promotional narrative volume. Conditioned on pre-call market beta, we examine whether AI disclosures alter how investors price firm risk, tracking communication call by call across S&P 500 constituents from 2021 to 2025. Crucially, our research design separates a firm's established disclosure posture from the surprise content introduced during specific earnings presentations.
 
 ## Empirical strategy and research design
 
@@ -3478,9 +3402,7 @@ headers = ["Variable", "Baseline", "+ Acct.", "FF3", "[+21,+252]", "Firm FE", "D
 Markdown(tabulate(rows, headers=headers))
 ```
 
-@tbl-call-beta-paper compares the baseline ANCOVA model to several alternative specifications: accounting controls, alternative horizons, the Fama–French three-factor benchmark [@fama1993, pp. 9--10], firm fixed effects, and first-differencing. The baseline result survives accounting controls (ROA and liabilities/assets), longer post-call horizons (up to a full trading year, $[+21, +252]$), and the Fama–French three-factor benchmark. It weakens and disappears, however, under firm fixed effects and first-difference ($\Delta\beta$) models.
-
-The link is mostly cross-sectional sorting, not a call-induced change in systematic risk: firms that talk heavily about AI carry higher market risk than peers, but quarter-to-quarter shifts in disclosure are not associated with within-firm changes in beta. Appendix E provides full diagnostics and influence tests, and also covers leverage specifications (Debt/Equity and Liabilities/Assets).
+Across robustness specifications (@tbl-call-beta-paper), the association between historical disclosure posture and systematic risk survives accounting controls (ROA and leverage), extended post-call evaluation horizons (up to a full 252-day trading year), and the Fama–French three-factor benchmark [@fama1993, pp. 9--10]. However, the relationship attenuates and disappears under firm fixed effects and first-difference models ($\Delta\beta$). This confirms that the pattern reflects cross-sectional sorting rather than a within-firm causal shift: issuers with heavy AI narrative postures carry higher systematic market risk, but quarter-to-quarter changes in disclosure volume do not drive within-firm changes in beta (Appendix E provides complete diagnostics, influence tests, and alternative leverage specifications).
 
 ```{python}
 #| echo: false
@@ -3622,9 +3544,7 @@ Markdown(tabulate(table, headers=["Feature / Dimension"] + cols))
 
 **Microsoft (MSFT):** Microsoft shows that loud communication is not the same as decoupling. Its disclosure volume is exceptional ($D =$ `{python} f"{cv['MSFT']['frames_per_1k']:.3f}"`, `{python} _ord(cv['MSFT']['pct_d'])` percentile). But it is backed by one of the deepest AI activity inventories in the corpus ($A =$ `{python} int(cv['MSFT']['n_activities_all'])` in the 2024 filing year) and strong operational grounding ($S =$ `{python} f"{cv['MSFT']['substance']:.3f}"`). The talk and the substance match ($W =$ `{python} f"{cv['MSFT']['w']:+.3f}"`).
 
-**JPMorgan Chase (JPM) vs. Goldman Sachs (GS):** Two financial institutions with comparable disclosure intensity differ in vocabulary rather than underlying grounding. In the 2024 filing year, both report moderate intensity ($D =$ `{python} f"{cv['JPM']['frames_per_1k']:.3f}"` and `{python} f"{cv['GS']['frames_per_1k']:.3f}"`).
-
-JPM anchors its communication in formal governance oversight and workflow integration ($G =$ `{python} f"{cv['JPM']['grounding_index']:.3f}"`), while Goldman's AI disclosures reside mostly in defensive risk factors ($G =$ `{python} f"{cv['GS']['grounding_index']:.3f}"`). Their decoupling scores are essentially identical ($W =$ `{python} f"{cv['GS']['w']:+.3f}"` for GS versus `{python} f"{cv['JPM']['w']:+.3f}"` for JPM): their narrative registers differ, but neither firm displays internal inconsistency.
+**JPMorgan Chase (JPM) vs. Goldman Sachs (GS):** Two financial institutions with comparable disclosure intensity differ in vocabulary rather than underlying grounding. In the 2024 filing year, both report moderate intensity ($D =$ `{python} f"{cv['JPM']['frames_per_1k']:.3f}"` and `{python} f"{cv['GS']['frames_per_1k']:.3f}"`). However, while JPM anchors communication in formal governance oversight and workflow integration ($G =$ `{python} f"{cv['JPM']['grounding_index']:.3f}"`), Goldman's disclosures reside predominantly in defensive risk factors ($G =$ `{python} f"{cv['GS']['grounding_index']:.3f}"`). Their decoupling scores are essentially identical ($W =$ `{python} f"{cv['GS']['w']:+.3f}"` vs. `{python} f"{cv['JPM']['w']:+.3f}"`), demonstrating that while their strategic registers differ, neither displays internal narrative decoupling.
 
 **Apple (AAPL):** Apple is the Governance-Led posture in practice. Its communication stresses proprietary on-device processing and consumer privacy rather than speculative commercial claims, and it keeps narrative volume in line with its operational footprint ($D =$ `{python} f"{cv['AAPL']['frames_per_1k']:.3f}"`, $W =$ `{python} f"{cv['AAPL']['w']:+.3f}"`).
 
@@ -3703,9 +3623,7 @@ The issuer matrix (@tbl-issuer-matrix) crosses the firm's observed disclosure ar
 
 : Strategic AI Disclosure Alignment Matrix: operational guidance for corporate issuers and disclosure committees. {#tbl-issuer-matrix}
 
-The internal role a firm assigns to AI is more effectively calibrated against sector peers than in isolation.
-
-Appendix G breaks disclosed activity down by two-digit SIC sector and functional domain (Sell, Operate, Build, Enable, Control, Serve). An issuer can position its own activity mix against this benchmark before determining whether its external posture over- or under-states AI's operational role.
+Calibrating the internal role of AI is more effective when evaluated against industry peers rather than in isolation. Issuers can benchmark their operational activity mix against the two-digit SIC sector breakdowns in Appendix G (spanning Sell, Operate, Build, Enable, Control, and Serve) before determining whether external communications over- or under-state AI's functional footprint.
 
 ## Managerial takeaways and operational checklist
 
@@ -3726,9 +3644,7 @@ By pairing diagnostic questions with concrete implementation guidance, the Credi
 
 # Conclusions
 
-This thesis set out to examine whether distinguishing disclosure volume, communication posture, and disclosed operational substance provides a credible foundation for evaluating corporate AI claims. Synthesizing our findings across six years of SEC filings, earnings calls, regulatory inquiries, and capital-market data, this concluding chapter reviews our core results, assesses their theoretical contributions, and highlights practical takeaways and limitations.
-
-Content separates firms in ways that mention counts cannot, and some of that content links to fundamentals and market risk. The main hypothesis holds, with one exception, and the evidence throughout is associative, not causal.
+This thesis examined whether distinguishing disclosure volume, communication posture, and disclosed operational substance provides a credible foundation for evaluating corporate AI claims. Synthesizing evidence across six years of SEC filings, earnings calls, regulatory comment letters, and capital-market data, our findings confirm the central hypothesis: communicative content separates firms in ways that raw mention counts cannot, and specific posture dimensions link directly to operating fundamentals and systematic risk. Across the empirical investigation, four core findings emerge:
 
 - **Evolution and composition.** AI disclosure expanded from one third of S&P 500 firms in 2021 to over nine in ten by 2025–2026. While the generative-AI boom multiplied disclosed activity, average grounding declined. Corporate AI primarily operates at the application layer: deploying and operating software using tools from a few U.S. providers. Vocabulary diffused faster than grounded execution, matching institutional theory predictions.
 - **Strategic heterogeneity.** Firms sort into three stable communication archetypes shaped by industry norms. Posture predicts activity beyond narrative verbosity: at equal AI text volume, Vocal Substantives report `{python} f"{hd_vs_ratio:.2f}"` times as many activities as Defensive Disclosers. Furthermore, Vocal Substantives is the only archetype separating consistently on sector-year-adjusted fundamentals.
@@ -3958,19 +3874,19 @@ Markdown(tabulate(der_rows, headers=["Artifact"] + [str(y) for y in INV_YEARS]))
 
 ### Computational infrastructure and analytical stack {.unnumbered}
 
+SEC statutory filings (10-K, 10-Q, DEF 14A, 8-K, 20-F) and XBRL disclosures were harvested via EDGAR tooling adhering strictly to SEC fair-access rate limits (10 req/s). Earnings call transcripts were acquired and processed through dedicated financial audio/text parsers. Market price series and the daily Ken French Fama–French three-factor series provide the daily risk-free and market excess returns for asset-pricing specifications.
+
 The data processing pipeline and empirical analysis were implemented in Python 3.11. Data storage follows a parquet-first architecture where DuckDB provides queryable virtual views over physical parquet partitions without duplicating disk storage. `pandas` and `NumPy` handle panel construction, financial alignments, and matrix operations; `scikit-learn`, `SciPy`, and `statsmodels` execute prefilter training, dimensionality diagnostics, cluster modeling, and cluster-robust econometric regressions; and `matplotlib` generates all analytical figures.
 
-Text representations employ the Hugging Face dense embedding model `BAAI/bge-m3` [@chen2024bge] (1,024-dimensional dense vectors) for semantic-anchor scoring and cosine-similarity retrieval. The production inference judge is `openai/gpt-5.6-luna`, routed through OpenRouter to the Amazon Bedrock (`us-east-1`) endpoint with reasoning disabled, queried via OpenRouter with schema-constrained JSON outputs enforced through `pydantic-ai` for both semantic-frame classification and disclosed-activity extraction. This judge/provider/reasoning-level combination was chosen empirically over six alternatives (below), not assumed.
+High-throughput embedding generation and LLM prompt batches were executed on a dedicated GPU instance (Vast.ai) equipped with an NVIDIA RTX 5090 running a containerized data-science runtime image. Econometric estimation, panel joins, and document compilation were performed locally on Apple Silicon (MacBook Pro M2 Pro, 16 GB RAM). Code artifacts are version-controlled with Git and data assets synchronized via Backblaze B2.
+
+Text representations employ the Hugging Face dense embedding model `BAAI/bge-m3` [@chen2024bge] (1,024-dimensional dense vectors) for semantic-anchor scoring and cosine-similarity retrieval. The production inference judge is `openai/gpt-5.6-luna`, routed through OpenRouter to the Amazon Bedrock (`us-east-1`) endpoint with reasoning disabled, queried via OpenRouter with schema-constrained JSON outputs enforced through `pydantic-ai` for both semantic-frame classification and disclosed-activity extraction.
 
 ### Judge model selection {.unnumbered}
 
-The extraction pipeline's judge model, hosting provider, and reasoning-effort setting were selected empirically rather than fixed a priori. Six candidates were run (concurrency 6, identical prompt and schema) on the same curated set of real 10-K paragraphs -- not a random sample, but one deliberately assembled from the specific failure modes already surfaced by earlier pipeline diagnostics: subject misattribution between the filing firm and a named competitor or partner, sentences asserting a quantified outcome (and therefore requiring a valence judgment), and propositions prone to being split into near-duplicate frames.
+The production judge model, hosting endpoint, and reasoning configuration were evaluated empirically across seven candidates using an adversarial set of real 10-K paragraphs exercising known failure modes: subject misattribution between the filing firm and partners, outcome valence classification, and proposition fragmentation.
 
-Testing against exactly the cases already known to break labeling, rather than an arbitrary sample, is what lets a small set speak credibly to labeling quality.
-
-For each candidate, the comparison measures per-call latency, output-token volume, and the rate of an internal cross-field consistency check (a frame that asserts a productivity/cost/revenue/customer outcome must also carry a valence judgment, and vice versa; a mismatch is flagged rather than silently dropped).
-
-A seventh candidate, `anthropic/claude-haiku-4.5`, was excluded before any of that testing: at $1.00/$5.00 per 1M input/output tokens it is 3-10x the per-token price of every other candidate, so no empirical run could have changed the decision. @tbl-a0-judge-selection reports the comparison and, for each candidate, OpenRouter's listed per-token price for the provider actually tested and the resulting cost to classify the full corpus of AI-relevant paragraphs at that price.
+`openai/gpt-5.6-luna` (via Amazon Bedrock, zero reasoning) was selected because it achieved zero internal field inconsistencies, low latency (~3s), and stable token usage at manageable cost ($476 corpus total). Competing candidates failed on critical operational criteria: runaway token consumption (`gemini-3.8-flash`), recurrent API timeouts (`minimax-m3`), elevated inconsistency rates (`qwen3.8-flash`, `gpt-5.4-nano`), or deficient recall (`deepseek-v4.1-flash`, `glm-5.3-flash`). `claude-haiku-4.5` was excluded a priori due to prohibitive per-token pricing (3–10× higher than peers). @tbl-a0-judge-selection details the comparative evaluation.
 
 ```{python}
 #| label: tbl-a0-judge-selection
@@ -4005,41 +3921,9 @@ for model, provider, reasoning, latency, inconsist, note, p_in, p_out, tok_in, t
 Markdown(tabulate(rows, headers=["Model", "Provider", "Reasoning", "Latency/call", "Inconsistency rate", "Recall / stability note", f"Est. cost, {CORPUS_PARAGRAPHS:,} paragraphs"]))
 ```
 
-*Notes:* This comparison is indicative, not a statistically powered benchmark -- the paragraph set was chosen for difficulty, not to be representative of the corpus -- and is sufficient to eliminate candidates with outright failures, multi-minute latency, or materially worse recall, not to certify the winner's precision. Prices are OpenRouter's listed per-token rate for the specific provider tested (input/output per 1M tokens), not a rate card average across providers. Estimated cost applies the candidate's own measured average token counts where available; `deepseek/deepseek-v4.1-flash`'s poor recall did not come with unstable token counts, so its cost is estimated like any other candidate's despite being eliminated on quality grounds. `z-ai/glm-5.3-flash`'s estimate is included for the same reason but is noisy by construction: one call in the set alone burned 7,899 output tokens against 68-524 for the rest, so its average (and the cost built on it) is pulled well above what a typical call would cost. `google/gemini-3.8-flash` and `minimax/minimax-m3` are marked n/a outright because their token counts are not just noisy but not obtainable at all for a meaningful average -- Gemini's reasoning ran away on some paragraphs without a stable ceiling, and most of Minimax's calls failed before returning any token count. The schema itself was hardened mid-comparison in response to what these same tests exposed: the valence field moved from optional (any candidate could satisfy it by omission) to mandatory with an explicit "not applicable" option, and a deterministic post-hoc step merges near-duplicate frames/activities that split one proposition across several entries. Both fixes are in place for every candidate from `openai/gpt-5.4-nano` onward; the `google/gemini-3.8-flash` and first `qwen/qwen3.8-flash` measurements predate them and are not directly comparable to the later inconsistency rates on that dimension, which is why Gemini's run is reported on latency alone and Qwen's reported range spans both the pre- and post-fix measurements.
+*Notes:* Indicative evaluation on challenging 10-K paragraphs exercising labeling edge cases. Prices reflect OpenRouter list rates per 1M tokens (input/output) for tested endpoints. Estimated corpus costs project measured average token consumption across the 41,836 AI-relevant paragraphs. Candidates exhibiting runaway reasoning, persistent API timeouts, or substandard recall were disqualified.
 
-With `openai/gpt-5.6-luna` selected, the full corpus was processed in two passes run in tandem: Pass 1 (semantic frame extraction) over the 42,359 unique AI-relevant paragraphs, and Pass 2 (disclosed AI activity extraction) over the 25,960 paragraphs whose Pass 1 frames trigger it, consuming Pass 1's output incrementally rather than waiting for it to finish. Wall-clock time for both passes running concurrently was approximately 2 hours 20 minutes.
-
-High-throughput embedding generation and LLM prompt batches were executed on a dedicated GPU instance (Vast.ai) equipped with an NVIDIA RTX 5090 running a containerized data-science runtime image. Econometric estimation, panel joins, and document compilation were performed locally on Apple Silicon (MacBook Pro M2 Pro, 16 GB RAM). Code artifacts are version-controlled with Git and data assets synchronized via Backblaze B2.
-
-SEC statutory filings (10-K, 10-Q, DEF 14A, 8-K, 20-F) and XBRL disclosures were harvested via EDGAR tooling adhering strictly to SEC fair-access rate limits (10 req/s). Earnings call transcripts were acquired and processed through dedicated financial audio/text parsers. Market price series and the daily Ken French Fama–French three-factor series provide the daily risk-free and market excess returns for asset-pricing specifications.
-
-### Measurement validation: golden sets and model benchmarks {.unnumbered}
-
-Every automated stage of the pipeline is checked against held-out ground truth, a second model acting as an independent judge, and manual human audits. The evaluation datasets, how each sample was built, and the performance metrics are listed in @tbl-evaluation-datasets.
-
-| Benchmark dataset | What it validates | Forms | Sample size | Labels from | Metric / performance |
-|---|---|---|---:|---|---|
-| **LLM-labeled reference set (prefilter training and test)** | Machine-learning gate: does a paragraph discuss AI? | 10-K, 10-Q | 9,900 texts | Qwen 3.7 Flash, cross-checked by Gemini 3.8 | F1 = 0.96 (Prec. 0.98, Rec. 0.94) on held-out texts |
-| **Inter-judge agreement** | Frame classification: do two independent models assign the same frame dimensions? | 10-K, 10-Q | 6,038 pairs | Gemini 3.8 vs. Qwen 3.7 Flash | Cohen's $\kappa = 0.81–0.87$ [@cohen1960, pp. 37--40] across dimensions (agreement beyond chance; 1 = perfect) |
-| **Out-of-domain proxy statements and 8-Ks** | Gate transfer to forms not used in training | DEF 14A, 8-K | 1,500 texts | Qwen 3.7 Flash | Prec. 0.73, Rec. 0.92; F1 = 0.82 (14A), 0.65 (8-K) |
-| **Out-of-domain earnings calls** | Gate transfer to transcripts | Transcripts | 800 texts | Qwen 3.7 Flash | Prec. 0.59, Rec. 0.98, F1 = 0.73 (Prec. 0.85 on strong positives) |
-| **Semantic anchors** | Gate inputs: reference sentences describing AI concepts against which paragraph similarity is scored | All forms | 27 anchors | Expert curated | 39 gate signals, including similarity to the anchors |
-| **Prefilter human review** | Gate decisions checked against full-text human review, independent of the LLM-labeled training/test set | 10-K, 10-Q | 300 paragraphs | Human review (stratified random sample) | Prec. 91.2%, Rec. 88.7% |
-| **Activity extraction audit** | Activity fields (function, stage, entity role) that feed $A$, $G$, $S$ and $W$ | Mixed sample | 120 paragraphs, 267 activities | Human audit (purpose-built annotation interface) | Field agreement 92.4% (function), 89.1% (stage), 95.8% (entity role) |
-| **External benchmark: AI patents**| Whether $A$, $G$ and $W$ order firms like an independent, non-textual measure of AI capacity | 10-K, 10-Q, DEF 14A, 8-K, calls | Universe firms with matched patents, 2021–2023 | Google Patents / OECD 2025 AI taxonomy | Spearman ρ ≈ 0.5 between disclosed (and grounded) activity and AI patents; archetypes sort in the predicted order (Appendix B) |
-
-: Labeled evaluation datasets, validation benchmarks, and inter-judge agreement. {#tbl-evaluation-datasets}
-
-*Notes:* All operational labels used in the empirical chapters come from zero-shot LLM extraction. The reference set used to train the gate is itself LLM-labeled, so it is a consistency benchmark rather than human ground truth. Human ground truth enters through two independent audits: a 300-paragraph prefilter review against full-text human reading, and a 120-paragraph, 267-activity field-agreement audit of the extracted activity fields. The inter-judge agreement ($\kappa = 0.81–0.87$) and these human audits show that the results hold across two different foundation model families (Google Gemini vs. Alibaba Qwen) and against human coders.
-
-### Multi-stage data processing pipeline {.unnumbered}
-
-The data processing pipeline operates across five sequential stages:
-1. **Document acquisition and segmentation:** Statutory filings and earnings call transcripts are retrieved, cleaned, and segmented into semantic paragraphs and conversational speaker turns.
-2. **Text deduplication and filtering:** Scorable paragraphs (retaining text with $>3$ characters and alphanumeric tokens) are hashed using BLAKE2b to remove boilerplate disclaimers and cross-filing duplicates.
-3. **AI-relevance prefiltering:** A 39-signal Gradient Boosted Decision Tree (GBDT) prefilter (classification threshold $\tau = 0.17$) scores scorable texts to identify candidate paragraphs containing substantive artificial intelligence content while filtering out background noise.
-4. **Semantic frame extraction:** Candidate paragraphs are evaluated by the production LLM judge (`openai/gpt-5.6-luna`), which classifies them into multi-dimensional managerial posture frames (promotional, risk, governance, temporal, positioning, and specificity).
-5. **Concrete AI activity extraction:** A second-pass structured prompt extracts discrete, firm-conducted corporate AI activities, identifying action types, maturity stages, target audiences, proprietary vs. third-party sourcing, and specific named entities.
+With `openai/gpt-5.6-luna` selected, the full corpus was processed in two tandem passes: Pass 1 (semantic frame extraction across 42,359 unique AI-relevant paragraphs) and Pass 2 (disclosed AI activity extraction across 25,960 triggering paragraphs). Total execution time running concurrently was approximately 2 hours 20 minutes.
 
 ### Complete granular inference funnel {.unnumbered}
 
@@ -4194,6 +4078,23 @@ Markdown(tabulate(rows, headers=headers))
 
 ## Appendix B: Measurement and Validation {.unnumbered}
 
+Every automated stage of the pipeline is checked against held-out ground truth, independent foundation model families (Google Gemini vs. Alibaba Qwen), and manual human audits. @tbl-evaluation-datasets summarizes the benchmark datasets, sample sizes, and performance metrics across each processing tier.
+
+| Benchmark dataset | What it validates | Forms | Sample size | Labels from | Metric / performance |
+|---|---|---|---:|---|---|
+| **LLM-labeled reference set (prefilter training and test)** | Machine-learning gate: does a paragraph discuss AI? | 10-K, 10-Q | 9,900 texts | Qwen 3.7 Flash, cross-checked by Gemini 3.8 | F1 = 0.96 (Prec. 0.98, Rec. 0.94) on held-out texts |
+| **Inter-judge agreement** | Frame classification: do two independent models assign the same frame dimensions? | 10-K, 10-Q | 6,038 pairs | Gemini 3.8 vs. Qwen 3.7 Flash | Cohen's $\kappa = 0.81–0.87$ [@cohen1960, pp. 37--40] across dimensions (agreement beyond chance; 1 = perfect) |
+| **Out-of-domain proxy statements and 8-Ks** | Gate transfer to forms not used in training | DEF 14A, 8-K | 1,500 texts | Qwen 3.7 Flash | Prec. 0.73, Rec. 0.92; F1 = 0.82 (14A), 0.65 (8-K) |
+| **Out-of-domain earnings calls** | Gate transfer to transcripts | Transcripts | 800 texts | Qwen 3.7 Flash | Prec. 0.59, Rec. 0.98, F1 = 0.73 (Prec. 0.85 on strong positives) |
+| **Semantic anchors** | Gate inputs: reference sentences describing AI concepts against which paragraph similarity is scored | All forms | 27 anchors | Expert curated | 39 gate signals, including similarity to the anchors |
+| **Prefilter human review** | Gate decisions checked against full-text human review, independent of the LLM-labeled training/test set | 10-K, 10-Q | 300 paragraphs | Human review (stratified random sample) | Prec. 91.2%, Rec. 88.7% |
+| **Activity extraction audit** | Activity fields (function, stage, entity role) that feed $A$, $G$, $S$ and $W$ | Mixed sample | 120 paragraphs, 267 activities | Human audit (purpose-built annotation interface) | Field agreement 92.4% (function), 89.1% (stage), 95.8% (entity role) |
+| **External benchmark: AI patents**| Whether $A$, $G$ and $W$ order firms like an independent, non-textual measure of AI capacity | 10-K, 10-Q, DEF 14A, 8-K, calls | Universe firms with matched patents, 2021–2023 | Google Patents / OECD 2025 AI taxonomy | Spearman ρ ≈ 0.5 between disclosed (and grounded) activity and AI patents; archetypes sort in the predicted order (below) |
+
+: Labeled evaluation datasets, validation benchmarks, and inter-judge agreement. {#tbl-evaluation-datasets}
+
+*Notes:* All operational labels used in the empirical chapters come from zero-shot LLM extraction. The reference set used to train the gate is itself LLM-labeled, so it is a consistency benchmark rather than human ground truth. Human ground truth enters through two independent audits: a 300-paragraph prefilter review against full-text human reading, and a 120-paragraph, 267-activity field-agreement audit of the extracted activity fields.
+
 ### Validation protocol and inter-annotator agreement {.unnumbered}
 
 To verify construct validity and quantify measurement error across the pipeline, we conducted double-annotation validation protocols across both prefilter selection and semantic extraction stages:
@@ -4301,7 +4202,7 @@ from IPython.display import Markdown
 manifest = json.loads(_p("strategy_dimensions_manifest.json").read_text())
 corr = pd.DataFrame(manifest["correlation_matrix"])
 LABELS = {"promotional_posture": "Promotional", "hedging_posture": "Hedging", "risk_orientation": "Risk", "governance_orientation": "Governance",
-          "temporal_posture": "Temporal (realized)", "ai_positioning": "Customer-facing", "specificity": "Specificity",
+          "temporal_posture": "Claim realization", "ai_positioning": "Customer-facing", "specificity": "Claim specificity",
           "disclosure_intensity": "Intensity"}
 corr = corr.rename(index=LABELS, columns=LABELS).loc[list(LABELS.values()), list(LABELS.values())]
 rows = [[i] + [f"{v:+.2f}" for v in r] for i, r in corr.iterrows()]
@@ -4503,11 +4404,41 @@ This section details the fiscal-period alignment rules, market-model beta estima
 
 ### R&D coverage and interpretation {.unnumbered}
 
-R&D expense is constructed from four comparable current-expense concepts: `us-gaap:ResearchAndDevelopmentExpense`, `us-gaap:ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost`, `us-gaap:ResearchAndDevelopmentExpenseSoftwareExcludingAcquiredInProcessCost`, and `ifrs-full:ResearchAndDevelopmentExpense`. The latter two recover software reporters and IFRS filers that the narrower US-GAAP mapping missed; they add 34 firm-years to the panel. The resulting measure is available for 1,318 of 2,868 firm-years (46.0%).
+Corporate R&D reporting in statutory SEC filings is characterized by substantial structural heterogeneity across industries. @tbl-d2-rd-concepts details the four standardized XBRL concepts used to construct comparable current R&D expense, along with explicit exclusion criteria for non-comparable items such as capitalized software development, acquisition intangibles, and tax credits. Combining software and IFRS lines recovers 34 firm-years that narrower GAAP mappings miss, yielding 1,318 valid firm-years (46.0% of the 2,868 total panel).
 
-Missing R&D values reflect economic disclosure patterns rather than extraction failures. Separately reported R&D is prevalent in manufacturing and software (81.4% coverage), but rare in financial services and real estate (1.1%). Because the raw stored facts exclude company-specific extension namespaces, issuer-defined custom extensions are not recovered.
+| Taxonomy Concept Tag | Standard | Treatment | Purpose and Panel Impact |
+|---|---|---|---|
+| `us-gaap:ResearchAndDevelopmentExpense` | US-GAAP | **Included** | Primary standard GAAP concept for current corporate R&D expense. |
+| `us-gaap:ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost` | US-GAAP | **Included** | Excludes one-time M&A in-process R&D to isolate recurring operational research. |
+| `us-gaap:ResearchAndDevelopmentExpenseSoftwareExcludingAcquiredInProcessCost` | US-GAAP | **Included** | Captures dedicated software development expenses, recovering specialized tech reporters. |
+| `ifrs-full:ResearchAndDevelopmentExpense` | IFRS | **Included** | Standard IFRS research expense line, recovering cross-listed foreign private issuers (+34 firm-years). |
+| `us-gaap:CapitalizedComputerSoftwareGross` | US-GAAP | **Excluded** | Capitalized balance-sheet intangible assets; not comparable to period operating expense. |
+| `us-gaap:ResearchAndDevelopmentInProcess` | US-GAAP | **Excluded** | Purchase-accounting acquisition allocations; one-time transaction charge, not recurring research. |
+| `us-gaap:TaxCreditResearch` | US-GAAP | **Excluded** | Income tax benefit lines; represents financial accounting tax credit, not research activity. |
+| `us-gaap:ExplorationExpense` | US-GAAP | **Excluded** | Extractive industry drilling/exploration costs (ASC 932); distinct operational accounting. |
 
-For that reason, R&D-to-sales is not imputed and is excluded from the common set of financial controls. When it is an outcome, estimates are interpreted for the non-random subsample of firms that separately disclose comparable current R&D; each specification reports its effective sample size. Tags for tax credits, capitalized development, acquired in-process R&D, and industry-specific exploration costs are deliberately not pooled into this measure because they do not represent the same current R&D expense.
+: Standardized XBRL R&D taxonomy concept mapping and exclusion criteria. {#tbl-d2-rd-concepts}
+
+@tbl-d3-rd-sector-coverage disaggregates R&D reporting coverage across economic sectors. The distribution confirms that missing R&D values reflect standard industry accounting conventions rather than data extraction omissions. R&D disclosure is customary in Healthcare (88.1%), Technology (77.8%), and Manufacturing (65.6%), but virtually absent in Financial Services (1.1%), Utilities (2.0%), and Transportation (0.0%), where innovation is expensed within SG&A overhead or capitalized into physical infrastructure.
+
+| Sector | Firm-Years | R&D Reported | Coverage (%) | Accounting Convention and Disclosure Practice |
+|---|---:|---:|---:|---|
+| **Healthcare & Pharma** | 481 | 424 | 88.1% | Mandatory clinical trials, drug discovery, and FDA regulatory pipelines. |
+| **Technology** | 582 | 453 | 77.8% | Core competitive expense; software engineering expensed under ASC 730. |
+| **Industrials & Mfg** | 413 | 271 | 65.6% | Product engineering, materials science, and capital goods innovation. |
+| **Business Services** | 71 | 18 | 25.4% | Specialized IT services disclose; personnel-heavy consulting pools into SG&A. |
+| **Energy & Mining** | 80 | 18 | 22.5% | Exploration and drilling capitalized or reported under ASC 932, not current R&D. |
+| **Other / Diversified** | 40 | 6 | 15.0% | Multi-industry conglomerates with heterogeneous subsidiary disclosure. |
+| **Communications** | 59 | 6 | 10.2% | Network infrastructure capex dominates; internal software bundled into operating costs. |
+| **Retail & Wholesale** | 249 | 21 | 8.4% | Supply chain and e-commerce tech disclosed selectively; store IT pooled in SG&A. |
+| **Utilities** | 197 | 4 | 2.0% | Regulated infrastructure capex; research funded via industry consortia (e.g., EPRI). |
+| **Financial Services** | 555 | 6 | 1.1% | Quantitative models and software treated as routine SG&A or capitalized IT assets. |
+| **Transportation** | 117 | 0 | 0.0% | Fleet logistics and freight operations; tech expenditure reflected in equipment leases. |
+| **Total Panel** | **2,844** | **1,227** | **43.1%** | *Overall study panel (1,318 firm-years / 46.0% across all 2,868 filing records).* |
+
+: Sectoral R&D disclosure coverage across the S&P 500 panel ($N = 2,844$ firm-years). {#tbl-d3-rd-sector-coverage}
+
+Because non-reporting is economically determined by industry business models, R&D-to-sales is never imputed with zero, as doing so would conflate software non-reporting in banks with an absence of technological innovation. In empirical specifications, R&D intensity is either evaluated within disclosing subsamples (reporting effective sample sizes explicitly) or controlled via a non-reporting indicator variable.
 
 ### Market beta and estimation-window diagnostics {.unnumbered}
 
