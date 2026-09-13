@@ -187,11 +187,19 @@ analytics-activities: analytics-text
 # después de ambos. build_call_beta_panel.py además se auto-valida contra la
 # corrida anterior (ver build_call_beta_panel.py::validate) antes de
 # sobrescribirla.
+#
+# build_call_fundamentals_panel.py / call_beta_generalized_targets.py
+# generalizan esa misma regresión (Cap. 6.5) a seis fundamentales no-beta,
+# a la misma precisión de fecha de filing que sus propios controles
+# pre-call -- corren después de call_beta_regressions.py porque la figura
+# de 6.5 reutiliza el coeficiente beta de ese baseline en vez de
+# recalcularlo.
 analytics-call-beta: analytics-panels
 	@echo "Panel de calls para las regresiones de beta post-call (build_call_beta_panel)..."
 	@$(RUN_CACHED) call-beta \
 		scripts/analytics/build_call_beta_panel.py scripts/analytics/call_beta_regressions.py \
 		scripts/analytics/call_beta_robustness.py scripts/analytics/sec_comment_letter_cases.py \
+		scripts/analytics/build_call_fundamentals_panel.py scripts/analytics/call_beta_generalized_targets.py \
 		data/processed/clusters/firm_activities.parquet data/processed/clusters/firm_year_financials_ratios.parquet \
 		data/processed/clusters/firm_year_washing_score.parquet data/processed/clusters/firm_year_master_v2.parquet \
 		data/processed/clusters/document_panel.parquet \
@@ -199,7 +207,9 @@ analytics-call-beta: analytics-panels
 		-- bash -c '.venv/bin/python scripts/analytics/build_call_beta_panel.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/call_beta_regressions.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/call_beta_robustness.py $(ARGS) && \
-			.venv/bin/python scripts/analytics/sec_comment_letter_cases.py $(ARGS)'
+			.venv/bin/python scripts/analytics/sec_comment_letter_cases.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/build_call_fundamentals_panel.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/call_beta_generalized_targets.py $(ARGS)'
 
 # 200-replicate dual bootstrap (frame-level + firm-level) of the k=3 posture
 # archetype -- expensive (minutes, not seconds) even with caching on a cache

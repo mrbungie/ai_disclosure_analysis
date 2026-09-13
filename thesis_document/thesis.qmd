@@ -3368,58 +3368,47 @@ _pb_sub_p = "< 0.001" if pb_sub["p"] < 0.001 else f"= {pb_sub['p']:.3f}"
 
 ## External characterization of archetypes: fundamental financial profiles
 
-The beta results above test one specific channel: whether post-call systematic risk responds to disclosure posture and substance. This section generalizes that test to the firm's broader financial profile, asking whether the disclosure archetypes established in Chapter 3 also separate firms economically beyond beta. Financial fundamentals and market prices do not come from disclosure text; they come from XBRL filings and market returns. We test whether the archetypes match economically distinct firms, first on raw medians and then after adjusting for sector and year. The adjusted model is $X = \alpha_{s,y} + \gamma \cdot \text{Archetype} + \varepsilon$, with No AI as the reference group and firm-clustered standard errors [@bertrand2004].
+The beta results above test one specific channel: whether post-call systematic risk responds to disclosure posture and substance. This section generalizes that test, unchanged, to six other firm fundamentals: log market capitalization, R&D-to-sales, gross margin, price-to-sales, revenue growth, and ROIC minus WACC. The regressors stay identical to the beta model ($\text{HistD}$, $\text{HistS}$, $\text{SurpriseD}$, $\text{SurpriseS}$, plus the same market and accounting controls), industry-by-year fixed effects and firm-clustered standard errors are unchanged, and only two things are swapped in per target: its own pre-call level (in the role $\beta^{\text{pre}}_{i,t}$ plays for beta) and its post-call value (in the role $\beta^{\text{post}}_{i,t}$ plays for beta). Both come from the closest 10-K to the call on each side -- the last one filed strictly before it, and the first one filed strictly after -- the same filing-date precision the beta model's own accounting controls already use, not a calendar-year approximation.
 
 ```{python}
 #| echo: false
 #| output: false
-import json
-from pathlib import Path
+import pandas as pd
 
+_COLS = ["target", "variable", "beta_std", "ci95_low", "ci95_high", "p"]
+_gen = pd.read_csv(_p("call_beta_generalized_targets.csv"))
+_beta_base = pd.read_csv(_p("call_beta_regressions.csv"))
+_beta_base = _beta_base[_beta_base["model"] == "baseline"].copy()
+_beta_base.insert(0, "target", "beta")
+_gen_all = pd.concat([_gen[_COLS], _beta_base[_COLS]], ignore_index=True)
 
-_econ = json.loads(_p("strategy_economic_profiles.json").read_text())
-econ_a = _econ["panel_a"]
-d = _econ["panel_b"]
+def _row(target, variable):
+    r = _gen_all[(_gen_all.target == target) & (_gen_all.variable == variable)].iloc[0]
+    return r["beta_std"], r["p"]
 
 def _pfmt(p):
     return "< 0.001" if p < 0.001 else f"= {p:.3g}"
 
-def _reg(key, seg):
-    row = d[key][seg]
-    return row["gamma"], row["se"], row["p"]
+mc_hd, mc_hd_p = _row("log_market_cap", "hist_disclosure")
+rd_hd, rd_hd_p = _row("rd_intensity", "hist_disclosure")
+gm_hs, gm_hs_p = _row("gross_margin", "hist_substance")
+ps_hd, ps_hd_p = _row("ps_ratio", "hist_disclosure")
+rg_hd, rg_hd_p = _row("next_revenue_yoy", "hist_disclosure")
+rw_hd, rw_hd_p = _row("roic_minus_wacc", "hist_disclosure")
+rw_hs, rw_hs_p = _row("roic_minus_wacc", "hist_substance")
+beta_hd, beta_hd_p = _row("beta", "hist_disclosure")
 
-vs_mktcap_g, _, vs_mktcap_p = _reg("log_market_cap", "Vocal Substantives")
-vs_rd_g, _, vs_rd_p = _reg("rd_intensity", "Vocal Substantives")
-vs_gm_g, _, vs_gm_p = _reg("gross_margin", "Vocal Substantives")
-vs_beta_g, _, vs_beta_p = _reg("beta", "Vocal Substantives")
-vs_ps_g, _, vs_ps_p = _reg("ps_ratio", "Vocal Substantives")
-
-gov_mktcap_g, _, gov_mktcap_p = _reg("log_market_cap", "Governance-Led Disclosers")
-gov_roic_g, _, gov_roic_p = _reg("roic_minus_wacc", "Governance-Led Disclosers")
-gov_ps_g, _, gov_ps_p = _reg("ps_ratio", "Governance-Led Disclosers")
-
-def_rd_g, _, def_rd_p = _reg("rd_intensity", "Defensive Disclosers")
-
-rd_vs, rd_gov, rd_def = econ_a["Vocal Substantives"]["rd_intensity"], econ_a["Governance-Led Disclosers"]["rd_intensity"], econ_a["Defensive Disclosers"]["rd_intensity"]
-gm_vs, gm_gov, gm_def = econ_a["Vocal Substantives"]["gross_margin"], econ_a["Governance-Led Disclosers"]["gross_margin"], econ_a["Defensive Disclosers"]["gross_margin"]
-beta_vs, beta_gov, beta_def = econ_a["Vocal Substantives"]["beta"], econ_a["Governance-Led Disclosers"]["beta"], econ_a["Defensive Disclosers"]["beta"]
+def _sig2(p):
+    return "significant" if p < 0.05 else "not statistically significant"
 ```
 
-Raw medians place Vocal Substantives ahead on technology-intensive metrics: R&D-to-sales, gross margin, and market beta. The sector-year-adjusted regressions in @fig-economic-coefficients confirm this differentiation across archetypes.
+Historical disclosure intensity, the same variable that predicts post-call beta (`{python} f"{beta_hd:+.3f}"`, $p$ `{python} _pfmt(beta_hd_p)`), is the regressor that recurs across the broader financial profile (@fig-economic-coefficients): a heavier historical AI narrative is associated with a higher log market cap (`{python} f"{mc_hd:+.3f}"`, $p$ `{python} _pfmt(mc_hd_p)`), a higher price-to-sales ratio (`{python} f"{ps_hd:+.3f}"`, $p$ `{python} _pfmt(ps_hd_p)`), and faster subsequent revenue growth (`{python} f"{rg_hd:+.3f}"`, $p$ `{python} _pfmt(rg_hd_p)`). Its coefficient on R&D-to-sales is negative but `{python} _sig2(rd_hd_p)` (`{python} f"{rd_hd:+.3f}"`, $p$ `{python} _pfmt(rd_hd_p)`).
 
-**Vocal Substantives** is the archetype that stands out most consistently, displaying significant premiums across market capitalization (`{python} f"{vs_mktcap_g:+.2f}"` log points, $p$ `{python} _pfmt(vs_mktcap_p)`), R&D intensity, gross margin, beta, and price-to-sales.
-
-**Governance-Led Disclosers** differ from No AI primarily in scale and earnings quality rather than technology intensity: they exhibit market-cap and ROIC-minus-WACC premiums but negligible price-to-sales effects. This aligns with an archetype whose governance discourse tracks firm size and regulatory oversight rather than commercial AI deployment.
-
-**Defensive Disclosers** differ least from No AI, with an R&D effect being the only statistically distinguishable metric.
-
-After sector-year adjustment, the archetype most grounded in disclosed AI activity (Vocal Substantives, @tbl-4-1-archetype-profile) is also the one that separates most consistently on fundamentals. Talking about AI or emphasizing governance is not by itself tied to distinctive economics.
-
-This finding validates signaling theory [@spence1973, pp. 363--64]: informative market signals emerge from costly, verifiable disclosure content rather than narrative volume or rhetorical framing.
+Historical substantive activity is `{python} _sig2(gm_hs_p)` on gross margin (`{python} f"{gm_hs:+.3f}"`, $p$ `{python} _pfmt(gm_hs_p)`) and `{python} _sig2(rw_hs_p)` on ROIC minus WACC (`{python} f"{rw_hs:+.3f}"`, $p$ `{python} _pfmt(rw_hs_p)`), and neither disclosure nor substance separates firms on ROIC minus WACC at conventional levels. The asymmetry documented for beta mostly generalizes: what recurs across the broader financial profile is how much a firm has historically talked about AI, not how grounded that talk is -- though the effect is not universal, and disappears entirely for the one measure of capital efficiency net of its cost.
 
 ```{python}
 #| label: fig-economic-coefficients
-#| fig-cap: "[Sector-year-adjusted effect of disclosure archetype on firm fundamentals, relative to No AI.]{custom-style=\"CaptionText\"}"
+#| fig-cap: "[Effect of historical disclosure intensity and historical substantive activity on beta and six firm fundamentals, same specification as the baseline beta model.]{custom-style=\"CaptionText\"}"
 #| echo: false
 #| fig-width: 8.5
 #| fig-height: 4.8
@@ -3432,26 +3421,24 @@ OUTCOMES = [
     ("ps_ratio", "Price-to-sales"), ("next_revenue_yoy", "Revenue growth (t+1)"),
     ("roic_minus_wacc", "ROIC − WACC"),
 ]
-ARCHETYPES = [("Vocal Substantives", "Vocal Substantives", "#059669"),
-              ("Governance-Led Disclosers", "Governance-Led Disclosers", "#7C3AED"),
-              ("Defensive Disclosers", "Defensive Disclosers", "#DC2626")]
+SERIES = [("hist_disclosure", "Historical disclosure intensity", "#059669"),
+          ("hist_substance", "Historical substantive activity", "#7C3AED")]
 
 fig, ax = plt.subplots(figsize=(8.5, 4.8), dpi=300)
 y0 = np.arange(len(OUTCOMES))
-offsets = {"Vocal Substantives": 0.22, "Governance-Led Disclosers": 0.0, "Defensive Disclosers": -0.22}
-for seg, label, color in ARCHETYPES:
+offsets = {"hist_disclosure": 0.12, "hist_substance": -0.12}
+for var, label, color in SERIES:
     ys, xs, xerr = [], [], []
     for i, (key, _) in enumerate(OUTCOMES):
-        row = d[key][seg]
-        sd = d[key]["sd"]
-        ys.append(y0[i] + offsets[seg])
-        xs.append(row["gamma"] / sd)
-        xerr.append(1.96 * row["se"] / sd)
+        row = _gen_all[(_gen_all.target == key) & (_gen_all.variable == var)].iloc[0]
+        ys.append(y0[i] + offsets[var])
+        xs.append(row["beta_std"])
+        xerr.append((row["ci95_high"] - row["ci95_low"]) / 2)
     ax.errorbar(xs, ys, xerr=xerr, fmt="o", color=color, label=label, capsize=3, ms=6, lw=1.6)
 ax.axvline(0, color="#334155", lw=1)
 ax.set_yticks(y0); ax.set_yticklabels([lbl for _, lbl in OUTCOMES], fontsize=9.5)
 ax.invert_yaxis()
-ax.set_xlabel("Sector-year-adjusted effect vs. No AI (standard deviations)", fontsize=9.5, fontweight="bold")
+ax.set_xlabel("Standardized effect (same specification as the baseline beta model)", fontsize=9.5, fontweight="bold")
 ax.legend(fontsize=8.5, loc="lower right", framealpha=0.9)
 ax.grid(True, axis="x", linestyle="--", alpha=0.3)
 plt.tight_layout()
@@ -3459,7 +3446,7 @@ plt.show()
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* 95% CI, firm-clustered SE.
+*Notes:* Standardized OLS coefficients, industry-by-year fixed effects, firm-clustered SE. Beta uses the [+21,+126] post-call window (@tbl-call-beta-baseline); the six fundamentals use the value from the first 10-K filed strictly after the call, conditioned on the value from the last 10-K filed strictly before it.
 :::
 
 ### A same-sector pair: posture, activity, and economics together
@@ -3493,7 +3480,7 @@ A comparison of two firms within the same two-digit SIC sector (73, business ser
 1. **HistDisclosure is not concentrated in a single year, but SurpriseDisclosure never reaches significance on its own:** Leave-one-year-out regressions keep $\text{HistDisclosure}$ `{python} _hd_sig_text` ($p \le$ `{python} f"{_max_p_hd:.3f}" + _hd_detail_text`). $\text{SurpriseDisclosure}$, by contrast, `{python} "reaches p < 0.05 in at least one excluded-year specification" if _any_sd_sig else "never reaches conventional significance in any single-year exclusion"`, consistent with its null in the baseline. The association between call disclosure and post-call beta runs through a firm's persistent historical posture, not through the surprise content of any one call.
 2. **Pre-call beta placebo failure:** Regressing pre-call beta ($\beta^{\text{pre}}_{[-252, -21]}$) on contemporaneous call disclosure yields $\beta =$ `{python} f"{pb_disc['beta_std']:.3f}"` ($p$ `{python} _pb_disc_p`), while substance is null ($p$ `{python} _pb_sub_p`). Firms that talk heavily about AI were already high-beta before the call, which is the cross-sectional reading of the robustness table.
 
-These market results complete our empirical investigations: while equity markets price narrative volume as a general indicator of systematic risk, they do not systematically distinguish grounded operational substance from rhetorical noise. The broader fundamentals analysis above reinforces this asymmetry at the archetype level: Vocal Substantives, the archetype most grounded in disclosed AI activity, is also the one that separates most consistently on market capitalization, R&D intensity, gross margin, and price-to-sales — an economically distinct group, not merely a loud one, even though the call-level evidence shows the market prices its narrative volume rather than its grounding. This market friction makes internal due diligence and objective measurement essential. The next chapter translates our empirical findings into an actionable decision framework for corporate executives, boards of directors, and investment professionals.
+These market results complete our empirical investigations: while equity markets price narrative volume as a general indicator of systematic risk, they do not systematically distinguish grounded operational substance from rhetorical noise. The broader fundamentals analysis above shows this asymmetry is not specific to beta: historical disclosure intensity, not historical substance, is also the variable that recurs across market capitalization, price-to-sales, and revenue growth. It is not a universal law -- capital efficiency net of its cost shows no association with either -- but where a relationship exists, it consistently runs through how much a firm has talked about AI, not through how grounded that talk is. This market friction makes internal due diligence and objective measurement essential. The next chapter translates our empirical findings into an actionable decision framework for corporate executives, boards of directors, and investment professionals.
 
 # From Measurement to Managerial Application
 
