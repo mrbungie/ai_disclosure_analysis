@@ -257,19 +257,9 @@ The next chapter details the empirical data and multi-stage measurement methodol
 
 # Methodology
 
-To address our research questions, we construct an empirical pipeline to extract, verify, and evaluate corporate AI disclosures without relying on coarse keyword counts. This chapter details our data sources, the multi-stage extraction funnel, the construction of six analytical constructs, and validation benchmarks.
+To address our research questions, we construct an empirical pipeline to extract, verify, and evaluate corporate AI disclosures without relying on coarse keyword counts. This chapter details our study universe, the multi-source data acquisition protocol, the multi-stage extraction funnel, the construction of six analytical constructs, and validation benchmarks.
 
-## Data sources and corpus
-
-The empirical analysis combines five primary data sources across textual, financial, and technological domains for the S&P 500 universe from 2021 through early 2026:
-
-1. **Statutory SEC filings:** Annual reports (Form 10-K and 20-F), quarterly reports (Form 10-Q), proxy statements (DEF 14A), and current reports (Form 8-K) retrieved directly from EDGAR.
-2. **Earnings-call transcripts:** Oral conference-call transcripts covering quarterly management presentations and executive Q&A sessions.
-3. **Market prices and returns:** Daily price, volume, and factor return series retrieved via Yahoo Finance (`yfinance`) to estimate pre- and post-call market betas, idiosyncratic volatility, and market capitalization.
-4. **Standardized financial fundamentals:** Balance-sheet and income-statement accounting items extracted from SEC XBRL company facts (capex, R&D, operating margin, revenue growth, and leverage).
-5. **AI patent records:** Firm-matched patent grants and applications from Google Patents classified under the OECD AI taxonomy, providing an independent external benchmark of technological capacity.
-
-All document counts and summary metrics are computed directly from the underlying database.
+## Firm sample and universe definition
 
 ```{python}
 #| echo: false
@@ -302,7 +292,107 @@ cov_calls_2026 = int(_cov.loc["Earnings call transcript", "firms"]) if "Earnings
 cov_months_2026 = pd.to_datetime(cov_last_date).month
 ```
 
-**Sample and panel construction.** The sample begins with S&P 500 constituents as of 2021-01-01 (`{python} uni_frame_total` tickers). To avoid survivorship bias, `{python} uni_frame_delisted` firms that later delisted or were acquired remain in the panel until exit. Overall, `{python} uni_n_firms` firms have processed narrative records, `{python} uni_n_activity_firms` report operational AI activities, and `{python} bal_n` firms form a balanced panel observed across all six years (2021–2026).
+The empirical investigation focuses on the constituents of the S&P 500 index fixed as of January 1, 2021 (`{python} uni_frame_total` firms). Fixing the constituent cohort at the start of the observation period provides an ex-ante, prospective baseline of large-cap U.S. enterprises prior to the commercial diffusion of generative AI. 
+
+Crucially, this ex-ante specification avoids look-ahead selection bias: defining the universe ex-post using later index rosters (e.g., 2024 or 2025) would systematically oversample firms that entered the index precisely because of market capitalization gains fueled by AI market enthusiasm. Furthermore, to guard against survivorship bias, the `{python} uni_frame_delisted` firms that were subsequently acquired, merged, or delisted after 2021-01-01 remain in the panel until their exit date, rather than being expunged retrospectively. In total, `{python} uni_n_firms` firms have processed narrative records, `{python} uni_n_activity_firms` report concrete operational AI activities, and `{python} bal_n` firms form a balanced panel observed continuously across all six years (2021–2026).
+
+```{python}
+#| label: fig-sic-distribution
+#| fig-cap: "Industrial distribution of the S&P 500 study universe (fixed at 2021-01-01, $N=499$) across broad Standard Industrial Classification (SIC) divisions (Panel A) and the top two-digit SIC major groups (Panel B)."
+#| echo: false
+#| fig-width: 9.5
+#| fig-height: 4.2
+import matplotlib.pyplot as plt
+
+fu = con.execute("SELECT ticker, company_name, sic, industry_group, active_status FROM firm_universe WHERE country_code = 'us'").df()
+fu["sic2"] = fu["sic"].astype(str).str.zfill(4).str[:2]
+fu["sic_int"] = pd.to_numeric(fu["sic"], errors="coerce")
+
+def sic_div(s):
+    if pd.isna(s): return "Other / Diversified"
+    s = int(s)
+    if s < 2000: return "Mining & Construction"
+    elif s < 4000: return "Manufacturing"
+    elif s < 5000: return "Transport & Utilities"
+    elif s < 6000: return "Wholesale & Retail"
+    elif s < 6800: return "Finance, Ins. & Real Estate"
+    elif s < 9000: return "Services"
+    else: return "Other / Diversified"
+
+fu["division"] = fu["sic_int"].apply(sic_div)
+div_counts = fu["division"].value_counts().sort_values(ascending=True)
+
+SIC2_LABELS = {
+    "73": "Business Services (73)",
+    "38": "Measuring & Optical Inst. (38)",
+    "28": "Chemicals & Allied Prod. (28)",
+    "49": "Electric, Gas & Sanitary (49)",
+    "35": "Industrial & Comp. Mach. (35)",
+    "67": "Holding & Invest. / REITs (67)",
+    "63": "Insurance Carriers (63)",
+    "36": "Electronic Equipment (36)",
+    "60": "Depository Institutions (60)",
+    "20": "Food & Kindred Products (20)",
+    "37": "Transportation Equipment (37)",
+    "62": "Security & Commodity Brokers (62)",
+    "13": "Oil & Gas Extraction (13)",
+    "48": "Communications (48)",
+}
+
+top_s2 = fu["sic2"].value_counts().head(12).sort_values(ascending=True)
+labels_s2 = [SIC2_LABELS.get(s, f"SIC {s}") for s in top_s2.index]
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9.5, 4.2), dpi=300)
+
+# Panel A: SIC Divisions
+y1 = range(len(div_counts))
+bars1 = ax1.barh(y1, div_counts.values, color="#1E40AF", alpha=0.85, height=0.62)
+ax1.set_yticks(y1)
+ax1.set_yticklabels(div_counts.index, fontsize=8.2)
+ax1.set_xlabel("Number of firms (N)", fontsize=8.5, fontweight="bold")
+ax1.set_title("Panel A: Broad SIC Divisions (N=499)", fontsize=9.2, fontweight="bold", pad=8)
+ax1.spines[["top", "right"]].set_visible(False)
+ax1.grid(axis="x", linestyle="--", alpha=0.3)
+for bar in bars1:
+    w = bar.get_width()
+    pct = w / len(fu) * 100
+    ax1.text(w + 3, bar.get_y() + bar.get_height()/2, f"{w} ({pct:.1f}%)",
+             va="center", fontsize=7.5, color="#1E293B")
+ax1.set_xlim(0, max(div_counts.values) * 1.18)
+
+# Panel B: Major 2-digit SIC Groups
+y2 = range(len(top_s2))
+bars2 = ax2.barh(y2, top_s2.values, color="#0D9488", alpha=0.85, height=0.62)
+ax2.set_yticks(y2)
+ax2.set_yticklabels(labels_s2, fontsize=8.0)
+ax2.set_xlabel("Number of firms (N)", fontsize=8.5, fontweight="bold")
+ax2.set_title("Panel B: Top 2-Digit SIC Industry Groups", fontsize=9.2, fontweight="bold", pad=8)
+ax2.spines[["top", "right"]].set_visible(False)
+ax2.grid(axis="x", linestyle="--", alpha=0.3)
+for bar in bars2:
+    w = bar.get_width()
+    pct = w / len(fu) * 100
+    ax2.text(w + 1, bar.get_y() + bar.get_height()/2, f"{w} ({pct:.1f}%)",
+             va="center", fontsize=7.5, color="#1E293B")
+ax2.set_xlim(0, max(top_s2.values) * 1.18)
+
+plt.tight_layout()
+plt.show()
+```
+
+As shown in @fig-sic-distribution, the sample spans diverse industries, led by manufacturing (40.9%), financial intermediaries and real estate (19.0%), and services (14.0%). At the two-digit SIC level, business and software services (SIC 73, $N=53$), precision instruments (SIC 38, $N=42$), and chemicals/pharmaceuticals (SIC 28, $N=38$) form the largest concentrations. This cross-sector heterogeneity is essential for evaluating whether corporate AI disclosures represent genuine operational adoption or promotional narrative across differing business models.
+
+## Data sources and corpus
+
+The empirical analysis combines five primary data sources across textual, financial, and technological domains for the S&P 500 universe from 2021 through early 2026:
+
+1. **Statutory SEC filings:** Annual reports (Form 10-K and 20-F), quarterly reports (Form 10-Q), proxy statements (DEF 14A), and current reports (Form 8-K) retrieved directly from EDGAR.
+2. **Earnings-call transcripts:** Oral conference-call transcripts covering quarterly management presentations and executive Q&A sessions.
+3. **Market prices and returns:** Daily price, volume, and factor return series retrieved via Yahoo Finance (`yfinance`) to estimate pre- and post-call market betas, idiosyncratic volatility, and market capitalization.
+4. **Standardized financial fundamentals:** Balance-sheet and income-statement accounting items extracted from SEC XBRL company facts (capex, R&D, operating margin, revenue growth, and leverage).
+5. **AI patent records:** Firm-matched patent grants and applications from Google Patents classified under the OECD AI taxonomy, providing an independent external benchmark of technological capacity.
+
+All document counts and summary metrics are computed directly from the underlying database.
 
 **Time coverage and seasonal adjustment.** Filings extend through `{python} cov_last_date`. For 2026 (year-to-date), `{python} cov_10k_2026` firms have filed 10-Ks (`{python} cov_10k_2025` in full-year 2025), `{python} cov_10q_2026` filed 10-Qs, and `{python} cov_calls_2026` held earnings calls. Cross-sectional analyses use observed year-to-date data, while trend comparisons scale 2026 using the matching 2025 calendar window (`{python} hd_cutoff_str`).
 
