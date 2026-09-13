@@ -3629,7 +3629,95 @@ Second, AI coding assistants (Anthropic Claude, via Claude Code) served as tools
 
 ### Data inventory by artifact and year {.unnumbered}
 
-The year-by-year inventory of every source artifact (10-K, 10-Q, DEF 14A, 8-K, and call-transcript counts; XBRL and market firm-years; patent publications) and every derived artifact (documents and frames with at least one AI mention, disclosed AI activities, firm-years with a Decoupling score, earnings-call events with a post-call beta) is kept in the project's supplementary analytics files rather than reproduced here. Two patterns from that inventory matter for reading the results that follow: coverage of every source artifact grows every year through 2025 as more firms are added and disclosure spreads, and 2026 is year-to-date throughout this thesis, not a complete year.
+@tbl-a0-source-inventory counts, for every year of the panel, the source artifacts collected for the analysis universe (S&P 500 as of 2021-01-01) and the number of firms with at least one such artifact; @tbl-a0-derived-inventory does the same for the artifacts the pipeline derives from them. Years are filing years (calls: call date); 2026 is year to date.
+
+```{python}
+#| label: tbl-a0-source-inventory
+#| tbl-cap: "Source artifacts by year: number of items and, in parentheses, number of firms with at least one item (analysis universe, S&P 500 at 2021-01-01)."
+#| echo: false
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+def _pp(name):
+    p = Path(f"../data/processed/{name}")
+    return p if p.exists() else Path(f"data/processed/{name}")
+
+INV_YEARS = [2021, 2022, 2023, 2024, 2025, 2026]
+_docs = pd.read_parquet(_p("document_panel.parquet"))
+_docs["year"] = pd.to_datetime(_docs["fecha"]).dt.year
+_docs = _docs[_docs["year"].isin(INV_YEARS)]
+
+def _cell(n_items, n_firms):
+    return f"{int(n_items):,} ({int(n_firms)})"
+
+def _by_year(df, item_col=None, firm_col="ticker", count="rows"):
+    """{year: (items, firms)} where items are rows, distinct item_col values, or a sum."""
+    out = {}
+    for y in INV_YEARS:
+        s = df[df["year"] == y]
+        if s.empty:
+            out[y] = (0, 0); continue
+        if count == "rows":
+            items = len(s)
+        elif count == "sum":
+            items = s[item_col].sum()
+        else:
+            items = s[item_col].nunique()
+        firms = s.loc[s[item_col] > 0, firm_col].nunique() if count == "sum" else s[firm_col].nunique()
+        out[y] = (items, firms)
+    return out
+
+src_rows = []
+for form, label in [("10-K", "Form 10-K annual reports"), ("10-Q", "Form 10-Q quarterly reports"),
+                    ("DEF 14A", "Proxy statements (DEF 14A)"), ("8-K", "Current reports (8-K)"),
+                    ("Earnings call", "Earnings-call transcripts")]:
+    d = _by_year(_docs[_docs["form"] == form], item_col="accession_number", count="nunique")
+    src_rows.append([label] + [_cell(*d[y]) for y in INV_YEARS])
+_fin = pd.read_parquet(_p("firm_year_financials_ratios.parquet"))[["ticker", "year"]]
+d = _by_year(_fin[_fin["year"].isin(INV_YEARS)]); src_rows.append(["XBRL annual financial statements (firm-years)"] + [_cell(*d[y]) for y in INV_YEARS])
+_mkt = pd.read_parquet(_p("firm_year_market_factors.parquet"))[["ticker", "year"]]
+d = _by_year(_mkt[_mkt["year"].isin(INV_YEARS)]); src_rows.append(["Market data: prices, beta, valuation (firm-years)"] + [_cell(*d[y]) for y in INV_YEARS])
+_pat_path = _pp("sp500_firm_year_ai_patents_oecd2025.parquet")
+if _pat_path.exists():
+    _pat = pd.read_parquet(_pat_path)
+    _pat = _pat[_pat["ticker"].isin(set(_docs["ticker"])) & _pat["year"].isin(INV_YEARS)]
+    d = _by_year(_pat, item_col="total_patents", count="sum"); src_rows.append(["Patent publications, all (OECD/EPO PATSTAT, firms in universe)"] + [_cell(*d[y]) for y in INV_YEARS])
+    d = _by_year(_pat, item_col="ai_patents_oecd", count="sum"); src_rows.append(["AI patent publications (OECD 2025 AI taxonomy)"] + [_cell(*d[y]) for y in INV_YEARS])
+Markdown(tabulate(src_rows, headers=["Artifact"] + [str(y) for y in INV_YEARS]))
+```
+
+*Notes:* Documents are counted once per accession number (calls once per transcript); firms with two listed share classes (for example GOOG and GOOGL) count as two firms but file once, so a firm count can exceed the document count. Financial and market firm-years follow the fiscal-period alignment described in Appendix D. Patent counts are publications by publication year assigned to the firm's patent-assignee aliases; publication lags mean 2025 and 2026 are incomplete. Patents are not an input to any construct; they serve as the external benchmark in Appendix B.
+
+```{python}
+#| label: tbl-a0-derived-inventory
+#| tbl-cap: "Derived artifacts by year: number of items and, in parentheses, number of firms with at least one item (analysis universe, S&P 500 at 2021-01-01)."
+#| echo: false
+der_rows = []
+for form, label in [("10-K", "10-K documents with ≥1 AI frame"), ("10-Q", "10-Q documents with ≥1 AI frame"),
+                    ("DEF 14A", "DEF 14A documents with ≥1 AI frame"), ("8-K", "8-K documents with ≥1 AI frame"),
+                    ("Earnings call", "Call transcripts with ≥1 AI frame")]:
+    s = _docs[(_docs["form"] == form) & (_docs["n_frames"] > 0)]
+    d = _by_year(s, item_col="accession_number", count="nunique"); der_rows.append([label] + [_cell(*d[y]) for y in INV_YEARS])
+for ch, label in [("filing", "AI semantic frames in statutory filings"), ("call", "AI semantic frames in earnings calls")]:
+    d = _by_year(_docs[_docs["channel"] == ch], item_col="n_frames", count="sum"); der_rows.append([label] + [_cell(*d[y]) for y in INV_YEARS])
+_act = pd.read_parquet(_p("firm_activities.parquet"), columns=["ticker", "accession_number", "text_hash", "activity_id", "channel"]).drop_duplicates(["ticker", "text_hash", "activity_id"])
+_act = _act.merge(_docs[["accession_number", "year"]].drop_duplicates("accession_number"), on="accession_number", how="inner")
+for ch, label in [("filing", "Disclosed AI activities in statutory filings"), ("call", "Disclosed AI activities in earnings calls")]:
+    d = _by_year(_act[_act["channel"] == ch]); der_rows.append([label] + [_cell(*d[y]) for y in INV_YEARS])
+_wsc = pd.read_parquet(_p("firm_year_washing_score.parquet"))[["ticker", "year"]]
+d = _by_year(_wsc[_wsc["year"].isin(INV_YEARS)]); der_rows.append(["Firm-years with Decoupling ($W$) (disclosing firms)"] + [_cell(*d[y]) for y in INV_YEARS])
+_cb = pd.read_parquet(_p("call_beta_main_panel_10k10q_asof.parquet"), columns=["ticker", "fecha", "beta_post_126"])
+_cb["year"] = pd.to_datetime(_cb["fecha"]).dt.year
+d = _by_year(_cb[_cb["year"].isin(INV_YEARS) & _cb["beta_post_126"].notna()]); der_rows.append(["Earnings-call events with post-call beta"] + [_cell(*d[y]) for y in INV_YEARS])
+Markdown(tabulate(der_rows, headers=["Artifact"] + [str(y) for y in INV_YEARS]))
+```
+
+*Notes:* Frames are unique semantic frames per document (a frame shared by identical paragraphs in several documents counts once per document). Activities are counted once per firm × text × activity index and dated by the document that contains them. Post-call beta requires 126 trading days after the call, so the 2026 count stops at calls held before mid-March 2026.
 
 ### Computational infrastructure and analytical stack {.unnumbered}
 
@@ -3645,7 +3733,42 @@ Testing against exactly the cases already known to break labeling, rather than a
 
 For each candidate, the comparison measures per-call latency, output-token volume, and the rate of an internal cross-field consistency check (a frame that asserts a productivity/cost/revenue/customer outcome must also carry a valence judgment, and vice versa; a mismatch is flagged rather than silently dropped).
 
-A seventh candidate, `anthropic/claude-haiku-4.5`, was excluded before any of that testing: at $1.00/$5.00 per 1M input/output tokens it is 3-10x the per-token price of every other candidate, so no empirical run could have changed the decision. Of the six tested, `openai/gpt-5.6-luna` (served via Amazon Bedrock, no explicit reasoning effort) was the only candidate with zero inconsistency-check failures and no pathological output fragmentation, at competitive latency (~3s/call) and cost; the full comparison table, including each candidate's failure modes and per-token pricing, is kept in the project's supplementary analytics files.
+A seventh candidate, `anthropic/claude-haiku-4.5`, was excluded before any of that testing: at $1.00/$5.00 per 1M input/output tokens it is 3-10x the per-token price of every other candidate, so no empirical run could have changed the decision. @tbl-a0-judge-selection reports the comparison and, for each candidate, OpenRouter's listed per-token price for the provider actually tested and the resulting cost to classify the full corpus of AI-relevant paragraphs at that price.
+
+```{python}
+#| label: tbl-a0-judge-selection
+#| tbl-cap: "Judge model / provider / reasoning-effort comparison, on a set of paragraphs chosen to exercise known labeling failure modes (plus one candidate excluded a priori on price), and full-corpus cost at OpenRouter list price."
+#| echo: false
+from tabulate import tabulate
+from IPython.display import Markdown
+
+CORPUS_PARAGRAPHS = 41_836  # unique AI-relevant paragraphs, pass-1 population
+
+candidates = [
+    # (model, provider, reasoning, latency, inconsistency, outcome, in_price, out_price, avg_in_tok, avg_out_tok)
+    ("google/gemini-3.8-flash", "(default)", "(default)", "~22s", "--", "runaway output (up to 7,473 tok/call, unbounded reasoning)", None, None, None, None),
+    ("qwen/qwen3.8-flash", "makora", "none", "~2s", "25-33%", "1 transient failure (did not reproduce isolated)", 0.15, 0.47, 1599, 629),
+    ("openai/gpt-5.4-nano", "openai/flex", "(default)", "~3s", "9%", "activity fragmentation (fixed post-hoc)", 0.10, 0.625, 1197, 190),
+    ("minimax/minimax-m3", "coreweave/fp4", "(default)", "30-183s", "--", "4/6 calls failed outright", 0.23, 0.96, None, None),
+    ("deepseek/deepseek-v4.1-flash", "siliconflow/fp8", "low", "11-67s", "--", "poor recall vs. other candidates on the same paragraphs", 0.30, 1.20, 1571, 931),
+    ("openai/gpt-5.6-luna", "amazon-bedrock/us-east-1", "none", "~3s", "0%", "no failures, no pathological fragmentation", 0.22, 1.32, 1197, 157),
+    ("z-ai/glm-5.3-flash", "baseten/fp8", "low", "8-250s", "--", "poor recall, worst latency of the comparison", 0.15, 0.50, 1417, 2696),
+    ("anthropic/claude-haiku-4.5", "(not tested)", "n/a", "not tested", "not tested", "excluded a priori: $1.00/$5.00 per 1M, 3-10x every tested candidate's per-token price", None, None, None, None),
+]
+
+rows = []
+for model, provider, reasoning, latency, inconsist, note, p_in, p_out, tok_in, tok_out in candidates:
+    if p_in is not None and tok_in is not None:
+        cost_per_call = (tok_in * p_in + tok_out * p_out) / 1e6
+        cost_str = f"${cost_per_call * CORPUS_PARAGRAPHS:,.0f}"
+    else:
+        cost_str = "n/a"
+    rows.append([f"`{model}`", provider, reasoning, latency, inconsist, note, cost_str])
+
+Markdown(tabulate(rows, headers=["Model", "Provider", "Reasoning", "Latency/call", "Inconsistency rate", "Recall / stability note", f"Est. cost, {CORPUS_PARAGRAPHS:,} paragraphs"]))
+```
+
+*Notes:* This comparison is indicative, not a statistically powered benchmark -- the paragraph set was chosen for difficulty, not to be representative of the corpus -- and is sufficient to eliminate candidates with outright failures, multi-minute latency, or materially worse recall, not to certify the winner's precision. Prices are OpenRouter's listed per-token rate for the specific provider tested (input/output per 1M tokens), not a rate card average across providers. Estimated cost applies the candidate's own measured average token counts where available; `deepseek/deepseek-v4.1-flash`'s poor recall did not come with unstable token counts, so its cost is estimated like any other candidate's despite being eliminated on quality grounds. `z-ai/glm-5.3-flash`'s estimate is included for the same reason but is noisy by construction: one call in the set alone burned 7,899 output tokens against 68-524 for the rest, so its average (and the cost built on it) is pulled well above what a typical call would cost. `google/gemini-3.8-flash` and `minimax/minimax-m3` are marked n/a outright because their token counts are not just noisy but not obtainable at all for a meaningful average -- Gemini's reasoning ran away on some paragraphs without a stable ceiling, and most of Minimax's calls failed before returning any token count. The schema itself was hardened mid-comparison in response to what these same tests exposed: the valence field moved from optional (any candidate could satisfy it by omission) to mandatory with an explicit "not applicable" option, and a deterministic post-hoc step merges near-duplicate frames/activities that split one proposition across several entries. Both fixes are in place for every candidate from `openai/gpt-5.4-nano` onward; the `google/gemini-3.8-flash` and first `qwen/qwen3.8-flash` measurements predate them and are not directly comparable to the later inconsistency rates on that dimension, which is why Gemini's run is reported on latency alone and Qwen's reported range spans both the pre- and post-fix measurements.
 
 With `openai/gpt-5.6-luna` selected, the full corpus was processed in two passes run in tandem: Pass 1 (semantic frame extraction) over the 42,359 unique AI-relevant paragraphs, and Pass 2 (disclosed AI activity extraction) over the 25,960 paragraphs whose Pass 1 frames trigger it, consuming Pass 1's output incrementally rather than waiting for it to finish. Wall-clock time for both passes running concurrently was approximately 2 hours 20 minutes.
 
@@ -3664,7 +3787,128 @@ The data processing pipeline operates across five sequential stages:
 
 ### Complete granular inference funnel {.unnumbered}
 
-Table 23 in the Methodology chapter reports the pipeline's operational yields at the pooled level (corpus, prefilter, semantic frames, disclosed AI activities). The full form-by-form breakdown of that same funnel (10-K, 10-Q, DEF 14A, 8-K, calls, 20-F individually) is kept in the project's supplementary analytics files rather than reproduced here.
+The full operational yields, instance counts, and acceptance ratios across document forms and analytical stages are reported in @tbl-a1-funnel-full, computed at render time from the document database and the firm-activity inventory. The full prefilter specification, semantic anchors, extraction prompts, and throughput diagnostics are documented in the project's internal pipeline documentation.
+
+```{python}
+#| label: tbl-a1-funnel-full
+#| tbl-cap: "Complete granular inference funnel by document form."
+#| echo: false
+import os
+from pathlib import Path
+import duckdb
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+db_path = Path("../duckdb/thesis.duckdb")
+if not db_path.exists():
+    db_path = Path("duckdb/thesis.duckdb")
+repo_root = db_path.resolve().parent.parent
+act_path = Path("../data/processed/clusters/firm_activities.parquet")
+if not act_path.exists():
+    act_path = Path("data/processed/clusters/firm_activities.parquet")
+_acts = pd.read_parquet(act_path).drop_duplicates(subset=["ticker", "text_hash", "activity_id"])
+
+FORMS = ["10-K", "10-Q", "DEF 14A", "8-K", "Earnings call", "20-F"]
+FORM_LABELS = {"10-K": "10-K", "10-Q": "10-Q", "DEF 14A": "DEF 14A", "8-K": "8-K", "Earnings call": "Calls", "20-F": "20-F"}
+
+con = duckdb.connect(str(db_path), read_only=True)
+con.execute("SET enable_progress_bar = false")
+con.register("acts", _acts[["ticker", "accession_number", "text_hash", "activity_id"]])
+_cwd = os.getcwd()
+os.chdir(repo_root)
+try:
+    con.execute(f"""
+        CREATE TEMP TABLE _pp AS
+        SELECT form, accession_number, paragraph_index, text_hash, is_scorable
+        FROM paragraphs WHERE country_code = 'us' AND {PANEL_DOCS}
+    """)
+    con.execute("""
+        CREATE TEMP TABLE _pos AS
+        SELECT text_hash FROM (
+            SELECT text_hash, is_ai_prefiltered
+            FROM read_parquet('data/interim/prefilter_predictions_unique/prefilter_predictions__run=*.parquet', union_by_name=true)
+            WHERE country_code = 'us'
+            QUALIFY row_number() OVER (PARTITION BY text_hash ORDER BY model_version DESC) = 1
+        ) WHERE is_ai_prefiltered
+    """)
+    con.execute(f"""
+        CREATE TEMP TABLE _fr AS
+        SELECT form, accession_number, paragraph_index, text_hash, frame_id, subject
+        FROM gold_ai_frames WHERE country_code = 'us' AND has_frame AND {PANEL_DOCS}
+    """)
+    con.execute("""
+        CREATE TEMP TABLE _ac AS
+        SELECT DISTINCT a.ticker, a.accession_number, a.text_hash, a.activity_id, d.form
+        FROM acts a JOIN (SELECT DISTINCT accession_number, form FROM _pp) d USING (accession_number)
+    """)
+    # an activity is counted once per (ticker, text, index) whatever the form it appears in
+    con.execute("CREATE TEMP TABLE _acu AS SELECT DISTINCT ticker, text_hash, activity_id, form FROM _ac")
+
+    def by_form(sql):
+        """{form: value} plus 'Total' computed over all forms (no double counting)."""
+        out = {}
+        for f in FORMS:
+            out[f] = con.execute(sql.format(where=f"WHERE form = '{f}'")).fetchone()[0] or 0
+        out["Total"] = con.execute(sql.format(where="")).fetchone()[0] or 0
+        return out
+
+    docs      = by_form("SELECT count(DISTINCT accession_number) FROM _pp {where}")
+    paras     = by_form("SELECT count(*) FROM _pp {where}")
+    scorable  = by_form("SELECT count(*) FROM (SELECT * FROM _pp {where}) WHERE is_scorable")
+    uniq      = by_form("SELECT count(DISTINCT text_hash) FROM (SELECT * FROM _pp {where}) WHERE is_scorable")
+    pos_uniq  = by_form("SELECT count(DISTINCT text_hash) FROM (SELECT * FROM _pp {where}) WHERE is_scorable AND text_hash IN (SELECT text_hash FROM _pos)")
+    pos_inst  = by_form("SELECT count(*) FROM (SELECT * FROM _pp {where}) WHERE is_scorable AND text_hash IN (SELECT text_hash FROM _pos)")
+    fr_texts  = by_form("SELECT count(DISTINCT text_hash) FROM _fr {where}")
+    fr_uniq   = by_form("SELECT count(*) FROM (SELECT DISTINCT text_hash, frame_id FROM (SELECT * FROM _fr {where}))")
+    fr_inst   = by_form("SELECT count(*) FROM (SELECT DISTINCT accession_number, paragraph_index FROM (SELECT * FROM _fr {where}))")
+    fr_docs   = by_form("SELECT count(DISTINCT accession_number) FROM _fr {where}")
+    firm_txt  = by_form("SELECT count(DISTINCT text_hash) FROM (SELECT * FROM _fr {where}) WHERE subject = 'firm'")
+    ac_uniq   = by_form("SELECT count(*) FROM (SELECT DISTINCT ticker, text_hash, activity_id FROM (SELECT * FROM _acu {where}))")
+    ac_uniq["Total"] = len(_acts)
+    ac_inst   = by_form("SELECT count(*) FROM (SELECT DISTINCT accession_number, text_hash FROM (SELECT * FROM _ac {where}))")
+    ac_docs   = by_form("SELECT count(DISTINCT accession_number) FROM _ac {where}")
+    ac_firms  = by_form("SELECT count(DISTINCT ticker) FROM _ac {where}")
+finally:
+    os.chdir(_cwd)
+con.close()
+
+FORMS = [f for f in FORMS if docs[f] > 0]  # drop forms absent from the analysis universe
+COLS = FORMS + ["Total"]
+def _n(d):   return [f"{int(d[c]):,}" for c in COLS]
+def _pct(num, den): return [f"{(num[c] / den[c] * 100) if den[c] else 0:.1f}%" for c in COLS]
+def _ratio(num, den): return [f"{(num[c] / den[c]) if den[c] else 0:.2f}" for c in COLS]
+blank = [""] * len(COLS)
+funnel_rows = [
+    ["**A. Corpus**", "", ""] + blank,
+    ["Documents", "Processed corpus", "Documents"] + _n(docs),
+    ["Paragraphs", "Segmentation / turns", "Instances"] + _n(paras),
+    ["Scorable paragraphs", "Rule: $>3$ char & alnum", "Instances"] + _n(scorable),
+    ["Unique scorable texts", "BLAKE2b content hash", "Unique texts"] + _n(uniq),
+    ["**B. Prefilter**", "", ""] + blank,
+    ["Positive unique texts", "GBDT ($\\tau=0.17$, 39 signals)", "Unique texts"] + _n(pos_uniq),
+    ["Share of scorable texts", "Positive rate", "%"] + _pct(pos_uniq, uniq),
+    ["Positive instances", "Exact hash join", "Instances"] + _n(pos_inst),
+    ["**C. Semantic Frames**", "", ""] + blank,
+    ["Texts with $\\ge 1$ frame", "LLM judge (gpt-5.6-luna)", "Unique texts"] + _n(fr_texts),
+    ["LLM acceptance rate", "Framed / positive texts", "%"] + _pct(fr_texts, pos_uniq),
+    ["Unique semantic frames", "Frame extraction", "Frames"] + _n(fr_uniq),
+    ["Document instances", "Exact hash join", "Instances"] + _n(fr_inst),
+    ["Documents with $\\ge 1$ frame", "Document join", "Documents"] + _n(fr_docs),
+    ["Share of form documents", "Document share", "%"] + _pct(fr_docs, docs),
+    ["**D. Disclosed AI Activities**", "", ""] + blank,
+    ["Texts with firm action", "Rule: subject = firm", "Unique texts"] + _n(firm_txt),
+    ["Share of framed texts", "Activity share", "%"] + _pct(firm_txt, fr_texts),
+    ["Unique AI activities", "LLM pass 2 (firm ID), deduplicated per ticker × text × activity index", "Activities"] + _n(ac_uniq),
+    ["AI activities per text", "Activity density", "Ratio"] + _ratio(ac_uniq, firm_txt),
+    ["Document instances", "Exact hash join", "Instances"] + _n(ac_inst),
+    ["Documents with $\\ge 1$ AI activity", "Document join", "Documents"] + _n(ac_docs),
+    ["Firms with $\\ge 1$ AI activity", "Ticker join", "Firms"] + _n(ac_firms)[:-1] + [f"{int(ac_firms['Total']):,} (of {uni_frame_total})"],
+]
+Markdown(tabulate(funnel_rows, headers=["Stage", "Operational Filter", "Unit"] + [FORM_LABELS[f] for f in FORMS] + ["Total"]))
+```
+
+*Notes:* Complete granular funnel executed at render time on the project's document database and the firm-activity inventory, restricted to the analysis universe (S&P 500 at 2021-01-01, `{python} uni_frame_total` firms). Unique-text and firm columns do not sum to total because the same text (or the same firm, across forms) can appear in more than one column.
 
 ### GBDT AI-relevance prefilter feature weights and signal importance {.unnumbered}
 
@@ -3676,9 +3920,49 @@ The model addresses three key failure modes of dictionary lookups and linear cla
 2. **Document-channel neutrality:** Statutory document form is deliberately excluded from the feature set. Including filing form would cause the model to memorize channel baselines rather than textual signals, inducing circularity in cross-venue comparisons.
 3. **Asymmetric loss preference:** Prefilter false negatives represent permanent sample attrition. In contrast, false positives merely incur marginal LLM validation cost. The decision threshold was calibrated on holdouts with an asymmetric loss preference ($\beta = 2.0$), prioritizing recall over precision.
 
-Permutation feature importance ($\Delta \text{Average Precision}$, 10 random shuffles, $n = 12{,}269$ annotated paragraphs) splits into three signal tiers, the full 39-feature breakdown kept in the project's supplementary analytics files. **Sentence-level AI embeddings (67.4% of total weight)** dominate classification: the fraction of sentences containing an AI keyword (`ai_sent_share`, 46.5%) and the raw count of AI-bearing sentences (`sent_n_ai`, 14.9%) isolate AI-bearing sentences from dilution by unrelated surrounding text.
+### GBDT AI-relevance prefilter feature weights and signal importance {.unnumbered}
 
-**Text structure and formatting disqualifiers (21.5%)** — character length (`log_len`, 13.0%) and digit frequency (`digit_rate`, 2.8%) penalize dense tables and governance matrices, while first-person pronouns (`first_person_per_100w`, 2.1%) mark managerial voice — and **paragraph semantic anchors and lexical matches (11.1%)**, led by strong lexical terms (`strong_ge1`, 3.8%), risk posture (`score_ai_risk`, 1.6%), and outcome realization (`score_ai_outcome`, 1.3%), account for the rest.
+To identify paragraphs with genuine corporate AI discussion across nearly ten million raw passages without prohibitive LLM inference costs or keyword bias, the pipeline deploys a 39-signal Gradient Boosted Decision Tree (`HistGradientBoostingClassifier`, depth 4, decision threshold $\tau = 0.17$).
+
+The model addresses three key failure modes of dictionary lookups and linear classifiers:
+
+1. **Context dilution:** In proxy statements (DEF 14A) and current reports (8-K), AI keywords often appear in board skill matrices or director bios (e.g., *"director serves on the advisory board of Scale AI"*). Linear keyword matching overweights these passages. Tree-based interactions penalize long texts with low term density.
+2. **Document-channel neutrality:** Statutory document form is deliberately excluded from the feature set. Including filing form would cause the model to memorize channel baselines rather than textual signals, inducing circularity in cross-venue comparisons.
+3. **Asymmetric loss preference:** Prefilter false negatives represent permanent sample attrition. In contrast, false positives merely incur marginal LLM validation cost. The decision threshold was calibrated on holdouts with an asymmetric loss preference ($\beta = 2.0$), prioritizing recall over precision.
+
+To quantify how the model discriminates relevant corporate statements, @tbl-a0-gbdt-feature-importance reports permutation feature importance ($\Delta \text{Average Precision}$, 10 random shuffles with sample weights) across three signal tiers:
+
+- **Sentence-level AI embeddings (67.4% total weight):** The fraction of sentences containing an AI keyword (`ai_sent_share`, 46.5%) and the raw count of AI-bearing sentences (`sent_n_ai`, 14.9%) dominate classification. Isolating and scoring AI-bearing sentences avoids dilution from unrelated text in the surrounding paragraph.
+- **Text structure and formatting disqualifiers (21.5% total weight):** Character length (`log_len`, 13.0%) and numeric digit frequency (`digit_rate`, 2.8%) penalize dense tables, financial schedules, and governance matrices. Conversely, first-person corporate pronouns (`first_person_per_100w`, 2.1%) serve as affirmative markers of managerial voice (*"we deployed"*, *"our platform"*).
+- **Paragraph semantic anchors and lexical matches (11.1% total weight):** Dense cosine similarities against category anchors provide localized context, led by strong lexical terms (`strong_ge1`, 3.8%), risk posture (`score_ai_risk`, 1.6%), and outcome realization (`score_ai_outcome`, 1.3%).
+
+```{python}
+#| label: tbl-a0-gbdt-feature-importance
+#| tbl-cap: "Permutation feature importance and signal decomposition for the 39-signal GBDT AI-relevance prefilter model."
+#| echo: false
+import json
+from pathlib import Path
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+data = json.loads(_p("gbdt_prefilter_importance.json").read_text())
+features = data["features"][:16]
+
+rows = []
+for f in features:
+    imp_str = f"{f['importance_mean']:.4f} ± {f['importance_std']:.4f}"
+    pct_str = f"{f['rel_importance_pct']:.1f}%"
+    rows.append([f["tier"], f"`{f['feature']}`", f["description"], imp_str, pct_str])
+
+headers = ["Signal Tier", "Feature Name", "Description / Linguistic Function", "Permutation ΔAP", "Relative Weight"]
+Markdown(tabulate(rows, headers=headers))
+```
+
+*Notes:* Permutation feature importance computed across 10 random permutations on the combined golden benchmark and cross-channel tuning sample ($n = 12,269$ annotated paragraphs, scoring metric: Average Precision). Top 16 features shown (accounting for 96.2% of total feature importance); the complete 39-feature dictionary is archived in the project's processed-data store.
 
 ## Appendix B: Measurement and Validation {.unnumbered}
 
@@ -4315,9 +4599,103 @@ Markdown(tabulate(table, headers=["Tail", "Ticker", "Year", "AI frames/1k", "Act
 
 *Notes:* Positive $W$ represents the washing tail (disclosure rank exceeds substance rank); negative $W$ represents quiet substance (grounded concrete activities exceed narrative intensity). The table shows the top 10 firm-years from each tail; the full panel of `{python} len(flagged)` extreme firm-years (5% cutoffs) is archived in the processed dataset.
 
-**Alternative firm-year aggregation.** Results are unchanged when firm-year intensity is constructed as an aggregate-numerator-over-denominator ratio rather than the median document rate. Because a firm-year's AI content typically concentrates in a single dominant filing, the rollup rule carries little empirical weight.
+**Alternative firm-year aggregation.** Results are unchanged when firm-year intensity is constructed as an aggregate-numerator-over-denominator ratio rather than the median document rate (@tbl-a5-altagg-comparison). Because a firm-year's AI content typically concentrates in a single dominant filing, the rollup rule carries little empirical weight.
 
-**Leverage controls.** Adding point-in-time XBRL leverage ratios (Debt/Equity, Liabilities/Assets) to the baseline call-beta model on the exact matched subsamples leaves the disclosure coefficients essentially unchanged, and neither leverage ratio is a significant predictor once disclosure is in the model. Capital structure does not confound the earnings-call disclosure signal.
+```{python}
+#| label: tbl-a5-altagg-comparison
+#| tbl-cap: "Incremental semantic-posture ΔR² (Model 2 vs. Model 1): median-of-documents (main text) vs. aggregate-numerator-over-aggregate-denominator (alternative rollup), same sample sizes."
+#| echo: false
+import json
+from pathlib import Path
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+_altagg = json.loads(_p("firm_year_aggregation_robustness.json").read_text())
+_outcome_labels = {"beta": "Beta", "volatilidad_idiosincratica": "Idiosyncratic volatility", "price_to_sales": "Price-to-sales",
+                    "rd_sobre_ventas": "R&D intensity", "crecimiento_ingresos_t1": "Revenue growth (t+1)"}
+rows = [[label, o["main_n"], f"{o['main_delta_r2']:+.4f}", f"{o['altagg_delta_r2']:+.4f}"]
+        for key, label in _outcome_labels.items() for o in [_altagg["outcomes"][key]]]
+Markdown(tabulate(rows, headers=["Outcome", "n", "ΔR² (median rollup)", "ΔR² (alt-agg rollup)"]))
+```
+
+### Matched-sample leverage specifications: Debt / Equity and Liabilities / Assets {.unnumbered}
+
+To evaluate whether capital structure confounds the earnings-call disclosure signal, the baseline ANCOVA model (Model 0) is compared against specifications adding point-in-time XBRL leverage ratios (Model 1) on the exact matched subsamples (@tbl-call-beta-leverage-de and @tbl-call-beta-leverage-la).
+
+```{python}
+#| echo: false
+#| output: false
+from pathlib import Path
+import pandas as pd
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+_lev = pd.read_csv(_p("call_beta_regressions.csv")).set_index(["model", "variable"])
+_lev_samples = pd.read_csv(_p("call_beta_regression_samples.csv")).set_index("model")
+
+def _lev_row(prefix, var, r2_row_label):
+    m0 = _lev.loc[(f"{prefix}_M0", var)]
+    m1 = _lev.loc[(f"{prefix}_M1", var)]
+    return [r2_row_label, f"{m0['beta_std']:.4f}", f"{m1['beta_std']:.4f}"], [f"{r2_row_label}, p", f"{m0['p']:.3f}", f"{m1['p']:.3f}"]
+
+def _lev_table(prefix, lev_var, lev_label):
+    hist_row, hist_p = _lev_row(prefix, "hist_disclosure", "HistDisclosure, beta est.")
+    surp_row, surp_p = _lev_row(prefix, "surprise_disclosure", "SurpriseDisclosure, beta est.")
+    lev_m1 = _lev.loc[(f"{prefix}_M1", lev_var)]
+    r2_m0 = _lev_samples.loc[f"{prefix}_M0", "r2"]
+    r2_m1 = _lev_samples.loc[f"{prefix}_M1", "r2"]
+    n_m0 = int(_lev_samples.loc[f"{prefix}_M0", "n_calls"])
+    n_m1 = int(_lev_samples.loc[f"{prefix}_M1", "n_calls"])
+    return [hist_row, hist_p, surp_row, surp_p,
+            ["Leverage, beta est.", "—", f"{lev_m1['beta_std']:.4f}"],
+            ["Leverage, p", "—", f"{lev_m1['p']:.3f}"],
+            ["R²", f"{r2_m0:.4f}", f"{r2_m1:.4f}"],
+            ["N", f"{n_m0:,}", f"{n_m1:,}"]]
+```
+
+```{python}
+#| label: tbl-call-beta-leverage-de
+#| tbl-cap: "Matched-sample leverage robustness: Long-Term Debt / Equity."
+#| echo: false
+from tabulate import tabulate
+from IPython.display import Markdown
+
+table_de = _lev_table("debt_to_equity", "debt_to_equity", "Debt / equity")
+Markdown(tabulate(table_de, headers=["Variable", "M0", "M1"]))
+```
+
+```{python}
+#| label: tbl-call-beta-leverage-la
+#| tbl-cap: "Matched-sample leverage robustness: Total Liabilities / Total Assets."
+#| echo: false
+from tabulate import tabulate
+from IPython.display import Markdown
+
+table_la = _lev_table("liabilities_to_assets", "liabilities_to_assets", "Liabilities / assets")
+Markdown(tabulate(table_la, headers=["Variable", "M0", "M1"]))
+```
+
+```{python}
+#| echo: false
+#| output: false
+_de_hist_m1 = _lev.loc[("debt_to_equity_M1", "hist_disclosure")]
+_de_surp_m1 = _lev.loc[("debt_to_equity_M1", "surprise_disclosure")]
+_de_lev_m1 = _lev.loc[("debt_to_equity_M1", "debt_to_equity")]
+_la_hist_m0 = _lev.loc[("liabilities_to_assets_M0", "hist_disclosure")]
+_la_hist_m1 = _lev.loc[("liabilities_to_assets_M1", "hist_disclosure")]
+_la_surp_m0 = _lev.loc[("liabilities_to_assets_M0", "surprise_disclosure")]
+_la_surp_m1 = _lev.loc[("liabilities_to_assets_M1", "surprise_disclosure")]
+_la_r2_m0 = _lev_samples.loc["liabilities_to_assets_M0", "r2"]
+_la_r2_m1 = _lev_samples.loc["liabilities_to_assets_M1", "r2"]
+```
+
+Controlling for Debt / Equity leaves disclosure coefficients essentially unchanged ($\text{HistD} =$ `{python} f"{_de_hist_m1['beta_std']:.4f}"`, $\text{SurpriseD} =$ `{python} f"{_de_surp_m1['beta_std']:.4f}"`; leverage $p =$ `{python} f"{_de_lev_m1['p']:.3f}"`). Controlling for Liabilities / Assets results in minor shifts ($\text{HistD}$ moves from `{python} f"{_la_hist_m0['beta_std']:.4f}"` to `{python} f"{_la_hist_m1['beta_std']:.4f}"`; $\text{SurpriseD}$ from `{python} f"{_la_surp_m0['beta_std']:.4f}"` to `{python} f"{_la_surp_m1['beta_std']:.4f}"`) and changes $R^2$ by `{python} f"{abs(_la_r2_m1 - _la_r2_m0):.4f}"` (`{python} f"{_la_r2_m0:.4f}"` to `{python} f"{_la_r2_m1:.4f}"`) without displacing the disclosure terms.
 
 ## Appendix F: SEC Comment-Letter Inventory and Case Comparisons {.unnumbered}
 
@@ -4439,7 +4817,61 @@ Markdown(tabulate(rows, headers=["Sector", "Disclosure Int. ($D$)", "Risk", "Gov
 
 Disclosure Intensity ($D$) is highest in business services and industrial/computer equipment and lowest in electric/gas/sanitary and holding/investment offices — sectors far from AI's core supply chain talk about it least. But every sector mixes archetypes: even electric/gas/sanitary, the lowest-$D$ sector, has Vocal Substantives among its firms, and business services has Defensive Disclosers alongside its majority of Vocal Substantives. Sector explains the general level of AI disclosure; it does not determine which posture a given firm within that sector adopts.
 
-The sector-by-role breakdown behind this question (Sell, Operate, Build, Enable, Control, Serve mix by 2-digit SIC) is kept in the supplementary analytics files; the headline pattern is that Sell dominates in most sectors but drops to a minority in business services and depository institutions, where Operate and Control pick up the remainder.
+### What do different industries do with AI? {.unnumbered}
+
+```{python}
+#| label: tbl-h2-sic-role
+#| tbl-cap: "Composition of disclosed AI activities by sector (2-digit SIC, top 10 by firm count), % of sector's activities in each role."
+#| echo: false
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+m = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
+m["sic2"] = m["sic2"].astype(int).astype(str)
+sic_by_ticker = m.groupby("ticker")["sic2"].agg(lambda s: s.mode().iloc[0])
+top_sic = m.groupby("sic2")["ticker"].nunique().sort_values(ascending=False).head(10).index
+n_firms_sic = m[m["sic2"].isin(top_sic)].groupby("sic2")["ticker"].nunique()
+
+act = pd.read_parquet(_p("firm_activities.parquet"))
+act["sic2"] = act["ticker"].map(sic_by_ticker)
+act = act[act["sic2"].isin(top_sic)].copy()
+
+def get_role(row):
+    f = str(row["function_family"]); obj = str(row["object_family"]); tgt = str(row["target"])
+    if f in ["product_feature", "content_and_media"] or "product" in obj or tgt == "customers":
+        return "Sell"
+    elif f in ["customer_service", "marketing_and_sales"]:
+        return "Serve"
+    elif f in ["software_development", "hr_and_talent"] or "copilot" in obj or "talent" in obj:
+        return "Enable"
+    elif f in ["it_and_cybersecurity", "fraud_and_risk", "governance"] or "security" in obj or "governance" in obj:
+        return "Control"
+    elif f in ["ai_compute_and_models", "research_and_product_development", "data_and_analytics"] or "compute" in obj or "analytics" in obj:
+        return "Build"
+    else:
+        return "Operate"
+
+act["role"] = act.apply(get_role, axis=1)
+ROLES = ["Sell", "Operate", "Build", "Enable", "Control", "Serve"]
+role_mix = (pd.crosstab(act["sic2"], act["role"], normalize="index") * 100).reindex(top_sic)[ROLES]
+
+SIC2_LABELS = {
+    "73": "Business services", "38": "Instruments", "28": "Chemicals", "49": "Electric/gas/sanitary",
+    "35": "Industrial/computer equip.", "67": "Holding/investment offices", "36": "Electronic equipment",
+    "63": "Insurance carriers", "60": "Depository institutions", "20": "Food products",
+}
+rows = [[SIC2_LABELS.get(s, s), int(n_firms_sic.get(s, 0))] + [f"{role_mix.loc[s, r]:.0f}%" for r in ROLES] for s in top_sic]
+_export("appendix_g_sic_role_mix.csv", role_mix, "heatmap of sector x AI activity role", "heatmap")
+Markdown(tabulate(rows, headers=["Sector", "Firms"] + ROLES))
+```
+
+Sell (customer-facing products) is the largest activity role in nearly every sector, but its share swings from a majority in industrial/computer equipment and instruments to a much smaller share in business services and depository institutions, where Operate and Control pick up the remainder. The AI-activity taxonomy is stable across industries; the mix that fills it is not.
 
 ### Do sectors differ in the amount of AI activity or in its grounding? {.unnumbered}
 
@@ -4667,7 +5099,96 @@ Markdown(tabulate(rows, headers=["From \\ To"] + ARCH))
 
 Archetypes are sticky but not permanent: across `{python} n_pairs` consecutive firm-year pairs, `{python} f"{stay_rate:.0f}"`% stay in the same archetype on average, and Vocal Substantives and Defensive Disclosers are the stickiest, each retaining roughly three-quarters of their firms year over year. Governance-Led Disclosers is the least stable category, most often transitioning toward Defensive Disclosers rather than toward Vocal Substantives — governance-heavy language is more often a step down in disclosed activity than a step up.
 
-Two further checks, kept in the supplementary analytics files rather than reproduced here, support the results above: the qualitative finding that calls are more grounded than filings holds under both activity-weighted and firm-weighted rollups, and the patent correlation reported in Appendix B survives controlling for firm size and 2-digit SIC fixed effects (disclosed and grounded activity both remain significant predictors of AI patenting, p < 0.001).
+### Do the results depend on the rollup method? {.unnumbered}
+
+```{python}
+#| label: tbl-h8-rollup-sensitivity
+#| tbl-cap: "Share of disclosed AI activities meeting the named-product-or-metric grounding bar, by channel, under two rollup methods."
+#| echo: false
+from pathlib import Path
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+act = pd.read_parquet(_p("firm_activities.parquet"))
+act["grounded"] = act["evidence_type"].isin(["named", "metric"])
+
+activity_weighted = act.groupby("channel")["grounded"].mean() * 100
+firm_share = act.groupby(["ticker", "channel"])["grounded"].mean().reset_index()
+firm_weighted = firm_share.groupby("channel")["grounded"].mean() * 100
+tbl = pd.DataFrame({"Activity-weighted (pooled)": activity_weighted, "Firm-weighted (equal per firm)": firm_weighted})
+_export("appendix_g_rollup_sensitivity.csv", tbl, "rollup sensitivity table", "table")
+
+rows = [[ch] + [f"{tbl.loc[ch, c]:.1f}%" for c in tbl.columns] for ch in tbl.index]
+Markdown(tabulate(rows, headers=["Channel"] + list(tbl.columns)))
+```
+
+Activity-weighted rollups (each disclosed activity counted once, so heavy disclosers dominate) and firm-weighted rollups (each firm-year counted once regardless of how many activities it discloses) answer different questions — "how grounded is the typical disclosed activity?" versus "how grounded is the typical firm's disclosure?" They give different levels here: the firm-weighted grounded share runs roughly 15–18 percentage points below the activity-weighted share in both channels, because firms with fewer disclosed activities tend to ground a smaller share of them.
+
+Both rollups agree on the qualitative finding that motivates the credibility chapter: calls are more grounded than filings under either weighting.
+
+### Do patents validate more than firm size and sector? {.unnumbered}
+
+```{python}
+#| label: tbl-h9-patents-controls
+#| tbl-cap: "OLS of log(1 + AI patents, 2021-2023) on log disclosed AI activity, controlling for log market capitalization and 2-digit SIC fixed effects."
+#| echo: false
+from pathlib import Path
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+from tabulate import tabulate
+from IPython.display import Markdown
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+def _pp(name):
+    p = Path(f"../data/processed/{name}")
+    return p if p.exists() else Path(f"data/processed/{name}")
+
+m = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
+m["sic2"] = m["sic2"].astype(int).astype(str)
+sic_by_ticker = m.groupby("ticker")["sic2"].agg(lambda s: s.mode().iloc[0])
+size_by_ticker = m.groupby("ticker")["market_cap"].mean()
+
+dim = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))[["ticker", "archetype"]]
+pt = pd.read_parquet(_pp("sp500_firm_year_ai_patents_oecd2025.parquet"))
+pt = pt[pt["ticker"].isin(dim["ticker"]) & pt["year"].between(2021, 2023)]
+pf = pt.groupby("ticker").agg(ai_pat=("ai_patents_oecd", "sum")).reset_index()
+
+act = pd.read_parquet(_p("firm_activities.parquet"))
+act["grounded"] = act["evidence_type"].isin(["named", "metric"])
+af = act.groupby("ticker").agg(n_act=("text_hash", "size"), n_grounded=("grounded", "sum")).reset_index()
+
+bench = dim.merge(af, on="ticker", how="left").fillna({"n_act": 0, "n_grounded": 0}).merge(pf, on="ticker", how="left")
+bench["sic2"] = bench["ticker"].map(sic_by_ticker)
+bench["market_cap"] = bench["ticker"].map(size_by_ticker)
+bench = bench.dropna(subset=["ai_pat", "market_cap", "sic2"])
+bench["log_ai_pat"] = np.log1p(bench["ai_pat"])
+bench["log_mktcap"] = np.log1p(bench["market_cap"].clip(lower=0))
+bench["log_n_act"] = np.log1p(bench["n_act"])
+bench["log_n_grounded"] = np.log1p(bench["n_grounded"])
+n_g9 = len(bench)
+n_sic_g9 = bench["sic2"].nunique()
+
+mod_act = smf.ols("log_ai_pat ~ log_n_act + log_mktcap + C(sic2)", data=bench).fit()
+mod_grd = smf.ols("log_ai_pat ~ log_n_grounded + log_mktcap + C(sic2)", data=bench).fit()
+
+tbl_rows = [
+    ["Disclosed AI activities ($\\log A$)", f"{mod_act.params['log_n_act']:+.3f}", f"{mod_act.pvalues['log_n_act']:.1e}" if mod_act.pvalues['log_n_act'] < 0.001 else f"{mod_act.pvalues['log_n_act']:.3f}"],
+    ["Grounded activities ($\\log G$)", f"{mod_grd.params['log_n_grounded']:+.3f}", f"{mod_grd.pvalues['log_n_grounded']:.1e}" if mod_grd.pvalues['log_n_grounded'] < 0.001 else f"{mod_grd.pvalues['log_n_grounded']:.3f}"],
+]
+_export("appendix_g_patents_controls.csv", pd.DataFrame(tbl_rows, columns=["regressor", "coef", "p"]),
+        "patents vs activity, controlling for size/SIC", "table")
+Markdown(tabulate(tbl_rows, headers=["Regressor (each in a separate model with log market cap + SIC FE)", "Coefficient", "p"]))
+```
+
+Disclosed AI activity predicts AI patenting even after controlling for firm size and sector: with `{python} n_g9` firms across `{python} n_sic_g9` SIC groups, a one-log-point increase in disclosed AI activities is associated with `{python} f"{mod_act.params['log_n_act']:.2f}"` additional log-patents (p < 0.001), and the same holds for grounded activities alone (`{python} f"{mod_grd.params['log_n_grounded']:.2f}"`, p < 0.001). The patent correlation reported earlier is not an artifact of large firms in patent-heavy sectors disclosing more of everything.
 
 ### Which firms embody or contradict the pattern? {.unnumbered}
 
