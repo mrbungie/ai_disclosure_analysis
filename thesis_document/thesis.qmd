@@ -3333,7 +3333,7 @@ headers = ["Variable", "Baseline", "+ Acct.", "FF3", "[+21,+252]", "Firm FE", "D
 Markdown(tabulate(rows, headers=headers))
 ```
 
-@tbl-call-beta-paper compares the baseline ANCOVA model to several alternative specifications: accounting controls, alternative horizons, the Fama–French three-factor benchmark, firm fixed effects, and first-differencing. The baseline result survives accounting controls (ROA and liabilities/assets), longer post-call horizons (up to a full trading year, $[+21, +252]$), and the Fama–French three-factor benchmark. It weakens and disappears, however, under firm fixed effects and first-difference ($\Delta\beta$) models.
+@tbl-call-beta-paper compares the baseline ANCOVA model to several alternative specifications: accounting controls, alternative horizons, the Fama–French three-factor benchmark [@fama1993, pp. 9--10], firm fixed effects, and first-differencing. The baseline result survives accounting controls (ROA and liabilities/assets), longer post-call horizons (up to a full trading year, $[+21, +252]$), and the Fama–French three-factor benchmark. It weakens and disappears, however, under firm fixed effects and first-difference ($\Delta\beta$) models.
 
 The link is mostly cross-sectional sorting, not a call-induced change in systematic risk: firms that talk heavily about AI carry higher market risk than peers, but quarter-to-quarter shifts in disclosure are not associated with within-firm changes in beta. Appendix E provides full diagnostics and influence tests, and also covers leverage specifications (Debt/Equity and Liabilities/Assets).
 
