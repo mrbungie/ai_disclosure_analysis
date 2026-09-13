@@ -537,13 +537,13 @@ Baseline controls include market capitalization, R&D-to-sales, gross margin, ope
 
 Each step of the pipeline was validated against holdout samples, multi-model evaluations, and human audits. Independent tests across model families show strong agreement (Gemini and Qwen inter-rater agreement $\kappa = 0.81\text{--}0.87$), while blind human audits confirm 91.2% precision on prefiltering and 89.1%–95.8% accuracy on extracted activity fields. Appendix A (@tbl-evaluation-datasets) reports full validation datasets and diagnostics.
 
-With the measurement pipeline calibrated and validated, we turn to our empirical analyses. The next chapter examines how corporate AI disclosure diffused across the S&P 500 from 2021 through 2026, and maps the distinct communication archetypes that emerged as AI language became ubiquitous.
+With the measurement pipeline calibrated and validated, we turn to our empirical analyses. The next chapter examines how corporate AI disclosure diffused across the S&P 500 from 2021 through 2026, and maps the distinct communication archetypes that emerged as AI language expanded across the market.
 
 # Corporate AI Disclosure Strategies
 
 How did corporate artificial intelligence communication evolve as the technology entered the mainstream, and do firms adopt homogeneous or distinct disclosure strategies? This chapter addresses our first two research questions by analyzing market-wide diffusion patterns and identifying recurring managerial communication postures across our large-cap panel.
 
-## AI becomes ubiquitous
+## The expansion and diffusion of AI disclosures
 
 AI went from a niche topic to a standard item of corporate disclosure between 2021 and 2026. The share of S&P 500 firms making at least one AI statement in their SEC filings rose from `{python} f"{hd_share[2021]:.1f}"`% in 2021 to `{python} f"{hd_share[2025]:.1f}"`% in 2025, the last complete year, and reached `{python} f"{hd_share[2026]:.1f}"`% in the 2026 year-to-date sample (@fig-ai-diffusion).
 
@@ -728,7 +728,7 @@ The correlation structure of these eight dimensions shows two key properties. Th
 1. Governance framing is largely independent of other dimensions. Governance orientation barely correlates with promotional posture ($r =$ `{python} f"{hd_corr['governance_orientation']['promotional_posture']:.2f}"`), risk framing ($r =$ `{python} f"{hd_corr['governance_orientation']['risk_orientation']:.2f}"`), or disclosure intensity ($r =$ `{python} f"{hd_corr['governance_orientation']['disclosure_intensity']:.2f}"`). It forms its own layer. It does not proxy for verbosity or risk aversion.
 2. Risk orientation runs against concrete execution. Risk framing correlates negatively with realized temporal posture ($r =$ `{python} f"{hd_corr['risk_orientation']['temporal_posture']:.2f}"`), specificity ($r =$ `{python} f"{hd_corr['risk_orientation']['specificity']:.2f}"`), customer-facing positioning ($r =$ `{python} f"{hd_corr['risk_orientation']['ai_positioning']:.2f}"`), and intensity ($r =$ `{python} f"{hd_corr['risk_orientation']['disclosure_intensity']:.2f}"`). Firms that treat AI mainly as a hazard say less about it. They name fewer concrete tools. They rarely report client-facing deployments.
 
-## Recurrent disclosure archetypes
+## Disclosure archetypes
 
 ```{python}
 #| echo: false
@@ -751,7 +751,7 @@ $$x_i \approx \sum_{j=1}^k w_{ij} z_j, \quad \text{subject to} \quad \sum_{j=1}^
 
 where $z_j \in \mathbb{R}^7$ are the archetypal coordinate vectors and $w_{ij}$ are the barycentric weights reflecting the firm's posture portfolio.
 
-### Recurrent archetypal profiles and the disclosure simplex
+### Archetypal profiles and the disclosure simplex
 
 Fitting Archetypal Analysis at $k = 3$ projects every active disclosing firm onto the 2-simplex $\Delta^2$ spanned by three extreme boundary vertices. @fig-archetypal-ternary-simplex maps all `{python} arch_n_fit` disclosing index constituents onto this continuous disclosure simplex, displaying consolidated industry centroids alongside boundary and central exemplars:
 
