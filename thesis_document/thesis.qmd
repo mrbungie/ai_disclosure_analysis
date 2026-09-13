@@ -298,10 +298,10 @@ Crucially, this ex-ante specification avoids look-ahead selection bias: defining
 
 ```{python}
 #| label: fig-sic-distribution
-#| fig-cap: "Industrial distribution of the S&P 500 study universe (fixed at 2021-01-01, $N=499$) across broad Standard Industrial Classification (SIC) divisions (Panel A) and the top two-digit SIC major groups (Panel B)."
+#| fig-cap: "Industrial distribution of the S&P 500 study universe (fixed at 2021-01-01, $N=499$) across broad Standard Industrial Classification (SIC) divisions (Panel A) and two-digit SIC major groups (Panel B: top 12 groups plus remaining industries)."
 #| echo: false
 #| fig-width: 9.5
-#| fig-height: 4.2
+#| fig-height: 4.4
 import matplotlib.pyplot as plt
 
 fu = con.execute("SELECT ticker, company_name, sic, industry_group, active_status FROM firm_universe WHERE country_code = 'us'").df()
@@ -335,14 +335,19 @@ SIC2_LABELS = {
     "20": "Food & Kindred Products (20)",
     "37": "Transportation Equipment (37)",
     "62": "Security & Commodity Brokers (62)",
-    "13": "Oil & Gas Extraction (13)",
-    "48": "Communications (48)",
 }
 
-top_s2 = fu["sic2"].value_counts().head(12).sort_values(ascending=True)
-labels_s2 = [SIC2_LABELS.get(s, f"SIC {s}") for s in top_s2.index]
+s2_counts = fu["sic2"].value_counts()
+top_n = 12
+top_s2 = s2_counts.head(top_n).sort_values(ascending=True)
+other_count = s2_counts.iloc[top_n:].sum()
+n_other_groups = len(s2_counts) - top_n
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9.5, 4.2), dpi=300)
+labels_s2 = [f"Other ({n_other_groups} SIC groups)"] + [SIC2_LABELS.get(s, f"SIC {s}") for s in top_s2.index]
+vals_s2 = [other_count] + list(top_s2.values)
+colors_s2 = ["#94A3B8"] + ["#0D9488"] * len(top_s2)
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9.5, 4.4), dpi=300)
 
 # Panel A: SIC Divisions
 y1 = range(len(div_counts))
@@ -360,27 +365,27 @@ for bar in bars1:
              va="center", fontsize=7.5, color="#1E293B")
 ax1.set_xlim(0, max(div_counts.values) * 1.18)
 
-# Panel B: Major 2-digit SIC Groups
-y2 = range(len(top_s2))
-bars2 = ax2.barh(y2, top_s2.values, color="#0D9488", alpha=0.85, height=0.62)
+# Panel B: Major 2-digit SIC Groups + Others
+y2 = range(len(vals_s2))
+bars2 = ax2.barh(y2, vals_s2, color=colors_s2, alpha=0.85, height=0.62)
 ax2.set_yticks(y2)
-ax2.set_yticklabels(labels_s2, fontsize=8.0)
+ax2.set_yticklabels(labels_s2, fontsize=7.8)
 ax2.set_xlabel("Number of firms (N)", fontsize=8.5, fontweight="bold")
-ax2.set_title("Panel B: Top 2-Digit SIC Industry Groups", fontsize=9.2, fontweight="bold", pad=8)
+ax2.set_title("Panel B: 2-Digit SIC Groups (Top 12 + Others)", fontsize=9.2, fontweight="bold", pad=8)
 ax2.spines[["top", "right"]].set_visible(False)
 ax2.grid(axis="x", linestyle="--", alpha=0.3)
 for bar in bars2:
     w = bar.get_width()
     pct = w / len(fu) * 100
-    ax2.text(w + 1, bar.get_y() + bar.get_height()/2, f"{w} ({pct:.1f}%)",
-             va="center", fontsize=7.5, color="#1E293B")
-ax2.set_xlim(0, max(top_s2.values) * 1.18)
+    ax2.text(w + 2, bar.get_y() + bar.get_height()/2, f"{w} ({pct:.1f}%)",
+             va="center", fontsize=7.3, color="#1E293B")
+ax2.set_xlim(0, max(vals_s2) * 1.18)
 
 plt.tight_layout()
 plt.show()
 ```
 
-As shown in @fig-sic-distribution, the sample spans diverse industries, led by manufacturing (40.9%), financial intermediaries and real estate (19.0%), and services (14.0%). At the two-digit SIC level, business and software services (SIC 73, $N=53$), precision instruments (SIC 38, $N=42$), and chemicals/pharmaceuticals (SIC 28, $N=38$) form the largest concentrations. This cross-sector heterogeneity is essential for evaluating whether corporate AI disclosures represent genuine operational adoption or promotional narrative across differing business models.
+As shown in @fig-sic-distribution, the sample spans diverse industries, led by manufacturing (40.9%), financial intermediaries and real estate (19.0%), and services (14.0%). At the two-digit SIC level, business and software services (SIC 73, $N=53$), precision instruments (SIC 38, $N=42$), and chemicals/pharmaceuticals (SIC 28, $N=38$) form the largest individual concentrations, while the remaining 45 industry groups account for 31.9% ($N=159$) of the universe. This cross-sector heterogeneity is essential for evaluating whether corporate AI disclosures represent genuine operational adoption or promotional narrative across differing business models.
 
 ## Data sources and corpus
 
