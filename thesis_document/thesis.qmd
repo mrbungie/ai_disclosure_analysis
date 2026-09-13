@@ -23,25 +23,69 @@ import pandas as pd
 _db = Path("../duckdb/thesis.duckdb")
 if not _db.exists():
     _db = Path("duckdb/thesis.duckdb")
-_db = _db.resolve()  # absolute: the chunk chdir()s to the repo root below
+_db = _db.resolve()
+_repo_root = _db.parent.parent
+
+# Persistent connection and search path configuration (views resolve relative to repo root)
+_shared_duckdb_conn = duckdb.connect(str(_db), read_only=True)
+_shared_duckdb_conn.execute(f"SET file_search_path = '.., {_repo_root}';")
+_shared_duckdb_conn.execute("SET enable_progress_bar = false;")
+
+class _DuckDBProxy:
+    def __init__(self, conn):
+        self._conn = conn
+    def close(self):
+        pass
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+_db_proxy = _DuckDBProxy(_shared_duckdb_conn)
+
+con = _db_proxy
+
+def get_db():
+    return _db_proxy
+
+# Intercept duckdb.connect so all subsequent cells transparently reuse the shared connection
+_orig_duckdb_connect = duckdb.connect
+duckdb.connect = lambda *args, **kwargs: _db_proxy
+
+# In-memory Parquet cache to avoid redundant disk I/O and decompression across cells
+_orig_read_parquet = pd.read_parquet
+_parquet_cache = {}
+
+def _p(name):
+    p = Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else Path(f"data/processed/clusters/{name}")
+
+def _cached_read_parquet(path, *args, **kwargs):
+    try:
+        resolved_path = str(Path(path).resolve())
+    except Exception:
+        return _orig_read_parquet(path, *args, **kwargs)
+    cols = kwargs.get("columns", None)
+    if not args and (set(kwargs.keys()) <= {"columns"}):
+        if resolved_path not in _parquet_cache:
+            _parquet_cache[resolved_path] = _orig_read_parquet(resolved_path)
+        cached_df = _parquet_cache[resolved_path]
+        if cols is not None:
+            return cached_df[list(cols)].copy()
+        return cached_df.copy()
+    return _orig_read_parquet(path, *args, **kwargs)
+
+pd.read_parquet = _cached_read_parquet
+
 PANEL_DOCS = ("accession_number IN ("
               "SELECT accession_number FROM filing_manifest WHERE country_code = 'us' AND accession_number IS NOT NULL "
               "UNION ALL SELECT document_id FROM filing_manifest WHERE country_code = 'us' AND document_id IS NOT NULL "
               "UNION ALL SELECT accession_number FROM filing_manifest_10q WHERE country_code = 'us')")
-import os
-_repo_root = _db.resolve().parent.parent
-_cwd0 = os.getcwd()
-os.chdir(_repo_root)  # gold_ai_frames view reads part files by repo-relative path
-_c = duckdb.connect(str(_db), read_only=True)
+
+_c = con
 hd_n_docs, hd_n_paragraphs = _c.execute(
     f"SELECT count(DISTINCT accession_number), count(*) FROM paragraphs WHERE country_code = 'us' "
     f"AND form IN ('10-K', '10-Q', '20-F', 'DEF 14A', '8-K', 'Earnings call') AND {PANEL_DOCS}").fetchone()
 hd_n_universe = _c.execute("SELECT count(*) FROM firm_universe WHERE country_code = 'us'").fetchone()[0]
-_c.close()
-os.chdir(_cwd0)
-_ap = Path("../data/processed/clusters/firm_activities.parquet")
-if not _ap.exists():
-    _ap = Path("data/processed/clusters/firm_activities.parquet")
+_ap = _p("firm_activities.parquet")
 _a = pd.read_parquet(_ap, columns=["ticker", "text_hash", "activity_id"]).drop_duplicates()
 hd_n_activities = len(_a)
 hd_n_activity_firms = int(_a["ticker"].nunique())
@@ -87,8 +131,7 @@ _ad = _ad.merge(pd.read_parquet(_cl / "document_panel.parquet", columns=["access
 _ad["year"] = _ad["fecha"].dt.year
 _ad["md"] = _ad["fecha"].dt.month * 100 + _ad["fecha"].dt.day
 hd_act_factor = float(((_ad["year"] == 2025).sum()) / ((_ad["year"] == 2025) & (_ad["md"] <= hd_cutoff_md)).sum())
-os.chdir(_repo_root)
-_c = duckdb.connect(str(_db), read_only=True)
+_c = get_db()
 _tenk = _c.execute(f"""
     SELECT extract(year FROM fm.filing_date)::INT AS y,
            count(DISTINCT p.accession_number) AS docs,
@@ -99,8 +142,6 @@ _tenk = _c.execute(f"""
            ON f.accession_number = p.accession_number
     GROUP BY 1 ORDER BY 1
 """).df()
-_c.close()
-os.chdir(_cwd0)
 hd_tenk_share = {int(r.y): float(r.docs_ai / r.docs * 100) for r in _tenk.itertuples()}
 _gapw = json.loads((_cl / "channel_gap_words_robustness.json").read_text())
 hd_promo_ratio = _gapw["promo_per_1k_words"]["ratio"]
@@ -135,17 +176,13 @@ hd_gap_named_pp = _cg["named_product_or_process"]["gap_pp"]
 
 # Executive Summary {.unnumbered}
 
-Between 2021 and 2026 almost every S&P 500 firm started talking about AI, so counting mentions no longer tells us much. This thesis builds a scalable framework that separates how much firms talk about AI from what they claim to be doing. It also measures how concretely those AI activities are supported and whether the talk runs ahead of disclosed substance.
+After ChatGPT launch in late 2022, almost every S&P 500 firm began discussing AI, making mentions alone uninformative. This thesis separates AI rhetoric from disclosed activity, its grounding, and the gap between them. Across `{python} hd_paragraphs_m` million filing and earnings-call paragraphs, we identify `{python} f"{hd_n_activities:,}"` AI activities across `{python} hd_n_activity_firms` firms.
 
-We examine `{python} hd_paragraphs_m` million paragraphs from SEC filings and earnings calls for the S&P 500. We also track `{python} f"{hd_n_activities:,}"` discrete AI activities disclosed by `{python} hd_n_activity_firms` firms. The main result is simple: corporate AI is an application story. Firms embed AI into products, workflows, customer service, and internal operations. Very few build foundation technology.
+Corporate AI is mainly applied AI: products, workflows, service, and operations—not foundation technology. Firms follow three disclosure strategies: Vocal Substantives pair frequent discussion with broad, mature activity portfolios; Governance-Led and Defensive Disclosers rely more on oversight or risk language while disclosing less activity. The generative-AI boom increased activity counts, but not their grounding; external tools remain concentrated among U.S. providers.
 
-Still, firms follow three stable disclosure strategies. Vocal Substantives talk often and back it with large, mature AI activity portfolios. They are the only group with distinct financials. Governance-Led and Defensive Disclosers copy peer oversight or risk language, but disclose far less activity. The generative-AI boom multiplied disclosed activities, but did not ground them better. The external AI tools firms rely on remain concentrated in U.S. providers.
+Credibility differs sharply by venue. Earnings calls contain `{python} round(hd_promo_ratio)`× more promotional and `{python} round(hd_quant_ratio)`× more quantified claims per thousand words than filings, yet quantified outcomes are `{python} f"{hd_gap_quant_pp:.0f}"` percentage points less common in filings for the same firm-year activities. The narrative reaches the binding venue; much of the evidence does not. AI rhetoric—but not disclosed substance or the rhetoric–substance gap—relates to later systematic risk; this is non-causal evidence.
 
-Credibility is tested where disclosure becomes costly. Earnings calls carry about `{python} round(hd_promo_ratio)` times more promotional claims and `{python} round(hd_quant_ratio)` times more quantified claims per thousand words than statutory filings. Within the same firm and fiscal year, both venues describe the same activities. Yet the share backed by a quantified outcome is `{python} f"{hd_gap_quant_pp:.0f}"` percentage points lower in the filings. The story travels to the binding venue; much of the evidence does not.
-
-Direct SEC scrutiny of AI claims has so far reached one firm in this universe. That firm answered with less AI text and a narrower gap between talk and grounded substance, not the padded, still-ungrounded narrative a cheap-talk account of scrutiny would predict. In the market, the volume of a firm's AI rhetoric, not its disclosed substance, is what relates to later systematic risk. The gap between the two is not priced. None of this evidence is causal.
-
-We synthesize these findings into an AI Disclosure Credibility Framework. The framework tracks six constructs: Disclosure Intensity, Communication Posture, Disclosed AI Activity, AI Activity Grounding, Disclosed Substance, and Decoupling. It also checks that claims hold across venues. For issuers, the advice is simple: move evidence, not adjectives, into the 10-K. Name the action, the object, and the stage. Carry quantified outcomes from the call into the filing. For investors, the framework scales due diligence. A large gap between narrative and disclosed substance prompts closer review, not an immediate verdict.
+The resulting AI Disclosure Credibility Framework tracks intensity, posture, activity, grounding, substance, decoupling, and consistency across venues. For issuers: move evidence, not adjectives, into the 10-K. For investors: treat a large gap as a due-diligence signal, not a verdict.
 
 # Introduction
 
@@ -175,8 +212,6 @@ Four linked research questions organize the empirical chapters that test this cl
 - **RQ2: Heterogeneity.** Which recurring disclosure profiles set firms apart? How do those profiles relate to firm economics?
 - **RQ3: Credibility and decoupling.** Where do gaps open up between disclosure and disclosed substance? Where do they open between statutory filings and earnings calls?
 - **RQ4: Economic relevance.** Does AI disclosure carry economic information? Does it relate to market outcomes?
-
-Not every result in the chapters that follow was predicted in advance. The specific number and composition of disclosure archetypes, the exact shape of the generative-AI activity boom, and the Welltower regulatory case are descriptive findings that emerged from applying the framework; they are reported as such rather than as confirmations of a prior prediction.
 
 ## Literature on corporate AI disclosure and AI washing
 
@@ -233,22 +268,9 @@ The U.S. corpus covers 10-K, 10-Q, 20-F, DEF 14A, and 8-K filings for the S&P 50
 ```{python}
 #| echo: false
 #| output: false
-from pathlib import Path
-import duckdb
-import pandas as pd
-
-db_path = Path("../duckdb/thesis.duckdb")
-if not db_path.exists():
-    db_path = Path("duckdb/thesis.duckdb")
-con = duckdb.connect(str(db_path), read_only=True)
 _u = con.execute("SELECT active_status, count(*) AS n FROM firm_universe WHERE country_code = 'us' GROUP BY 1").df()
-con.close()
 uni_frame_total = int(_u["n"].sum())
 uni_frame_delisted = int(_u.loc[_u["active_status"] == "delisted", "n"].sum())
-
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _master = pd.read_parquet(_p("firm_year_master_v2.parquet"))
 uni_n_firms = int(_master["ticker"].nunique())
@@ -259,7 +281,6 @@ bal_share = (_master[_master["ticker"].isin(_yrs[_yrs == 6].index)]
 uni_n_activity_firms = int(pd.read_parquet(_p("firm_activities.parquet"))["ticker"].nunique())
 
 # Temporal coverage of the partial 2026 year, from the manifests.
-con = duckdb.connect(str(db_path), read_only=True)
 _cov = con.execute("""
     SELECT form_type, count(DISTINCT ticker) AS firms, max(filing_date) AS last_date
     FROM (SELECT form_type, ticker, filing_date FROM filing_manifest WHERE country_code = 'us'
@@ -267,7 +288,6 @@ _cov = con.execute("""
     WHERE extract(year FROM filing_date) = 2026 GROUP BY 1
 """).df().set_index("form_type")
 _cov25 = con.execute("SELECT count(DISTINCT ticker) FROM filing_manifest WHERE country_code = 'us' AND form_type = '10-K' AND extract(year FROM filing_date) = 2025").fetchone()[0]
-con.close()
 cov_last_date = str(pd.to_datetime(_cov["last_date"].max()).date())
 cov_10k_2026 = int(_cov.loc["10-K", "firms"]) if "10-K" in _cov.index else 0
 cov_10k_2025 = int(_cov25)
@@ -286,14 +306,7 @@ The full-year estimate uses a same-window seasonal adjustment. It scales the 202
 
 ```{python}
 #| echo: false
-from pathlib import Path
-import duckdb
 from IPython.display import Markdown
-
-db_path = Path("../duckdb/thesis.duckdb")
-if not db_path.exists():
-    db_path = Path("duckdb/thesis.duckdb")
-con = duckdb.connect(str(db_path), read_only=True)
 # Documents of the analysis universe (S&P 500 at 2021-01-01). The manifest
 # views are already restricted to that panel; `paragraphs` is a base table
 # keyed by accession_number (calls use their document_id), so every corpus
@@ -322,15 +335,9 @@ Markdown(
 #| label: tbl-documents-by-form-year
 #| tbl-cap: "Current processed U.S. corpus by form."
 #| echo: false
-from pathlib import Path
-import duckdb
 from tabulate import tabulate
 from IPython.display import Markdown
 
-db_path = Path("../duckdb/thesis.duckdb")
-if not db_path.exists():
-    db_path = Path("duckdb/thesis.duckdb")
-con = duckdb.connect(str(db_path), read_only=True)
 scope = f"country_code = 'us' AND form IN ('10-K', '10-Q', '20-F', 'DEF 14A', '8-K', 'Earnings call') AND {PANEL_DOCS}"
 rows = con.execute(f"""
     SELECT form, count(DISTINCT accession_number) AS documents
@@ -338,7 +345,6 @@ rows = con.execute(f"""
     GROUP BY 1
     ORDER BY CASE form WHEN '10-K' THEN 1 WHEN '10-Q' THEN 2 WHEN '20-F' THEN 3 WHEN 'DEF 14A' THEN 4 WHEN '8-K' THEN 5 ELSE 6 END
 """).fetchall()
-con.close()
 rows.append(["Total", sum(n for _, n in rows)])
 Markdown(tabulate([[form, f"{n:,}"] for form, n in rows], headers=["Form", "Documents"]))
 ```
@@ -349,50 +355,34 @@ Markdown(tabulate([[form, f"{n:,}"] for form, n in rows], headers=["Form", "Docu
 #| label: tbl-funnel-summary
 #| tbl-cap: "Compact summary of the inference funnel."
 #| echo: false
-import os
-from pathlib import Path
-import duckdb
-import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-db_path = Path("../duckdb/thesis.duckdb")
-if not db_path.exists():
-    db_path = Path("duckdb/thesis.duckdb")
-repo_root = db_path.resolve().parent.parent
-act_path = Path("../data/processed/clusters/firm_activities.parquet")
-if not act_path.exists():
-    act_path = Path("data/processed/clusters/firm_activities.parquet")
+n_docs, n_raw, n_scorable, n_unique = totals[0], totals[1], totals[2], totals[3]
+n_prefiltered = con.execute(f"""
+    SELECT count(*) FROM (
+        SELECT text_hash, is_ai_prefiltered
+        FROM read_parquet('data/interim/prefilter_predictions_unique/prefilter_predictions__run=*.parquet', union_by_name=true)
+        WHERE country_code = 'us'
+        QUALIFY row_number() OVER (PARTITION BY text_hash ORDER BY model_version DESC) = 1
+    ) WHERE is_ai_prefiltered
+      AND text_hash IN (SELECT text_hash FROM paragraphs WHERE country_code='us' AND is_scorable AND {PANEL_DOCS})
+""").fetchone()[0]
 
-con = duckdb.connect(str(db_path), read_only=True)
-con.execute("SET enable_progress_bar = false")
-_cwd = os.getcwd()
-os.chdir(repo_root)
-try:
-    n_docs = con.execute(f"SELECT count(DISTINCT accession_number) FROM paragraphs WHERE country_code='us' AND {PANEL_DOCS}").fetchone()[0]
-    n_raw = con.execute(f"SELECT count(*) FROM paragraphs WHERE country_code='us' AND {PANEL_DOCS}").fetchone()[0]
-    n_scorable = con.execute(f"SELECT count(*) FROM paragraphs WHERE country_code='us' AND is_scorable AND {PANEL_DOCS}").fetchone()[0]
-    n_unique = con.execute(f"SELECT count(DISTINCT text_hash) FROM paragraphs WHERE country_code='us' AND is_scorable AND {PANEL_DOCS}").fetchone()[0]
-    n_prefiltered = con.execute(f"""
-        SELECT count(*) FROM (
-            SELECT text_hash, is_ai_prefiltered
-            FROM read_parquet('data/interim/prefilter_predictions_unique/prefilter_predictions__run=*.parquet', union_by_name=true)
-            WHERE country_code = 'us'
-            QUALIFY row_number() OVER (PARTITION BY text_hash ORDER BY model_version DESC) = 1
-        ) WHERE is_ai_prefiltered
-          AND text_hash IN (SELECT text_hash FROM paragraphs WHERE country_code='us' AND is_scorable AND {PANEL_DOCS})
-    """).fetchone()[0]
-    n_framed = con.execute(f"SELECT count(DISTINCT text_hash) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND {PANEL_DOCS}").fetchone()[0]
-    n_frames_total, share_firm_subject = con.execute(f"""
-        SELECT count(*), avg((subject = 'firm')::INT) * 100
-        FROM (SELECT DISTINCT text_hash, frame_id, subject FROM gold_ai_frames
-              WHERE country_code='us' AND has_frame AND {PANEL_DOCS})
-    """).fetchone()
-    n_firm_texts = con.execute(f"SELECT count(DISTINCT text_hash) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND subject = 'firm' AND {PANEL_DOCS}").fetchone()[0]
-finally:
-    os.chdir(_cwd)
-con.close()
-n_activities = len(pd.read_parquet(act_path).drop_duplicates(subset=["ticker", "text_hash", "activity_id"]))
+con.execute(f"""
+    CREATE OR REPLACE TEMP TABLE _us_frames AS
+    SELECT form, accession_number, paragraph_index, text_hash, frame_id, subject, ai_type, temporal, specificity, rhetoric
+    FROM gold_ai_frames WHERE country_code='us' AND has_frame AND {PANEL_DOCS}
+""")
+n_framed, n_frames_total, share_firm_subject, n_firm_texts = con.execute("""
+    SELECT 
+        count(DISTINCT text_hash) AS n_framed,
+        count(*) AS n_frames_total,
+        avg((subject = 'firm')::INT) * 100 AS share_firm_subject,
+        count(DISTINCT CASE WHEN subject = 'firm' THEN text_hash END) AS n_firm_texts
+    FROM (SELECT DISTINCT text_hash, frame_id, subject FROM _us_frames)
+""").fetchone()
+n_activities = hd_n_activities
 
 rows = [
     ("1. Raw Corpus", "Paragraph instances", f"Raw segmentation across {n_docs:,} filings & calls", n_raw, 100.0),
@@ -434,48 +424,40 @@ This pass is a high-precision gate: `{python} f"{(1 - n_framed / n_prefiltered) 
 #| label: tbl-frame-schema
 #| tbl-cap: "Semantic frame schema: operational definitions, categorical levels, and observed corpus distributions."
 #| echo: false
-import os
-from pathlib import Path
-import duckdb
 from tabulate import tabulate
 from IPython.display import Markdown
 
-db_path = Path("../duckdb/thesis.duckdb")
-if not db_path.exists():
-    db_path = Path("duckdb/thesis.duckdb")
-repo_root = db_path.resolve().parent.parent
-con = duckdb.connect(str(db_path), read_only=True)
-con.execute("SET enable_progress_bar = false")
+con.execute(f"""
+    CREATE TEMP TABLE IF NOT EXISTS _us_frames AS
+    SELECT form, accession_number, paragraph_index, text_hash, frame_id, subject, ai_type, temporal, specificity, rhetoric
+    FROM gold_ai_frames WHERE country_code='us' AND has_frame AND {PANEL_DOCS}
+""")
+counts_subj = con.execute("SELECT subject, count(*) n FROM _us_frames GROUP BY 1 ORDER BY 2 DESC").df()
+tot_subj = counts_subj['n'].sum()
+subj_str = "; ".join(f"{r.subject.replace('_', ' ').title()}: {r.n/tot_subj*100:.1f}%" for _, r in counts_subj.iterrows())
 
-_cwd = os.getcwd()
-os.chdir(repo_root)
-try:
-    counts_subj = con.execute("SELECT subject, count(*) n FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + " GROUP BY 1 ORDER BY 2 DESC").df()
-    tot_subj = counts_subj['n'].sum()
-    subj_str = "; ".join(f"{r.subject.replace('_', ' ').title()}: {r.n/tot_subj*100:.1f}%" for _, r in counts_subj.iterrows())
+counts_ai = con.execute("SELECT ai_type, count(*) n FROM _us_frames GROUP BY 1 ORDER BY 2 DESC").df()
+tot_ai = counts_ai['n'].sum()
+ai_str = "; ".join(f"{r.ai_type.replace('_', ' ').title()}: {r.n/tot_ai*100:.1f}%" for _, r in counts_ai.iterrows())
 
-    counts_ai = con.execute("SELECT ai_type, count(*) n FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + " GROUP BY 1 ORDER BY 2 DESC").df()
-    tot_ai = counts_ai['n'].sum()
-    ai_str = "; ".join(f"{r.ai_type.replace('_', ' ').title()}: {r.n/tot_ai*100:.1f}%" for _, r in counts_ai.iterrows())
+counts_temp = con.execute("SELECT temporal, count(*) n FROM _us_frames GROUP BY 1 ORDER BY 2 DESC").df()
+tot_temp = counts_temp['n'].sum()
+temp_str = "; ".join(f"{r.temporal.title()}: {r.n/tot_temp*100:.1f}%" for _, r in counts_temp.iterrows())
 
-    counts_temp = con.execute("SELECT temporal, count(*) n FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + " GROUP BY 1 ORDER BY 2 DESC").df()
-    tot_temp = counts_temp['n'].sum()
-    temp_str = "; ".join(f"{r.temporal.title()}: {r.n/tot_temp*100:.1f}%" for _, r in counts_temp.iterrows())
-
-    spec_prod = con.execute("SELECT round(avg(list_contains(specificity, 'product')::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
-    spec_proc = con.execute("SELECT round(avg(list_contains(specificity, 'process')::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
-    spec_date = con.execute("SELECT round(avg(list_contains(specificity, 'timeline')::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
-    spec_metr = con.execute("SELECT round(avg(list_contains(specificity, 'metric')::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
-    spec_vend = con.execute("SELECT round(avg(list_contains(specificity, 'vendor')::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
-    spec_str = f"Product: {spec_prod}%; Process: {spec_proc}%; Timeline: {spec_date}%; Metric: {spec_metr}%; Vendor: {spec_vend}%"
-
-    rhet_strat = con.execute("SELECT round(avg(list_contains(rhetoric, 'strategic')::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
-    rhet_prom = con.execute("SELECT round(avg(list_contains(rhetoric, 'promotional')::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
-    rhet_hedg = con.execute("SELECT round(avg(list_contains(rhetoric, 'hedged')::int)*100, 1) FROM gold_ai_frames WHERE country_code='us' AND has_frame AND " + PANEL_DOCS + "").fetchone()[0]
-    rhet_str = f"Strategic importance: {rhet_strat}%; Promotional tone: {rhet_prom}%; Hedged: {rhet_hedg}%"
-finally:
-    os.chdir(_cwd)
-con.close()
+spec_prod, spec_proc, spec_date, spec_metr, spec_vend, rhet_strat, rhet_prom, rhet_hedg = con.execute("""
+    SELECT 
+        round(avg(list_contains(specificity, 'product')::int)*100, 1),
+        round(avg(list_contains(specificity, 'process')::int)*100, 1),
+        round(avg(list_contains(specificity, 'timeline')::int)*100, 1),
+        round(avg(list_contains(specificity, 'metric')::int)*100, 1),
+        round(avg(list_contains(specificity, 'vendor')::int)*100, 1),
+        round(avg(list_contains(rhetoric, 'strategic')::int)*100, 1),
+        round(avg(list_contains(rhetoric, 'promotional')::int)*100, 1),
+        round(avg(list_contains(rhetoric, 'hedged')::int)*100, 1)
+    FROM _us_frames
+""").fetchone()
+spec_str = f"Product: {spec_prod}%; Process: {spec_proc}%; Timeline: {spec_date}%; Metric: {spec_metr}%; Vendor: {spec_vend}%"
+rhet_str = f"Strategic importance: {rhet_strat}%; Promotional tone: {rhet_prom}%; Hedged: {rhet_hedg}%"
 
 t4_rows = [
     ["Subject", "Identifies the focal entity of the corporate claim", "Firm, partners, customers, industry, regulators", subj_str],
@@ -741,9 +723,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 df = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
 
@@ -805,9 +784,6 @@ The correlation structure of these eight dimensions shows two key properties. Th
 from pathlib import Path
 import pandas as pd
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _arch = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
 arch_n_universe = len(_arch)
@@ -838,7 +814,6 @@ Fitting Archetypal Analysis at $k = 3$ projects every active disclosing firm ont
 import contextlib
 import io
 from pathlib import Path
-import duckdb
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -846,16 +821,7 @@ import matplotlib.pyplot as plt
 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
     from archetypes import AA
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
-
-db_path = Path("../duckdb/thesis.duckdb")
-if not db_path.exists():
-    db_path = Path("duckdb/thesis.duckdb")
-con = duckdb.connect(str(db_path), read_only=True)
 fu = con.execute("SELECT ticker, company_name, sic, industry_group FROM firm_universe WHERE country_code = 'us' AND ticker IS NOT NULL").df()
-con.close()
 fu["sic_int"] = pd.to_numeric(fu["sic"], errors="coerce")
 
 def map_proper_sector(sic):
@@ -1081,9 +1047,6 @@ import matplotlib.pyplot as plt
 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
     from archetypes import AA
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 df = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
 
@@ -1133,9 +1096,6 @@ import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _g = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
 _feats = {"promotional_posture": "promotional", "hedging_posture": "hedging", "risk_orientation": "risk", "governance_orientation": "governance",
@@ -1188,24 +1148,11 @@ The three archetypes reflect distinct strategic orientations (@tbl-archetypes-gl
 ```{python}
 #| label: tbl-representative-firms
 #| tbl-cap: "Representative corporations and disclosure registers across AI disclosure archetypes. Prominent constituents are widely recognized S&P 500 members in each cluster; centroid-closest exemplars are the firms nearest to each archetype's mean standardized posture vector; primary SEC disclosure focus summarizes the dominant narrative register in statutory filings."
-from pathlib import Path
-import duckdb
 import numpy as np
 import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
-
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
-
-db_path = Path("../duckdb/thesis.duckdb")
-if not db_path.exists():
-    db_path = Path("duckdb/thesis.duckdb")
-
-con = duckdb.connect(str(db_path), read_only=True)
 fu = con.execute("SELECT ticker, company_name, sic, active_status FROM firm_universe WHERE country_code = 'us'").df()
-con.close()
 fu_delisted = set(fu.loc[fu["active_status"] == "delisted", "ticker"])
 fu["sic2"] = fu["sic"].astype(str).str.zfill(4).str[:2]
 
@@ -1275,9 +1222,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 p_stab = _p("bootstrap_jaccard_200_results.json")
 if not p_stab.exists():
@@ -1392,9 +1336,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _fy = pd.read_parquet(_p("firm_year_strategy_dimensions.parquet"))
 _FE = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation", "temporal_posture",
@@ -1465,39 +1406,23 @@ Industry economics and regulatory exposure shape the archetypes strongly, though
 #| echo: false
 #| fig-width: 8.5
 #| fig-height: 4.6
-import os
-from pathlib import Path
 import numpy as np
 import pandas as pd
-import duckdb
 import matplotlib.pyplot as plt
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
-
-db_path = Path("../duckdb/thesis.duckdb")
-if not db_path.exists():
-    db_path = Path("duckdb/thesis.duckdb")
-
-con = duckdb.connect(str(db_path), read_only=True)
 fu = con.execute("SELECT ticker, company_name, sic, active_status FROM firm_universe WHERE country_code = 'us'").df()
 _disclosing = set(pd.read_parquet(_p("firm_strategy_dimensions.parquet")).loc[lambda d: d["archetype"] != "No AI", "ticker"])
 _ch_n_disclosing = len(_disclosing)
 _ch_has_def14a = set(con.execute("SELECT ticker FROM filing_manifest WHERE country_code = 'us' AND form_type = 'DEF 14A'").df()["ticker"].dropna())
 _ch_coverage = _disclosing & _ch_has_def14a
 _ch_n_coverage_pct = round(100 * len(_ch_coverage) / _ch_n_disclosing)
-_ch_cwd0 = Path.cwd()
-os.chdir(db_path.resolve().parent.parent)  # gold_ai_frames view reads part files by repo-relative path
 _ch_mentions = set(con.execute("""
     SELECT DISTINCT fm.ticker FROM gold_ai_frames f
     JOIN filing_manifest fm USING (country_code, accession_number)
     WHERE fm.form_type = 'DEF 14A' AND f.has_frame
 """).df()["ticker"].dropna())
-os.chdir(_ch_cwd0)
 _ch_n_mention = len(_ch_coverage & _ch_mentions)
 _ch_n_omit = len(_ch_coverage) - _ch_n_mention
-con.close()
 fu_delisted = set(fu.loc[fu["active_status"] == "delisted", "ticker"])
 
 fu["sic2"] = fu["sic"].astype(str).str.zfill(4).str[:2]
@@ -1614,11 +1539,7 @@ def _shrink_10k(rates, counts):
         out[col] = (p * counts + alpha) / (counts + alpha + beta)
     return pd.DataFrame(out, index=rates.index)
 
-_cwd10k = Path.cwd()
-_abs_db10k = db_path.resolve()
-os.chdir(_abs_db10k.parent.parent)  # gold_ai_frames view reads part files by repo-relative path
-_con10k = duckdb.connect(str(_abs_db10k), read_only=True)
-_frames_10k = _con10k.execute("""
+_frames_10k = con.execute("""
     WITH frame_domains AS (
         SELECT text_hash, frame_id, bool_or(domain = 'customer_facing') AS is_customer_facing
         FROM gold_ai_activities WHERE has_activity GROUP BY text_hash, frame_id
@@ -1630,8 +1551,6 @@ _frames_10k = _con10k.execute("""
     JOIN filing_manifest fm USING (country_code, accession_number)
     WHERE f.country_code = 'us' AND f.has_frame AND fm.ticker IS NOT NULL AND fm.form_type = '10-K'
 """).fetchdf()
-_con10k.close()
-os.chdir(_cwd10k)
 
 _p10k = _posture_10k(_frames_10k)
 _p10k = _p10k[_p10k["n_frames_10k"] >= 5].reset_index(drop=True)
@@ -1692,9 +1611,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 df = pd.read_parquet(_p("firm_activities.parquet"))
 
@@ -1823,9 +1739,6 @@ import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 m4 = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
 m4["sic2"] = m4["sic2"].astype(int).astype(str)
@@ -1883,9 +1796,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 df_strat = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
 act = pd.read_parquet(_p("firm_activities.parquet")).merge(df_strat[["ticker", "archetype"]], on="ticker", how="left")
@@ -1947,9 +1857,6 @@ import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 strat = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))[["ticker", "archetype"]]
 act = pd.read_parquet(_p("firm_activities.parquet")).merge(strat, on="ticker", how="left")
@@ -2000,9 +1907,6 @@ from pathlib import Path
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 reg = json.loads(_p("strategy_dimensions_manifest.json").read_text())["activity_volume_regression"]
 OTHERS = ["Governance-Led Disclosers", "Vocal Substantives"]
@@ -2033,9 +1937,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 df_strat = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
 act = pd.read_parquet(_p("firm_activities.parquet")).merge(df_strat[["ticker", "archetype"]], on="ticker", how="left")
@@ -2110,27 +2011,24 @@ _SELL, _OPER, _CTRL, _SERVE = "Sell (Customer products)", "Operate (Internal ope
 
 Vocal Substantives concentrate most heavily in Sell; Governance-Led Disclosers split closer to evenly between Sell and Operate, with Control activities a small share even here: governance is how this group talks, not mainly what it does. Defensive Disclosers describe the same commercial and operational mix as everyone else, just less of it. Sell dominates in all three groups: the archetypes differ in how strongly (Vocal Substantives most of all) and in how much they disclose, not in what corporate AI is for.
 
-Three filings illustrate what that split looks like in practice.
+Three filings illustrate what that split looks like in practice (@tbl-archetype-activity-examples).
 
 ```{python}
+#| label: tbl-archetype-activity-examples
+#| tbl-cap: "Illustrative statutory filing excerpts across disclosure archetypes and activity orientations."
 #| echo: false
-#| output: false
 import re
 from pathlib import Path
-import duckdb
+from tabulate import tabulate
+from IPython.display import Markdown
 
 def _quote(ticker, act_df, **filters):
     sub = act_df[act_df["ticker"] == ticker]
     for k, v in filters.items():
         sub = sub[sub[k] == v]
     r = sub.iloc[0]
-    db_path = Path("../duckdb/thesis.duckdb")
-    if not db_path.exists():
-        db_path = Path("duckdb/thesis.duckdb")
-    con = duckdb.connect(str(db_path), read_only=True)
-    q = con.execute("SELECT paragraph_text FROM paragraphs WHERE accession_number = ? AND paragraph_index = ? LIMIT 1",
-                     [r["accession_number"], int(r["paragraph_index"])]).fetchone()
-    con.close()
+    q = get_db().execute("SELECT paragraph_text FROM paragraphs WHERE accession_number = ? AND paragraph_index = ? LIMIT 1",
+                         [r["accession_number"], int(r["paragraph_index"])]).fetchone()
     if not q:
         return ""
     t = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", q[0])
@@ -2138,19 +2036,38 @@ def _quote(ticker, act_df, **filters):
     t = re.sub(r"\s{2,}", " ", t)
     return re.sub(r"\s+([.,;:])", r"\1", t).strip()
 
-def _clip(text, n=260):
+def _clip(text, n=190):
     return f'"{text[:n].strip()}..."' if len(text) > n else f'"{text}"'
 
 _amd_quote = _quote("AMD", act, role="Sell (Customer products)", evidence_type="metric")
 _aig_quote = _quote("AIG", act, role="Control (Risk & security)", evidence_type="named")
 _lly_quote = _quote("LLY", act, evidence_type="generic")
+
+_rows_ex = [
+    [
+        "**Vocal Substantives**",
+        "**AMD**",
+        "Sell",
+        _clip(_amd_quote, 180).replace("|", "-"),
+        "Specific and verifiable: names the acquisition, product line, and deployment targets.",
+    ],
+    [
+        "**Governance-Led Disclosers**",
+        "**AIG**",
+        "Control",
+        _clip(_aig_quote, 180).replace("|", "-"),
+        "Institutional oversight language rather than technical or operational deployment.",
+    ],
+    [
+        "**Defensive Disclosers**",
+        "**Eli Lilly**",
+        "Generic (Sell / Operate)",
+        _clip(_lly_quote, 180).replace("|", "-"),
+        "Vague and defensive: no named products, operational stages, or concrete metrics.",
+    ],
+]
+Markdown(tabulate(_rows_ex, headers=["Archetype", "Firm", "Primary Focus", "Filing Excerpt", "Diagnostic Interpretation"]))
 ```
-
-**AMD (Vocal Substantives, Sell):** `{python} _clip(_amd_quote)` The claim names the acquisition, the product line, and the deployment target: a reader can check it against AMD's own subsequent filings.
-
-**AIG (Governance-Led Disclosers, Control):** `{python} _clip(_aig_quote)` The activity here is board-level oversight language, not a product or a deployment, consistent with why this archetype's Control share is small in volume but central to how it frames AI.
-
-**Eli Lilly (Defensive Disclosers, generic evidence):** `{python} _clip(_lly_quote)` No product, stage, or metric is named: this is what an "unspecified function" activity actually reads like in the filing, not just a row in a taxonomy table.
 
 ## Decomposing AI activity grounding
 
@@ -2250,18 +2167,9 @@ This is what institutional-legitimacy theory predicts. Once a vocabulary becomes
 #| fig-height: 4.0
 from pathlib import Path
 import pandas as pd
-import duckdb
 import matplotlib.pyplot as plt
 
-db_path = Path("../duckdb/thesis.duckdb")
-if not db_path.exists():
-    db_path = Path("duckdb/thesis.duckdb")
-act_path = Path("../data/processed/clusters/firm_activities.parquet")
-if not act_path.exists():
-    act_path = Path("data/processed/clusters/firm_activities.parquet")
-
-act = pd.read_parquet(act_path)
-con = duckdb.connect(str(db_path), read_only=True)
+act = pd.read_parquet(_p("firm_activities.parquet"))
 filings = con.execute("""
     WITH manifest AS (
         SELECT country_code, accession_number, filing_date FROM filing_manifest WHERE form_type != 'Earnings call transcript'
@@ -2270,7 +2178,6 @@ filings = con.execute("""
     )
     SELECT accession_number, filing_date FROM manifest
 """).df()
-con.close()
 
 act_f = act[act.channel == "filing"].merge(filings, on="accession_number", how="left")
 act_f["year"] = pd.to_datetime(act_f["filing_date"]).dt.year
@@ -2372,9 +2279,6 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 df = pd.read_parquet(_p("firm_activities.parquet"))
 n_activities_total = len(df)
@@ -2595,9 +2499,6 @@ Financial fundamentals and market prices do not come from disclosure text; they 
 import json
 from pathlib import Path
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _econ = json.loads(_p("strategy_economic_profiles.json").read_text())
 econ_a = _econ["panel_a"]
@@ -2683,9 +2584,6 @@ plt.show()
 from pathlib import Path
 import pandas as pd
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _m26 = pd.read_parquet(_p("firm_year_master_v2.parquet"))
 _m26 = _m26[_m26["year"] == _m26["year"].max()]
@@ -2770,9 +2668,6 @@ import json
 from pathlib import Path
 import pandas as pd
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _df_w = pd.read_parquet(_p("firm_year_washing_score.parquet"))
 _w = _df_w["w"].dropna()
@@ -2803,9 +2698,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 df = pd.read_parquet(_p("firm_year_washing_score.parquet"))
 w = df['w'].dropna()
@@ -2902,9 +2794,6 @@ If decoupling is a lasting posture, what happens when the same firm discusses AI
 import json
 from pathlib import Path
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 grounding = json.loads(_p("activity_grounding.json").read_text())
 gap = grounding["channel_gap"]
@@ -2932,9 +2821,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _pooled = json.loads(_p("activity_grounding.json").read_text())["channel_gap"]["pooled"]
 
@@ -3069,9 +2955,6 @@ A common assumption in corporate communication research is that promotional tone
 import json
 from pathlib import Path
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _words_gap = json.loads(_p("channel_gap_words_robustness.json").read_text())
 promo_ratio = _words_gap["promo_per_1k_words"]["ratio"]
@@ -3488,29 +3371,20 @@ We now run the framework on contrasting firm-years from the S&P 500 (@tbl-firm-c
 #| tbl-cap: "Illustrative peer comparisons across firm-years within Financials, Technology, and Real Estate. Quantities are computed at render time for the 2024 filing year (Welltower: the 2025 filing year, which contains its FY2024 Form 10-K and the earnings call cited in the SEC comment letter). Percentiles are within-year ranks among disclosing firms; activity shares are computed over the firm-year's disclosed activities in all venues."
 #| echo: false
 from pathlib import Path
-import duckdb
 import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _ws = pd.read_parquet(_p("firm_year_washing_score.parquet"))
 _ws["pct_d"] = _ws.groupby("year")["frames_per_1k"].rank(pct=True) * 100
 _ws["pct_s"] = _ws.groupby("year")["substance"].rank(pct=True) * 100
 _dim = pd.read_parquet(_p("firm_year_strategy_dimensions.parquet")).set_index(["ticker", "year"])["archetype"]
 _act = pd.read_parquet(_p("firm_activities.parquet"))
-db_path = Path("../duckdb/thesis.duckdb")
-if not db_path.exists():
-    db_path = Path("duckdb/thesis.duckdb")
-con = duckdb.connect(str(db_path), read_only=True)
 _fdates = con.execute("""
     SELECT accession_number, filing_date FROM filing_manifest WHERE country_code = 'us' AND accession_number IS NOT NULL
     UNION ALL SELECT accession_number, filing_date FROM filing_manifest_10q WHERE country_code = 'us'
 """).df()
-con.close()
 _act = _act.merge(_fdates, on="accession_number", how="left")
 _act["year"] = pd.to_datetime(_act["filing_date"]).dt.year
 _call_year = _act["accession_number"].str.extract(r"_(\d{4})Q")[0].astype(float)
@@ -3602,9 +3476,6 @@ Quadrants come from a median split of $D$ and of $S$ among the firms disclosing 
 from pathlib import Path
 import pandas as pd
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _wall = pd.read_parquet(_p("firm_year_washing_score.parquet"))
 _m26 = pd.read_parquet(_p("firm_year_master_v2.parquet"))
@@ -3740,9 +3611,6 @@ import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 def _pp(name):
     p = Path(f"../data/processed/{name}")
     return p if p.exists() else Path(f"data/processed/{name}")
@@ -3894,37 +3762,23 @@ The full operational yields, instance counts, and acceptance ratios across docum
 #| tbl-cap: "Complete granular inference funnel by document form."
 #| echo: false
 import os
-from pathlib import Path
-import duckdb
-import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-db_path = Path("../duckdb/thesis.duckdb")
-if not db_path.exists():
-    db_path = Path("duckdb/thesis.duckdb")
-repo_root = db_path.resolve().parent.parent
-act_path = Path("../data/processed/clusters/firm_activities.parquet")
-if not act_path.exists():
-    act_path = Path("data/processed/clusters/firm_activities.parquet")
-_acts = pd.read_parquet(act_path).drop_duplicates(subset=["ticker", "text_hash", "activity_id"])
+_acts = pd.read_parquet(_p("firm_activities.parquet")).drop_duplicates(subset=["ticker", "text_hash", "activity_id"])
 
 FORMS = ["10-K", "10-Q", "DEF 14A", "8-K", "Earnings call", "20-F"]
 FORM_LABELS = {"10-K": "10-K", "10-Q": "10-Q", "DEF 14A": "DEF 14A", "8-K": "8-K", "Earnings call": "Calls", "20-F": "20-F"}
 
-con = duckdb.connect(str(db_path), read_only=True)
-con.execute("SET enable_progress_bar = false")
 con.register("acts", _acts[["ticker", "accession_number", "text_hash", "activity_id"]])
-_cwd = os.getcwd()
-os.chdir(repo_root)
 try:
     con.execute(f"""
-        CREATE TEMP TABLE _pp AS
+        CREATE OR REPLACE TEMP TABLE _pp AS
         SELECT form, accession_number, paragraph_index, text_hash, is_scorable
         FROM paragraphs WHERE country_code = 'us' AND {PANEL_DOCS}
     """)
     con.execute("""
-        CREATE TEMP TABLE _pos AS
+        CREATE OR REPLACE TEMP TABLE _pos AS
         SELECT text_hash FROM (
             SELECT text_hash, is_ai_prefiltered
             FROM read_parquet('data/interim/prefilter_predictions_unique/prefilter_predictions__run=*.parquet', union_by_name=true)
@@ -3932,18 +3786,18 @@ try:
             QUALIFY row_number() OVER (PARTITION BY text_hash ORDER BY model_version DESC) = 1
         ) WHERE is_ai_prefiltered
     """)
-    con.execute(f"""
-        CREATE TEMP TABLE _fr AS
+    con.execute("""
+        CREATE OR REPLACE TEMP TABLE _fr AS
         SELECT form, accession_number, paragraph_index, text_hash, frame_id, subject
-        FROM gold_ai_frames WHERE country_code = 'us' AND has_frame AND {PANEL_DOCS}
+        FROM _us_frames
     """)
     con.execute("""
-        CREATE TEMP TABLE _ac AS
+        CREATE OR REPLACE TEMP TABLE _ac AS
         SELECT DISTINCT a.ticker, a.accession_number, a.text_hash, a.activity_id, d.form
         FROM acts a JOIN (SELECT DISTINCT accession_number, form FROM _pp) d USING (accession_number)
     """)
     # an activity is counted once per (ticker, text, index) whatever the form it appears in
-    con.execute("CREATE TEMP TABLE _acu AS SELECT DISTINCT ticker, text_hash, activity_id, form FROM _ac")
+    con.execute("CREATE OR REPLACE TEMP TABLE _acu AS SELECT DISTINCT ticker, text_hash, activity_id, form FROM _ac")
 
     def by_form(sql):
         """{form: value} plus 'Total' computed over all forms (no double counting)."""
@@ -3970,8 +3824,7 @@ try:
     ac_docs   = by_form("SELECT count(DISTINCT accession_number) FROM _ac {where}")
     ac_firms  = by_form("SELECT count(DISTINCT ticker) FROM _ac {where}")
 finally:
-    os.chdir(_cwd)
-con.close()
+    pass
 
 FORMS = [f for f in FORMS if docs[f] > 0]  # drop forms absent from the analysis universe
 COLS = FORMS + ["Total"]
@@ -4045,9 +3898,6 @@ from pathlib import Path
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 data = json.loads(_p("gbdt_prefilter_importance.json").read_text())
 features = data["features"][:16]
@@ -4088,9 +3938,6 @@ import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 def _pp(name):
     p = Path(f"../data/processed/{name}")
     return p if p.exists() else Path(f"data/processed/{name}")
@@ -4172,9 +4019,6 @@ import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 manifest = json.loads(_p("strategy_dimensions_manifest.json").read_text())
 corr = pd.DataFrame(manifest["correlation_matrix"])
@@ -4202,9 +4046,6 @@ import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 df = pd.read_parquet(_p("firm_activities.parquet"))
 n_firms = df["ticker"].nunique()
@@ -4406,9 +4247,6 @@ The beta-estimation procedure identifies the first trading day on or after the f
 from pathlib import Path
 import pandas as pd
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _mf = pd.read_parquet(_p("firm_year_market_factors.parquet"))
 mf_n_cells, mf_n_tickers = len(_mf), _mf["ticker"].nunique()
@@ -4432,14 +4270,7 @@ The market-factors panel spans `{python} f"{mf_n_cells:,}"` firm-years across `{
 ```{python}
 #| echo: false
 #| output: false
-import duckdb
-
-_db_path = Path("../duckdb/thesis.duckdb")
-if not _db_path.exists():
-    _db_path = Path("duckdb/thesis.duckdb")
-_dbc = duckdb.connect(str(_db_path), read_only=True)
-_uni = _dbc.execute("SELECT active_status, count(*) AS n FROM firm_universe WHERE country_code = 'us' GROUP BY 1").df()
-_dbc.close()
+_uni = con.execute("SELECT active_status, count(*) AS n FROM firm_universe WHERE country_code = 'us' GROUP BY 1").df()
 uni_total = int(_uni["n"].sum())
 uni_delisted = int(_uni.loc[_uni["active_status"] == "delisted", "n"].sum())
 ```
@@ -4598,9 +4429,6 @@ import json
 from pathlib import Path
 import pandas as pd
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _wv = json.loads(_p("washing_score_validation.json").read_text())
 w_n_panel, w_n_firms = _wv["n_panel"], _wv["n_firms"]
@@ -4674,9 +4502,6 @@ import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 w = pd.read_parquet(_p("firm_year_washing_score.parquet"))
 strat = pd.read_parquet(_p("firm_year_strategy_dimensions.parquet"))[["ticker", "year", "archetype"]]
@@ -4710,9 +4535,6 @@ from pathlib import Path
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _altagg = json.loads(_p("firm_year_aggregation_robustness.json").read_text())
 _outcome_labels = {"beta": "Beta", "volatilidad_idiosincratica": "Idiosyncratic volatility", "price_to_sales": "Price-to-sales",
@@ -4732,9 +4554,6 @@ To evaluate whether capital structure confounds the earnings-call disclosure sig
 from pathlib import Path
 import pandas as pd
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 _lev = pd.read_csv(_p("call_beta_regressions.csv")).set_index(["model", "variable"])
 _lev_samples = pd.read_csv(_p("call_beta_regression_samples.csv")).set_index("model")
@@ -4886,9 +4705,6 @@ import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 SIC2_LABELS = {
     "73": "Business services", "38": "Instruments", "28": "Chemicals", "49": "Electric/gas/sanitary",
@@ -4928,9 +4744,6 @@ import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 m = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
 m["sic2"] = m["sic2"].astype(int).astype(str)
@@ -4985,9 +4798,6 @@ from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 m = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
 m["sic2"] = m["sic2"].astype(int).astype(str)
@@ -5035,9 +4845,6 @@ import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 m = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
 m["sic2"] = m["sic2"].astype(int).astype(str)
@@ -5079,9 +4886,6 @@ import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 wy = pd.read_parquet(_p("firm_year_washing_score.parquet"))
 first_year = wy.groupby("ticker")["year"].min()
@@ -5115,9 +4919,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 m = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
 m["sic2"] = m["sic2"].astype(int).astype(str)
@@ -5178,9 +4979,6 @@ import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 m = pd.read_parquet(_p("firm_year_master_v2.parquet"))
 mm = m[["ticker", "year", "archetype"]].dropna(subset=["archetype"]).sort_values(["ticker", "year"]).copy()
@@ -5210,9 +5008,6 @@ import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 act = pd.read_parquet(_p("firm_activities.parquet"))
 act["grounded"] = act["evidence_type"].isin(["named", "metric"])
@@ -5244,9 +5039,6 @@ import statsmodels.formula.api as smf
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 def _pp(name):
     p = Path(f"../data/processed/{name}")
     return p if p.exists() else Path(f"data/processed/{name}")
@@ -5296,15 +5088,7 @@ Disclosed AI activity predicts AI patenting even after controlling for firm size
 #| label: tbl-h10-vignettes
 #| echo: false
 from pathlib import Path
-import duckdb
 import pandas as pd
-
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
-def _db():
-    p = Path("../duckdb/thesis.duckdb")
-    return p if p.exists() else Path("duckdb/thesis.duckdb")
 
 m = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
 m["sic2"] = m["sic2"].astype(int).astype(str)
@@ -5322,8 +5106,6 @@ prof = (wy_last[wy_last["ticker"].isin(sic_by_ticker[sic_by_ticker == sic_pick].
 pick = pd.concat([prof.head(1), prof.tail(1)])
 
 act = pd.read_parquet(_p("firm_activities.parquet"))
-dbc = duckdb.connect(str(_db()), read_only=True)
-
 vignette_rows = []
 lines = []
 for _, r in pick.iterrows():
@@ -5332,13 +5114,12 @@ for _, r in pick.iterrows():
     q = act[(act["ticker"] == r["ticker"]) & (act["evidence_type"] == "metric")].head(1)
     if len(q):
         qr = q.iloc[0]
-        txt = dbc.execute("SELECT paragraph_text FROM paragraphs WHERE accession_number = ? AND paragraph_index = ? LIMIT 1",
-                           [qr["accession_number"], int(qr["paragraph_index"])]).fetchone()
+        txt = con.execute("SELECT paragraph_text FROM paragraphs WHERE accession_number = ? AND paragraph_index = ? LIMIT 1",
+                          [qr["accession_number"], int(qr["paragraph_index"])]).fetchone()
         if txt:
             lines.append(f"> {txt[0][:280].strip()}...\n")
     vignette_rows.append({"ticker": r["ticker"], "archetype": r["archetype"], "d": r["disclosure_intensity"],
                            "g": r["grounding_index"], "w": r["w"], "n_activities": int(r["n_activities"])})
-dbc.close()
 
 def _gdir():
     d = Path("../docs/analytics")
