@@ -1,4 +1,5 @@
 ---
+title: "AI Washing or Credible Disclosure? Patterns and Clusters in Corporate AI Disclosures"
 bibliography: references.bib
 format:
   docx:
