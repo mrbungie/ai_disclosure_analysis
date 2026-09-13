@@ -175,6 +175,8 @@ hd_gap_quant_pp = _cg["quantified_outcome"]["gap_pp"]
 hd_gap_named_pp = _cg["named_product_or_process"]["gap_pp"]
 ```
 
+{{< pagebreak >}}
+
 # Executive Summary {.unnumbered}
 
 After ChatGPT launch in late 2022, almost every S&P 500 firm began discussing AI, making mentions alone uninformative. This thesis separates AI rhetoric from disclosed activity, its grounding, and the gap between them. Across `{python} hd_paragraphs_m` million filing and earnings-call paragraphs, we identify `{python} f"{hd_n_activities:,}"` AI activities across `{python} hd_n_activity_firms` firms.
@@ -184,6 +186,8 @@ Corporate AI is mainly applied AI: products, workflows, service, and operations�
 Credibility differs sharply by venue. Earnings calls contain `{python} round(hd_promo_ratio)`× more promotional and `{python} round(hd_quant_ratio)`× more quantified claims per thousand words than filings, yet quantified outcomes are `{python} f"{hd_gap_quant_pp:.0f}"` percentage points less common in filings for the same firm-year activities. The narrative reaches the binding venue; much of the evidence does not. AI rhetoric—but not disclosed substance or the rhetoric–substance gap—relates to later systematic risk; this is non-causal evidence.
 
 The resulting AI Disclosure Credibility Framework tracks intensity, posture, activity, grounding, substance, decoupling, and consistency across venues. For issuers: move evidence, not adjectives, into the 10-K. For investors: treat a large gap as a due-diligence signal, not a verdict.
+
+{{< pagebreak >}}
 
 # Introduction
 
@@ -3749,10 +3753,14 @@ The models did not produce empirical results directly. Both acted as annotators 
 
 Second, AI coding assistants (Anthropic Claude, via Claude Code) served as tools while preparing this text. They helped write and debug pipeline scripts. They helped draft figures and tables from computed data. They also helped check references, find source PDFs, and edit prose for clarity. All research questions, hypotheses, design choices, interpretations, and conclusions are the author's own. Every number reported comes from the author's code on the author's data. The author reviewed and approved all text. The author takes full responsibility for its content.
 
+{{< pagebreak >}}
+
 # References {.unnumbered}
 
 ::: {#refs}
 :::
+
+{{< pagebreak >}}
 
 # Appendices {.unnumbered}
 
