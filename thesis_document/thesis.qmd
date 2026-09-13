@@ -257,7 +257,7 @@ The next chapter details the empirical data and multi-stage measurement methodol
 
 # Methodology
 
-To address these research questions, we construct an empirical measurement pipeline capable of extracting, verifying, and evaluating corporate AI communication at market scale without relying on coarse keyword counts. This chapter details our data acquisition protocol, the multi-stage machine-learning and LLM extraction funnel, the construction of our six analytical constructs, and the validation benchmarks that establish their reliability.
+To address our research questions, we construct an empirical pipeline to extract, verify, and evaluate corporate AI disclosures without relying on coarse keyword counts. This chapter details our data sources, the multi-stage extraction funnel, the construction of six analytical constructs, and validation benchmarks.
 
 ## Data sources and corpus
 
@@ -302,9 +302,9 @@ cov_calls_2026 = int(_cov.loc["Earnings call transcript", "firms"]) if "Earnings
 cov_months_2026 = pd.to_datetime(cov_last_date).month
 ```
 
-**Sample and panel construction.** The sample begins with S&P 500 constituents as of 2021-01-01 (`{python} uni_frame_total` tickers). To avoid survivorship bias, the `{python} uni_frame_delisted` firms that later delisted or were acquired remain in the panel until their exit dates. Overall, `{python} uni_n_firms` firms have processed narrative records, `{python} uni_n_activity_firms` report operational AI activities, and `{python} bal_n` firms form a balanced panel observed across all six years (2021–2026).
+**Sample and panel construction.** The sample begins with S&P 500 constituents as of 2021-01-01 (`{python} uni_frame_total` tickers). To avoid survivorship bias, `{python} uni_frame_delisted` firms that later delisted or were acquired remain in the panel until exit. Overall, `{python} uni_n_firms` firms have processed narrative records, `{python} uni_n_activity_firms` report operational AI activities, and `{python} bal_n` firms form a balanced panel observed across all six years (2021–2026).
 
-**Time coverage and seasonal adjustment.** The panel includes filings through `{python} cov_last_date`. For 2026 (year-to-date), `{python} cov_10k_2026` firms have filed 10-Ks (compared to `{python} cov_10k_2025` in full-year 2025), `{python} cov_10q_2026` filed 10-Qs, and `{python} cov_calls_2026` held earnings calls. Cross-sectional analyses use observed year-to-date data, while annual trend comparisons scale 2026 by the ratio of full-year 2025 to the matching 2025 calendar window (`{python} hd_cutoff_str`).
+**Time coverage and seasonal adjustment.** Filings extend through `{python} cov_last_date`. For 2026 (year-to-date), `{python} cov_10k_2026` firms have filed 10-Ks (`{python} cov_10k_2025` in full-year 2025), `{python} cov_10q_2026` filed 10-Qs, and `{python} cov_calls_2026` held earnings calls. Cross-sectional analyses use observed year-to-date data, while trend comparisons scale 2026 using the matching 2025 calendar window (`{python} hd_cutoff_str`).
 
 ```{python}
 #| echo: false
@@ -395,23 +395,21 @@ Markdown(tabulate(table, headers=["Stage", "Unit of Observation", "Operational F
 
 *Notes: High-level overview of the six-stage inference funnel. Granular form-by-form decompositions and model acceptance diagnostics are detailed in Appendix A (@tbl-a1-funnel-full).*
 
-Following the principles of Knowledge Discovery in Databases (KDD) [@fayyad1996, pp. 37--40] and the CRISP-DM process model [@shearer2000, pp. 13--15], the pipeline was iteratively applied from document selection and cleaning to feature modeling and empirical validation. Because this is an academic research study rather than a commercial software system, the cycle ends at the evaluation and econometric analysis stage rather than an operational deployment phase. In practice, this architecture (@fig-pipeline-architecture; @tbl-funnel-summary) turns raw corporate text into structured metrics through two intermediate steps:
-
-It is important to note that this is mostly an empirical and exploratory analytics exercise rather than a prescriptive or operational framework, and its primary goal is to generate insights and support hypothesis testing rather than to provide scientific or operational guarantees.
+Grounded in Knowledge Discovery in Databases (KDD) [@fayyad1996, pp. 37--40] and CRISP-DM [@shearer2000, pp. 13--15], the pipeline follows an iterative workflow from document cleaning to empirical validation. As an exploratory academic study, the process terminates at econometric evaluation rather than operational deployment. In practice, this architecture (@fig-pipeline-architecture; @tbl-funnel-summary) converts raw corporate text into structured metrics through two intermediate extraction layers:
 
 $$\text{Raw text} \longrightarrow \text{AI claims (Frames)} \longrightarrow \text{Disclosed AI activities} \longrightarrow \text{Firm-level measures}$$
 
 ## Identifying AI disclosure: cleaning, deduplication, and ML gate
 
-Before model scoring, scorable paragraphs ($>3$ characters, alphanumeric content) are normalized and hashed using BLAKE2b signatures. Deduplication scores identical boilerplate and legal disclaimers once per unique text and maps them back across filings, preventing repeated text from distorting downstream measures.
+Before scoring, scorable paragraphs ($>3$ characters, alphanumeric content) are normalized and hashed with BLAKE2b signatures. Deduplication scores repeated boilerplate once per unique text and maps it across filings, preventing boilerplate from distorting downstream measures.
 
-We select candidate passages using a Gradient Boosted Decision Tree (GBDT) prefilter [@friedman2001, pp. 1189--95] built on 39 lexical, structural, and embedding features. To avoid missing relevant disclosures before LLM evaluation, we calibrate the model for high recall ($\ge 0.92$, classification threshold $\tau = 0.17$). Documents with no AI discussion are recorded as true zeros rather than missing values. Attrition across each screening stage appears in @tbl-funnel-summary, and validation benchmarks are reported in Appendix A (@tbl-evaluation-datasets).
+Candidate passages are screened using a Gradient Boosted Decision Tree (GBDT) prefilter [@friedman2001, pp. 1189--95] trained on 39 lexical, structural, and embedding features. We calibrate the prefilter for high recall ($\ge 0.92$, threshold $\tau = 0.17$) to avoid discarding relevant disclosures prior to LLM evaluation. Documents lacking AI discussion enter as true zeros rather than missing values (@tbl-funnel-summary; Appendix A, @tbl-evaluation-datasets).
 
 ## From paragraphs to individual AI claims: frame extraction
 
-Candidate texts pass to a zero-shot LLM judge (`openai/gpt-5.6-luna`), selected based on the model benchmarks in Appendix A. The judge acts as a precision filter: it drops roughly `{python} f"{(1 - n_framed / n_prefiltered) * 100:.0f}"`% of prefiltered passages that contain only incidental keywords, macro commentary, or generic risk disclaimers.
+Candidate texts pass to a zero-shot LLM judge (`openai/gpt-5.6-luna`, benchmarked in Appendix A). Acting as a precision filter, the judge discards roughly `{python} f"{(1 - n_framed / n_prefiltered) * 100:.0f}"`% of candidate passages containing only incidental keywords, macro commentary, or generic disclaimers.
 
-For the remaining disclosures, the judge extracts zero, one, or multiple claims per passage using a seven-dimension schema (@tbl-frame-schema). Claims describing the disclosing firm's own actions or exposures form the basis for Disclosure Intensity ($D$) and Communication Posture ($P$).
+For retained disclosures, the model extracts claims using a seven-dimension schema (@tbl-frame-schema). Claims describing the firm's own actions or exposures feed directly into Disclosure Intensity ($D$) and Communication Posture ($P$).
 
 ```{python}
 #| label: tbl-frame-schema
@@ -466,9 +464,9 @@ Markdown(tabulate(t4_rows, headers=["Dimension", "Operational Scope", "Schema Cl
 
 ## From claims to concrete AI activities: action, object, and function
 
-When a claim attributes an operational action to the firm (such as deploying, developing, partnering, or investing), it passes to a second extraction prompt conditioned on the firm's name and ticker. The prompt extracts an action triple (action, object, function), deployment stage, technology source, target user, and supporting evidence (@tbl-activity-schema).
+Claims attributing operational action to the firm (deploying, developing, partnering, investing) pass to a second prompt conditioned on firm identity. The prompt extracts an action triple (action, object, function), deployment stage, technology source, target user, and supporting sentence evidence (@tbl-activity-schema).
 
-This second pass identifies `{python} f"{hd_n_activities:,}"` operational AI activity records across `{python} hd_n_activity_firms` firms, each linked to specific sentences in the source text. These records serve as inputs to Disclosed AI Activity ($A$) and Activity Grounding ($G$).
+This second pass identifies `{python} f"{hd_n_activities:,}"` operational AI activity records across `{python} hd_n_activity_firms` firms. These records supply the inputs for Disclosed AI Activity ($A$) and Activity Grounding ($G$).
 
 ```{python}
 #| label: tbl-activity-schema
@@ -535,17 +533,17 @@ $$\underbrace{\text{Semantic frames}}_{\text{frame extraction}} \Longrightarrow 
    $$W_{it} = \text{rank}(D_{it}) - \text{rank}(S_{it}) \in [-1, 1]$$
    A high positive score reflects high narrative volume paired with low grounded substance ("AI washing").
 
-**Aggregation and robustness.** Document-level rates are aggregated to firm-years using the median document rate, preventing boilerplate exhibits from skewing the measure. Concept counts are log-transformed, which shows higher year-to-year reliability than simple narrative shares ($\rho = 0.845$ vs. $0.528$). Rates for firms with sparse text are shrunk toward the sample mean using empirical-Bayes estimation [@efron1973].
+**Aggregation and robustness.** Document rates aggregate to firm-years via median document rates to dampen boilerplate exhibits. Concept counts are log-transformed, yielding higher year-over-year reliability than raw shares ($\rho = 0.845$ vs. $0.528$). Rates for firms with sparse text are shrunk toward the sample mean using empirical-Bayes estimation [@efron1973].
 
 ## Financial and market variables
 
-We collect firm-year financial and market variables from SEC XBRL filings and daily stock returns, aligned to fiscal period ends. Financial items follow standardized fallback rules (capex 91%, SG&A 81%, net margin 99%, revenue 99% coverage) and a [340, 380]-day window filter for annual changes.
+Firm-year financial and market controls combine SEC XBRL disclosures and daily stock returns aligned to fiscal period ends. Balance-sheet and income items follow standardized fallback hierarchies (capex 91%, SG&A 81%, net margin 99%, revenue 99% coverage) with a [340, 380]-day window for annual changes.
 
-Baseline controls include market capitalization, R&D-to-sales, gross margin, operating margin, asset turnover, price-to-sales, forward revenue growth, market beta, and idiosyncratic volatility [@campbell2001; @ang2006]. Because XBRL R&D has 46% coverage, we include a non-reporting indicator rather than imputing zero. Financial ratios are winsorized at the 1st and 99th percentiles. Appendix D details return windows and estimation diagnostics.
+Baseline controls comprise market capitalization, R&D-to-sales, gross margin, operating margin, asset turnover, price-to-sales, forward revenue growth, market beta, and idiosyncratic volatility [@campbell2001; @ang2006]. Because XBRL R&D coverage is 46%, we include a non-reporting indicator rather than imputing zero. Financial ratios are winsorized at the 1st and 99th percentiles (Appendix D).
 
 ## Measurement validation
 
-Each step of the pipeline was validated against holdout samples, multi-model evaluations, and human audits. Independent tests across model families show strong agreement (Gemini and Qwen inter-rater agreement $\kappa = 0.81\text{--}0.87$), while blind human audits confirm 91.2% precision on prefiltering and 89.1%–95.8% accuracy on extracted activity fields. Appendix A (@tbl-evaluation-datasets) reports full validation datasets and diagnostics.
+Each pipeline step was evaluated against holdout sets, multi-model benchmarks, and blind human audits. Independent model evaluations demonstrate high inter-rater agreement (Gemini and Qwen $\kappa = 0.81\text{--}0.87$), while human audits confirm 91.2% precision on prefiltering and 89.1%–95.8% field accuracy on activity extraction (Appendix A, @tbl-evaluation-datasets).
 
 With the measurement pipeline calibrated and validated, we turn to our empirical analyses. The next chapter examines how corporate AI disclosure diffused across the S&P 500 from 2021 through 2026, and maps the distinct communication archetypes that emerged as AI language expanded across the market.
 
