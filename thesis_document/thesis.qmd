@@ -257,6 +257,8 @@ The next chapter details the empirical data and multi-stage measurement methodol
 
 # Methodology
 
+To address these research questions, we construct an empirical measurement pipeline capable of extracting, verifying, and evaluating corporate AI communication at market scale without relying on coarse keyword counts. This chapter details our data acquisition protocol, the multi-stage machine-learning and LLM extraction funnel, the construction of our six analytical constructs, and the validation benchmarks that establish their reliability.
+
 ## Data sources and corpus
 
 The sample covers SEC filings (10-K, 10-Q, 20-F, DEF 14A, 8-K) and earnings-call transcripts for the S&P 500 from 2021 through early 2026. All document counts and summary metrics are computed directly from the underlying database.
@@ -535,7 +537,11 @@ Baseline controls include market capitalization, R&D-to-sales, gross margin, ope
 
 Each step of the pipeline was validated against holdout samples, multi-model evaluations, and human audits. Independent tests across model families show strong agreement (Gemini and Qwen inter-rater agreement $\kappa = 0.81\text{--}0.87$), while blind human audits confirm 91.2% precision on prefiltering and 89.1%–95.8% accuracy on extracted activity fields. Appendix A (@tbl-evaluation-datasets) reports full validation datasets and diagnostics.
 
+With the measurement pipeline calibrated and validated, we turn to our empirical analyses. The next chapter examines how corporate AI disclosure diffused across the S&P 500 from 2021 through 2026, and maps the distinct communication archetypes that emerged as AI language became ubiquitous.
+
 # Corporate AI Disclosure Strategies
+
+How did corporate artificial intelligence communication evolve as the technology entered the mainstream, and do firms adopt homogeneous or distinct disclosure strategies? This chapter addresses our first two research questions by analyzing market-wide diffusion patterns and identifying recurring managerial communication postures across our large-cap panel.
 
 ## AI becomes ubiquitous
 
@@ -1531,7 +1537,11 @@ Recomputing the archetypes on Form 10-K frames alone (`{python} len(_common10k)`
 
 Without DEF 14A, the governance vertex absorbs `{python} f"{_z_gov10k_on_risk:+.2f}"` SD of risk orientation while the defensive vertex attenuates from `{python} f"{_z_def_full_on_risk:+.2f}"` to `{python} f"{_z_def10k_on_risk:+.2f}"` SD; proxy statements are essential to disentangle board oversight from statutory risk-listing.
 
+These archetypal profiles demonstrate that firms adopt stable, multi-dimensional communication strategies reflecting industry norms rather than random noise. However, posture captures only *how* managers talk about AI, not *what* operational initiatives they actually undertake. To evaluate whether these rhetorical strategies correspond to real organizational deployment, the next chapter examines the concrete AI activities disclosed by these firms.
+
 # AI Activity, Business Models, and Economic Profiles
+
+A central question in corporate disclosure is whether narrative posture reflects genuine technological execution or ungrounded talk. This chapter examines the concrete operational substance behind corporate AI claims by classifying disclosed activities into functional business roles, evaluating their verification grounding, and testing whether disclosure archetypes cohere with underlying economic fundamentals.
 
 ## What corporate AI activity actually consists of
 
@@ -2552,11 +2562,13 @@ The two firms also differ sharply in scale, with Mastercard's market capitalizat
 
 ## What disclosed AI activity adds to disclosure posture
 
-Disclosed activity carries information that posture alone does not. At equal disclosure volume, Vocal Substantives report `{python} f"{hd_vs_ratio:.2f}"` times as many AI activities as Defensive Disclosers. Archetypes do not simply proxy for verbosity. What firms report doing is similar across groups. They sell and operate with AI. Only the archetype pairing promotion with grounded activity stands out on sector-year-adjusted fundamentals. For an investor or issuer, archetype status offers a first screen. Deeper information sits in grounding attributes. These attributes feed the credibility tests that follow.
+Disclosed activity carries information that posture alone does not. At equal disclosure volume, Vocal Substantives report `{python} f"{hd_vs_ratio:.2f}"` times as many AI activities as Defensive Disclosers. Archetypes do not simply proxy for verbosity. What firms report doing is similar across groups. They sell and operate with AI. Only the archetype pairing promotion with grounded activity stands out on sector-year-adjusted fundamentals. For an investor or issuer, archetype status offers a valuable first screen, but the deeper signals sit in grounding attributes. 
+
+Yet, within any single document, firms retain wide discretion over what they emphasize. The crucial empirical question is whether these operational claims survive when legal commitment escalates. The next chapter tests corporate credibility across escalating verification hurdles, examining how disclosures shift between voluntary earnings calls and statutory SEC filings, and how firms respond to direct regulatory inquiries.
 
 # Credibility Under Increasing Disclosure Commitment
 
-There is no audited census of corporate AI deployment, so we define credibility by what survives as disclosure becomes more costly to commit to [@crawford1982, pp. 1431--32; @rogers2011, pp. 2155--56]. The credibility ladder in @fig-credibility-ladder orders those commitments. Its first three rungs (named artifacts, deployment stage, quantified outcomes) are the components of AI Activity Grounding and are tested jointly through Decoupling ($W$). The last two, survival of claims across venues and response to direct SEC scrutiny, each get their own design.
+How credible are corporate AI claims when scrutinized against escalating legal and regulatory commitments? Because enterprise AI adoption lacks a centralized, audited reporting census, we evaluate credibility by observing what survives as the cost of misrepresentation rises [@crawford1982, pp. 1431--32; @rogers2011, pp. 2155--56]. The credibility ladder in @fig-credibility-ladder orders those commitments. Its first three rungs (named artifacts, deployment stage, quantified outcomes) capture internal verifiability and are tested jointly through Decoupling ($W$). The remaining rungs examine whether claims survive across disclosure venues under differing legal liability and how firms respond to direct SEC scrutiny.
 
 ## Empirical credibility tests: the credibility ladder
 
@@ -3043,7 +3055,11 @@ Three things survive the climb up the ladder. Decoupling between narrative inten
 
 AI washing in this thesis therefore means an observable, persistent Decoupling ($W$) between narrative intensity and grounded operational substance, not legal proof of fraud or nonimplementation.
 
+While these findings show that promotional claims frequently fail to survive into binding filings, they raise an immediate valuation question: do capital markets penalize ungrounded disclosure, or do investors respond indiscriminately to narrative volume? The next chapter examines how equity markets price corporate AI communication around earnings announcements.
+
 # Market Relevance of Disclosure Signals
+
+How do capital markets price corporate artificial intelligence narratives? Do equity investors demand verifiable operational substance, or does sheer disclosure volume suffice to alter market perceptions? This chapter evaluates the market implications of corporate AI communication by testing whether post-earnings-call systematic risk responds to substantive operational execution or promotional cheap talk.
 
 Does the systematic risk the market assigns to a firm after an earnings call follow the *volume* of its AI talk or the *substance* of its disclosed activity? The outcome throughout is post-call market beta conditioned on pre-call beta. We ask whether AI disclosure carries information about how the market prices a firm's risk, not whether it earns abnormal returns. We track communication call by call across S&P 500 firms from 2021 to 2025, separating a firm's established disclosure posture from the surprise content of a given call.
 
@@ -3293,7 +3309,11 @@ _pb_sub_p = "< 0.001" if pb_sub["p"] < 0.001 else f"= {pb_sub['p']:.3f}"
 1. **HistDisclosure is not concentrated in a single year, but SurpriseDisclosure never reaches significance on its own:** Leave-one-year-out regressions keep $\text{HistDisclosure}$ `{python} _hd_sig_text` ($p \le$ `{python} f"{_max_p_hd:.3f}" + _hd_detail_text`). $\text{SurpriseDisclosure}$, by contrast, `{python} "reaches p < 0.05 in at least one excluded-year specification" if _any_sd_sig else "never reaches conventional significance in any single-year exclusion"`, consistent with its null in the baseline. The association between call disclosure and post-call beta runs through a firm's persistent historical posture, not through the surprise content of any one call.
 2. **Pre-call beta placebo failure:** Regressing pre-call beta ($\beta^{\text{pre}}_{[-252, -21]}$) on contemporaneous call disclosure yields $\beta =$ `{python} f"{pb_disc['beta_std']:.3f}"` ($p$ `{python} _pb_disc_p`), while substance is null ($p$ `{python} _pb_sub_p`). Firms that talk heavily about AI were already high-beta before the call, which is the cross-sectional reading of the robustness table.
 
+These market results complete our empirical investigations: while equity markets price narrative volume as a general indicator of systematic risk, they do not systematically distinguish grounded operational substance from rhetorical noise. This market friction makes internal due diligence and objective measurement essential. The next chapter translates our empirical findings into an actionable decision framework for corporate executives, boards of directors, and investment professionals.
+
 # From Measurement to Managerial Application
+
+The empirical findings documented across the preceding chapters highlight a complex corporate landscape: strategic disclosure archetypes follow industry norms, oral conference-call evidence often fails to reach statutory filings, and markets price talk rather than technical depth. To bridge these analytical insights to practical decision-making, this chapter operationalizes our measurement architecture into a concrete credibility framework for corporate issuers and investment allocators.
 
 The pipeline built and tested on `{python} hd_paragraphs_m` million paragraphs of corporate text boils down to six diagnostic questions. Five follow the measurement chain ($D \to A \to G \to S \to W$). The sixth asks whether a firm tells the same story in its calls and in its filings. @tbl-managerial-framework reads each one as a managerial and investment decision.
 
@@ -3496,7 +3516,11 @@ Issuers use the framework to bring communication in line with how much AI actual
 
 : The AI Disclosure Credibility Checklist: operational guidance for corporate issuers and investment due diligence. {#tbl-checklist}
 
+By pairing diagnostic questions with concrete implementation guidance, the Credibility Checklist enables issuers and investors to ground corporate communication in verifiable facts. The final chapter synthesizes the overarching findings of this thesis, discusses their theoretical implications, acknowledges empirical limitations, and outlines directions for future research.
+
 # Conclusions
+
+This thesis set out to examine whether distinguishing disclosure volume, communication posture, and disclosed operational substance provides a credible foundation for evaluating corporate AI claims. Synthesizing our findings across six years of SEC filings, earnings calls, regulatory inquiries, and capital-market data, this concluding chapter reviews our core results, assesses their theoretical contributions, and highlights practical takeaways and limitations.
 
 Content separates firms in ways that mention counts cannot, and some of that content links to fundamentals and market risk. The main hypothesis holds, with one exception, and the evidence throughout is associative, not causal.
 
