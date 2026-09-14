@@ -248,12 +248,39 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       Appendix E. La comparación con Yang (2026) NO se toca: es el único resultado de
       mercado robusto y es lo que lo sitúa en la literatura en vez de dejarlo como
       asociación suelta. **Corregido (Yang 2026 se queda intacta) — Prioridad: Alta**
-- [ ] **39. Recortes menores varios** — §2.3, §2.5, §3.1, §3.2, §4.3, §4.4, §4.6, §4.7,
+- [x] **39. Recortes menores varios** — §2.3, §2.5, §3.1, §3.2, §4.3, §4.4, §4.6, §4.7,
       apertura §5, §5.5, §8.2: threshold/features al apéndice, distribuciones al
       apéndice, "never input to clustering" decirlo una sola vez, seasonal factor a
       nota al pie, etc. Ver detalle caso a caso al tocar cada sección. **§6.6 (Blades et
       al.) queda fuera de esta lista — NO se toca, ver nota abajo. Corregido — Prioridad:
-      Media**
+      Media** — Hecho, caso a caso:
+      - §2.3 (Identifying AI disclosure): prosa recortada — el feature count y el
+        threshold τ ya estaban en `tbl-funnel-summary` y el recall target en Appendix B,
+        así que se sacaron los números duplicados de la prosa dejando solo la referencia
+        cruzada. Ningún número desaparece.
+      - §4.3 (Disclosure strategy meets disclosed AI activity): "never an input to
+        clustering" se dice completo la primera vez (prosa, antes de la figura); la
+        repetición en la nota de `fig-archetype-activity-heatmap` se recortó a "is
+        joined to the archetype assignment after the fact", sin repetir la explicación.
+      - §4.6 (More activities, thinner grounding): la explicación del ajuste
+        estacional same-window (ya explicado en detalle en "Data sources and corpus")
+        pasó a nota al pie; la repetición inline junto al número de 2026 se simplificó
+        a solo el número proyectado.
+      - §5.5 (What credibility means in this thesis): se eliminó la referencia hacia
+        adelante "The next chapter examines..." (regla 1), sin tocar el resto del
+        párrafo ni el hallazgo.
+      - §8.2 (What the evidence establishes and its synthesis): se sacó la repetición
+        casi verbatim de la cifra de difusión y de "grounding declined" que §8.1 (Answer
+        to the research question) ya establece un párrafo antes; se conservan los
+        números nuevos de esa frase (narrative intensity growing faster than
+        participation, generative-AI boom) y todos los números/betas del resto del
+        párrafo.
+      - §2.5, §3.1, §3.2, §4.4, §4.7, apertura §5: revisadas, sin recortes — no tenían
+        threshold/features duplicados, distribuciones movibles sin perder la evidencia
+        central de la sección, ni texto repetido en otra parte del documento.
+      - §6.6 (Blades et al.) verificado intacto (`grep -n Blades thesis.qmd`, texto
+        byte-a-byte sin cambios).
+      - `./render.py` compiló limpio (Word vía LibreOffice + PDF, "Done" al final).
 
       **Nota sobre §6.6 (Blades et al.): se queda íntegro, no se recorta.** No es "otra
       cita más": es el único lugar del cuerpo que explica *por qué* el mercado no premia
