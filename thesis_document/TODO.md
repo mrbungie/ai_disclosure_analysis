@@ -121,8 +121,9 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       ancla el framework a un estándar de industria NO se corta — es lo que muestra
       "adequate use of models derived from the literature" para la rúbrica. **Corregido
       (pase anterior iba a cortar Simonian también; no corresponde) — Prioridad: Máxima**
-- [ ] **17. §2.4 — recortar a la mitad.** False negatives y borderline passages →
-      Appendix B. **Original — Prioridad: Muy alta**
+- [x] **17. §2.4 — recortar a la mitad.** False negatives y borderline passages →
+      Appendix B. **Hecho (150→~74 palabras de prosa; detalle movido a "Error taxonomy
+      and classification robustness" en Appendix B) — Prioridad: Muy alta**
 - [ ] **18. §3.3.2.1 (refit 10-K-only) — una frase en el cuerpo.** Correlaciones y
       z-scores → apéndice. **Original — Prioridad: Muy alta**
 - [ ] **19. §7.1 — Table 15 + casos en prosa. Decisión a tomar al tocar la sección:**
