@@ -1234,7 +1234,7 @@ plt.show()
 *Notes:* k = 3; active index constituents, 10-K and DEF 14A filings. Ten consolidated industry centroids with radial non-crossing leader lines. Boundary exemplars: simplex boundary clipping. Central exemplars (OXY, JPM): balanced tripartite postures.
 :::
 
-Archetypal Analysis reveals that corporate AI communication organizes around three distinct, highly stable strategic orientations, alongside a non-disclosing baseline. @tbl-archetypes-glance summarizes the empirical composition, index shares, bootstrap stability, and defining profiles of each archetype:
+Archetypal Analysis identifies three distinct, highly stable disclosure strategies alongside a non-disclosing baseline (@tbl-archetypes-glance):
 
 ```{python}
 #| label: tbl-archetypes-glance
@@ -1283,13 +1283,11 @@ Markdown(tabulate(_rows, headers=["Archetype", "Firms ($n$)", "Share (%)", "Arch
 *Notes:* Archetypal disclosure profile: standardized coordinate score (SD from pooled mean) on the defining dimensions. Stability: mean bootstrap Jaccard reproducibility, frame-level resampling.
 :::
 
-The three active archetypes reflect fundamentally different managerial disclosure strategies:
+- **Vocal Substantives:** commercial execution and product differentiation, pairing promotional guidance with verifiable technical claims (named systems, partners, performance metrics) to build market credibility.
+- **Governance-Led Disclosers:** institutional oversight and risk containment, emphasizing board committee charters, model-risk auditing, and responsible-AI frameworks over product marketing.
+- **Defensive Disclosers:** passive regulatory compliance, listing boilerplate Item 1A risks without committing management to operational milestones.
 
-- **Vocal Substantives:** Commercial execution and product differentiation. Issuers at this pole actively commercialize AI for external clients, pairing promotional forward guidance with verifiable technical claims (naming concrete systems, partner ecosystems, and performance metrics) to establish market credibility.
-- **Governance-Led Disclosers:** Institutional oversight and risk containment. Rather than marketing commercial tools, these issuers prioritize supervisory guardrails, emphasizing board committee charters, model-risk auditing protocols, and responsible AI frameworks.
-- **Defensive Disclosers:** Passive regulatory compliance. These firms treat AI primarily as an operational hazard, satisfying statutory disclosure mandates by listing boilerplate risks in Item 1A without committing management to operational milestones or concrete deployments.
-
-To inspect how these strategic postures map onto the underlying measurement space, @fig-archetype-heatmap displays the standardized coordinates (matrix $A$, $z$-scores) of the three archetypal vertices across all eight dimensions. The heatmap confirms that each vertex represents an extreme, interpretable configuration: Vocal Substantives anchors customer positioning, temporal realization, and specificity; Governance-Led Disclosers peaks on governance orientation (+2.40 SD); and Defensive Disclosers concentrates heavily on risk framing (+1.83 SD) with negative disclosure intensity.
+Each vertex maps an extreme, interpretable configuration (@fig-archetype-heatmap): Vocal Substantives anchors customer positioning and specificity, Governance-Led Disclosers peaks on governance orientation, and Defensive Disclosers concentrates on risk framing with negative intensity.
 
 ```{python}
 #| label: fig-archetype-heatmap
@@ -1408,12 +1406,12 @@ Markdown(tabulate(_rows, headers=["Archetype", "Prominent Constituents", "Centro
 *Notes:* Prominent constituents: widely recognized S&P 500 members per cluster. Centroid-closest exemplars: firms nearest each archetype's mean posture vector. Primary SEC disclosure focus: dominant narrative register in statutory filings.
 :::
 
-Two high-profile classifications illustrate the distinction between SEC disclosure posture and commercial reputation:
+Two classifications illustrate the gap between SEC disclosure posture and commercial reputation:
 
-- **Apple** clusters as Governance-Led: while it deploys proprietary AI across its consumer devices, its statutory SEC filings concentrate AI mentions on board oversight, privacy policies, and responsible-use shareholder proposals, reserving product marketing for consumer keynotes outside EDGAR.
-- **Goldman Sachs** clusters as Defensive: over 60% of its AI-bearing text resides in Item 1A risk factors (model risk, cybersecurity, and vendor dependencies), with minimal operational disclosure of the kind Vocal Substantives report in the same filings.
+- **Apple** clusters as Governance-Led: despite deploying proprietary AI across its consumer devices, its SEC filings concentrate AI mentions on board oversight and responsible-use proposals, reserving product marketing for keynotes outside EDGAR.
+- **Goldman Sachs** clusters as Defensive: over 60% of its AI-bearing text sits in Item 1A risk factors (model risk, cybersecurity, vendor dependencies), with minimal operational disclosure.
 
-Capital-intensive firms with minimal digital-transformation discourse (such as Costco, Texas Instruments, O'Reilly Automotive, and NVR) constitute the No AI group. This segment also absorbs `{python} int(df_sec.loc[df_sec["archetype"] == "No AI", "ticker"].isin(fu_delisted).sum())` firms that exited the S&P 500 through acquisition or delisting prior to the generative AI boom. Because these firms lack post-2023 filings, their classification reflects historical exit timing rather than an active managerial policy; retaining them preserves panel integrity without introducing survivorship bias.
+The No AI group also absorbs `{python} int(df_sec.loc[df_sec["archetype"] == "No AI", "ticker"].isin(fu_delisted).sum())` firms that exited the S&P 500 through acquisition or delisting before the generative AI boom, so part of its composition reflects exit timing rather than an active disclosure policy; they are retained to preserve panel integrity.
 
 ### Sectoral sorting and institutional channels
 
