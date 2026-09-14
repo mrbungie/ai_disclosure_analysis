@@ -26,10 +26,14 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       call→filing, mercado no premia evidencia, framework de tres pasos. Los dos
       caveats metodológicos a una cláusula cada uno. **Modificado (el pase anterior solo
       comprimió, no simplificó el registro) — Prioridad: Máxima**
-- [ ] **3. Capítulo 8 completo — objetivo 2 páginas.** §8.4 → 3-4 frases con la
+- [x] **3. Capítulo 8 completo — objetivo 2 páginas.** §8.4 → 3-4 frases con la
       definición de AI washing de esta tesis, sin recap de las tres teorías. §8.2 −25%,
       o fusionar con §8.3 (Synthesis). **Modificado (agrega meta de páginas) — Prioridad:
-      Máxima**
+      Máxima** — Hecho: §8.4 reducida a 3 frases (definición operacional, sin
+      re-explicar las teorías de §1.4). §8.2 y §8.3 fusionadas en "What the evidence
+      establishes and its synthesis" (eran redundantes: hallazgos + interpretación de
+      los mismos). Capítulo 8 completo ~1130 palabras (~2 páginas). §8.1, §8.5, §8.6 sin
+      tocar (ítems 4 y 23).
 - [ ] **4. §8.1 — responder RQ1-RQ4 explícitamente.** Una línea cada una, además del
       veredicto H-operational/H-market. Cierra el criterio "coherent development as set
       out in the introduction". **Nuevo — Prioridad: Alta**
