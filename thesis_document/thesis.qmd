@@ -254,13 +254,13 @@ Capital markets do not reward the more verifiable evidence behind a firm's AI cl
 
 ## Problem and practical relevance
 
-After the release of ChatGPT, artificial intelligence quickly became a standard topic in corporate disclosures [@anantharaman2026, pp. 1--2]. In the S&P 500, the share of firms mentioning AI in their SEC filings rose from `{python} f"{hd_share[2021]:.0f}"`% in 2021 to `{python} f"{hd_share[2025]:.0f}"`% in 2025, with a same-window-adjusted 2026 estimate of `{python} f"{hd_share_est_2026:.0f}"`%. Across the observed 2021–2025 panel, narrative intensity grew `{python} f"{hd_frames_ratio:.1f}"`-fold, reaching roughly `{python} f"{hd_int_ratio_est:.0f}"`-fold when extending through annualized 2026 projections.
-
-When nearly every firm mentions AI, counting words is no longer enough to distinguish operationally grounded disclosure from generic or promotional AI communication. This creates three practical problems:
+Interpreting corporate AI disclosure creates three practical problems:
 
 - **Investors and analysts** need to separate companies building real AI systems from those making promotional claims, as actual adoption affects productivity and firm value [@basnet2025, pp. 1--2; @song2026, pp. 1--2].
 - **Managers and boards** must communicate technical initiatives without raising unrealistic expectations or creating legal risks.
 - **Regulators** increasingly monitor whether corporate claims reflect real organizational work or amount to "AI washing" [@gensler2023, pp. 4--5; @sec2024pressrelease, pp. 1--2]. Recent SEC comment letters show that gaps between promotional earnings calls and formal filings can prompt direct regulatory inquiries [@welltower2025letter, p. 1].
+
+This problem has become urgent since the release of ChatGPT, when artificial intelligence quickly became a standard topic in corporate disclosures [@anantharaman2026, pp. 1--2]. In the S&P 500, the share of firms mentioning AI in their SEC filings rose from `{python} f"{hd_share[2021]:.0f}"`% in 2021 to `{python} f"{hd_share[2025]:.0f}"`% in 2025, with a same-window-adjusted 2026 estimate of `{python} f"{hd_share_est_2026:.0f}"`%. Across the observed 2021–2025 panel, narrative intensity grew `{python} f"{hd_frames_ratio:.1f}"`-fold, reaching roughly `{python} f"{hd_int_ratio_est:.0f}"`-fold when extending through annualized 2026 projections. When nearly every firm mentions AI, counting words is no longer enough to distinguish operationally grounded disclosure from generic or promotional AI communication.
 
 Standard textual methods in finance rely on keyword counts or dictionary sentiment [@loughran2011, p. 36], treating routine risk disclaimers identically to concrete statements about software deployments, budgets, or commercial partners. Assessing corporate credibility instead requires measuring how firms frame their claims, what specific operational activities they report, and how well those claims are grounded in verifiable evidence.
 

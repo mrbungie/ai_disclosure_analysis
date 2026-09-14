@@ -39,8 +39,12 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       out in the introduction". **Nuevo — Prioridad: Alta** — Hecho: agregado un párrafo
       con una línea por RQ (RQ1-RQ4) después del veredicto H-operational/H-market
       existente (sin borrarlo), citando el hallazgo real de cada pregunta.
-- [ ] **5. §1.1 — reordenar apertura.** Partir del decision problem (investors/boards/
+- [x] **5. §1.1 — reordenar apertura.** Partir del decision problem (investors/boards/
       regulators) y recién después la difusión post-ChatGPT. **Original — Prioridad: Alta**
+      — Hecho: la sección abre ahora con los tres problemas prácticos (investors/analysts,
+      managers/boards, regulators), y el párrafo de adopción post-ChatGPT pasa a segundo
+      lugar, conectado como el motivo de urgencia actual del problema. Sin contenido nuevo,
+      solo reordenamiento y ajuste mínimo de conectores.
 - [ ] **6. §1.3 + roadmap §1.5 — reordenar contribuciones.** framework → evidencia →
       arquitectura de medición. El roadmap debe decir explícitamente que los capítulos
       2-6 construyen el framework aplicado en el capítulo 7 — si no, la intro promete un
