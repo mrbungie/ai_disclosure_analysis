@@ -149,9 +149,10 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       specifications plus FDR correction." Cortar Tukey; conservar la cita a
       Gelman-Loken (es la señal de por qué se corrige por multiplicidad). **Corregido
       (Gelman-Loken se queda, solo Tukey se corta) — Prioridad: Muy alta**
-- [ ] **23. §8.6 (Limitations) — cuatro límites.** Disclosed ≠ implemented; no causal;
+- [x] **23. §8.6 (Limitations) — cuatro límites.** Disclosed ≠ implemented; no causal;
       S&P 500; 2026 YTD. Gemini/Qwen queda documentado en §2.8, no repetir acá.
-      **Original — Prioridad: Muy alta**
+      **Corregido (párrafo reescrito a 4 límites numerados; oración Gemini/Qwen
+      eliminada por duplicar §2.8) — Prioridad: Muy alta**
 - [ ] **24. §3.3.1 — reducir ~40% la prosa** entre Table 6 / Fig 6 / Table 7; caveat de
       "No AI" a una frase. **Original — Prioridad: Muy alta**
 
