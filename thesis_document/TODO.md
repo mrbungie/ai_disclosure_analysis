@@ -75,8 +75,10 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
 - [x] **10. Todo el texto + AI Statement — "we/our" → "this thesis" / primera persona
       singular.** La guía MIB insiste en que el trabajo es individual. **Nuevo —
       Prioridad: Media**
-- [ ] **11. Cover letter — declarar uso de AI también ahí.** La guía lo exige en ambos
-      lugares (cover letter y AI Statement). **Nuevo — Prioridad: Alta (cumplimiento)**
+- [x] **11. Cover letter — declarar uso de AI también ahí.** La guía lo exige en ambos
+      lugares (cover letter y AI Statement). **Nuevo — Prioridad: Alta (cumplimiento)** —
+      Hecho: se insertó un párrafo breve en `cover.docx`, después de la declaración de
+      trabajo individual, consistente con el AI Statement de `thesis.qmd`.
 - [ ] **12. Figuras/tablas — medir páginas de figuras+tablas del cuerpo (42
       elementos).** Límite: 20 páginas. Si está cerca del límite, mover primero Table 3
       (prevalence) y Table 4 (distribution) al apéndice. **Nuevo — Prioridad: Alta
