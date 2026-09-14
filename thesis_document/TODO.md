@@ -114,7 +114,7 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
 - [x] **15. §6.2 — sacar "martingale processes" y la justificación técnica.** Ecuación
       ANCOVA pasa a opcional/appendix. Detalle → Appendix D/E. **Original — Prioridad:
       Máxima**
-- [ ] **16. §7.2.1 — comprimir solo la defensa de W, Simonian queda intacto.**
+- [x] **16. §7.2.1 — comprimir solo la defensa de W, Simonian queda intacto.**
       La triple aclaración de que W no define cuadrante / no es fraud classifier / solo
       rankea se comprime a una frase: "D y S determinan el cuadrante; W prioriza revisión
       dentro de él y no es un fraud label." La referencia a Simonian (CFA Institute) que
