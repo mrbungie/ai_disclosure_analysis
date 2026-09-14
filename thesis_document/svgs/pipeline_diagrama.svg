@@ -132,7 +132,7 @@
   <g>
     <rect x="845" y="70" width="175" height="60" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.75"/>
     <text x="932" y="95" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#042C53">Semantic Frames</text>
-    <text x="932" y="113" text-anchor="middle" font-size="11" fill="#185FA5">69,714 frames → D, P Posture</text>
+    <text x="932" y="113" text-anchor="middle" font-size="11" fill="#185FA5">69,683 frames → D, P Posture</text>
   </g>
   <!-- Disclosed activities (A) -->
   <g>
