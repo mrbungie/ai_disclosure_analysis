@@ -55,8 +55,14 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       (roadmap de cierre del cap. 1) ahora dice explícitamente que los capítulos 2-6
       construyen el framework de medición aplicado en el capítulo 7, y que el capítulo 8
       concluye.
-- [ ] **7. §1.4.2 — recortar definición teórica.** Agregar 1 línea de implicancia
-      managerial por cada teoría citada. **Original — Prioridad: Alta**
+- [x] **7. §1.4.2 — recortar definición teórica.** Agregar 1 línea de implicancia
+      managerial por cada teoría citada. **Original — Prioridad: Alta** — Hecho: las
+      cuatro teorías (signalling/cheap talk, legitimidad institucional, decoupling,
+      cumplimiento regulatorio) mantienen la cita mínima necesaria y cada una cierra con
+      una línea de implicancia managerial concreta (board/investor, peer-group,
+      directores, ponderación call vs. 10-K), consistente con el framework de due
+      diligence del capítulo 7. Largo total de la subsección se redujo levemente
+      (307 → 300 palabras).
 - [ ] **8. §1.4.3 — reescribir literature gaps.** Como cuatro preguntas que un
       decision-maker no puede responder hoy (no como vacíos académicos abstractos).
       **Original — Prioridad: Media**
