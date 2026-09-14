@@ -1080,15 +1080,9 @@ ax.plot([0.5, c_x], [0, c_y], color="#A5AFB6", lw=1.1, ls=":", zorder=2)
 ax.plot([0.75, c_x], [np.sqrt(3)/4, c_y], color="#A5AFB6", lw=1.1, ls=":", zorder=2)
 ax.plot([0.25, c_x], [np.sqrt(3)/4, c_y], color="#A5AFB6", lw=1.1, ls=":", zorder=2)
 
-# Ternary-specific subpalette: the three vertices are semantic poles, not
-# categories, so they get a dedicated, more separable triad -- teal / rust /
-# slate-indigo, equalized in lightness and saturation for visual parity --
-# rather than the document's restrained editorial palette used elsewhere.
-POLE_VOCAL, POLE_GOV, POLE_DEF = "#2A8479", "#554D89", "#AB5A3F"
-
-ax.text(0.33, 0.06, "Pure Vocal (w > 0.5)", fontsize=7.2, color=POLE_VOCAL, ha="center", style="italic")
-ax.text(0.67, 0.06, "Pure Governance (w > 0.5)", fontsize=7.2, color=POLE_GOV, ha="center", style="italic")
-ax.text(0.50, 0.60, "Pure Defensive (w > 0.5)", fontsize=7.2, color=POLE_DEF, ha="center", style="italic")
+ax.text(0.33, 0.06, "Pure Vocal (w > 0.5)", fontsize=7.2, color="#A5AFB6", ha="center", style="italic")
+ax.text(0.67, 0.06, "Pure Governance (w > 0.5)", fontsize=7.2, color="#A5AFB6", ha="center", style="italic")
+ax.text(0.50, 0.60, "Pure Defensive (w > 0.5)", fontsize=7.2, color="#A5AFB6", ha="center", style="italic")
 ax.text(0.50, 0.14, "Mixed Postures", fontsize=7.2, color="#A5AFB6", ha="center", style="italic")
 
 ax.scatter(fit_pop["x_tern"], fit_pop["y_tern"],
@@ -1211,16 +1205,11 @@ ax.set_aspect("equal")
 ax.axis("off")
 
 ax.text(-0.05, -0.07, "Vocal Substantives\n(Commercial Execution)",
-        fontsize=11, fontweight="bold", ha="center", va="top", color=POLE_VOCAL)
+        fontsize=11, fontweight="bold", ha="center", va="top", color="#1C1F22")
 ax.text(1.05, -0.07, "Governance-Led Disclosers\n(Institutional Guardrails)",
-        fontsize=11, fontweight="bold", ha="center", va="top", color=POLE_GOV)
+        fontsize=11, fontweight="bold", ha="center", va="top", color="#1C1F22")
 ax.text(0.5, np.sqrt(3)/2 + 0.05, "Defensive Disclosers\n(Risk-Framed)",
-        fontsize=11, fontweight="bold", ha="center", va="bottom", color=POLE_DEF)
-
-# Vertex markers themselves, so the three poles read as distinct anchors
-# even before the eye reaches the corner labels.
-for (vx, vy), vc in [((0, 0), POLE_VOCAL), ((1, 0), POLE_GOV), ((0.5, np.sqrt(3)/2), POLE_DEF)]:
-    ax.scatter([vx], [vy], color=vc, s=170, edgecolor="white", linewidth=1.6, zorder=11)
+        fontsize=11, fontweight="bold", ha="center", va="bottom", color="#1C1F22")
 
 plt.tight_layout()
 plt.show()
