@@ -85,6 +85,7 @@ FINANCIALS_PATH = OUT_DIR / "firm_year_financials_ratios.parquet"
 GROUNDING_COMPONENTS = ["named_function", "deployed_or_scaled", "named_product_or_process",
                         "quantified_outcome", "third_party_named_provider"]
 BETA_MIN_OBS = 120
+BETA_MIN_OBS_63 = 60  # same ~95% completeness ratio as BETA_MIN_OBS/126, scaled to a 63-day (quarterly) window
 
 
 def _shrink(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
@@ -104,7 +105,43 @@ def build_call_spine() -> pd.DataFrame:
     calls = docs[docs.channel == "call"].copy()
     calls["disclosure"] = 1000.0 * calls["n_frames"] / calls["n_words"]
     calls = calls.rename(columns={"accession_number": "call_accession_number"})
-    return calls[["ticker", "fecha", "call_accession_number", "n_words", "n_frames", "disclosure"]]
+    calls = calls[["ticker", "fecha", "call_accession_number", "n_words", "n_frames", "disclosure"]]
+    # `call_accession_number` is `{SOURCE_TICKER}_{YEAR}Q{N}` where
+    # SOURCE_TICKER is whichever symbol the transcript was filed under. A
+    # dual-class issuer (e.g. Discovery's DISCA/DISCK) files the SAME
+    # earnings call under both share classes' symbols, and firm_universe
+    # aliases the secondary class onto the primary one (DISCK -> DISCA) so
+    # it isn't lost as an "unknown ticker" -- but that alias then lets
+    # DISCK_2024Q1's row survive alongside DISCA_2024Q1's under the shared
+    # `ticker == "DISCA"`, duplicating the same call. Keep only rows whose
+    # own source symbol matches the panel ticker, so the aliased second
+    # class's calls are dropped rather than double-counted. This must NOT
+    # be confused with the separate case of two DIFFERENT quarterly calls
+    # sharing a (wrong) `fecha` upstream -- those keep distinct disclosure
+    # values under the SAME symbol and are handled by ordering on
+    # call_accession_number in attach_history(), not by this filter.
+    same_symbol = calls["call_accession_number"].str.split("_", n=1).str[0] == calls["ticker"]
+    calls = calls[same_symbol]
+
+    # Off-calendar fiscal-year retailers (Lowe's, Target, Home Depot, Dollar
+    # General, ...) surface a second known duplicate pattern: the SAME real
+    # call reaches document_table() twice under two different fiscal-year
+    # labels for the SAME quarter NUMBER (e.g. LOW_2022Q2 and LOW_2023Q2 both
+    # on 2022-08-17) -- a fiscal-year-offset labeling disagreement between
+    # source manifests, not two distinct quarters. That's the discriminator
+    # from the separate case of two GENUINELY different quarters sharing a
+    # (wrong) `fecha` (e.g. ADI's Q3/Q4 pair): those have different quarter
+    # numbers and must both survive, ordered by call_accession_number in
+    # attach_history(). So only collapse duplicate (ticker, fecha) groups
+    # whose quarter number is identical, keeping the longer (more complete)
+    # transcript.
+    q = calls["call_accession_number"].str.extract(r"Q([1-4])$")[0]
+    calls = calls.assign(_q=q)
+    calls["_dup_key"] = calls["ticker"] + "|" + calls["fecha"].astype(str) + "|" + calls["_q"]
+    calls = (calls.sort_values("n_words", ascending=False)
+                   .drop_duplicates(subset="_dup_key", keep="first")
+                   .drop(columns=["_q", "_dup_key"]))
+    return calls
 
 
 def attach_activities(panel: pd.DataFrame) -> pd.DataFrame:
@@ -126,7 +163,13 @@ def attach_activities(panel: pd.DataFrame) -> pd.DataFrame:
 
 
 def attach_history(panel: pd.DataFrame) -> pd.DataFrame:
-    panel = panel.sort_values(["ticker", "fecha"]).reset_index(drop=True)
+    # `call_accession_number` (format `{TICKER}_{YEAR}Q{N}`) breaks ties for
+    # the handful of tickers where two distinct quarterly calls share the
+    # same `fecha` upstream (a document_table date bug, not a real same-day
+    # pair of calls) -- without it, expanding().shift(1) can let one same-
+    # date call see its sibling's own value instead of only strictly prior
+    # calls, since pandas' sort is otherwise unordered between ties.
+    panel = panel.sort_values(["ticker", "fecha", "call_accession_number"]).reset_index(drop=True)
     panel["n_prior_calls"] = panel.groupby("ticker").cumcount()
     panel["hist_disclosure"] = panel.groupby("ticker")["disclosure"].transform(lambda s: s.expanding().mean().shift(1))
     panel["hist_substance"] = panel.groupby("ticker")["substance"].transform(lambda s: s.expanding().mean().shift(1))
@@ -135,8 +178,8 @@ def attach_history(panel: pd.DataFrame) -> pd.DataFrame:
     return panel
 
 
-def _beta(merged: pd.DataFrame) -> float:
-    if len(merged) < BETA_MIN_OBS:
+def _beta(merged: pd.DataFrame, min_obs: int = BETA_MIN_OBS) -> float:
+    if len(merged) < min_obs:
         return np.nan
     excess = merged["ret"].to_numpy() - merged["rf"].to_numpy()
     design = np.column_stack([np.ones(len(merged)), merged["mktrf"].to_numpy()])
@@ -163,9 +206,16 @@ def attach_market(panel: pd.DataFrame) -> pd.DataFrame:
     factors["date"] = pd.to_datetime(factors["date"])
     prices = _load_prices(set(panel["ticker"]))
     rows = []
-    for row in panel[["ticker", "fecha"]].itertuples(index=False):
+    # Keyed on (ticker, fecha, call_accession_number) -- not just (ticker,
+    # fecha) -- because a handful of tickers have two DIFFERENT calls
+    # sharing one `fecha` (a document_table date bug upstream); merging back
+    # on (ticker, fecha) alone would cartesian-match both of that ticker's
+    # panel rows against both of that date's computed market rows, silently
+    # doubling beta/price values for the affected calls.
+    for row in panel[["ticker", "fecha", "call_accession_number"]].itertuples(index=False):
         pr = prices.get(row.ticker)
-        result = {"ticker": row.ticker, "fecha": row.fecha, "beta_pre": np.nan,
+        result = {"ticker": row.ticker, "fecha": row.fecha, "call_accession_number": row.call_accession_number,
+                  "beta_pre": np.nan, "beta_post_63": np.nan,
                   "beta_post_126": np.nan, "beta_post_252": np.nan, "price_pre": np.nan, "return60": np.nan}
         if pr is not None:
             dates = pr["date"].values
@@ -177,6 +227,9 @@ def attach_market(panel: pd.DataFrame) -> pd.DataFrame:
                 if idx - 252 >= 0:
                     pre = pr.iloc[idx - 252:idx].merge(factors, on="date", how="inner").dropna(subset=["ret", "mktrf", "rf"])
                     result["beta_pre"] = _beta(pre)
+                if idx + 63 < len(pr):
+                    post63 = pr.iloc[idx:idx + 63].merge(factors, on="date", how="inner").dropna(subset=["ret", "mktrf", "rf"])
+                    result["beta_post_63"] = _beta(post63, min_obs=BETA_MIN_OBS_63)
                 if idx + 126 < len(pr):
                     post126 = pr.iloc[idx:idx + 126].merge(factors, on="date", how="inner").dropna(subset=["ret", "mktrf", "rf"])
                     result["beta_post_126"] = _beta(post126)
@@ -184,7 +237,7 @@ def attach_market(panel: pd.DataFrame) -> pd.DataFrame:
                     post252 = pr.iloc[idx:idx + 252].merge(factors, on="date", how="inner").dropna(subset=["ret", "mktrf", "rf"])
                     result["beta_post_252"] = _beta(post252)
         rows.append(result)
-    return panel.merge(pd.DataFrame(rows), on=["ticker", "fecha"], how="left")
+    return panel.merge(pd.DataFrame(rows), on=["ticker", "fecha", "call_accession_number"], how="left")
 
 
 def attach_financials(panel: pd.DataFrame) -> pd.DataFrame:
@@ -193,7 +246,7 @@ def attach_financials(panel: pd.DataFrame) -> pd.DataFrame:
     # `attach_leverage()` in call_beta_regressions.py joins XBRL facts on.
     fin = pd.read_parquet(FINANCIALS_PATH, columns=["ticker", "filing_date", "accession_number", "revenue",
                                                      "operating_income", "total_assets", "operating_margin",
-                                                     "asset_turnover", "shares_out"])
+                                                     "asset_turnover", "shares_out", "roa"])
     fin["filing_date"] = pd.to_datetime(fin["filing_date"])
     fin = fin.dropna(subset=["filing_date"]).sort_values(["filing_date", "ticker"])
     left = panel.sort_values(["fecha", "ticker"]).copy()
@@ -239,11 +292,11 @@ def main() -> None:
 
     validate(panel)
 
-    cols = ["ticker", "fecha", "n_words", "n_frames", "disclosure", "n_activities", "grounding", "substance",
+    cols = ["ticker", "fecha", "call_accession_number", "n_words", "n_frames", "disclosure", "n_activities", "grounding", "substance",
             "n_prior_calls", "hist_disclosure", "surprise_disclosure", "hist_substance", "surprise_substance",
-            "beta_pre", "beta_post_126", "beta_post_252", "price_pre", "return60", "filing_date_pt",
+            "beta_pre", "beta_post_63", "beta_post_126", "beta_post_252", "price_pre", "return60", "filing_date_pt",
             "revenue", "operating_income", "total_assets", "sic", "sic2", "operating_margin", "asset_turnover",
-            "shares_out", "log_market_cap", "fe", "accession_number"]
+            "roa", "shares_out", "log_market_cap", "fe", "accession_number"]
     panel = panel[cols].sort_values(["ticker", "fecha"]).reset_index(drop=True)
     panel["fecha"] = pd.to_datetime(panel["fecha"]).astype("datetime64[ns]")
     panel["filing_date_pt"] = pd.to_datetime(panel["filing_date_pt"]).astype("datetime64[ns]")

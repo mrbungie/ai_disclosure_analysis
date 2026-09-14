@@ -45,7 +45,7 @@ AI_VARS = ["hist_disclosure", "hist_substance", "surprise_disclosure", "surprise
 # Fixed controls: identical across every target regression except the one
 # that duplicates the target itself (dropped there, since {target}_pre
 # already plays that role -- see `controls_for`).
-FIXED_CONTROLS = ["log_market_cap", "return60", "operating_margin", "asset_turnover"]
+FIXED_CONTROLS = ["log_market_cap", "return60", "roa"]
 
 TARGETS = {
     "log_market_cap": "Log market cap",

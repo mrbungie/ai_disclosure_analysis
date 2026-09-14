@@ -127,12 +127,14 @@ pre_cols = [c for c in fund.columns if c.endswith("_pre") and c not in panel.col
 panel = panel.merge(fund[["ticker", "fecha"] + post_cols + pre_cols], on=["ticker", "fecha"], how="left")
 
 AI_VARS = ["hist_disclosure", "hist_substance", "surprise_disclosure", "surprise_substance"]
-DUMMIES = ["dum_gov", "dum_voc"]
-BASE_CTRLS = ["log_market_cap", "return60", "operating_margin", "asset_turnover"]
+DUMMIES = ["dum_gov", "dum_voc", "dum_noai"]
+BASE_CTRLS = ["log_market_cap", "return60", "roa"]
 
-active = panel[panel["arch_exp"].isin(["Defensive Disclosers", "Governance-Led Disclosers", "Vocal Substantives"])].copy()
+active = panel[panel["arch_exp"].isin(
+    ["Defensive Disclosers", "Governance-Led Disclosers", "Vocal Substantives", "No AI"])].copy()
 active["dum_gov"] = (active["arch_exp"] == "Governance-Led Disclosers").astype(float)
 active["dum_voc"] = (active["arch_exp"] == "Vocal Substantives").astype(float)
+active["dum_noai"] = (active["arch_exp"] == "No AI").astype(float)
 
 def fit_outcome(df, y_col, pre_col, add_dummies=True, add_w=False):
     extra = DUMMIES if add_dummies else []
