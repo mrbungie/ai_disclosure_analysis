@@ -182,7 +182,7 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       Ecuación completa ($x_i \approx \sum w_{ij} z_j$, con notación) movida a nueva
       subsección "Archetypal Analysis: formal specification" al inicio de Appendix C,
       antes de los robustness checks que el ítem 13 ya había movido ahí.
-- [ ] **30. §3.3.3 — metodología a una frase** (expanding windows, no look-ahead);
+- [x] **30. §3.3.3 — metodología a una frase** (expanding windows, no look-ahead);
       prosa a 3 mensajes. **Original — Prioridad: Alta**
 - [ ] **31. §3.4 — −30% recap empírico.** k=4 fallido a una frase. **Original —
       Prioridad: Alta**
