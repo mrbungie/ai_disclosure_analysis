@@ -94,14 +94,18 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       inference funnel") y Table 4 (`tbl-frame-schema`, "Semantic frame schema...
       observed corpus distributions") permanecen en el cuerpo, en `thesis.qmd` líneas
       579 y 638 respectivamente.
-- [ ] **12b. Figure 25 ("Incremental value of NLP layers over mention counts") —
+- [x] **12b. Figure 25 ("Incremental value of NLP layers over mention counts") —
       mover de Appendix E al cuerpo**, en §6.6 o como apertura de §8.1, un párrafo de
       cuatro frases. El cuerpo nunca la cita hoy. Es la respuesta más directa a la RQ
       principal (distinguir volume/posture/substance revela diferencias económicas
       reales) y la única prueba empírica de que contar keywords no basta: posture +
       activities suben R² en valuation +4.2 pp donde mention counts no aportan nada, y W
       no aporta nada (H-market matizada en una sola figura). **Nuevo — Prioridad:
-      Máxima**
+      Máxima** — **Hecho:** `fig-nlp-horse-race` movida a §6.6 ("Synthesis and
+      empirical limits"), insertada entre el párrafo de límites estructurales y el
+      párrafo de Blades et al. (sin tocarlo), con un párrafo propio de 4 frases.
+      Appendix E conserva solo `tbl-c1-m0m3` bajo un heading acortado que remite a la
+      figura en el cuerpo, evitando duplicar la imagen. Render limpio (exit 0).
 
 ## Bloque B — poda mayor (robustez al apéndice)
 

@@ -3546,6 +3546,90 @@ Across the three empirical channels, the econometric results distinguish narrati
 
 Two structural limits qualify these market findings. First, pre-call beta placebos show positive associations ($\beta^{\text{pre}} \sim D$ yields $\beta = +$`{python} f"{rob_placebo_d['beta_std']:.3f}"`, $p < 0.001$, while substance is null), indicating cross-sectional sorting into thematic risk rather than call-event impact. Second, multiple calls from the same firm map to the same annual 10-K, inducing pseudo-replication in accounting fundamentals that warrants caution for low-frequency fundamental outcomes.
 
+A sequential variance-decomposition exercise makes this asymmetry between disclosure volume and substance explicit for valuation specifically: adding semantic posture and disclosed AI activity to a model that already includes raw AI mention counts raises explanatory power for price-to-sales by $+4.2$ percentage points, while mention counts alone add essentially none (@fig-nlp-horse-race). The same decomposition shows the reverse pattern for market-risk outcomes -- beta, idiosyncratic volatility, and next-year revenue growth -- where raw mention counts already capture most of the explanatory power and posture and activity add comparatively little on top. Once posture and disclosed activity are held constant, the decoupling index ($W$) contributes virtually no additional explanatory power anywhere ($\Delta R^2 \le 0.0009$), consistent with the null association already established for decoupling and crash risk. Distinguishing volume, posture, and disclosed substance therefore does reveal real economic differences in what markets price -- just not the differences $H_{6b}$ anticipated: valuation rewards *how* AI is described, market risk rewards *how much*, and neither rewards the verifiable gap between the two.
+
+```{python}
+#| label: fig-nlp-horse-race
+#| fig-cap: "[Incremental explanatory power (ΔR² over financial fundamentals) across sequential NLP modeling layers for five corporate outcomes.]{custom-style=\"CaptionText\"}"
+#| echo: false
+#| fig-width: 7.5
+#| fig-height: 3.6
+import json
+from pathlib import Path
+import matplotlib.pyplot as plt
+import numpy as np
+
+data_path = Path("../data/processed/clusters/incremental_signal.json")
+if not data_path.exists():
+    data_path = Path("data/processed/clusters/incremental_signal.json")
+d = json.loads(data_path.read_text())
+
+outcomes_map = [
+    ("price_to_sales", "Valuation\n(P/S Ratio)"),
+    ("crecimiento_ingresos_t1", "Next-Year\nRevenue Growth"),
+    ("beta", "Market Beta\n(Systematic Risk)"),
+    ("rd_sobre_ventas", "R&D\nIntensity"),
+    ("volatilidad_idiosincratica", "Idiosyncratic\nVolatility")
+]
+
+labels = [name for _, name in outcomes_map]
+y = np.arange(len(labels))[::-1]
+
+delta_vol = []
+delta_sem = []
+delta_act = []
+delta_wash = []
+
+for key, _ in outcomes_map:
+    o = d["outcomes"][key]
+    r0 = o["r2_M0"]
+    r1 = o["r2_M1"]
+    r2 = o["r2_M2"]
+    r3 = o.get("r2_M2AB", o.get("r2_M3"))
+    dw = o.get("delta_r2_washing", 0.0)
+
+    delta_vol.append(max(0.0, r1 - r0))
+    delta_sem.append(max(0.0, r2 - r1))
+    delta_act.append(max(0.0, r3 - r2))
+    delta_wash.append(max(0.0, dw))
+
+fig, ax = plt.subplots(figsize=(7.5, 3.6), dpi=300)
+height = 0.55
+
+c_vol = "#A5AFB6"
+c_sem = "#7AA2AE"
+c_act = "#355F6B"
+c_wash = "#D5B1A5"
+
+b1 = ax.barh(y, delta_vol, height=height, label="1. Raw AI Mention Counts (Volume)", color=c_vol, edgecolor="white", lw=0.6)
+b2 = ax.barh(y, delta_sem, left=delta_vol, height=height, label="2. + Semantic Frame Posture", color=c_sem, edgecolor="white", lw=0.6)
+left_act = [v + s for v, s in zip(delta_vol, delta_sem)]
+b3 = ax.barh(y, delta_act, left=left_act, height=height, label="3. + Disclosed AI Activity Inventory", color=c_act, edgecolor="white", lw=0.6)
+left_wash = [l + a for l, a in zip(left_act, delta_act)]
+b4 = ax.barh(y, delta_wash, left=left_wash, height=height, label="4. + Decoupling / Washing Index (W)", color=c_wash, edgecolor="white", lw=0.6)
+
+for i in range(len(labels)):
+    total = left_wash[i] + delta_wash[i]
+    ax.text(total + 0.002, y[i], f"+{total*100:.1f} pp", va="center", fontsize=8.5, fontweight="bold", color="#1C1F22")
+
+ax.set_yticks(y)
+ax.set_yticklabels(labels, fontsize=9.0, fontweight="bold")
+ax.set_xlabel("Incremental Explanatory Power (ΔR² over Financial Fundamentals)", fontsize=9.0, fontweight="bold")
+_totals = [l + a for l, a in zip(left_wash, delta_wash)]
+ax.set_xlim(0, max(_totals) * 1.12)
+ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x*100:.0f}%"))
+ax.legend(loc="lower right", fontsize=8.2, framealpha=0.95)
+ax.grid(True, axis="x", linestyle=":", alpha=0.5)
+ax.spines[["top", "right"]].set_visible(False)
+
+plt.tight_layout()
+plt.show()
+```
+
+::: {custom-style="FigureNote"}
+*Notes:* Raw mention counts explain volume-related risk but fail on valuation; semantic posture and grounded activities add substantial explanatory power; the decoupling index adds near-zero incremental information.
+:::
+
 The limited incremental information carried by disclosed substance in these specifications does not establish that all market participants disregard operational detail. @blades2026 find that analysts and investors, on average, do not distinguish speculative AI firms from firms with concrete AI disclosure, while more experienced analysts assign lower target prices to speculative firms. This heterogeneity motivates examining how disclosure evidence is interpreted by different users. The next chapter translates the thesis's measures into a structured process for prioritizing further due diligence.
 
 # From Measurement to Managerial Application
@@ -4465,102 +4549,9 @@ The first re-estimates the specification excluding Financial Services, Utilities
 
 The second restricts the sample to firm-years that switch into or out of the Governance-Led archetype over the panel, rather than holding it throughout. The coefficient retains similar sign and magnitude ($\beta = -0.161, p = 0.063$), with a wider confidence interval reflecting the smaller switcher subsample. Because switchers are observed both inside and outside the archetype, this rules out a purely static sorting effect in which firms with permanently low crash risk simply happen to adopt Governance-Led posture.
 
-### Incremental value of NLP layers over simple mention counts {.unnumbered}
+### Model-fit statistics for the incremental-value decomposition {.unnumbered}
 
-A foundational methodological question for this thesis is: **what is gained by constructing a multi-stage NLP pipeline over `{python} hd_paragraphs_m` million paragraphs rather than simply counting keyword mentions?**
-
-To answer this question empirically, @fig-nlp-horse-race evaluates a sequential horse race across all five firm-level economic and market outcomes, tracking incremental explanatory power ($\Delta R^2$) over financial fundamentals (Model 0: sector-by-year fixed effects, market capitalization, profit margins, and asset turnover):
-
-1. **Model 1 (+ Raw AI Mention Counts / Volume):** Adds total AI disclosure intensity ($\log(1 + \text{AI frames})$ or mentions per 1,000 words).
-2. **Model 2 (+ Semantic Frame Posture):** Adds the full multi-dimensional communication posture (risk, governance, temporal, positioning, and specificity).
-3. **Model 3 (+ Disclosed AI Activity Inventory):** Adds concrete operational claims and grounded behavioral features (named business functions, deployed stages, product/process citations).
-4. **Model 4 (+ Decoupling / Washing Index $W$):** Adds the within-disclosure rank gap between talk and disclosed substance.
-
-```{python}
-#| label: fig-nlp-horse-race
-#| fig-cap: "[Incremental explanatory power (ΔR² over financial fundamentals) across sequential NLP modeling layers for five corporate outcomes.]{custom-style=\"CaptionText\"}"
-#| echo: false
-#| fig-width: 7.5
-#| fig-height: 3.6
-import json
-from pathlib import Path
-import matplotlib.pyplot as plt
-import numpy as np
-
-data_path = Path("../data/processed/clusters/incremental_signal.json")
-if not data_path.exists():
-    data_path = Path("data/processed/clusters/incremental_signal.json")
-d = json.loads(data_path.read_text())
-
-outcomes_map = [
-    ("price_to_sales", "Valuation\n(P/S Ratio)"),
-    ("crecimiento_ingresos_t1", "Next-Year\nRevenue Growth"),
-    ("beta", "Market Beta\n(Systematic Risk)"),
-    ("rd_sobre_ventas", "R&D\nIntensity"),
-    ("volatilidad_idiosincratica", "Idiosyncratic\nVolatility")
-]
-
-labels = [name for _, name in outcomes_map]
-y = np.arange(len(labels))[::-1]
-
-delta_vol = []
-delta_sem = []
-delta_act = []
-delta_wash = []
-
-for key, _ in outcomes_map:
-    o = d["outcomes"][key]
-    r0 = o["r2_M0"]
-    r1 = o["r2_M1"]
-    r2 = o["r2_M2"]
-    r3 = o.get("r2_M2AB", o.get("r2_M3"))
-    dw = o.get("delta_r2_washing", 0.0)
-    
-    delta_vol.append(max(0.0, r1 - r0))
-    delta_sem.append(max(0.0, r2 - r1))
-    delta_act.append(max(0.0, r3 - r2))
-    delta_wash.append(max(0.0, dw))
-
-fig, ax = plt.subplots(figsize=(7.5, 3.6), dpi=300)
-height = 0.55
-
-c_vol = "#A5AFB6"
-c_sem = "#7AA2AE"
-c_act = "#355F6B"
-c_wash = "#D5B1A5"
-
-b1 = ax.barh(y, delta_vol, height=height, label="1. Raw AI Mention Counts (Volume)", color=c_vol, edgecolor="white", lw=0.6)
-b2 = ax.barh(y, delta_sem, left=delta_vol, height=height, label="2. + Semantic Frame Posture", color=c_sem, edgecolor="white", lw=0.6)
-left_act = [v + s for v, s in zip(delta_vol, delta_sem)]
-b3 = ax.barh(y, delta_act, left=left_act, height=height, label="3. + Disclosed AI Activity Inventory", color=c_act, edgecolor="white", lw=0.6)
-left_wash = [l + a for l, a in zip(left_act, delta_act)]
-b4 = ax.barh(y, delta_wash, left=left_wash, height=height, label="4. + Decoupling / Washing Index (W)", color=c_wash, edgecolor="white", lw=0.6)
-
-for i in range(len(labels)):
-    total = left_wash[i] + delta_wash[i]
-    ax.text(total + 0.002, y[i], f"+{total*100:.1f} pp", va="center", fontsize=8.5, fontweight="bold", color="#1C1F22")
-
-ax.set_yticks(y)
-ax.set_yticklabels(labels, fontsize=9.0, fontweight="bold")
-ax.set_xlabel("Incremental Explanatory Power (ΔR² over Financial Fundamentals)", fontsize=9.0, fontweight="bold")
-_totals = [l + a for l, a in zip(left_wash, delta_wash)]
-ax.set_xlim(0, max(_totals) * 1.12)
-ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x*100:.0f}%"))
-ax.legend(loc="lower right", fontsize=8.2, framealpha=0.95)
-ax.grid(True, axis="x", linestyle=":", alpha=0.5)
-ax.spines[["top", "right"]].set_visible(False)
-
-plt.tight_layout()
-plt.show()
-```
-
-::: {custom-style="FigureNote"}
-*Notes:* Raw mention counts explain volume-related risk but fail on valuation; semantic posture and grounded activities add substantial explanatory power; the decoupling index adds near-zero incremental information.
-:::
-
-Four findings emerge from @fig-nlp-horse-race: mention counts fail on valuation (adding essentially no explanatory power to Price-to-Sales), while semantic posture and disclosed AI activities together raise $R^2$ by $+4.2$ percentage points there: *how* AI is deployed, not whether it's mentioned, is what moves valuation. Conversely, raw mention counts dominate market-risk outcomes (beta, idiosyncratic volatility, next-year revenue growth), where posture and activity add comparatively little on top.
-
-Disclosed AI activities add material explanatory power across every outcome regardless of which layer dominates it. And once posture and activities are controlled for, adding the decoupling index ($W$) yields virtually zero incremental explanatory power anywhere ($\Delta R^2 \le 0.0009$): the market prices narrative volume and disclosed activity, not the within-disclosure decoupling gap.
+A sequential horse race evaluates the incremental explanatory power of each NLP layer over financial fundamentals (Model 0: sector-by-year fixed effects, market capitalization, profit margins, and asset turnover) by adding, in order: raw AI mention counts (Model 1: total AI disclosure intensity, $\log(1 + \text{AI frames})$ or mentions per 1,000 words), semantic frame posture (Model 2: the full multi-dimensional communication posture -- risk, governance, temporal, positioning, and specificity), disclosed AI activity inventory (Model 3: concrete operational claims and grounded behavioral features, such as named business functions, deployed stages, and product or process citations), and the decoupling/washing index $W$ (Model 4: the within-disclosure rank gap between talk and disclosed substance). @fig-nlp-horse-race, presented in the main text, reports the resulting $\Delta R^2$ across all five firm-level outcomes; @tbl-c1-m0m3 reports the full M0-M3 model-fit statistics underlying that decomposition for beta.
 
 ```{python}
 #| label: tbl-c1-m0m3
