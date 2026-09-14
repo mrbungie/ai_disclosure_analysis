@@ -3470,7 +3470,7 @@ This section evaluates Channel 3 ($H_{6c}$): whether narrative decoupling ($W = 
 
 ### Stock price crash risk (NCSKEW)
 
-This section evaluates the tail risk channel by estimating Negative Coefficient of Skewness ($NCSKEW$) and Down-to-Up Volatility ($DUVOL$) over $[+21, +126]$ trading days post-call (@fig-call-crash-risk). In line with literature documenting that qualitative corporate disclosures in earnings conference calls convey price-relevant information that constrains stock price crash risk [@fu2021], this horizon captures whether AI narrative commitments alter the distribution of extreme negative returns once quarterly communications are digested.
+This section evaluates the tail risk channel by estimating Negative Coefficient of Skewness ($NCSKEW$) and Down-to-Up Volatility ($DUVOL$) over $[+21, +126]$ trading days post-call (@fig-call-crash-risk), following evidence that qualitative disclosures in earnings conference calls convey price-relevant information that constrains crash risk [@fu2021].
 
 ```{python}
 #| label: fig-call-crash-risk
@@ -3526,7 +3526,7 @@ plt.show()
 
 The crash risk estimates in @fig-call-crash-risk yield two findings. Continuous decoupling shows no short-run association with crash risk over a 6-month horizon ($\beta = -0.005, p = 0.814$), running counter to an immediate reading of $H_{6c}$; whether bad news instead accumulates over longer, multi-year horizons remains an open extension.
 
-The *Governance-Led* archetype, however, is associated with lower downside crash risk than Defensive Disclosers ($\beta = -0.150, p = 0.0016$ on $NCSKEW$; $\beta = -0.153, p = 0.0406$ on $DUVOL$) -- the sole estimate in the 18-test archetype family to clear Benjamini–Hochberg [@benjamini1995] FDR correction ($p \le 0.05/18 \approx 0.0028$), consistent with governance and structured risk disclosure mitigating bad-news withholding [@hutton2009; @kim2011; @au2023]. The result holds across three checks: it is an incremental post-call association over the lagged pre-call baseline, not a static sorting effect; it survives excluding Financial Services, Utilities, and Healthcare & Pharma ($\beta = -0.176, p = 0.021$), so it is not an artifact of sector-specific regulation; and it holds similar sign and magnitude among firms that switch into or out of Governance-Led over time ($\beta = -0.161, p = 0.063$), with a wider interval reflecting that smaller sample.
+The *Governance-Led* archetype, however, is associated with lower downside crash risk than Defensive Disclosers ($\beta = -0.150, p = 0.0016$ on $NCSKEW$; $\beta = -0.153, p = 0.0406$ on $DUVOL$) -- the sole estimate in the 18-test archetype family to clear Benjamini–Hochberg [@benjamini1995] FDR correction ($p \le 0.05/18 \approx 0.0028$), consistent with governance and structured risk disclosure mitigating bad-news withholding [@hutton2009; @kim2011; @au2023]. The result is an incremental post-call association over the lagged pre-call baseline, not a static sorting effect, and it holds under sector-exclusion and posture-switcher robustness checks reported in Appendix E.
 
 This pattern qualifies @yang2026, who find that AI adoption reduces crash risk in Chinese listed firms via internal-control quality: in this S&P 500 setting, it is not AI mention volume that compresses tail risk -- continuous disclosure and substance surprises remain statistically indistinguishable from zero -- but specifically the Governance-Led disclosure configuration.
 
@@ -4454,6 +4454,14 @@ Y_{i,t}^{\text{post}} = \alpha + \boldsymbol{\beta}' \text{AI}_{i,t} + \gamma Y^
 $$
 
 where $\alpha_{s,y} \equiv \text{SIC2} \times \text{Year}$ fixed effects absorb industry-year shocks, and standard errors are clustered by firm. The vector $\text{AI}_{i,t}$ comprises expanding historical posture ($\text{HistD}_{i,t^{-}}, \text{HistS}_{i,t^{-}}$), incremental call-specific surprise ($\text{SurpriseD}_{i,t}, \text{SurpriseS}_{i,t}$), prior-year decoupling ($W_{i,t-1}$), and expanding-window archetype indicators ($\mathbf{1}_{\{\text{GovLed}\}_{i,t}}, \mathbf{1}_{\{\text{Vocal}\}_{i,t}}$, with *Defensive Disclosers* as reference; Section 3.3.3). Predetermined controls $X^{\text{pre}}_{i,t}$ include log market cap, 60-day return momentum, operating margin, asset turnover, and pre-call volatility. Model $R^2$ is dominated by the lagged outcome by construction; each table therefore reports both the total $R^2$ and the partial $R^2$ of the disclosure block, which is the quantity of interest.
+
+### Governance-Led crash-risk finding: sector exclusion and posture switchers {.unnumbered}
+
+Two checks probe whether the Governance-Led association with lower crash risk ($\beta = -0.150, p = 0.0016$ on $NCSKEW$; @fig-call-crash-risk, Section 6.5.1) reflects sector composition or a static sorting effect rather than the disclosure posture itself.
+
+The first re-estimates the specification excluding Financial Services, Utilities, and Healthcare & Pharma -- the sectors carrying the heaviest regulatory risk-disclosure requirements. The Governance-Led coefficient is essentially unchanged ($\beta = -0.176, p = 0.021$), so the result is not an artifact of sector-specific regulation concentrating both Governance-Led firms and low crash risk in the excluded industries.
+
+The second restricts the sample to firm-years that switch into or out of the Governance-Led archetype over the panel, rather than holding it throughout. The coefficient retains similar sign and magnitude ($\beta = -0.161, p = 0.063$), with a wider confidence interval reflecting the smaller switcher subsample. Because switchers are observed both inside and outside the archetype, this rules out a purely static sorting effect in which firms with permanently low crash risk simply happen to adopt Governance-Led posture.
 
 ### Incremental value of NLP layers over simple mention counts {.unnumbered}
 

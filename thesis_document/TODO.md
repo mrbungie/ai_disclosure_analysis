@@ -244,7 +244,7 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       tabla; se conservó intacta la mención de FDR/Benjamini–Hochberg ($q^*=0.05/14$)
       y el rango agregado de *Vocal Substantives* ($p \ge 0.056$), que ya citaba la
       tabla. **Corregido (verificar antes de cortar) — Prioridad: Alta**
-- [ ] **38. §6.5.1 — horizonte a una frase.** Sector-exclusion y posture-switchers →
+- [x] **38. §6.5.1 — horizonte a una frase.** Sector-exclusion y posture-switchers →
       Appendix E. La comparación con Yang (2026) NO se toca: es el único resultado de
       mercado robusto y es lo que lo sitúa en la literatura en vez de dejarlo como
       asociación suelta. **Corregido (Yang 2026 se queda intacta) — Prioridad: Alta**
