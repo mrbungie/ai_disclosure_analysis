@@ -34,9 +34,11 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       establishes and its synthesis" (eran redundantes: hallazgos + interpretación de
       los mismos). Capítulo 8 completo ~1130 palabras (~2 páginas). §8.1, §8.5, §8.6 sin
       tocar (ítems 4 y 23).
-- [ ] **4. §8.1 — responder RQ1-RQ4 explícitamente.** Una línea cada una, además del
+- [x] **4. §8.1 — responder RQ1-RQ4 explícitamente.** Una línea cada una, además del
       veredicto H-operational/H-market. Cierra el criterio "coherent development as set
-      out in the introduction". **Nuevo — Prioridad: Alta**
+      out in the introduction". **Nuevo — Prioridad: Alta** — Hecho: agregado un párrafo
+      con una línea por RQ (RQ1-RQ4) después del veredicto H-operational/H-market
+      existente (sin borrarlo), citando el hallazgo real de cada pregunta.
 - [ ] **5. §1.1 — reordenar apertura.** Partir del decision problem (investors/boards/
       regulators) y recién después la difusión post-ChatGPT. **Original — Prioridad: Alta**
 - [ ] **6. §1.3 + roadmap §1.5 — reordenar contribuciones.** framework → evidencia →
