@@ -193,8 +193,15 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       sección. Redundancia con la lista de sectores ya presentada en §3.3.2 (Sectoral
       sorting) recortada. Ningún número ni hallazgo desaparece; @fig-sector-archetype-heatmap
       y @fig-archetype-composition-annual quedan intactos.
-- [ ] **32. §4.8 — un párrafo de síntesis + transición, nada más.** **Original —
+- [x] **32. §4.8 — un párrafo de síntesis + transición, nada más.** **Original —
       Prioridad: Alta**
+      Consolidados los tres párrafos (hallazgo de actividad vs. postura, similitud
+      funcional entre arquetipos, discreción del firm) en uno solo; se eliminó la
+      referencia hacia adelante a "Chapter 6" y el cierre-cliffhanger ("The next
+      chapter tests..."), reemplazado por una transición funcional mínima e implícita
+      ("raises the question of whether these operational claims survive as legal and
+      regulatory commitment escalates"). Ningún número ni hallazgo desaparece;
+      `hd_vs_ratio` y la cita a @barrios2025 quedan intactos.
 - [ ] **33. §5.1 — no repetir la fórmula de W.** Prosa de Figure 16 −30-40%; split-half
       → apéndice. **Original — Prioridad: Alta**
 - [ ] **34. §5.2 — FE a 3 líneas.** "filtering under statutory liability" →

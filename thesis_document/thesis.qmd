@@ -2656,11 +2656,7 @@ When firms do disclose external technology stacks, four hyperscalers dominate ci
 
 ## What disclosed AI activity adds to disclosure posture
 
-Disclosed activity carries information that posture alone does not. At equal disclosure volume, Vocal Substantives report `{python} f"{hd_vs_ratio:.2f}"` times as many AI activities as Defensive Disclosers. Archetypes do not simply proxy for verbosity.
-
-What firms report doing is functionally similar across groups: enterprises primarily sell and operate with AI. That functional similarity leaves the business role of an activity as a separate question from its volume or grounding, and prior research suggests it matters: @barrios2025 find that AI disclosures provide stronger signals when they concern the use of AI in firms' products and services rather than internal applications. Whether this business-role distinction carries incremental financial information beyond disclosure posture is tested separately in Chapter 6.
-
-Yet, within any single document, firms retain wide discretion over what they emphasize. The crucial empirical question is whether these operational claims survive when legal commitment escalates. The next chapter tests corporate credibility across escalating verification hurdles, examining how disclosures shift between voluntary earnings calls and statutory SEC filings, and how firms respond to direct regulatory inquiries.
+Disclosed activity carries information that posture alone does not: at equal disclosure volume, Vocal Substantives report `{python} f"{hd_vs_ratio:.2f}"` times as many AI activities as Defensive Disclosers, so archetypes do not simply proxy for verbosity. What firms report doing is nonetheless functionally similar across groups, with enterprises primarily selling and operating with AI, which leaves the business role of an activity as a separate question from its volume or grounding -- one that prior research suggests matters, since @barrios2025 find that AI disclosures provide stronger signals when they concern the use of AI in firms' products and services rather than internal applications. Firms retain wide discretion over what they emphasize within any single document, however, which raises the question of whether these operational claims survive as legal and regulatory commitment escalates.
 
 # Credibility Under Increasing Disclosure Commitment
 
