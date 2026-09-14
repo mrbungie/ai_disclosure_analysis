@@ -184,8 +184,15 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       antes de los robustness checks que el ítem 13 ya había movido ahí.
 - [x] **30. §3.3.3 — metodología a una frase** (expanding windows, no look-ahead);
       prosa a 3 mensajes. **Original — Prioridad: Alta**
-- [ ] **31. §3.4 — −30% recap empírico.** k=4 fallido a una frase. **Original —
-      Prioridad: Alta**
+- [x] **31. §3.4 — −30% recap empírico.** k=4 fallido a una frase. **Original —
+      Prioridad: Alta** — Hecho: prosa de "Theoretical interpretation: signaling and
+      disclosure costs" reducida de 363 a 256 palabras (-29.5%). k=4 comprimido a una
+      sola frase (el detalle completo ya vive en §3.3.4); el párrafo de cierre con
+      referencia hacia adelante ("The next chapter tests...") se eliminó por violar la
+      regla de no-forward-reference, junto con dos menciones a "Chapter 5" dentro de la
+      sección. Redundancia con la lista de sectores ya presentada en §3.3.2 (Sectoral
+      sorting) recortada. Ningún número ni hallazgo desaparece; @fig-sector-archetype-heatmap
+      y @fig-archetype-composition-annual quedan intactos.
 - [ ] **32. §4.8 — un párrafo de síntesis + transición, nada más.** **Original —
       Prioridad: Alta**
 - [ ] **33. §5.1 — no repetir la fórmula de W.** Prosa de Figure 16 −30-40%; split-half
