@@ -228,8 +228,13 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       la repetición en la nota de @fig-promotion-and-evidence, que ahora solo
       retiene la comparación relativa (evidencia cuantificada vs. reclamos
       promocionales) que no estaba en la prosa.
-- [ ] **36. §6.3 — leave-one-year-out → Appendix E.** Párrafo de atenuación a una
-      frase. **Original — Prioridad: Alta**
+- [x] **36. §6.3 — leave-one-year-out → Appendix E.** Ya resuelto como efecto
+      colateral del ítem 14: el cuerpo (línea ~3297) reduce el check a una cláusula
+      ("This effect is stable across leave-one-year-out re-estimations and
+      archetype-conditional specifications (Appendix E)"), y el detalle completo
+      vive en Appendix E, sección "Leave-one-year-out and archetype-conditional
+      estimates for post-call beta" (línea ~4763). Sin cambios en thesis.qmd.
+      **Original — Prioridad: Alta**
 - [ ] **37. §6.4 — mantener el null result + multiplicity correction.** Antes de sacar
       cada p-value listado, verificar que esté en Figure 23 o Table 33; los que no estén
       ahí van a una tabla compacta en Appendix E (no se borran sin más). **Corregido
