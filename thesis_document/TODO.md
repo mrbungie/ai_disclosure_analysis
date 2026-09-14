@@ -174,7 +174,7 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       al apéndice.
 - [x] **27. §2.6 (aggregation) — mantener la mediana en el cuerpo.** Reliability rho y
       empirical Bayes → Appendix B/E. **Original — Prioridad: Alta**
-- [ ] **28. §2.7 — coverage % y fallback → Appendix D.** **Original — Prioridad: Alta**
+- [x] **28. §2.7 — coverage % y fallback → Appendix D.** **Original — Prioridad: Alta**
 - [ ] **29. §3.3 (AA setup) — una frase.** "AA represents each firm as a convex
       mixture of extreme disclosure profiles." Ecuación pasa a opcional. **Original —
       Prioridad: Alta**

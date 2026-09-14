@@ -773,7 +773,7 @@ $$\underbrace{\text{Semantic frames}}_{\text{frame extraction}} \Longrightarrow 
 
 ## Financial and market variables
 
-Firm-year financial and market controls combine SEC XBRL disclosures and daily stock returns aligned to fiscal period ends. Balance-sheet and income items follow standardized fallback hierarchies (capex 91%, SG&A 81%, net margin 99%, revenue 99% coverage) with a [340, 380]-day window for annual changes.
+Firm-year financial and market controls combine SEC XBRL disclosures and daily stock returns aligned to fiscal period ends. Coverage of the firm-year panel reaches 99% for revenue and net margin; less consistently reported items (capex, SG&A) are recovered through standardized XBRL concept-tag fallback hierarchies, with full coverage figures and the fallback mechanism detailed in Appendix D. Annual changes use a [340, 380]-day window.
 
 Baseline controls comprise market capitalization, R&D-to-sales, gross margin, operating margin, asset turnover, price-to-sales, forward revenue growth, market beta, and idiosyncratic volatility [@campbell2001; @ang2006]. Because XBRL R&D coverage is 46%, this thesis includes a non-reporting indicator rather than imputing zero. Financial ratios are winsorized at the 1st and 99th percentiles (Appendix D).
 
@@ -4383,6 +4383,8 @@ The sectoral distribution of frames and disclosed AI activities across 2-digit S
 | R&D expense | 46% (1,318 of 2,868 firm-years; outcome only) |
 
 : XBRL concept coverage. {#tbl-d1-xbrl-coverage}
+
+Coverage in @tbl-d1-xbrl-coverage reflects a standardized fallback hierarchy of alternative XBRL concept tags per item: when a firm's primary reporting tag for a given concept is absent in a given year, the construction pipeline falls back to the next tag in a fixed priority order before leaving the item missing, rather than imputing a value. The R&D concept mapping in @tbl-d2-rd-concepts illustrates this logic in full, including the explicit inclusion and exclusion criteria applied at each tag.
 
 This section details the fiscal-period alignment rules, market-model beta estimation (252 pre-filing trading days), and economic-profit construction (geometric equity risk premium of 6.48%). Annual growth uses a [340, 380]-day validity window matched to the nearest prior filing date.
 
