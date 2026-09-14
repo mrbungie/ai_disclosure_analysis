@@ -7,3 +7,9 @@ _book/
 
 /.quarto/
 **/*.quarto_ipynb
+
+# Microsoft's Calibri is proprietary (bundled with a licensed local Office
+# install, used only to render figures in matching typography) -- do not
+# redistribute it via git. Carlito (Apache/OFL, metric-compatible) stays
+# committed as the portable fallback baked into the rcParams font list.
+assets/fonts/Calibri*.ttf

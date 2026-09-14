@@ -14,10 +14,71 @@ execute:
 
 ```{python}
 #| include: false
+# Global chart styling: register Calibri -- the template's own body/heading
+# font (template/reference.docx docDefaults; the "Ttulo1..4" heading styles
+# don't override it, so it's also the font under the 008B7B accent color
+# used for the MIB palette below) -- so every matplotlib figure uses the
+# same typeface as the surrounding Word prose. Calibri itself is a licensed
+# Microsoft font (pulled from this machine's Office install, see the
+# .gitignore note next to assets/fonts/) so it isn't committed to the repo;
+# Carlito, its metric-compatible open-source twin, ships in assets/fonts/
+# and is registered too, purely as a portable fallback if Calibri isn't
+# present on whatever machine renders this next.
+from pathlib import Path
+import matplotlib
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
+from matplotlib.colors import LinearSegmentedColormap
+
+_font_dir = Path("../thesis_document/assets/fonts")
+if not _font_dir.exists():
+    _font_dir = Path("assets/fonts")
+for _f in _font_dir.glob("*.ttf"):
+    fm.fontManager.addfont(str(_f))
+_HAS_CALIBRI = any(_font_dir.glob("Calibri*.ttf"))
+
+# "Petrol & Rust" -- an editorial system, not a categorical dashboard palette.
+# MIB teal (#008B7B, the template's own heading accent) is a brand reference,
+# not the default data color: it appears only as one member of the
+# qualitative sets below. The chart workhorse is a narrow, related cool
+# family (deep blue-gray -> petrol -> teal -> sage-gray, all within ~35deg of
+# hue) plus exactly one warm contrast (rust) pulled from that family's true
+# complement (~180deg). Each of the 5 anchors has one lighter companion tone
+# (same hue, lifted L, tempered S) for the 6-10 category charts (sectors) --
+# nothing enters the set that isn't a tint of one of these five hues.
+MIB = {
+    "deep": "#263B4A", "deep_light": "#6A89A0",
+    "petrol_dark": "#18323A", "petrol": "#355F6B", "petrol_light": "#7AA2AE",
+    "teal": "#008B7B", "teal_light": "#69B5AC",
+    "sage": "#8EA7A3", "sage_light": "#D9E3E1",
+    "rust": "#B85F42", "rust_light": "#D5B1A5", "rust_wash": "#EFE4E1",
+    "ink_950": "#1C1F22", "ink_800": "#454E54", "ink_600": "#73828C",
+    "ink_400": "#A5AFB6", "ink_200": "#D5D9DD", "ink_100": "#F1F2F4",
+}
+# Extended qualitative set for >5 categories: 5 families x 2 tones, grouped.
+MIB_QUAL10 = [MIB["deep"], MIB["deep_light"], MIB["petrol"], MIB["petrol_light"],
+              MIB["teal"], MIB["teal_light"], MIB["sage"], MIB["sage_light"],
+              MIB["rust"], MIB["rust_light"]]
+# Diverging colormap for heatmaps (replaces RdBu_r): rust -> cream -> deep
+# blue-gray, i.e. the system's one warm contrast against its darkest cool.
+MIB_DIV = LinearSegmentedColormap.from_list("mib_div", [MIB["rust"], "#F3EEE6", MIB["deep"]], N=256)
+
+plt.rcParams.update({
+    "font.family": ["Calibri", "Carlito", "DejaVu Sans"] if _HAS_CALIBRI else ["Carlito", "DejaVu Sans"],
+    "font.size": 9.0,
+    "text.color": MIB["ink_950"],
+    "axes.edgecolor": MIB["ink_400"],
+    "axes.labelcolor": MIB["ink_950"],
+    "xtick.color": MIB["ink_800"],
+    "ytick.color": MIB["ink_800"],
+    "axes.prop_cycle": matplotlib.cycler(color=[
+        MIB["petrol"], MIB["rust"], MIB["deep"], MIB["teal"], MIB["sage"], MIB["ink_600"],
+    ]),
+})
+
 # Headline corpus quantities used in the front matter, computed once from the
 # analysis universe (S&P 500 at 2021-01-01; the DuckDB manifest views are
 # already restricted to it, `paragraphs` is joined back through PANEL_DOCS).
-from pathlib import Path
 import duckdb
 import pandas as pd
 
@@ -354,7 +415,7 @@ n_other_groups = len(s2_counts) - top_n
 
 labels_s2 = [f"Other ({n_other_groups} groups)"] + [SIC2_LABELS.get(s, f"SIC {s}") for s in top_s2.index]
 vals_s2 = [other_count] + list(top_s2.values)
-colors_s2 = ["#94A3B8"] + ["#0D9488"] * len(top_s2)
+colors_s2 = ["#A5AFB6"] + ["#355F6B"] * len(top_s2)
 
 def map_sector(sic2):
     try: s = int(sic2)
@@ -382,7 +443,7 @@ ax3 = fig.add_subplot(gs[1, :])
 
 # Panel A: Broad SIC Divisions
 y1 = range(len(div_counts))
-bars1 = ax1.barh(y1, div_counts.values, color="#1E40AF", alpha=0.85, height=0.6)
+bars1 = ax1.barh(y1, div_counts.values, color="#18323A", alpha=0.85, height=0.6)
 ax1.set_yticks(y1)
 ax1.set_yticklabels(div_counts.index, fontsize=7.8)
 ax1.set_xlabel("Number of firms (N)", fontsize=8.2, fontweight="bold")
@@ -393,7 +454,7 @@ for bar in bars1:
     w = bar.get_width()
     pct = w / len(fu) * 100
     ax1.text(w + 3, bar.get_y() + bar.get_height()/2, f"{w} ({pct:.1f}%)",
-             va="center", fontsize=7.2, color="#1E293B")
+             va="center", fontsize=7.2, color="#454E54")
 ax1.set_xlim(0, max(div_counts.values) * 1.25)
 
 # Panel B: Major 2-digit SIC Groups + Others
@@ -409,12 +470,12 @@ for bar in bars2:
     w = bar.get_width()
     pct = w / len(fu) * 100
     ax2.text(w + 2, bar.get_y() + bar.get_height()/2, f"{w} ({pct:.1f}%)",
-             va="center", fontsize=7.0, color="#1E293B")
+             va="center", fontsize=7.0, color="#454E54")
 ax2.set_xlim(0, max(vals_s2) * 1.25)
 
 # Panel C: Aggregated Economic Sectors
 y3 = range(len(sec_counts))
-bars3 = ax3.barh(y3, sec_counts.values, color="#7C3AED", alpha=0.85, height=0.58)
+bars3 = ax3.barh(y3, sec_counts.values, color="#B85F42", alpha=0.85, height=0.58)
 ax3.set_yticks(y3)
 ax3.set_yticklabels(sec_counts.index, fontsize=7.8)
 ax3.set_xlabel("Number of firms (N)", fontsize=8.2, fontweight="bold")
@@ -425,7 +486,7 @@ for bar in bars3:
     w = bar.get_width()
     pct = w / len(fu) * 100
     ax3.text(w + 1.5, bar.get_y() + bar.get_height()/2, f"{w} ({pct:.1f}%)",
-             va="center", fontsize=7.2, color="#1E293B")
+             va="center", fontsize=7.2, color="#454E54")
 ax3.set_xlim(0, max(sec_counts.values) * 1.15)
 
 plt.show()
@@ -751,20 +812,20 @@ min_ai, max_ai = all_ai.min(), all_ai.max()
 y_range_a = max_ai - min_ai
 offset_a = y_range_a * 0.045
 
-ax1.plot(main.index, main.any_ai * 100, "o-", color="#1D4ED8", lw=2.4, ms=6, label="Historical panel (2021–2025)")
-ax1.plot(ytd.index, ytd.any_ai * 100, "o:", color="#1D4ED8", lw=2.0, ms=5, label="2026 YTD")
+ax1.plot(main.index, main.any_ai * 100, "o-", color="#355F6B", lw=2.4, ms=6, label="Historical panel (2021–2025)")
+ax1.plot(ytd.index, ytd.any_ai * 100, "o:", color="#355F6B", lw=2.0, ms=5, label="2026 YTD")
 for yr in years:
     val = main.loc[yr, "any_ai"] * 100
-    ax1.text(yr, val + offset_a, f"{val:.1f}%", ha="center", fontsize=8.2, fontweight="bold", color="#1E293B")
+    ax1.text(yr, val + offset_a, f"{val:.1f}%", ha="center", fontsize=8.2, fontweight="bold", color="#454E54")
 val_26 = ytd.loc[2026, "any_ai"] * 100
-ax1.text(2026, val_26 + offset_a, f"{val_26:.1f}%", ha="center", fontsize=8.2, fontweight="bold", color="#1D4ED8")
+ax1.text(2026, val_26 + offset_a, f"{val_26:.1f}%", ha="center", fontsize=8.2, fontweight="bold", color="#355F6B")
 
-ax1.axvline(2023.5, color="#DC2626", linestyle=":", lw=1.3, alpha=0.8)
-ax1.axvspan(2023.0, 2024.0, color="#FEE2E2", alpha=0.35)
+ax1.axvline(2023.5, color="#B85F42", linestyle=":", lw=1.3, alpha=0.8)
+ax1.axvspan(2023.0, 2024.0, color="#D5B1A5", alpha=0.35)
 ax1.annotate("GenAI boom\n(2023–2024)", xy=(2023.5, 55), xytext=(2021.6, 68),
-             arrowprops=dict(arrowstyle="->", color="#DC2626", lw=1.1),
-             fontsize=8.0, fontweight="bold", color="#991B1B",
-             bbox=dict(boxstyle="round,pad=0.2", facecolor="#FEF2F2", edgecolor="#FCA5A5", alpha=0.9))
+             arrowprops=dict(arrowstyle="->", color="#B85F42", lw=1.1),
+             fontsize=8.0, fontweight="bold", color="#B85F42",
+             bbox=dict(boxstyle="round,pad=0.2", facecolor="#D5B1A5", edgecolor="#D5B1A5", alpha=0.9))
 
 ax1.set_title("Panel A: Broadening Participation\nShare of S&P 500 Firms Disclosing AI (%)", fontsize=9.8, fontweight="bold")
 ax1.set_ylabel("% of S&P 500 Firms", fontsize=8.8, fontweight="bold")
@@ -781,31 +842,31 @@ all_frames = pd.concat([main.frames, ytd.frames])
 max_f = all_frames.max()
 offset_f = max_f * 0.045
 
-ax2.plot(main.index, main.frames, "s-", color="#059669", lw=2.4, ms=6, label="Historical panel")
-ax2.plot(ytd.index, ytd.frames, "s:", color="#059669", lw=2.0, ms=5, label="2026 YTD")
+ax2.plot(main.index, main.frames, "s-", color="#8EA7A3", lw=2.4, ms=6, label="Historical panel")
+ax2.plot(ytd.index, ytd.frames, "s:", color="#8EA7A3", lw=2.0, ms=5, label="2026 YTD")
 
 for yr in [2021, 2022, 2023]:
     val = main.loc[yr, "frames"]
-    ax2.text(yr, val + offset_f, f"{val:.3f}", ha="center", fontsize=8.2, fontweight="bold", color="#1E293B")
+    ax2.text(yr, val + offset_f, f"{val:.3f}", ha="center", fontsize=8.2, fontweight="bold", color="#454E54")
 
 val_24 = main.loc[2024, "frames"]
-ax2.text(2024.08, val_24 - offset_f * 1.6, f"{val_24:.3f}", ha="left", fontsize=8.2, fontweight="bold", color="#1E293B")
+ax2.text(2024.08, val_24 - offset_f * 1.6, f"{val_24:.3f}", ha="left", fontsize=8.2, fontweight="bold", color="#454E54")
 
 val_25 = main.loc[2025, "frames"]
-ax2.text(2024.90, val_25 + offset_f, f"{val_25:.3f}", ha="right", fontsize=8.2, fontweight="bold", color="#1E293B")
+ax2.text(2024.90, val_25 + offset_f, f"{val_25:.3f}", ha="right", fontsize=8.2, fontweight="bold", color="#454E54")
 
 val_26_f = ytd.loc[2026, "frames"]
-ax2.text(2026, val_26_f + offset_f, f"{val_26_f:.3f}", ha="center", fontsize=8.2, fontweight="bold", color="#059669")
+ax2.text(2026, val_26_f + offset_f, f"{val_26_f:.3f}", ha="center", fontsize=8.2, fontweight="bold", color="#8EA7A3")
 
-ax2.axvline(2023.5, color="#DC2626", linestyle=":", lw=1.3, alpha=0.8)
-ax2.axvspan(2023.0, 2024.0, color="#FEE2E2", alpha=0.35)
+ax2.axvline(2023.5, color="#B85F42", linestyle=":", lw=1.3, alpha=0.8)
+ax2.axvspan(2023.0, 2024.0, color="#D5B1A5", alpha=0.35)
 
 ratio = main.loc[2025, "frames"] / main.loc[2021, "frames"]
 ax2.annotate(f"{ratio:.1f}× panel growth\n({main.loc[2021, 'frames']:.3f} → {main.loc[2025, 'frames']:.3f})",
              xy=(2024.0, 0.065), xytext=(2021.5, 0.125),
-             arrowprops=dict(arrowstyle="->", color="#047857", lw=1.1),
-             fontsize=8.0, fontweight="bold", color="#065F46",
-             bbox=dict(boxstyle="round,pad=0.2", facecolor="#ECFDF5", edgecolor="#A7F3D0", alpha=0.9))
+             arrowprops=dict(arrowstyle="->", color="#8EA7A3", lw=1.1),
+             fontsize=8.0, fontweight="bold", color="#8EA7A3",
+             bbox=dict(boxstyle="round,pad=0.2", facecolor="#D9E3E1", edgecolor="#D9E3E1", alpha=0.9))
 
 ax2.set_title("Panel B: Deepening Narrative Intensity\nAI Frames per 1,000 Narrative Words", fontsize=9.8, fontweight="bold")
 ax2.set_ylabel("AI Frames / 1,000 Words", fontsize=8.8, fontweight="bold")
@@ -849,33 +910,45 @@ FEATURES = ["promotional_posture", "hedging_posture", "risk_orientation", "gover
 LABELS = ["Promotional posture", "Hedging posture", "Risk orientation", "Governance orientation",
           "Claim realization", "Customer-facing", "Claim specificity", "Disclosure intensity"]
 
-fig, ax = plt.subplots(figsize=(8.8, 3.8), dpi=300)
+fig, ax = plt.subplots(figsize=(8.8, 4.4), dpi=300)
 y_positions = np.arange(len(FEATURES))
+
+# Faint alternating row bands make it easier to trace a label back to its
+# row without any text touching the whisker/bar/marker it describes.
+for idx in range(len(FEATURES)):
+    if idx % 2 == 0:
+        ax.axhspan(idx - 0.5, idx + 0.5, color=MIB["ink_100"], zorder=0)
 
 for idx, feat in enumerate(FEATURES):
     s = df[feat]
     med = s.median()
     q25, q75 = s.quantile(0.25), s.quantile(0.75)
     p05, p95 = s.quantile(0.05), s.quantile(0.95)
-    
-    ax.plot([p05, p95], [idx, idx], color="#94A3B8", lw=2.0, zorder=1)
-    ax.plot([q25, q75], [idx, idx], color="#1D4ED8", lw=5.5, solid_capstyle="round", zorder=2)
-    ax.scatter([med], [idx], color="#FFFFFF", edgecolor="#0F172A", s=50, lw=1.8, zorder=3)
-    ax.text(med, idx + 0.28, f"{med:.2f}", ha="center", va="bottom", fontsize=8.0, fontweight="bold", color="#1E293B")
+
+    ax.plot([p05, p95], [idx, idx], color=MIB["ink_400"], lw=2.0, zorder=1)
+    ax.plot([q25, q75], [idx, idx], color=MIB["petrol"], lw=5.5, solid_capstyle="round", zorder=2)
+    ax.scatter([med], [idx], color="#FFFFFF", edgecolor=MIB["ink_950"], s=50, lw=1.8, zorder=3)
+
+    # Value label sits directly above the marker, centered on it -- the axis
+    # is reversed (row 0 at the top), so "above" is a smaller data-y, not a
+    # larger one.
+    ax.text(med, idx - 0.30, f"{med:.2f}", ha="center", va="bottom", fontsize=8.2, fontweight="bold", color=MIB["ink_800"], zorder=4)
 
 ax.set_yticks(y_positions)
 ax.set_yticklabels(LABELS, fontsize=9.0, fontweight="bold")
-ax.invert_yaxis()
-ax.set_xlim(-0.05, 1.05)
+ax.set_ylim(len(FEATURES) - 0.5, -0.5)
+ax.set_xlim(-0.05, 1.12)
+ax.set_xticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
 ax.set_xlabel("Dimension Score (Scaled 0 to 1)", fontsize=8.8, fontweight="bold")
-ax.grid(True, axis="x", linestyle="--", alpha=0.3)
-ax.spines[["top", "right"]].set_visible(False)
+ax.grid(True, axis="x", linestyle="--", alpha=0.3, zorder=0)
+ax.spines[["top", "right", "left"]].set_visible(False)
+ax.tick_params(axis="y", length=0)
 plt.tight_layout()
 plt.show()
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* White circles denote medians; blue bars interquartile ranges; grey whiskers the 5th–95th percentile. All measures are scaled from 0 to 1.
+*Notes:* White circles denote medians; petrol bars interquartile ranges; grey whiskers the 5th–95th percentile. All measures are scaled from 0 to 1.
 :::
 
 | Dimension | Operational Definition | Range | Managerial Meaning |
@@ -1003,29 +1076,29 @@ fig, ax = plt.subplots(figsize=(15, 14), dpi=300)
 ax.plot([0, 1, 0.5, 0], [0, 0, np.sqrt(3)/2, 0], "k-", lw=2.2, zorder=3)
 
 c_x, c_y = 0.5, np.sqrt(3)/6
-ax.plot([0.5, c_x], [0, c_y], color="#94A3B8", lw=1.1, ls=":", zorder=2)
-ax.plot([0.75, c_x], [np.sqrt(3)/4, c_y], color="#94A3B8", lw=1.1, ls=":", zorder=2)
-ax.plot([0.25, c_x], [np.sqrt(3)/4, c_y], color="#94A3B8", lw=1.1, ls=":", zorder=2)
+ax.plot([0.5, c_x], [0, c_y], color="#A5AFB6", lw=1.1, ls=":", zorder=2)
+ax.plot([0.75, c_x], [np.sqrt(3)/4, c_y], color="#A5AFB6", lw=1.1, ls=":", zorder=2)
+ax.plot([0.25, c_x], [np.sqrt(3)/4, c_y], color="#A5AFB6", lw=1.1, ls=":", zorder=2)
 
-ax.text(0.33, 0.06, "Pure Vocal (w > 0.5)", fontsize=7.2, color="#94A3B8", ha="center", style="italic")
-ax.text(0.67, 0.06, "Pure Governance (w > 0.5)", fontsize=7.2, color="#94A3B8", ha="center", style="italic")
-ax.text(0.50, 0.60, "Pure Defensive (w > 0.5)", fontsize=7.2, color="#94A3B8", ha="center", style="italic")
-ax.text(0.50, 0.14, "Mixed Postures", fontsize=7.2, color="#94A3B8", ha="center", style="italic")
+ax.text(0.33, 0.06, "Pure Vocal (w > 0.5)", fontsize=7.2, color="#A5AFB6", ha="center", style="italic")
+ax.text(0.67, 0.06, "Pure Governance (w > 0.5)", fontsize=7.2, color="#A5AFB6", ha="center", style="italic")
+ax.text(0.50, 0.60, "Pure Defensive (w > 0.5)", fontsize=7.2, color="#A5AFB6", ha="center", style="italic")
+ax.text(0.50, 0.14, "Mixed Postures", fontsize=7.2, color="#A5AFB6", ha="center", style="italic")
 
 ax.scatter(fit_pop["x_tern"], fit_pop["y_tern"],
-           c="#94A3B8", s=18, alpha=0.35, edgecolors="none", zorder=4)
+           c="#A5AFB6", s=18, alpha=0.35, edgecolors="none", zorder=4)
 
 SECTOR_COLORS = {
-    "Technology": "#2563EB",
-    "Industrials & Mfg": "#475569",
-    "Financial Services": "#059669",
-    "Healthcare & Pharma": "#D97706",
-    "Retail & Wholesale": "#DB2777",
-    "Utilities": "#0891B2",
-    "Energy & Mining": "#B45309",
-    "Transportation": "#7C3AED",
-    "Business Services": "#0D9488",
-    "Communications": "#E11D48",
+    "Technology": "#008B7B",
+    "Industrials & Mfg": "#263B4A",
+    "Financial Services": "#355F6B",
+    "Healthcare & Pharma": "#6A89A0",
+    "Retail & Wholesale": "#B85F42",
+    "Utilities": "#8EA7A3",
+    "Energy & Mining": "#D5B1A5",
+    "Transportation": "#7AA2AE",
+    "Business Services": "#69B5AC",
+    "Communications": "#D9E3E1",
 }
 
 sec_grp = fit_pop[fit_pop["sector"] != "Other / Diversified"].groupby("sector").agg(
@@ -1051,11 +1124,11 @@ for idx, sec in enumerate(RIGHT_ORDER):
     ly = y_right[idx]
     lx = (1.0 - ly / np.sqrt(3)) + 0.080
     marker_size = 75 + 18 * np.sqrt(n)
-    ax.scatter(sx, sy, s=marker_size, facecolor=col, edgecolor="#0F172A", linewidth=1.4, zorder=6)
+    ax.scatter(sx, sy, s=marker_size, facecolor=col, edgecolor="#1C1F22", linewidth=1.4, zorder=6)
     ax.text(sx, sy, str(sid), fontsize=7.2, fontweight="bold", color="white", ha="center", va="center", zorder=7)
     ax.plot([sx, lx], [sy, ly], color=col, lw=1.2, alpha=0.85, zorder=5)
     label_text = f" {sid}  {sec} (n={n}) "
-    ax.text(lx, ly, label_text, fontsize=7.8, fontweight="bold", ha="left", va="center", color="#0F172A",
+    ax.text(lx, ly, label_text, fontsize=7.8, fontweight="bold", ha="left", va="center", color="#1C1F22",
             bbox=dict(boxstyle="round,pad=0.25", fc="white", ec=col, lw=1.3, alpha=0.96), zorder=8)
 
 y_left = [0.20]
@@ -1067,11 +1140,11 @@ for idx, sec in enumerate(LEFT_ORDER):
     ly = y_left[idx]
     lx = (ly / np.sqrt(3)) - 0.085
     marker_size = 75 + 18 * np.sqrt(n)
-    ax.scatter(sx, sy, s=marker_size, facecolor=col, edgecolor="#0F172A", linewidth=1.4, zorder=6)
+    ax.scatter(sx, sy, s=marker_size, facecolor=col, edgecolor="#1C1F22", linewidth=1.4, zorder=6)
     ax.text(sx, sy, str(sid), fontsize=7.2, fontweight="bold", color="white", ha="center", va="center", zorder=7)
     ax.plot([sx, lx], [sy, ly], color=col, lw=1.2, alpha=0.85, zorder=5)
     label_text = f" {sid}  {sec} (n={n}) "
-    ax.text(lx, ly, label_text, fontsize=7.8, fontweight="bold", ha="right", va="center", color="#0F172A",
+    ax.text(lx, ly, label_text, fontsize=7.8, fontweight="bold", ha="right", va="center", color="#1C1F22",
             bbox=dict(boxstyle="round,pad=0.25", fc="white", ec=col, lw=1.3, alpha=0.96), zorder=8)
 
 ticker_map = fit_pop.set_index("ticker").to_dict(orient="index")
@@ -1101,22 +1174,22 @@ CENTER_EXEMPLARS = [
 ]
 
 dltr_lbl = get_exemplar_label("DLTR")
-ax.scatter([0.5], [np.sqrt(3)/2], color="#0F172A", s=32, zorder=9)
+ax.scatter([0.5], [np.sqrt(3)/2], color="#1C1F22", s=32, zorder=9)
 ax.annotate(dltr_lbl, xy=(0.5, np.sqrt(3)/2), xytext=(0, 10),
             textcoords="offset points", fontsize=8.0, fontweight="bold",
-            ha="center", va="bottom", color="#0F172A",
-            bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="#CBD5E1", lw=0.8, alpha=0.95),
+            ha="center", va="bottom", color="#1C1F22",
+            bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="#D5D9DD", lw=0.8, alpha=0.95),
             zorder=10)
 
 for exemplars, ha_default in ((BOTTOM_EXEMPLARS, None), (LEFT_EXEMPLARS, None), (RIGHT_EXEMPLARS, None), (CENTER_EXEMPLARS, None)):
     for t, off, ha, va in exemplars:
         r = ticker_map[t]
         lbl = get_exemplar_label(t)
-        ax.scatter([r["x_tern"]], [r["y_tern"]], color="#0F172A", s=28, zorder=9)
+        ax.scatter([r["x_tern"]], [r["y_tern"]], color="#1C1F22", s=28, zorder=9)
         ax.annotate(lbl, xy=(r["x_tern"], r["y_tern"]), xytext=off,
                     textcoords="offset points", fontsize=7.6, fontweight="bold",
-                    ha=ha, va=va, color="#0F172A",
-                    bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="#CBD5E1", lw=0.8, alpha=0.95),
+                    ha=ha, va=va, color="#1C1F22",
+                    bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="#D5D9DD", lw=0.8, alpha=0.95),
                     zorder=10)
 
 ax.set_xlim(-0.48, 1.52)
@@ -1125,11 +1198,11 @@ ax.set_aspect("equal")
 ax.axis("off")
 
 ax.text(-0.05, -0.07, "Vocal Substantives\n(Commercial Execution)",
-        fontsize=11, fontweight="bold", ha="center", va="top", color="#0F172A")
+        fontsize=11, fontweight="bold", ha="center", va="top", color="#1C1F22")
 ax.text(1.05, -0.07, "Governance-Led Disclosers\n(Institutional Guardrails)",
-        fontsize=11, fontweight="bold", ha="center", va="top", color="#0F172A")
+        fontsize=11, fontweight="bold", ha="center", va="top", color="#1C1F22")
 ax.text(0.5, np.sqrt(3)/2 + 0.05, "Defensive Disclosers\n(Risk-Framed)",
-        fontsize=11, fontweight="bold", ha="center", va="bottom", color="#0F172A")
+        fontsize=11, fontweight="bold", ha="center", va="bottom", color="#1C1F22")
 
 plt.tight_layout()
 plt.show()
@@ -1238,7 +1311,7 @@ mat = pd.DataFrame(A[[voc_col, gov_col, def_col], :], columns=FEATURES, index=AR
 
 fig, ax = plt.subplots(figsize=(8.2, 4.2), dpi=300)
 vmax = float(np.abs(mat.values).max())
-im = ax.imshow(mat.values.T, cmap="RdBu_r", vmin=-vmax, vmax=vmax, aspect="auto")
+im = ax.imshow(mat.values.T, cmap=MIB_DIV, vmin=-vmax, vmax=vmax, aspect="auto")
 ax.set_xticks(range(len(ARCHETYPES)))
 ax.set_xticklabels(ARCHETYPES, fontsize=9.0, fontweight="bold", rotation=25, ha="right", rotation_mode="anchor")
 ax.set_yticks(range(len(FEATURES)))
@@ -1380,7 +1453,7 @@ rel_rep = rel_rep[archs].sort_values(by="Vocal Substantives", ascending=False)
 fig, ax = plt.subplots(figsize=(8.5, 4.8), dpi=300)
 log_ratio = np.log2(np.clip(rel_rep.values, 0.2, 5.0))
 vmax = 1.5
-im = ax.imshow(log_ratio, cmap="RdBu_r", vmin=-vmax, vmax=vmax, aspect="auto")
+im = ax.imshow(log_ratio, cmap=MIB_DIV, vmin=-vmax, vmax=vmax, aspect="auto")
 
 ax.set_xticks(range(len(archs)))
 ax.set_xticklabels(archs, fontsize=8.8, fontweight="bold", rotation=30, ha="right", rotation_mode="anchor")
@@ -1392,7 +1465,7 @@ for i in range(len(rel_rep)):
         val = rel_rep.iloc[i, j]
         n_firms = ct.loc[rel_rep.index[i], archs[j]]
         text = f"{val:.2f}x\n({n_firms})"
-        color = "white" if abs(log_ratio[i, j]) > 0.75 else "#0F172A"
+        color = "white" if abs(log_ratio[i, j]) > 0.75 else "#1C1F22"
         ax.text(j, i, text, ha="center", va="center", fontsize=7.8, color=color,
                 fontweight="bold" if val > 1.25 or val < 0.75 else "normal")
 
@@ -1522,8 +1595,8 @@ from archetypes import AA as _AA_exp
 ARCH_ORDER = ["No AI", "Defensive Disclosers", "Governance-Led Disclosers", "Vocal Substantives"]
 ARCH_SHORT = {"No AI": "No AI", "Defensive Disclosers": "Defensive",
               "Governance-Led Disclosers": "Governance", "Vocal Substantives": "Vocal"}
-ARCH_COLORS4 = {"No AI": "#E2E8F0", "Defensive Disclosers": "#94A3B8",
-                "Governance-Led Disclosers": "#7C3AED", "Vocal Substantives": "#2563EB"}
+ARCH_COLORS4 = {"No AI": "#D5D9DD", "Defensive Disclosers": "#A5AFB6",
+                "Governance-Led Disclosers": "#B85F42", "Vocal Substantives": "#355F6B"}
 _POSTURE_EXP = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
                 "temporal_posture", "ai_positioning", "specificity"]
 _CROSS_FEATS_EXP = _POSTURE_EXP + ["disclosure_intensity"]
@@ -1644,8 +1717,8 @@ _row_pct2526 = _trans_pct[(2025, 2026)]
 #| fig-height: 7.6
 import matplotlib.pyplot as plt
 
-ARCH_LINE_COLORS = {"No AI": "#0F172A", "Defensive Disclosers": "#64748B",
-                     "Governance-Led Disclosers": "#7C3AED", "Vocal Substantives": "#2563EB"}
+ARCH_LINE_COLORS = {"No AI": "#1C1F22", "Defensive Disclosers": "#73828C",
+                     "Governance-Led Disclosers": "#B85F42", "Vocal Substantives": "#355F6B"}
 _trans_labels = [f"{y0}→{y1}" for y0, y1 in zip(_years_comp[:-1], _years_comp[1:])]
 
 fig = plt.figure(figsize=(10.5, 7.6), dpi=300)
@@ -1662,7 +1735,7 @@ for a in ARCH_ORDER:
     for x, v, b0 in zip(_years_comp, vals, bottom):
         if v >= 4:
             axA.text(x, b0 + v / 2, f"{v:.0f}%", ha="center", va="center", fontsize=7.3,
-                      color="white" if a != "No AI" and v >= 8 else "#0F172A")
+                      color="white" if a != "No AI" and v >= 8 else "#1C1F22")
     bottom += vals
 axA.set_title("A. Annual disclosure-posture composition (all S&P 500 firms)", fontsize=10.2, fontweight="bold")
 axA.set_ylabel("% of firms", fontsize=9.0, fontweight="bold")
@@ -1743,12 +1816,12 @@ firm_mins = [d["firm_level"][str(k)]["min"] for k in ks]
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8.5, 3.4), dpi=300, sharey=True)
 
 # Panel A: Frame-level
-ax1.plot(ks, frame_means, "o-", color="#1D4ED8", lw=2.2, label="Mean Jaccard")
-ax1.plot(ks, frame_mins, "s--", color="#DC2626", lw=1.8, label="Minimum archetype Jaccard")
-ax1.axhline(0.60, color="#991B1B", linestyle=":", lw=1.4, label="Stability floor (0.60)")
+ax1.plot(ks, frame_means, "o-", color="#355F6B", lw=2.2, label="Mean Jaccard")
+ax1.plot(ks, frame_mins, "s--", color="#B85F42", lw=1.8, label="Minimum archetype Jaccard")
+ax1.axhline(0.60, color="#B85F42", linestyle=":", lw=1.4, label="Stability floor (0.60)")
 for k, mn in zip(ks, frame_mins):
     ax1.annotate(f"{mn:.2f}", (k, mn), xytext=(0, -13), textcoords="offset points",
-                 ha="center", fontsize=7.8, fontweight="bold", color="#991B1B" if mn < 0.60 else "#0F172A")
+                 ha="center", fontsize=7.8, fontweight="bold", color="#B85F42" if mn < 0.60 else "#1C1F22")
 ax1.set_xticks(ks)
 ax1.set_xlabel("Number of Archetypes (k)", fontsize=8.8, fontweight="bold")
 ax1.set_ylabel("Bootstrap Jaccard Overlap", fontsize=8.8, fontweight="bold")
@@ -1759,12 +1832,12 @@ ax1.legend(loc="lower left", fontsize=7.8, framealpha=0.9)
 ax1.spines[["top", "right"]].set_visible(False)
 
 # Panel B: Firm-level
-ax2.plot(ks, firm_means, "o-", color="#059669", lw=2.2, label="Mean Jaccard")
-ax2.plot(ks, firm_mins, "s--", color="#DC2626", lw=1.8, label="Minimum archetype Jaccard")
-ax2.axhline(0.60, color="#991B1B", linestyle=":", lw=1.4, label="Stability floor (0.60)")
+ax2.plot(ks, firm_means, "o-", color="#8EA7A3", lw=2.2, label="Mean Jaccard")
+ax2.plot(ks, firm_mins, "s--", color="#B85F42", lw=1.8, label="Minimum archetype Jaccard")
+ax2.axhline(0.60, color="#B85F42", linestyle=":", lw=1.4, label="Stability floor (0.60)")
 for k, mn in zip(ks, firm_mins):
     ax2.annotate(f"{mn:.2f}", (k, mn), xytext=(0, -13), textcoords="offset points",
-                 ha="center", fontsize=7.8, fontweight="bold", color="#991B1B" if mn < 0.60 else "#0F172A")
+                 ha="center", fontsize=7.8, fontweight="bold", color="#B85F42" if mn < 0.60 else "#1C1F22")
 ax2.set_xticks(ks)
 ax2.set_xlabel("Number of Archetypes (k)", fontsize=8.8, fontweight="bold")
 ax2.set_title("Panel B: Firm-Level (Sample Sensitivity)", fontsize=9.2, fontweight="bold")
@@ -2059,10 +2132,10 @@ The purpose and action taxonomies above pool every sector together. Crossing the
 #| echo: false
 #| fig-width: 11.5
 #| fig-height: 5.6
-ROLE_COLORS4 = {"Sell": "#2563EB", "Operate": "#059669", "Build": "#7C3AED",
-                "Enable": "#F59E0B", "Control": "#DC2626", "Serve": "#0EA5E9"}
-_SECTOR_PALETTE = ["#2563EB", "#DC2626", "#059669", "#7C3AED", "#F59E0B",
-                   "#0EA5E9", "#DB2777", "#65A30D", "#78716C", "#0F172A"]
+ROLE_COLORS4 = {"Sell": "#355F6B", "Operate": "#8EA7A3", "Build": "#B85F42",
+                "Enable": "#008B7B", "Control": "#263B4A", "Serve": "#7AA2AE"}
+_SECTOR_PALETTE = ["#263B4A", "#6A89A0", "#355F6B", "#7AA2AE", "#008B7B",
+                   "#69B5AC", "#8EA7A3", "#D9E3E1", "#B85F42", "#D5B1A5"]
 SECTOR_COLORS4 = dict(zip(SECTOR_ORDER4, _SECTOR_PALETTE))
 
 fig, (axA, axB) = plt.subplots(1, 2, figsize=(11.5, 5.6), dpi=300, gridspec_kw={"width_ratios": [1.0, 1.2]})
@@ -2087,7 +2160,7 @@ axA.spines[["top", "right"]].set_visible(False)
 
 dev_mat = action_dev4.T.reindex(index=ACTIONS_SEC4, columns=SECTOR_ORDER4).values
 vmax_dev = np.ceil(np.abs(dev_mat).max())
-im = axB.imshow(dev_mat, cmap="RdBu_r", vmin=-vmax_dev, vmax=vmax_dev, aspect="auto")
+im = axB.imshow(dev_mat, cmap=MIB_DIV, vmin=-vmax_dev, vmax=vmax_dev, aspect="auto")
 axB.set_xticks(range(len(SECTOR_ORDER4)))
 axB.set_xticklabels(SECTOR_ORDER4, fontsize=7.6, rotation=35, ha="right", rotation_mode="anchor")
 axB.set_yticks(range(len(ACTIONS_SEC4)))
@@ -2097,7 +2170,7 @@ for i in range(len(ACTIONS_SEC4)):
         v = dev_mat[i, j]
         if abs(v) >= 3:
             axB.text(j, i, f"{v:+.0f}", ha="center", va="center", fontsize=7.4,
-                      color="white" if abs(v) >= vmax_dev * 0.6 else "#0F172A")
+                      color="white" if abs(v) >= vmax_dev * 0.6 else "#1C1F22")
 axB.set_title("B. How firms operationalize AI\n(deviation from the pooled mix)", fontsize=9.5, fontweight="bold", pad=8)
 cbar = fig.colorbar(im, ax=axB, fraction=0.035, pad=0.03)
 cbar.set_label("Deviation from pooled activity mix (percentage points)", fontsize=7.8, fontweight="bold")
@@ -2165,10 +2238,10 @@ fig, (ax0, ax1) = plt.subplots(2, 1, figsize=(8.0, 4.6), dpi=300, gridspec_kw={"
 # Top mini-panel: median AI activities per firm, as a ratio to the pooled median
 n_vals = [per_firm[per_firm.archetype == a]["n_activities"].median() for a in ARCH]
 ratios = [v / _pooled_median_n for v in n_vals]
-bars = ax0.barh(range(3), ratios, color="#2563EB", height=0.55)
-ax0.axvline(1, color="#0F172A", lw=1.0, linestyle="--")
+bars = ax0.barh(range(3), ratios, color="#355F6B", height=0.55)
+ax0.axvline(1, color="#1C1F22", lw=1.0, linestyle="--")
 for i, (v, r) in enumerate(zip(n_vals, ratios)):
-    ax0.text(r + 0.15, i, f"{v:.0f} ({r:.1f}× pooled)", va="center", fontsize=8.0, fontweight="bold", color="#0F172A")
+    ax0.text(r + 0.15, i, f"{v:.0f} ({r:.1f}× pooled)", va="center", fontsize=8.0, fontweight="bold", color="#1C1F22")
 ax0.set_yticks(range(3))
 ax0.set_yticklabels(ARCH, fontsize=8.5)
 ax0.invert_yaxis()
@@ -2179,8 +2252,8 @@ ax0.spines[["top", "right"]].set_visible(False)
 # Bottom heatmap: deviation from the pooled rate, in percentage points; a thin
 # gray "Pooled" column on the left shows the benchmark itself, uncolored.
 vmax = float(np.abs(mat_dev).max())
-im = ax1.imshow(mat_dev, cmap="RdBu_r", vmin=-vmax, vmax=vmax, aspect="auto", extent=(0.5, 3.5, len(pct_features) - 0.5, -0.5))
-ax1.axvspan(-0.9, 0.5, color="#E2E8F0", zorder=0)
+im = ax1.imshow(mat_dev, cmap=MIB_DIV, vmin=-vmax, vmax=vmax, aspect="auto", extent=(0.5, 3.5, len(pct_features) - 0.5, -0.5))
+ax1.axvspan(-0.9, 0.5, color="#D5D9DD", zorder=0)
 
 ax1.set_xticks([0] + list(range(1, 4)))
 ax1.set_xticklabels(["Pooled"] + ARCH, fontsize=8.6, fontweight="bold", rotation=30, ha="right", rotation_mode="anchor")
@@ -2189,11 +2262,11 @@ ax1.set_yticks(range(len(pct_features)))
 ax1.set_yticklabels([name for name, _ in pct_features], fontsize=8.8, fontweight="bold")
 
 for i, (_, col) in enumerate(pct_features):
-    ax1.text(-0.2, i, f"{_pooled_rates[col]:.1f}%", ha="center", va="center", fontsize=8.2, color="#334155")
+    ax1.text(-0.2, i, f"{_pooled_rates[col]:.1f}%", ha="center", va="center", fontsize=8.2, color="#454E54")
     for j in range(3):
         raw_v, dev_v = mat_raw[i, j], mat_dev[i, j]
         ax1.text(j + 1, i, f"{raw_v:.1f}%", ha="center", va="center", fontsize=8.5, fontweight="bold",
-                  color="white" if abs(dev_v) > vmax * 0.6 else "#0F172A")
+                  color="white" if abs(dev_v) > vmax * 0.6 else "#1C1F22")
 
 cbar = fig.colorbar(im, ax=ax1, shrink=0.85, pad=0.03)
 cbar.set_label("Deviation from pooled rate (pp)", fontsize=8.0)
@@ -2296,7 +2369,7 @@ roles_order = [
     "Control (Risk & security)",
     "Serve (Sales & service)"
 ]
-colors = ["#1D4ED8", "#0D9488", "#D97706", "#6366F1", "#DC2626", "#E11D48"]
+colors = ["#355F6B", "#8EA7A3", "#B85F42", "#008B7B", "#263B4A", "#7AA2AE"]
 
 fig, ax = plt.subplots(figsize=(9.2, 3.6), dpi=300)
 y_pos = np.arange(3)
@@ -2446,10 +2519,10 @@ labels_nested = [
     "4. + Named product or process",
     "5. + Quantified outcome / metric"
 ]
-colors_nested = ["#94A3B8", "#64748B", "#3B82F6", "#2563EB", "#1D4ED8"]
+colors_nested = ["#A5AFB6", "#73828C", "#7AA2AE", "#355F6B", "#18323A"]
 bars1 = ax1.barh(labels_nested[::-1], pcts_nested[::-1], color=colors_nested[::-1], height=0.6)
 for b, p in zip(bars1, pcts_nested[::-1]):
-    ax1.text(p + 1.5, b.get_y() + b.get_height() / 2, f"{p:.1f}%", va="center", fontsize=8.5, fontweight="bold", color="#1E293B")
+    ax1.text(p + 1.5, b.get_y() + b.get_height() / 2, f"{p:.1f}%", va="center", fontsize=8.5, fontweight="bold", color="#454E54")
 ax1.set_xlim(0, 115)
 ax1.set_xlabel(f"% of all {n_total:,} disclosed AI activities", fontsize=8.8, fontweight="bold")
 ax1.set_title("Decomposing AI Activity Grounding\n(Strictly Nested Concreteness Requirements)", fontsize=9.8, fontweight="bold")
@@ -2464,10 +2537,10 @@ labels_ind = [
     "External vendor / model attributed"
 ]
 pcts_ind = [p_stage, p_func, p_named, p_metric, p_vendor]
-colors_ind = ["#059669", "#0284C7", "#6366F1", "#D97706", "#DC2626"]
+colors_ind = ["#8EA7A3", "#355F6B", "#7AA2AE", "#B85F42", "#263B4A"]
 bars2 = ax2.barh(labels_ind[::-1], pcts_ind[::-1], color=colors_ind[::-1], height=0.6)
 for b, p in zip(bars2, pcts_ind[::-1]):
-    ax2.text(p + 1.5, b.get_y() + b.get_height() / 2, f"{p:.1f}%", va="center", fontsize=8.5, fontweight="bold", color="#1E293B")
+    ax2.text(p + 1.5, b.get_y() + b.get_height() / 2, f"{p:.1f}%", va="center", fontsize=8.5, fontweight="bold", color="#454E54")
 ax2.set_xlim(0, 115)
 ax2.set_xlabel("% of AI activities with attribute present", fontsize=8.8, fontweight="bold")
 ax2.set_title("Independent AI Grounding Attributes\n(% of AI activities meeting each criterion)", fontsize=9.8, fontweight="bold")
@@ -2539,20 +2612,20 @@ main_years = [y for y in years if y <= 2025]
 ytd_years = [y for y in years if y >= 2025]
 
 # Panel A: Total Disclosed Corporate AI Activities with Stacked Year-End Projection
-bars_hist = ax1.bar(main_years, [vol[y] for y in main_years], color="#2563EB", width=0.55, edgecolor="#1D4ED8", lw=1.2, label="Observed full-year AI activities")
-bar_26_obs = ax1.bar([2026], [vol_2026_obs], color="#60A5FA", width=0.55, edgecolor="#2563EB", lw=1.2, label="2026 YTD observed AI activities")
-bar_26_proj = ax1.bar([2026], [vol_2026_proj_adj], bottom=[vol_2026_obs], color="#DBEAFE", width=0.55,
-                      edgecolor="#1D4ED8", lw=1.2, linestyle="--", hatch="///", label="Projected year-end AI activity adjustment")
+bars_hist = ax1.bar(main_years, [vol[y] for y in main_years], color="#355F6B", width=0.55, edgecolor="#355F6B", lw=1.2, label="Observed full-year AI activities")
+bar_26_obs = ax1.bar([2026], [vol_2026_obs], color="#7AA2AE", width=0.55, edgecolor="#355F6B", lw=1.2, label="2026 YTD observed AI activities")
+bar_26_proj = ax1.bar([2026], [vol_2026_proj_adj], bottom=[vol_2026_obs], color="#7AA2AE", width=0.55,
+                      edgecolor="#355F6B", lw=1.2, linestyle="--", hatch="///", label="Projected year-end AI activity adjustment")
 
 max_v = max(max(vol[y] for y in main_years), vol_2026_proj_total)
 ax1.set_ylim(0, max_v * 1.20)
 
 for y in main_years:
     v = vol[y]
-    ax1.text(y, v + max_v * 0.02, f"{v:,}", ha="center", fontsize=8.2, fontweight="bold", color="#1E293B")
+    ax1.text(y, v + max_v * 0.02, f"{v:,}", ha="center", fontsize=8.2, fontweight="bold", color="#454E54")
 
-ax1.text(2026, vol_2026_obs * 0.55, f"{vol_2026_obs:,}\n(YTD)", ha="center", va="center", fontsize=7.8, fontweight="bold", color="#1E3A8A")
-ax1.text(2026, vol_2026_proj_total + max_v * 0.02, f"{vol_2026_proj_total:,}\n(FY Proj.)", ha="center", fontsize=8.0, fontweight="bold", color="#1D4ED8")
+ax1.text(2026, vol_2026_obs * 0.55, f"{vol_2026_obs:,}\n(YTD)", ha="center", va="center", fontsize=7.8, fontweight="bold", color="#18323A")
+ax1.text(2026, vol_2026_proj_total + max_v * 0.02, f"{vol_2026_proj_total:,}\n(FY Proj.)", ha="center", fontsize=8.0, fontweight="bold", color="#355F6B")
 
 ax1.set_ylabel("Number of Disclosed AI Activities", fontsize=9.0, fontweight="bold")
 ax1.set_xlabel("Year", fontsize=9.0, fontweight="bold")
@@ -2568,14 +2641,14 @@ ax1.spines[["top", "right"]].set_visible(False)
 def _trend_label(base, series):
     return f"{base} ({series[main_years[0]]:.0f}% → {series[main_years[-1]]:.0f}%)"
 
-ax2.plot(main_years, [dep_share[y] for y in main_years], "o-", color="#059669", lw=2.2, ms=5, label=_trend_label("Deployed or scaled", dep_share))
-ax2.plot(ytd_years, [dep_share[y] for y in ytd_years], "o:", color="#059669", lw=1.8, ms=5)
-ax2.plot(main_years, [ident_func[y] for y in main_years], "s-", color="#0284C7", lw=2.2, ms=5, label=_trend_label("Identifiable business function", ident_func))
-ax2.plot(ytd_years, [ident_func[y] for y in ytd_years], "s:", color="#0284C7", lw=1.8, ms=5)
-ax2.plot(main_years, [named_prod[y] for y in main_years], "^-", color="#6366F1", lw=2.2, ms=5, label=_trend_label("Named product or process", named_prod))
-ax2.plot(ytd_years, [named_prod[y] for y in ytd_years], "^:", color="#6366F1", lw=1.8, ms=5)
-ax2.plot(main_years, [gen_ev[y] for y in main_years], "d--", color="#DC2626", lw=2.2, ms=5, label=_trend_label("Generic, unanchored evidence", gen_ev))
-ax2.plot(ytd_years, [gen_ev[y] for y in ytd_years], "d:", color="#DC2626", lw=1.8, ms=5)
+ax2.plot(main_years, [dep_share[y] for y in main_years], "o-", color="#8EA7A3", lw=2.2, ms=5, label=_trend_label("Deployed or scaled", dep_share))
+ax2.plot(ytd_years, [dep_share[y] for y in ytd_years], "o:", color="#8EA7A3", lw=1.8, ms=5)
+ax2.plot(main_years, [ident_func[y] for y in main_years], "s-", color="#355F6B", lw=2.2, ms=5, label=_trend_label("Identifiable business function", ident_func))
+ax2.plot(ytd_years, [ident_func[y] for y in ytd_years], "s:", color="#355F6B", lw=1.8, ms=5)
+ax2.plot(main_years, [named_prod[y] for y in main_years], "^-", color="#D5B1A5", lw=2.2, ms=5, label=_trend_label("Named product or process", named_prod))
+ax2.plot(ytd_years, [named_prod[y] for y in ytd_years], "^:", color="#D5B1A5", lw=1.8, ms=5)
+ax2.plot(main_years, [gen_ev[y] for y in main_years], "d--", color="#B85F42", lw=2.2, ms=5, label=_trend_label("Generic, unanchored evidence", gen_ev))
+ax2.plot(ytd_years, [gen_ev[y] for y in ytd_years], "d:", color="#B85F42", lw=1.8, ms=5)
 
 all_shares = pd.concat([dep_share, ident_func, named_prod, gen_ev])
 min_s, max_s = all_shares.min(), all_shares.max()
@@ -2670,13 +2743,13 @@ categories = [
     "Commercial strategic partner named"
 ]
 values = [own_brand_pct, third_party_src, ext_vendor_pct, partner_pct]
-colors = ["#1D4ED8", "#64748B", "#DC2626", "#EA580C"]
+colors = ["#355F6B", "#73828C", "#B85F42", "#D5B1A5"]
 
 fig, ax = plt.subplots(figsize=(7.8, 3.2), dpi=300)
 bars = ax.barh(categories[::-1], values[::-1], color=colors[::-1], height=0.55)
 
 for b, v in zip(bars, values[::-1]):
-    ax.text(v + 0.8, b.get_y() + b.get_height() / 2, f"{v:.1f}%", va="center", fontsize=8.8, fontweight="bold", color="#0F172A")
+    ax.text(v + 0.8, b.get_y() + b.get_height() / 2, f"{v:.1f}%", va="center", fontsize=8.8, fontweight="bold", color="#1C1F22")
 
 ax.set_xlim(0, max(values) * 1.15)
 ax.set_xlabel(f"% of all disclosed AI activity statements (n = {n_activities_total:,})", fontsize=9.0, fontweight="bold")
@@ -2766,8 +2839,8 @@ _ds = _ds.merge(_arch_ds, on=["ticker", "year"], how="left")
 _ds["pct_d"] = _ds["frames_per_1k"].rank(pct=True)
 _ds["pct_s"] = _ds["substance"].rank(pct=True)
 
-ARCH_COLORS = {"Vocal Substantives": "#2563EB", "Governance-Led Disclosers": "#7C3AED",
-               "Defensive Disclosers": "#94A3B8", "No AI": "#CBD5E1"}
+ARCH_COLORS = {"Vocal Substantives": "#355F6B", "Governance-Led Disclosers": "#B85F42",
+               "Defensive Disclosers": "#A5AFB6", "No AI": "#D5D9DD"}
 _q_hi, _q_lo = _ds["w"].quantile(0.95), _ds["w"].quantile(0.05)
 _tail_hi = _ds["w"] >= _q_hi
 _tail_lo = _ds["w"] <= _q_lo
@@ -2778,14 +2851,14 @@ for arch, color in ARCH_COLORS.items():
     sub = _ds[_body & (_ds["archetype"] == arch)]
     ax.scatter(sub["pct_d"], sub["pct_s"], s=10, color=color, alpha=0.35, linewidths=0, label=arch)
 
-ax.scatter(_ds.loc[_tail_hi, "pct_d"], _ds.loc[_tail_hi, "pct_s"], s=22, facecolor="#DC2626",
-           edgecolor="#7F1D1D", linewidths=0.6, alpha=0.9,
+ax.scatter(_ds.loc[_tail_hi, "pct_d"], _ds.loc[_tail_hi, "pct_s"], s=22, facecolor="#B85F42",
+           edgecolor="#B85F42", linewidths=0.6, alpha=0.9,
            label=f"Top 5% decoupled (W ≥ {_q_hi:.2f})", zorder=5)
-ax.scatter(_ds.loc[_tail_lo, "pct_d"], _ds.loc[_tail_lo, "pct_s"], s=22, facecolor="#1D4ED8",
-           edgecolor="#1E3A8A", linewidths=0.6, alpha=0.9,
+ax.scatter(_ds.loc[_tail_lo, "pct_d"], _ds.loc[_tail_lo, "pct_s"], s=22, facecolor="#355F6B",
+           edgecolor="#18323A", linewidths=0.6, alpha=0.9,
            label=f"Bottom 5% quiet substance (W ≤ {_q_lo:.2f})", zorder=5)
 
-ax.plot([0, 1], [0, 1], color="#0F172A", lw=1.2, ls="--")
+ax.plot([0, 1], [0, 1], color="#1C1F22", lw=1.2, ls="--")
 ax.set_xlabel("Disclosure Intensity (D), percentile rank", fontsize=9.0, fontweight="bold")
 ax.set_ylabel("Disclosed Substance (S), percentile rank", fontsize=9.0, fontweight="bold")
 ax.set_xlim(-0.02, 1.02)
@@ -2831,37 +2904,37 @@ fig, ax = plt.subplots(figsize=(7.5, 4.0), dpi=300)
 
 # Histogram with bins
 n_bins = 45
-counts, bins, patches = ax.hist(w, bins=n_bins, density=True, alpha=0.45, color='#94A3B8', edgecolor='white', lw=0.8)
+counts, bins, patches = ax.hist(w, bins=n_bins, density=True, alpha=0.45, color='#A5AFB6', edgecolor='white', lw=0.8)
 
-# Color the top 5% bins in red
+# Color the top 5% bins in rust
 cutoff = w.quantile(0.95)
 for p, b in zip(patches, bins[:-1]):
     if b >= cutoff:
-        p.set_facecolor('#DC2626')
+        p.set_facecolor('#B85F42')
         p.set_alpha(0.85)
-        p.set_edgecolor('#7F1D1D')
+        p.set_edgecolor('#B85F42')
 
 # KDE curve
 kde = gaussian_kde(w, bw_method=0.15)
 x_grid = np.linspace(w.min() - 0.05, w.max() + 0.05, 300)
-ax.plot(x_grid, kde(x_grid), color='#0F172A', lw=2.0, label='Kernel density estimate')
+ax.plot(x_grid, kde(x_grid), color='#1C1F22', lw=2.0, label='Kernel density estimate')
 
 # Vertical line at zero
-ax.axvline(0, color='#0F172A', lw=1.2, ls='--')
+ax.axvline(0, color='#1C1F22', lw=1.2, ls='--')
 
 # Vertical line at 95th percentile
-ax.axvline(cutoff, color='#DC2626', lw=1.2, ls=':')
+ax.axvline(cutoff, color='#B85F42', lw=1.2, ls=':')
 ax.text(cutoff + 0.02, ax.get_ylim()[1] * 0.75, f'Top 5% decoupled tail\n(W \u2265 {cutoff:.2f})',
-        fontsize=8.0, fontweight='bold', color='#991B1B')
+        fontsize=8.0, fontweight='bold', color='#B85F42')
 
 # Directional zone headers
 ax.text(-0.35, ax.get_ylim()[1] * 0.90, '\u2190 Substance ahead of talk\n(Quiet substance)',
-        ha='center', va='center', fontsize=8.8, fontweight='bold', color='#1E40AF',
-        bbox=dict(boxstyle='round,pad=0.3', facecolor='#EFF6FF', edgecolor='#93C5FD', alpha=0.9))
+        ha='center', va='center', fontsize=8.8, fontweight='bold', color='#18323A',
+        bbox=dict(boxstyle='round,pad=0.3', facecolor='#7AA2AE', edgecolor='#7AA2AE', alpha=0.9))
 
 ax.text(0.40, ax.get_ylim()[1] * 0.90, 'Talk ahead of substance \u2192\n(Decoupling / Washing)',
-        ha='center', va='center', fontsize=8.8, fontweight='bold', color='#991B1B',
-        bbox=dict(boxstyle='round,pad=0.3', facecolor='#FEF2F2', edgecolor='#FCA5A5', alpha=0.9))
+        ha='center', va='center', fontsize=8.8, fontweight='bold', color='#B85F42',
+        bbox=dict(boxstyle='round,pad=0.3', facecolor='#D5B1A5', edgecolor='#D5B1A5', alpha=0.9))
 
 # Persistence note inside
 stats_text = (
@@ -2871,7 +2944,7 @@ stats_text = (
     f'\u2022 Split-half \u03c1 = {split_half_rho:+.3f} (p {"< 0.001" if split_half_p < 0.001 else f"= {split_half_p:.3g}"})'
 )
 ax.text(0.04, 0.50, stats_text, transform=ax.transAxes, fontsize=8.0,
-        bbox=dict(boxstyle='round,pad=0.35', facecolor='#F8FAFC', edgecolor='#CBD5E1', alpha=0.92))
+        bbox=dict(boxstyle='round,pad=0.35', facecolor='#F1F2F4', edgecolor='#D5D9DD', alpha=0.92))
 
 ax.set_xlabel('Disclosure\u2013Substance Decoupling Index (W = pct_rank(Disclosure) \u2212 pct_rank(Substance))',
               fontsize=9.0, fontweight='bold')
@@ -2884,7 +2957,7 @@ plt.show()
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* W > 0: narrative intensity ahead of disclosed substance. W < 0: quiet substance. Top 5% decoupled tail highlighted in red.
+*Notes:* W > 0: narrative intensity ahead of disclosed substance. W < 0: quiet substance. Top 5% decoupled tail highlighted in rust.
 :::
 
 ```{python}
@@ -2964,11 +3037,11 @@ p1 = [s[3] for s in _stats1]
 y1 = np.arange(len(labels1))
 
 ax1.errorbar(diffs1, y1, xerr=[np.array(diffs1)-np.array(ci_lo1), np.array(ci_hi1)-np.array(diffs1)],
-             fmt='o', color='#475569', ecolor='#94A3B8', elinewidth=2.0, capsize=4, ms=6.5)
-ax1.axvline(0, color='#0F172A', lw=1.2, ls='--')
+             fmt='o', color='#454E54', ecolor='#A5AFB6', elinewidth=2.0, capsize=4, ms=6.5)
+ax1.axvline(0, color='#1C1F22', lw=1.2, ls='--')
 
 for i, d in enumerate(diffs1):
-    ax1.text(d, i + 0.28, f'{d:+.1f} pp', ha='center', va='bottom', fontsize=8.0, fontweight='bold', color='#475569')
+    ax1.text(d, i + 0.28, f'{d:+.1f} pp', ha='center', va='bottom', fontsize=8.0, fontweight='bold', color='#454E54')
 
 ax1.set_yticks(y1)
 ax1.set_yticklabels(labels1, fontsize=8.5, fontweight='bold')
@@ -2994,14 +3067,14 @@ ci_hi2 = [s[2] for s in _stats2]
 p2 = [s[3] for s in _stats2]
 y2 = np.arange(len(labels2))
 
-colors2 = ['#DC2626' if d < 0 else '#2563EB' for d in diffs2]
+colors2 = ['#B85F42' if d < 0 else '#355F6B' for d in diffs2]
 for i, d, lo, hi, c in zip(y2, diffs2, ci_lo2, ci_hi2, colors2):
     ax2.errorbar(d, i, xerr=[[d - lo]], fmt='o', color=c, ecolor=c, elinewidth=2.0, capsize=4, ms=6.5)
 
-ax2.axvline(0, color='#0F172A', lw=1.2, ls='--')
+ax2.axvline(0, color='#1C1F22', lw=1.2, ls='--')
 
 for i, d in enumerate(diffs2):
-    c = '#1E40AF' if d >= 0 else '#991B1B'
+    c = '#18323A' if d >= 0 else '#B85F42'
     ax2.text(d, i + 0.28, f'{d:+.1f} pp', ha='center', va='bottom', fontsize=8.0, fontweight='bold', color=c)
 
 ax2.set_yticks(y2)
@@ -3108,19 +3181,19 @@ abs_text = [
     f'{quant_filing:.3f} → {quant_call:.3f} claims / 1,000 words',
     f'{promo_filing:.3f} → {promo_call:.3f} claims / 1,000 words'
 ]
-colors = ['#1D4ED8', '#64748B']
+colors = ['#355F6B', '#73828C']
 
 y = np.arange(len(categories))[::-1]
 height = 0.38
 
 bars = ax.barh(y, ratios, height=height, color=colors, edgecolor='none')
 
-ax.axvline(1.0, color='#94A3B8', linestyle='--', lw=1.0, alpha=0.7)
-ax.text(1.0, 1.45, '1.0× (Parity)', color='#64748B', fontsize=8.0, ha='center', va='bottom')
+ax.axvline(1.0, color='#A5AFB6', linestyle='--', lw=1.0, alpha=0.7)
+ax.text(1.0, 1.45, '1.0× (Parity)', color='#73828C', fontsize=8.0, ha='center', va='bottom')
 
 for i in range(len(categories)):
     ax.text(ratios[i] + 0.4, y[i] + 0.07, f'{ratios[i]:.1f}×', va='center', fontsize=10.5, fontweight='bold', color=colors[i])
-    ax.text(ratios[i] + 0.4, y[i] - 0.13, abs_text[i], va='center', fontsize=8.2, color='#64748B')
+    ax.text(ratios[i] + 0.4, y[i] - 0.13, abs_text[i], va='center', fontsize=8.2, color='#73828C')
 
 ax.set_yticks(y)
 ax.set_yticklabels(categories, fontsize=9.5, fontweight='bold')
@@ -3194,9 +3267,9 @@ for ax, m, title, ylab in [(ax1, "claim_density", "Panel A: AI claim density", "
                            (ax2, "realized_density", "Panel B: Realized-integration claims (targeted)", "Realized claims / 1k words")]:
     t = [np.nan if v is None else v for v in _w["treated"][m]]
     c = [np.nan if v is None else v for v in _w["controls_mean"][m]]
-    ax.plot(_ks, t, "s-", color="#DC2626", lw=2.0, ms=6, label="Welltower")
-    ax.plot(_ks, c, "o--", color="#2563EB", lw=1.6, ms=5, label="Matched peers (mean)")
-    ax.axvline(-0.5, color="#475569", ls=":", lw=1.2, label="SEC letter")
+    ax.plot(_ks, t, "s-", color="#B85F42", lw=2.0, ms=6, label="Welltower")
+    ax.plot(_ks, c, "o--", color="#355F6B", lw=1.6, ms=5, label="Matched peers (mean)")
+    ax.axvline(-0.5, color="#454E54", ls=":", lw=1.2, label="SEC letter")
     ax.set_xticks(_ks); ax.set_xticklabels([f"k = {k}\n({y})" for k, y in zip(_ks, _w["year"])], fontsize=8)
     ax.set_title(title, fontsize=9.2, fontweight="bold"); ax.set_ylabel(ylab, fontsize=8.5, fontweight="bold")
     ax.grid(True, linestyle="--", alpha=0.3); ax.spines[["top", "right"]].set_visible(False)
@@ -3294,12 +3367,12 @@ ci_low = sub["ci95_low"].tolist()
 ci_high = sub["ci95_high"].tolist()
 y = list(range(len(labels)))
 err = [[b - lo for b, lo in zip(vals, ci_low)], [hi - b for b, hi in zip(vals, ci_high)]]
-colors = ["#2563EB" if (lo > 0 or hi < 0) else "#94A3B8" for lo, hi in zip(ci_low, ci_high)]
+colors = ["#355F6B" if (lo > 0 or hi < 0) else "#A5AFB6" for lo, hi in zip(ci_low, ci_high)]
 
 fig, ax = plt.subplots(figsize=(5.0, 2.8), dpi=300)
-ax.errorbar(vals, y, xerr=err, fmt="none", ecolor="#475569", elinewidth=1.2, capsize=3, zorder=1)
+ax.errorbar(vals, y, xerr=err, fmt="none", ecolor="#454E54", elinewidth=1.2, capsize=3, zorder=1)
 ax.scatter(vals, y, c=colors, s=40, zorder=2)
-ax.axvline(0, color="#0F172A", lw=0.8, linestyle="--")
+ax.axvline(0, color="#1C1F22", lw=0.8, linestyle="--")
 ax.set_yticks(y)
 ax.set_yticklabels(labels, fontsize=8.5)
 ax.invert_yaxis()
@@ -3367,10 +3440,10 @@ OUTCOMES_C1 = [
 ]
 
 SERIES_C1 = [
-    ("hist_disclosure", "HistDisclosure", "#059669"),
-    ("surprise_disclosure", "SurpriseDisclosure", "#0EA5E9"),
-    ("hist_substance", "HistSubstance (control)", "#7C3AED"),
-    ("surprise_substance", "SurpriseSubstance (control)", "#F59E0B"),
+    ("hist_disclosure", "HistDisclosure", "#8EA7A3"),
+    ("surprise_disclosure", "SurpriseDisclosure", "#7AA2AE"),
+    ("hist_substance", "HistSubstance (control)", "#B85F42"),
+    ("surprise_substance", "SurpriseSubstance (control)", "#D5B1A5"),
 ]
 
 fig, ax = plt.subplots(figsize=(7.2, 3.8), dpi=300)
@@ -3393,7 +3466,7 @@ for var, label, color in SERIES_C1:
             xerr.append((row["ci95_high"] - row["ci95_low"]) / 2)
     ax.errorbar(xs, ys, xerr=xerr, fmt="o", color=color, label=label, capsize=3, ms=5, lw=1.3)
 
-ax.axvline(0, color="#334155", lw=1, linestyle="--")
+ax.axvline(0, color="#454E54", lw=1, linestyle="--")
 ax.set_yticks(y0)
 ax.set_yticklabels([lbl for _, lbl in OUTCOMES_C1], fontsize=9)
 ax.invert_yaxis()
@@ -3468,11 +3541,11 @@ OUTCOMES_C2 = [
 ]
 
 SERIES_C2 = [
-    ("hist_substance", "HistSubstance", "#7C3AED"),
-    ("surprise_substance", "SurpriseSubstance", "#F59E0B"),
-    ("hist_disclosure", "HistDisclosure (control)", "#059669"),
-    ("dum_gov", "Governance-Led (vs Def.)", "#EC4899"),
-    ("dum_voc", "Vocal Substantives (vs Def.)", "#6366F1"),
+    ("hist_substance", "HistSubstance", "#B85F42"),
+    ("surprise_substance", "SurpriseSubstance", "#D5B1A5"),
+    ("hist_disclosure", "HistDisclosure (control)", "#8EA7A3"),
+    ("dum_gov", "Governance-Led (vs Def.)", "#263B4A"),
+    ("dum_voc", "Vocal Substantives (vs Def.)", "#355F6B"),
 ]
 
 fig, ax = plt.subplots(figsize=(7.2, 3.8), dpi=300)
@@ -3496,7 +3569,7 @@ for var, label, color in SERIES_C2:
             xerr.append((row["ci95_high"] - row["ci95_low"]) / 2)
     ax.errorbar(xs, ys, xerr=xerr, fmt="o", color=color, label=label, capsize=3, ms=5, lw=1.3)
 
-ax.axvline(0, color="#334155", lw=1, linestyle="--")
+ax.axvline(0, color="#454E54", lw=1, linestyle="--")
 ax.set_yticks(y0)
 ax.set_yticklabels([lbl for _, lbl in OUTCOMES_C2], fontsize=9)
 ax.invert_yaxis()
@@ -3555,13 +3628,13 @@ vals = _sub_nc["beta_std"].tolist()
 ci_low = _sub_nc["ci95_low"].tolist()
 ci_high = _sub_nc["ci95_high"].tolist()
 y = list(range(len(order)))
-colors = ["#7C3AED" if v == "dum_gov" else "#64748B" for v in order]
+colors = ["#B85F42" if v == "dum_gov" else "#73828C" for v in order]
 
 fig, ax = plt.subplots(figsize=(6.5, 3.2), dpi=300)
 for yi, val, lo, hi, col in zip(y, vals, ci_low, ci_high, colors):
     ax.errorbar(val, yi, xerr=[[val - lo], [hi - val]], fmt="o", color=col, ecolor=col, elinewidth=1.4, capsize=3, ms=6, zorder=2)
 
-ax.axvline(0, color="#0F172A", lw=0.8, linestyle="--")
+ax.axvline(0, color="#1C1F22", lw=0.8, linestyle="--")
 ax.set_yticks(y)
 ax.set_yticklabels([labels[k] for k in order], fontsize=8.5)
 ax.invert_yaxis()
@@ -3572,22 +3645,14 @@ plt.show()
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* Standardized coefficients and 95% confidence intervals clustered by firm, with industry-by-year fixed effects ($\text{SIC2} \times \text{Year}$) and lagged pre-call crash risk ($N = 8,199$ calls across 310 firms, total $R^2 = 0.312$, partial $R^2 (\text{archetype block}) = 0.0031$). The Governance-Led indicator ($\beta = -0.150, p = 0.0016$) is highlighted in purple; it is the sole estimate surviving Benjamini–Hochberg FDR multiplicity correction across the 18-test family ($p \le 0.05/18 \approx 0.0028$).
+*Notes:* Standardized coefficients and 95% confidence intervals clustered by firm, with industry-by-year fixed effects ($\text{SIC2} \times \text{Year}$) and lagged pre-call crash risk ($N = 8,199$ calls across 310 firms, total $R^2 = 0.312$, partial $R^2 (\text{archetype block}) = 0.0031$). The Governance-Led indicator ($\beta = -0.150, p = 0.0016$) is highlighted in rust; it is the sole estimate surviving Benjamini–Hochberg FDR multiplicity correction across the 18-test family ($p \le 0.05/18 \approx 0.0028$).
 :::
 
-The crash risk estimates in @fig-call-crash-risk indicate two main findings:
+The crash risk estimates in @fig-call-crash-risk yield two findings. Continuous decoupling shows no short-run association with crash risk over a 6-month horizon ($\beta = -0.005, p = 0.814$), running counter to an immediate reading of $H_{6c}$; whether bad news instead accumulates over longer, multi-year horizons remains an open extension.
 
-First, continuous decoupling shows no short-run association with stock price crash risk over a 6-month horizon ($\beta = -0.005, p = 0.814$), running counter to an immediate short-run interpretation of $H_{6c}$; evaluating whether bad news accumulates over longer multi-year horizons remains an empirical extension.
+The *Governance-Led* archetype, however, is associated with lower downside crash risk than Defensive Disclosers ($\beta = -0.150, p = 0.0016$ on $NCSKEW$; $\beta = -0.153, p = 0.0406$ on $DUVOL$) -- the sole estimate in the 18-test archetype family to clear Benjamini–Hochberg [@benjamini1995] FDR correction ($p \le 0.05/18 \approx 0.0028$), consistent with governance and structured risk disclosure mitigating bad-news withholding [@hutton2009; @kim2011; @au2023]. The result holds across three checks: it is an incremental post-call association over the lagged pre-call baseline, not a static sorting effect; it survives excluding Financial Services, Utilities, and Healthcare & Pharma ($\beta = -0.176, p = 0.021$), so it is not an artifact of sector-specific regulation; and it holds similar sign and magnitude among firms that switch into or out of Governance-Led over time ($\beta = -0.161, p = 0.063$), with a wider interval reflecting that smaller sample.
 
-Second, the indicator for *Governance-Led Disclosers* exhibits a statistically significant negative association with downside crash risk relative to Defensive Disclosers ($\beta = -0.150, p = 0.0016$ on $NCSKEW$; $\beta = -0.153, p = 0.0406$ on $DUVOL$). Across the full 18-test family of archetype hypotheses, this $NCSKEW$ coefficient is the sole estimate to clear Benjamini–Hochberg [@benjamini1995] FDR multiplicity correction ($p = 0.0016 \le 0.05 \times 1/18 \approx 0.00278$). This aligns directly with theoretical accounts where governance and structured risk disclosures mitigate bad-news withholding [@hutton2009; @kim2011; @au2023]. In particular, @au2023 show that structured risk factor disclosures compress crash risk ($NCSKEW$ and $DUVOL$) primarily when backed by robust governance mechanisms, separating disciplined oversight disclosures from unconstrained voluntary boilerplate. Three robustness checks clarify the identification behind this result:
-
-1. *Martingale structure:* The pre-call $NCSKEW$ control absorbs persistent level differences across sectors and firms; an incremental post-call divergence is not absorbed by static sorting. Under this specification, the Governance-Led coefficient reflects the incremental post-call association over the lagged baseline.
-
-2. *Excluding regulated sectors:* Excluding Financial Services (SIC 60–67), Utilities (SIC 49), and Healthcare & Pharma (SIC 28, 38, 80), the Governance-Led coefficient remains negative and significant ($\beta = -0.176, p = 0.021$). Non-regulated exemplars such as Alaska Air (`ALK`), Delta (`DAL`), and RTX (`RTX`) indicate that the tail-risk association is not an artifact of utility or banking regulation.
-
-3. *Posture switchers:* Among firms transitioning into or out of Governance-Led over time, the coefficient remains similar in sign and magnitude ($\beta = -0.161$), with wider confidence intervals reflecting the smaller sample ($p = 0.063$, 95% CI $[-0.331, +0.009]$). Because the model controls for $\text{SIC2} \times \text{Year}$ fixed effects rather than firm fixed effects, this reflects variation across switchers and non-switchers within industry-years, providing consistent exploratory support.
-
-Taken together, these checks indicate that the negative association between Governance-Led disclosure and crash risk is a consistent exploratory pattern across specifications: it survives multiplicity control across the 18-test family, persists across sector exclusions, and aligns with theoretical mechanisms where credible risk disclosures and internal controls mitigate bad-news hoarding [@hutton2009; @kim2011; @au2023]. This finding also qualifies recent empirical evidence by @yang2026, who finds that enterprise AI adoption reduces crash risk ($NCSKEW$ and $DUVOL$) in Chinese listed firms through improved internal control quality and decision efficiency. In our S&P 500 setting, simply escalating AI mention volume or narrative intensity does not compress tail risk—continuous disclosure and substance surprises remain statistically indistinguishable from zero—but the Governance-Led posture is the disclosure configuration that exhibits the robust negative association with tail risk.
+This pattern qualifies @yang2026, who find that AI adoption reduces crash risk in Chinese listed firms via internal-control quality: in this S&P 500 setting, it is not AI mention volume that compresses tail risk -- continuous disclosure and substance surprises remain statistically indistinguishable from zero -- but specifically the Governance-Led disclosure configuration.
 
 ## Synthesis and empirical limits
 
@@ -4431,10 +4496,10 @@ for key, _ in outcomes_map:
 fig, ax = plt.subplots(figsize=(7.5, 3.6), dpi=300)
 height = 0.55
 
-c_vol = "#94A3B8"
-c_sem = "#3B82F6"
-c_act = "#1D4ED8"
-c_wash = "#F59E0B"
+c_vol = "#A5AFB6"
+c_sem = "#7AA2AE"
+c_act = "#355F6B"
+c_wash = "#D5B1A5"
 
 b1 = ax.barh(y, delta_vol, height=height, label="1. Raw AI Mention Counts (Volume)", color=c_vol, edgecolor="white", lw=0.6)
 b2 = ax.barh(y, delta_sem, left=delta_vol, height=height, label="2. + Semantic Frame Posture", color=c_sem, edgecolor="white", lw=0.6)
@@ -4445,7 +4510,7 @@ b4 = ax.barh(y, delta_wash, left=left_wash, height=height, label="4. + Decouplin
 
 for i in range(len(labels)):
     total = left_wash[i] + delta_wash[i]
-    ax.text(total + 0.002, y[i], f"+{total*100:.1f} pp", va="center", fontsize=8.5, fontweight="bold", color="#0F172A")
+    ax.text(total + 0.002, y[i], f"+{total*100:.1f} pp", va="center", fontsize=8.5, fontweight="bold", color="#1C1F22")
 
 ax.set_yticks(y)
 ax.set_yticklabels(labels, fontsize=9.0, fontweight="bold")
