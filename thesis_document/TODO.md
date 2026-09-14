@@ -136,8 +136,13 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       quedan solo en la tabla, la prosa pasa a interpretación/mecanismo) sin sacrificar
       ningún caso — consistente con la preferencia explícita del autor por mantener los
       cuatro worked examples. **Prioridad: Muy alta**
-- [ ] **20. §2.8 — dos frases.** Human audit valida producción; cross-model agreement
-      es check secundario. **Original — Prioridad: Muy alta**
+- [x] **20. §2.8 — dos frases.** Resuelto: el cuerpo quedó en dos frases. (1) Blind
+      human audits on the production judge's output validate the pipeline (91.2%
+      precision on GBDT prefiltering; 89.1%–95.8% field-level accuracy). (2) Cross-model
+      agreement (Gemini vs. Qwen, $\kappa = 0.81$–$0.87$) is a secondary consistency
+      check, since neither model is the production judge. Todos los números ya existían
+      en `@tbl-evaluation-datasets` (Appendix B), así que no hizo falta crear entradas
+      nuevas. **Prioridad: Muy alta**
 - [ ] **21. §5.4 (Welltower) — comprimir los tres caveats causales.** A: "descriptive
       case evidence, not causal identification." **Original — Prioridad: Muy alta**
 - [ ] **22. Apertura Cap. 6 — a la mitad.** "Analyses are exploratory, common

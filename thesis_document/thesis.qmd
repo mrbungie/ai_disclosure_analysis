@@ -779,7 +779,7 @@ Baseline controls comprise market capitalization, R&D-to-sales, gross margin, op
 
 ## Measurement validation
 
-Each pipeline stage was rigorously benchmarked against holdout evaluations and blind human audits (@tbl-evaluation-datasets, Appendix B). Cross-model comparisons confirm strong inter-rater reliability between independent foundation models (Gemini and Qwen agreement $\kappa = 0.81\text{--}0.87$, evaluating inter-model consistency across semantic dimensions), but that comparison is between two non-production models and does not by itself validate the production judge, `gpt-5.6-luna`. That validation instead comes from blind human audits directly on the production judge's output: manual review establishes 91.2% precision on GBDT prefiltering and 89.1%–95.8% field-level accuracy across its extracted activity parameters.
+Blind human audits on the production judge's output validate the pipeline: manual review establishes 91.2% precision on GBDT prefiltering and 89.1%–95.8% field-level accuracy across extracted activity parameters (@tbl-evaluation-datasets, Appendix B). Cross-model agreement between two independent foundation models (Gemini and Qwen, $\kappa = 0.81\text{--}0.87$) serves only as a secondary consistency check, since neither model is the production judge.
 
 With the measurement pipeline calibrated and validated, the empirical analyses follow. The next chapter examines how corporate AI disclosure diffused across the S&P 500 from 2021 through 2026, and maps the distinct communication archetypes that emerged as AI language expanded across the market.
 
