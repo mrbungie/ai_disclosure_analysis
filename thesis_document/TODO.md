@@ -63,7 +63,7 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       directores, ponderación call vs. 10-K), consistente con el framework de due
       diligence del capítulo 7. Largo total de la subsección se redujo levemente
       (307 → 300 palabras).
-- [ ] **8. §1.4.3 — reescribir literature gaps.** Como cuatro preguntas que un
+- [x] **8. §1.4.3 — reescribir literature gaps.** Como cuatro preguntas que un
       decision-maker no puede responder hoy (no como vacíos académicos abstractos).
       **Original — Prioridad: Media**
 - [ ] **9. §1.5 (RQs) — reemplazar las cuatro colas "Derived from X theory…" por una

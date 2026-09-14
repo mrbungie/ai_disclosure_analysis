@@ -297,14 +297,14 @@ Four theoretical perspectives motivate the empirical design:
 * **Decoupling and symbolic management.** Formal statements can diverge from day-to-day operations [@meyer1977, pp. 340--41; @westphal1994, pp. 367--69; @crilly2012, pp. 1429--31; @bromley2012], a gap @seele2022 term machinewashing in algorithmic communication. This thesis measures a narrower, observable version: the distance between narrative volume and grounded activity disclosed by the same firm. Directors should treat high narrative volume paired with low grounded activity as a governance flag warranting internal audit, not proof of misconduct.
 * **Regulatory enforcement and credibility boundaries.** Regulators can raise the cost of unfounded claims [@gensler2023, pp. 4--5; @sec2024pressrelease]; attorney-reviewed statutory filings carry more legal exposure than the less formal discussion on earnings calls [@matsumoto2011, pp. 1383--84; @frankel1999, pp. 133--34]. Investors should weight AI claims made on a call less heavily than the same claims repeated in the 10-K, since only the filing carries comparable liability discipline.
 
-### Literature gaps: what remains unknown
+### What decision-makers cannot answer today
 
-Prior research shows that corporate AI disclosures have grown rapidly and that managers adjust qualitative tone strategically. However, four important gaps remain:
+Corporate AI disclosures have grown rapidly, and managers adjust qualitative tone strategically. That leaves investors, board members, and regulators facing four practical questions that existing tools and evidence do not answer:
 
-1. **Granular operational inventory:** We know firms mention AI often, but we do not yet know how to separate discrete operational actions from boilerplate text across the whole market.
-2. **Cross-venue divergence:** We know voluntary earnings calls carry lower litigation risk than Form 10-Ks, but we do not yet know how promotional tone and concrete evidence diverge across these venues for the same firm-year.
-3. **Internal observable decoupling:** We know symbolic decoupling happens when oversight is weak, but without external audit records for enterprise AI, the literature lacks a calibrated measure of decoupling based on internal consistency between narrative volume and grounded activity.
-4. **Capital-market relevance:** Prior studies examine the informativeness of AI disclosures and their relationship with investment and market outcomes. This thesis asks whether activity-level grounding and internal narrative--substance decoupling add information beyond disclosure intensity and communication posture in the outcomes and horizons examined here.
+1. **Separating substance from boilerplate at scale.** With hundreds of firms repeating AI language every quarter, how can an investor or analyst tell which mentions describe a named system, a deployment stage, or a quantified result, and which are undifferentiated promotional text, without reading every paragraph of every filing by hand?
+2. **Weighting a claim by where it was made.** A management team can describe the same AI initiative on an earnings call and in the Form 10-K filed weeks later. Should an investor or analyst treat those two statements as equally credible, or does promotional language run further ahead of verifiable evidence on the call than in the filing that carries statutory liability?
+3. **Flagging decoupling without an internal audit.** A board member or regulator with no access to a company's internal AI program has only the company's own words to work with. Can the gap between how much a company talks about AI and how much grounded, verifiable activity it discloses be measured from public filings alone, and used as a governance flag?
+4. **Deciding whether grounding is priced.** If two firms disclose AI initiatives with similar frequency but one grounds its claims in named systems, metrics, and partners while the other does not, does that difference show up in the firms' operating characteristics or market risk, or does the market treat both disclosures alike?
 
 ## Hypotheses and research questions
 
