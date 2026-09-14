@@ -211,9 +211,15 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       los números de split-half inline; se dejó una frase que remite a la tabla de
       validación existente en Apéndice E (@tbl-c4-washing-validation), que ya reporta
       split-half con n, ρ y p. Ningún número desaparece.
-- [ ] **34. §5.2 — FE a 3 líneas.** "filtering under statutory liability" →
+- [x] **34. §5.2 — FE a 3 líneas.** "filtering under statutory liability" →
       "consistent with filtering under greater statutory exposure" (lenguaje de
       asociación, no causal). **Original — Prioridad: Alta**
+      La explicación de la especificación (unidad de observación, ANCOVA, FE
+      SIC2×Year, clustering por firma, vector de disclosure, controles, R²) se
+      fusionó en un solo párrafo de 3 oraciones; el detalle completo (ecuación,
+      notación, lista de controles) ya vivía verbatim en Apéndice E, así que no
+      se pierde ningún número. La frase de "statutory liability" en "Promotion is
+      not the opposite of evidence" (Ch.4) ahora usa lenguaje asociativo.
 - [ ] **35. §5.3 — el caveat del denominador solo en un lugar** (nota o prosa, no
       ambos). **Original — Prioridad: Alta**
 - [ ] **36. §6.3 — leave-one-year-out → Appendix E.** Párrafo de atenuación a una
