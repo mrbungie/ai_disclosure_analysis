@@ -34,9 +34,8 @@
     <!-- Pass 2 to Disclosed Activities -->
     <line x1="815" y1="220" x2="843" y2="220" marker-end="url(#arrow)"/>
 
-    <!-- Disclosed Activities to Grounding and Geo Taxonomy -->
-    <path d="M1020,210 L1035,210 L1035,188 L1048,188" marker-end="url(#arrow)"/>
-    <path d="M1020,230 L1035,230 L1035,258 L1048,258" marker-end="url(#arrow)"/>
+    <!-- Disclosed Activities to Grounding & Substance -->
+    <line x1="1020" y1="220" x2="1048" y2="220" marker-end="url(#arrow)"/>
 
     <!-- Parallel Quantitative Streams into Processed Panel -->
     <line x1="370" y1="388" x2="438" y2="398" marker-end="url(#arrow)"/>
@@ -45,12 +44,10 @@
     <!-- Inputs to Fusion -->
     <!-- From Semantic Frames (D, P) -->
     <path d="M1020,100 L1250,100 L1250,220 L1273,220" marker-end="url(#arrow)"/>
-    <!-- From Grounding (G, S) -->
-    <path d="M1230,188 L1250,188 L1250,240 L1273,240" marker-end="url(#arrow)"/>
-    <!-- From Geo Taxonomy -->
-    <path d="M1230,258 L1250,258 L1250,260 L1273,260" marker-end="url(#arrow)"/>
+    <!-- From Grounding & Substance (G, S) -->
+    <path d="M1230,220 L1250,220 L1250,245 L1273,245" marker-end="url(#arrow)"/>
     <!-- From Processed Quantitative Data -->
-    <path d="M1010,420 L1250,420 L1250,280 L1273,280" marker-end="url(#arrow)"/>
+    <path d="M1010,420 L1250,420 L1250,270 L1273,270" marker-end="url(#arrow)"/>
 
     <!-- Fusion to Empirical Analyses -->
     <line x1="1470" y1="250" x2="1508" y2="250" marker-end="url(#arrow)"/>
@@ -107,7 +104,7 @@
   <g>
     <rect x="440" y="216" width="170" height="60" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.75"/>
     <text x="525" y="241" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#173404">Supervised GBDT Gate</text>
-    <text x="525" y="259" text-anchor="middle" font-size="11" fill="#3B6D11">Recall ≥ 0.92 (36,613 flagged)</text>
+    <text x="525" y="259" text-anchor="middle" font-size="11" fill="#3B6D11">Recall ≥ 0.92 (36,591 flagged)</text>
   </g>
   <!-- Golden sets (Coral) -->
   <g>
@@ -121,7 +118,7 @@
   <g>
     <rect x="640" y="70" width="175" height="60" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.75"/>
     <text x="727" y="95" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#173404">Pass 1: Semantic Claims</text>
-    <text x="727" y="113" text-anchor="middle" font-size="11" fill="#3B6D11">Zero-shot LLM (8 core fields)</text>
+    <text x="727" y="113" text-anchor="middle" font-size="11" fill="#3B6D11">Zero-shot LLM (7-field schema)</text>
   </g>
   <!-- Pass 2 -->
   <g>
@@ -135,25 +132,19 @@
   <g>
     <rect x="845" y="70" width="175" height="60" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.75"/>
     <text x="932" y="95" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#042C53">Semantic Frames</text>
-    <text x="932" y="113" text-anchor="middle" font-size="11" fill="#185FA5">69,704 frames → D, P Posture</text>
+    <text x="932" y="113" text-anchor="middle" font-size="11" fill="#185FA5">69,683 frames → D, P Posture</text>
   </g>
   <!-- Disclosed activities (A) -->
   <g>
     <rect x="845" y="190" width="175" height="60" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.75"/>
     <text x="932" y="215" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#042C53">Disclosed Activities</text>
-    <text x="932" y="233" text-anchor="middle" font-size="11" fill="#185FA5">47,683 operational triples (A)</text>
+    <text x="932" y="233" text-anchor="middle" font-size="11" fill="#185FA5">47,675 operational triples (A)</text>
   </g>
   <!-- Grounding (G, S) -->
   <g>
-    <rect x="1050" y="160" width="180" height="55" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.75"/>
-    <text x="1140" y="183" text-anchor="middle" font-size="12" font-weight="bold" fill="#042C53">Grounding &amp; Substance</text>
-    <text x="1140" y="201" text-anchor="middle" font-size="10.5" fill="#185FA5">5 falsification flags → G, S</text>
-  </g>
-  <!-- Geographic Taxonomy -->
-  <g>
-    <rect x="1050" y="230" width="180" height="55" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.75"/>
-    <text x="1140" y="253" text-anchor="middle" font-size="12" font-weight="bold" fill="#042C53">Geographic Taxonomy</text>
-    <text x="1140" y="271" text-anchor="middle" font-size="10.5" fill="#185FA5">Ecosystem lexicon (US, EU, CN)</text>
+    <rect x="1050" y="190" width="180" height="60" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.75"/>
+    <text x="1140" y="215" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#042C53">Grounding &amp; Substance</text>
+    <text x="1140" y="233" text-anchor="middle" font-size="11" fill="#185FA5">5 falsification flags → G, S</text>
   </g>
 
   <!-- 8. PROCESSED QUANTITATIVE PANEL (Blue) -->
@@ -179,7 +170,7 @@
     <rect x="1510" y="190" width="195" height="120" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.75"/>
     <text x="1607" y="217" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#26215C">Empirical Analyses</text>
     <text x="1607" y="238" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 3: AI Archetypes (D, P)</text>
-    <text x="1607" y="255" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 4: Operations &amp; Geo (A, G)</text>
+    <text x="1607" y="255" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 4: Operations &amp; Grounding (A, G, S)</text>
     <text x="1607" y="272" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 5: Credibility &amp; Decoupling (W)</text>
     <text x="1607" y="289" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 6–7: Markets &amp; Diligence</text>
   </g>

@@ -200,6 +200,7 @@ analytics-call-beta: analytics-panels
 		scripts/analytics/build_call_beta_panel.py scripts/analytics/call_beta_regressions.py \
 		scripts/analytics/call_beta_robustness.py scripts/analytics/sec_comment_letter_cases.py \
 		scripts/analytics/build_call_fundamentals_panel.py scripts/analytics/call_beta_generalized_targets.py \
+		scripts/analytics/build_call_crash_and_archetypes.py scripts/analytics/call_archetype_full_battery.py \
 		data/processed/clusters/firm_activities.parquet data/processed/clusters/firm_year_financials_ratios.parquet \
 		data/processed/clusters/firm_year_washing_score.parquet data/processed/clusters/firm_year_master_v2.parquet \
 		data/processed/clusters/document_panel.parquet \
@@ -209,7 +210,9 @@ analytics-call-beta: analytics-panels
 			.venv/bin/python scripts/analytics/call_beta_robustness.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/sec_comment_letter_cases.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/build_call_fundamentals_panel.py $(ARGS) && \
-			.venv/bin/python scripts/analytics/call_beta_generalized_targets.py $(ARGS)'
+			.venv/bin/python scripts/analytics/call_beta_generalized_targets.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/build_call_crash_and_archetypes.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/call_archetype_full_battery.py $(ARGS)'
 
 # 200-replicate dual bootstrap (frame-level + firm-level) of the k=3 posture
 # archetype -- expensive (minutes, not seconds) even with caching on a cache

@@ -56,6 +56,8 @@ COMPILED_DIR = ROOT / "compiled"
 COMPILED_PDF_DIR = ROOT / "compiled_pdf"
 AUTHOR_SLUG = "GermanOviedo"
 VENV_PYTHON = ROOT / ".venv" / "bin" / "python"
+if not VENV_PYTHON.exists():
+    VENV_PYTHON = ROOT.parent / ".venv" / "bin" / "python"
 SOFFICE = shutil.which("soffice") or shutil.which("libreoffice")
 
 

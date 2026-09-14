@@ -392,10 +392,14 @@ def main() -> None:
         dummies = pd.get_dummies(reg["archetype"]).astype(float)[others]
         raw_m = sm.OLS(reg["log_activities"], sm.add_constant(dummies)).fit(cov_type="HC1")
         adj_m = sm.OLS(reg["log_activities"], sm.add_constant(dummies.assign(log_frames=reg["log_frames"].values))).fit(cov_type="HC1")
+        raw_ci = raw_m.conf_int(alpha=0.05)
+        adj_ci = adj_m.conf_int(alpha=0.05)
         activity_reg = {
             "reference": ref,
-            "raw": {a: {"ratio": float(np.exp(raw_m.params[a])), "p": float(raw_m.pvalues[a])} for a in others},
-            "volume_adjusted": {a: {"ratio": float(np.exp(adj_m.params[a])), "p": float(adj_m.pvalues[a])} for a in others},
+            "raw": {a: {"ratio": float(np.exp(raw_m.params[a])), "p": float(raw_m.pvalues[a]),
+                        "ratio_ci95": [float(np.exp(raw_ci.loc[a, 0])), float(np.exp(raw_ci.loc[a, 1]))]} for a in others},
+            "volume_adjusted": {a: {"ratio": float(np.exp(adj_m.params[a])), "p": float(adj_m.pvalues[a]),
+                                    "ratio_ci95": [float(np.exp(adj_ci.loc[a, 0])), float(np.exp(adj_ci.loc[a, 1]))]} for a in others},
             "log_frames_coef": float(adj_m.params["log_frames"]), "log_frames_p": float(adj_m.pvalues["log_frames"]),
             "r2_adjusted": float(adj_m.rsquared), "n": int(len(reg)),
         }

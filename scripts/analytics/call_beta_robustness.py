@@ -116,13 +116,30 @@ def standardize(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
 
 def fit_fe(panel: pd.DataFrame, variables: list[str], outcome: str, fe_col: str = "fe",
            min_fe_size: int = 2) -> tuple[sm.regression.linear_model.RegressionResultsWrapper, pd.DataFrame]:
+    """Fixed-effects OLS via the within (group-demeaning) estimator rather
+    than LSDV (dummy columns for every ``fe_col`` level). By the
+    Frisch-Waugh-Lovell theorem the two are numerically equivalent for the
+    slope coefficients, but demeaning avoids building a design matrix with
+    hundreds of sparse dummy columns — which, for some narrow AI-variable
+    subsets, made the design ill-conditioned enough to hit SVD
+    non-convergence (``LinAlgError``) in numpy's LAPACK backend. The
+    cluster-robust covariance is rescaled by the LSDV-equivalent
+    finite-sample correction so inference matches what LSDV would report."""
     d = panel.dropna(subset=[outcome, fe_col, *variables]).copy()
     d = d[d.groupby(fe_col)["ticker"].transform("size") >= min_fe_size].copy()
     y = (d[outcome] - d[outcome].mean()) / d[outcome].std(ddof=0)
     x = standardize(d, variables)
-    fe = pd.get_dummies(d[fe_col], prefix=fe_col, drop_first=True, dtype=float)
-    design = sm.add_constant(pd.concat([x, fe], axis=1))
-    result = sm.OLS(y, design).fit(cov_type="cluster", cov_kwds={"groups": d["ticker"]})
+    grp = d[fe_col]
+    y_dm = y - y.groupby(grp).transform("mean")
+    x_dm = x.groupby(grp).transform(lambda s: s - s.mean())
+    design = sm.add_constant(x_dm)
+    result = sm.OLS(y_dm, design).fit(cov_type="cluster", cov_kwds={"groups": d["ticker"]})
+
+    n, n_fe, k_within = len(d), grp.nunique(), design.shape[1]
+    k_lsdv = k_within + (n_fe - 1)
+    if n - k_lsdv > 0:
+        ratio = (n - k_within) / (n - k_lsdv)
+        result.cov_params_default = result.cov_params_default * ratio
     return result, d
 
 
