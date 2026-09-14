@@ -274,11 +274,7 @@ Motivated by these practical tensions, this study addresses one central question
 
 This thesis examines whether corporate AI disclosures contain sufficiently grounded evidence of operational activity to support a credible assessment of corporate AI claims. To test this, it develops an open measurement framework that audits corporate AI communication across `{python} f"{hd_n_docs:,}"` SEC filings and earnings-call transcripts, evaluating credibility across texts, disclosure channels, SEC comment letters, and market prices.
 
-The thesis makes three main contributions:
-
-1. **A practical credibility framework for issuers and investors.** Translating measurement into practical tools, the study introduces a disclosure-intensity/substance screening matrix and a due-diligence checklist to help investors and managers distinguish real technical integration from promotional cheap talk.
-2. **Empirical tests linking theory to corporate evidence.** The study tests economic and organizational theories across four empirical settings: market-wide diffusion and disclosure archetypes, operational activity mapping and firm fundamentals, cross-venue credibility gaps under SEC comment letters, and market pricing of systematic risk.
-3. **A multi-dimensional measurement architecture.** Moving beyond keyword counts and simple sentiment dictionaries, the study builds a pipeline combining a tree-based classifier with zero-shot large language models into a six-construct measurement architecture that is reconciled across communication venues (earnings calls versus statutory filings). Because the architecture is modular and general, it serves as a reusable template to study corporate credibility in other narrative settings, such as ESG, cybersecurity, or future technology waves.
+The thesis makes three main contributions. First, **a practical credibility framework for issuers and investors**: translating measurement into practical tools, the study introduces a disclosure-intensity/substance screening matrix and a due-diligence checklist to help investors and managers distinguish real technical integration from promotional cheap talk. Second, **empirical tests linking theory to corporate evidence**, tested across four empirical settings: market-wide diffusion and disclosure archetypes, operational activity mapping and firm fundamentals, cross-venue credibility gaps under SEC comment letters, and market pricing of systematic risk. Third, **a multi-dimensional measurement architecture** that moves beyond keyword counts and simple sentiment dictionaries, combining a tree-based classifier with zero-shot large language models into a six-construct architecture reconciled across communication venues (earnings calls versus statutory filings); because the architecture is modular and general, it serves as a reusable template to study corporate credibility in other narrative settings, such as ESG, cybersecurity, or future technology waves.
 
 ## Theoretical foundations and state of the art
 
@@ -301,10 +297,9 @@ Four theoretical perspectives motivate the empirical design:
 
 Corporate AI disclosures have grown rapidly, and managers adjust qualitative tone strategically. That leaves investors, board members, and regulators facing four practical questions that existing tools and evidence do not answer:
 
-1. **Separating substance from boilerplate at scale.** With hundreds of firms repeating AI language every quarter, can an analyst separate mentions that name a system, a deployment stage, or a quantified result from undifferentiated promotional text without reading every filing by hand?
+1. **Flagging decoupling without an internal audit.** With no access to a company's internal AI program and no time to read every filing by hand, can an outside analyst separate mentions that name a system, a deployment stage, or a quantified result from undifferentiated promotional text, and use the resulting gap as a governance flag?
 2. **Weighting a claim by where it was made.** Should an analyst treat the same AI initiative as equally credible on an earnings call and in the 10-K filed weeks later, or does promotional language outrun verifiable evidence more on the call than in the filing that carries statutory liability?
-3. **Flagging decoupling without an internal audit.** Can the gap between how much a company talks about AI and how much grounded activity it discloses be measured from public filings alone, with no access to its internal AI program, and used as a governance flag?
-4. **Deciding whether grounding is priced.** If two firms disclose AI initiatives with similar frequency but only one grounds its claims in named systems, metrics, and partners, does that difference show up in operating characteristics or market risk, or does the market treat both alike?
+3. **Deciding whether grounding is priced.** If two firms disclose AI initiatives with similar frequency but only one grounds its claims in named systems, metrics, and partners, does that difference show up in operating characteristics or market risk, or does the market treat both alike?
 
 ## Hypotheses and research questions
 
@@ -312,8 +307,7 @@ To address these gaps, this thesis states a central hypothesis and four guiding 
 
 **Main hypothesis.** This splits into two claims that need not receive the same verdict, since operating characteristics and market risk are distinct outcomes with no reason to move together:
 
-- **H-operational:** Disclosure posture and grounded operational substance carry incremental information about firm operating characteristics beyond narrative disclosure volume alone.
-- **H-market:** Disclosure posture and grounded operational substance carry incremental information about market risk beyond narrative disclosure volume alone.
+Disclosure posture and grounded operational substance carry incremental information about firm operating characteristics beyond narrative disclosure volume alone (**H-operational**), and separately about market risk beyond narrative disclosure volume alone (**H-market**).
 
 Four research questions guide the empirical analysis:
 
