@@ -254,15 +254,11 @@ Capital markets do not reward the more verifiable evidence behind a firm's AI cl
 
 ## Problem and practical relevance
 
-Interpreting corporate AI disclosure creates three practical problems:
+Corporate AI disclosure has become increasingly difficult to interpret. Investors and analysts need to distinguish firms with substantive AI adoption from those making primarily promotional claims, because genuine adoption may affect productivity and firm value [@basnet2025; @song2026]. Managers and boards, meanwhile, must communicate technical initiatives without overstating their maturity or creating unnecessary legal and reputational exposure. Regulators face a related challenge: determining whether public AI claims reflect meaningful organizational activity or amount to "AI washing" [@gensler2023; @sec2024pressrelease]. Recent SEC comment letters illustrate that inconsistencies between promotional earnings-call statements and formal filings can trigger direct regulatory scrutiny [@welltower2025letter].
 
-- **Investors and analysts** need to separate companies building real AI systems from those making promotional claims, as actual adoption affects productivity and firm value [@basnet2025, pp. 1--2; @song2026, pp. 1--2].
-- **Managers and boards** must communicate technical initiatives without raising unrealistic expectations or creating legal risks.
-- **Regulators** increasingly monitor whether corporate claims reflect real organizational work or amount to "AI washing" [@gensler2023, pp. 4--5; @sec2024pressrelease, pp. 1--2]. Recent SEC comment letters show that gaps between promotional earnings calls and formal filings can prompt direct regulatory inquiries [@welltower2025letter, p. 1].
+The problem has become more relevant since the release of ChatGPT, after which artificial intelligence rapidly became a standard feature of corporate communication [@anantharaman2026]. In the S&P 500, the share of firms mentioning AI in SEC filings increased from {python} f"{hd_share[2021]:.0f}"% in 2021 to {python} f"{hd_share[2025]:.0f}"% in 2025. Over the same period, narrative intensity across the panel increased {python} f"{hd_frames_ratio:.1f}"-fold and, when annualizing 2026 observations, reaches approximately {python} f"{hd_int_ratio_est:.0f}" times its 2021 level. Once AI appears in the disclosures of nearly every large public company, simple mention counts provide little information about whether firms are describing material operational activity or merely participating in a broader communication trend.
 
-This problem has become urgent since the release of ChatGPT, when artificial intelligence quickly became a standard topic in corporate disclosures [@anantharaman2026, pp. 1--2]. In the S&P 500, the share of firms mentioning AI in their SEC filings rose from `{python} f"{hd_share[2021]:.0f}"`% in 2021 to `{python} f"{hd_share[2025]:.0f}"`% in 2025, while narrative intensity across the same panel grew `{python} f"{hd_frames_ratio:.1f}"`-fold, reaching roughly `{python} f"{hd_int_ratio_est:.0f}"`-fold when extending through annualized 2026 projections. When nearly every firm mentions AI, counting words is no longer enough to distinguish operationally grounded disclosure from generic or promotional AI communication.
-
-Standard textual methods in finance rely on keyword counts or dictionary sentiment [@loughran2011, p. 36], treating routine risk disclaimers identically to concrete statements about software deployments, budgets, or commercial partners. Assessing corporate credibility instead requires measuring how firms frame their claims, what specific operational activities they report, and how well those claims are grounded in verifiable evidence.
+This creates a measurement problem. Conventional textual approaches in finance typically rely on keyword frequencies or dictionary-based sentiment [@loughran2011], approaches that can treat a routine risk disclaimer and a detailed account of an AI deployment, investment, or commercial partnership as equivalent textual evidence. Evaluating the substance and credibility of corporate AI disclosure therefore requires moving beyond how often firms mention AI toward how they frame those claims, what operational activities they report, and how concretely those activities are supported by disclosed evidence.
 
 ## Main research question
 
@@ -280,18 +276,18 @@ The thesis makes three main contributions. First, **a practical credibility fram
 
 ### What the literature knows and prior empirical evidence
 
-This thesis connects with computational linguistics in corporate finance [@li2008, pp. 1--3; @loughran2011, pp. 35--36; @gentzkow2019, pp. 1--2; @hoberg2016; @hassan2019] and with recent work documenting a surge in corporate AI discussions since the generative-AI shock [@anantharaman2026, pp. 1--2]. Scholars have characterized that surge by classifying disclosure into actionable versus speculative text [@basnet2025, pp. 1--2], measuring planned versus implemented AI via patents and job postings [@song2026, pp. 1--2; @babina2024; @eisfeldt2023, p. 9], and, closest to the present design, by combining disclosure with employment data to validate its credibility against an external benchmark [@barrios2025]. This thesis instead examines communication posture, disclosed activities, and their grounding within corporate text, treating internal disclosure consistency and independently observed implementation as distinct questions.
+This thesis connects with computational linguistics in corporate finance [@li2008; @loughran2011; @gentzkow2019; @hoberg2016; @hassan2019] and with recent work documenting a surge in corporate AI discussions since the generative-AI shock [@anantharaman2026]. Scholars have characterized that surge by classifying disclosure into actionable versus speculative text [@basnet2025], measuring planned versus implemented AI via patents and job postings [@song2026; @babina2024; @eisfeldt2023], and, closest to the present design, by combining disclosure with employment data to validate its credibility against an external benchmark [@barrios2025]. This thesis instead examines communication posture, disclosed activities, and their grounding within corporate text, treating internal disclosure consistency and independently observed implementation as distinct questions.
 
-Market enthusiasm has concurrently heightened scrutiny over what @elhajjar2025 conceptualize as "AI washing": the misrepresentation or exaggeration of AI capabilities for marketing advantage [@gensler2023, pp. 4--5; @sec2024pressrelease, pp. 1--2], connecting to foundational research on greenwashing and symbolic impression management [@delmas2011, pp. 64--68; @lyon2015, pp. 1--3; @marquis2016, pp. 483--85] and to evidence that managers adjust disclosure tone independently of fundamentals and expand speculative talk during technology booms [@huang2014; @cheng2019].
+Market enthusiasm has concurrently heightened scrutiny over what @elhajjar2025 conceptualize as "AI washing": the misrepresentation or exaggeration of AI capabilities for marketing advantage [@gensler2023; @sec2024pressrelease], connecting to foundational research on greenwashing and symbolic impression management [@delmas2011; @lyon2015; @marquis2016] and to evidence that managers adjust disclosure tone independently of fundamentals and expand speculative talk during technology booms [@huang2014; @cheng2019].
 
 ### Theoretical concepts and mechanisms
 
 Four theoretical perspectives motivate the empirical design:
 
-* **Signalling and cheap talk.** Claims gain credibility when they contain details that are costly to fake or easy to verify [@spence1973, pp. 363--64; @crawford1982, pp. 1431--32; @dye1985, pp. 123--24]; without that cost, promotional talk defaults to ungrounded claims [@rogers2011, pp. 2155--56]. This thesis operationalizes verifiable evidence as named systems, deployment stages, quantified metrics, and identified technology partners. For a board or investor, AI language lacking a named system, stage, metric, or partner should be discounted regardless of how often it recurs.
-* **Institutional legitimacy and diffusion.** Under technological uncertainty, organizations adopt popular terminology to appear modern independent of internal change [@meyer1977, pp. 340--41; @dimaggio1983, pp. 147--48; @suchman1995, pp. 571--74], which is why AI language spreads across industries and clusters into recurring postures. A rising count of AI mentions across a peer group signals industry-wide pressure rather than firm-specific capability, and should not alone move a valuation or lending decision.
-* **Decoupling and symbolic management.** Formal statements can diverge from day-to-day operations [@meyer1977, pp. 340--41; @westphal1994, pp. 367--69; @crilly2012, pp. 1429--31; @bromley2012], a gap @seele2022 term machinewashing in algorithmic communication. This thesis measures a narrower, observable version: the distance between narrative volume and grounded activity disclosed by the same firm. Directors should treat high narrative volume paired with low grounded activity as a governance flag warranting internal audit, not proof of misconduct.
-* **Regulatory enforcement and credibility boundaries.** Regulators can raise the cost of unfounded claims [@gensler2023, pp. 4--5; @sec2024pressrelease]; attorney-reviewed statutory filings carry more legal exposure than the less formal discussion on earnings calls [@matsumoto2011, pp. 1383--84; @frankel1999, pp. 133--34]. Investors should watch whether a claim made on a call is later carried into the statutory filing with the same evidentiary detail, since only the filing carries comparable liability discipline -- the credibility risk is not that calls lack evidence, but that supporting detail need not travel with the claim.
+* **Signalling and cheap talk.** Claims gain credibility when they contain details that are costly to fake or easy to verify [@spence1973; @crawford1982; @dye1985]; without that cost, promotional talk defaults to ungrounded claims [@rogers2011]. This thesis operationalizes verifiable evidence as named systems, deployment stages, quantified metrics, and identified technology partners. For a board or investor, AI language lacking a named system, stage, metric, or partner should be discounted regardless of how often it recurs.
+* **Institutional legitimacy and diffusion.** Under technological uncertainty, organizations adopt popular terminology to appear modern independent of internal change [@meyer1977; @dimaggio1983; @suchman1995], which is why AI language spreads across industries and clusters into recurring postures. A rising count of AI mentions across a peer group signals industry-wide pressure rather than firm-specific capability, and should not alone move a valuation or lending decision.
+* **Decoupling and symbolic management.** Formal statements can diverge from day-to-day operations [@meyer1977; @westphal1994; @crilly2012; @bromley2012], a gap @seele2022 term machinewashing in algorithmic communication. This thesis measures a narrower, observable version: the distance between narrative volume and grounded activity disclosed by the same firm. Directors should treat high narrative volume paired with low grounded activity as a governance flag warranting internal audit, not proof of misconduct.
+* **Regulatory enforcement and credibility boundaries.** Regulators can raise the cost of unfounded claims [@gensler2023; @sec2024pressrelease]; attorney-reviewed statutory filings carry more legal exposure than the less formal discussion on earnings calls [@matsumoto2011; @frankel1999]. Investors should watch whether a claim made on a call is later carried into the statutory filing with the same evidentiary detail, since only the filing carries comparable liability discipline -- the credibility risk is not that calls lack evidence, but that supporting detail need not travel with the claim.
 
 ### What decision-makers cannot answer today
 
@@ -622,7 +618,7 @@ Markdown(tabulate(table, headers=["Stage", "Unit of Observation", "Operational F
 
 Before scoring, scorable paragraphs ($>3$ characters, alphanumeric content) are normalized and hashed with BLAKE2b signatures. Deduplication scores repeated boilerplate once per unique text and maps it across filings, preventing boilerplate from distorting downstream measures.
 
-Candidate passages are screened using a Gradient Boosted Decision Tree (GBDT) prefilter [@friedman2001, pp. 1189--95] calibrated for high recall to avoid discarding relevant disclosures prior to LLM evaluation (feature count and threshold in @tbl-funnel-summary; recall target in Appendix B). Documents lacking AI discussion enter as true zeros rather than missing values (Appendix B, @tbl-evaluation-datasets).
+Candidate passages are screened using a Gradient Boosted Decision Tree (GBDT) prefilter [@friedman2001] calibrated for high recall to avoid discarding relevant disclosures prior to LLM evaluation (feature count and threshold in @tbl-funnel-summary; recall target in Appendix B). Documents lacking AI discussion enter as true zeros rather than missing values (Appendix B, @tbl-evaluation-datasets).
 
 ## From paragraphs to individual AI claims: frame extraction
 
@@ -898,7 +894,23 @@ Once almost every large firm talks about AI, presence alone says little. At `{py
 
 ## The dimensions of AI disclosure strategy
 
-Seven frame-level dimensions describe Communication Posture ($P$). Disclosure intensity ($D$) captures narrative volume, completing the eight-dimensional strategy space. @tbl-strategy-dimensions defines each dimension and its operational meaning. @fig-strategy-dimensions-dist shows their distribution across the S&P 500.
+Seven frame-level dimensions describe Communication Posture ($P$). Disclosure intensity ($D$) captures narrative volume, completing the eight-dimensional strategy space. @tbl-strategy-dimensions defines each dimension and its operational meaning, while @fig-strategy-dimensions-dist shows their distribution across the S&P 500.
+
+| Dimension | Operational Definition | Range | Managerial Meaning |
+|---|---|---|---|
+| **Promotional posture** | Average of promotional tone and strategic-importance framing | $[0, 1]$ | Extent to which AI is communicated as a transformative strategic asset |
+| **Hedging posture** | Share of statements framed with cautious or conditional language | $[0, 1]$ | Degree to which AI claims are qualified rather than asserted outright |
+| **Risk orientation** | Share of statements containing risk, uncertainty, or dependency concepts | $[0, 1]$ | Degree to which AI is treated as an operational vulnerability or hazard |
+| **Governance orientation** | Share of statements containing oversight, ethics, or compliance policies | $[0, 1]$ | Formal institutionalization of model oversight and responsible AI guardrails |
+| **Claim realization** | Share of statements describing current, realized usage rather than planned/future intentions | $[0, 1]$ | Operational maturity: active/realized deployment vs. future roadmap or intent |
+| **Customer-facing** | Share of statements oriented toward external clients and commercial offerings | $[0, 1]$ | Commercial orientation: external client products vs. internal operating workflows |
+| **Claim specificity** | Mean of 5 binary grounding flags (process, product, vendor, metric, timeline) | $[0, 1]$ | Falsifiability and informational granularity of corporate statements |
+| **Disclosure intensity** | Percentile rank of AI semantic frames per 1,000 narrative words | $[0, 1]$ | Overall narrative volume dedicated to artificial intelligence |
+
+: Operational definitions of the eight AI disclosure strategy dimensions. {#tbl-strategy-dimensions}
+
+The empirical distribution across the S&P 500 reveals substantial structural heterogeneity across dimensions (@fig-strategy-dimensions-dist). Risk orientation and disclosure intensity exhibit broad cross-sectional dispersion, spanning virtually the entire range from minimal to extensive discussion. In contrast, promotional posture, hedging, and customer-facing positioning remain compressed near the lower bound for the typical firm, with medians below 0.15. This asymmetry confirms that corporate disclosure strategies cannot be understood as mere differences in verbosity ("talking more or less"); rather, firms differentiate through distinct combinations of thematic emphasis, evidentiary concreteness, temporal commitment, and functional orientation.
+
 
 ```{python}
 #| label: fig-strategy-dimensions-dist
@@ -960,21 +972,6 @@ plt.show()
 *Notes:* White circles denote medians; petrol bars interquartile ranges; grey whiskers the 5th–95th percentile. All measures are scaled from 0 to 1.
 :::
 
-| Dimension | Operational Definition | Range | Managerial Meaning |
-|---|---|---|---|
-| **Promotional posture** | Average of promotional tone and strategic-importance framing | $[0, 1]$ | Extent to which AI is communicated as a transformative strategic asset |
-| **Hedging posture** | Share of statements framed with cautious or conditional language | $[0, 1]$ | Degree to which AI claims are qualified rather than asserted outright |
-| **Risk orientation** | Share of statements containing risk, uncertainty, or dependency concepts | $[0, 1]$ | Degree to which AI is treated as an operational vulnerability or hazard |
-| **Governance orientation** | Share of statements containing oversight, ethics, or compliance policies | $[0, 1]$ | Formal institutionalization of model oversight and responsible AI guardrails |
-| **Claim realization** | Share of statements describing current, realized usage rather than planned/future intentions | $[0, 1]$ | Operational maturity: active/realized deployment vs. future roadmap or intent |
-| **Customer-facing** | Share of statements oriented toward external clients and commercial offerings | $[0, 1]$ | Commercial orientation: external client products vs. internal operating workflows |
-| **Claim specificity** | Mean of 5 binary grounding flags (process, product, vendor, metric, timeline) | $[0, 1]$ | Falsifiability and informational granularity of corporate statements |
-| **Disclosure intensity** | Percentile rank of AI semantic frames per 1,000 narrative words | $[0, 1]$ | Overall narrative volume dedicated to artificial intelligence |
-
-: Operational definitions of the eight AI disclosure strategy dimensions. {#tbl-strategy-dimensions}
-
-The empirical distribution across the S&P 500 reveals substantial structural heterogeneity across dimensions (@fig-strategy-dimensions-dist). Risk orientation and disclosure intensity exhibit broad cross-sectional dispersion, spanning virtually the entire range from minimal to extensive discussion. In contrast, promotional posture, hedging, and customer-facing positioning remain compressed near the lower bound for the typical firm, with medians below 0.15. This asymmetry confirms that corporate disclosure strategies cannot be understood as mere differences in verbosity ("talking more or less"); rather, firms differentiate through distinct combinations of thematic emphasis, evidentiary concreteness, temporal commitment, and functional orientation.
-
 The correlation structure of these eight dimensions shows two key properties (@tbl-a3-posture-correlation, Appendix C):
 
 1. **Governance framing operates independently.** Governance orientation barely correlates with promotional posture ($r =$ `{python} f"{hd_corr['governance_orientation']['promotional_posture']:.2f}"`), risk framing ($r =$ `{python} f"{hd_corr['governance_orientation']['risk_orientation']:.2f}"`), or disclosure intensity ($r =$ `{python} f"{hd_corr['governance_orientation']['disclosure_intensity']:.2f}"`). It constitutes an autonomous disclosure dimension rather than a proxy for general verbosity or risk aversion.
@@ -995,9 +992,9 @@ arch_n_noai = int((_arch["archetype"] == "No AI").sum())
 arch_n_fit = arch_n_universe - arch_n_noai
 ```
 
-This thesis computes the posture dimensions across all `{python} arch_n_universe` firms. Firms with fewer than five AI frames across 2021–2025 SEC filings receive the rule-based label **No AI** ($n =$ `{python} arch_n_noai`). By 2025, nearly nine in ten firms disclose enough AI commentary to exhibit an active posture [@dimaggio1983, pp. 147--48].
+This thesis computes the posture dimensions across all `{python} arch_n_universe` firms. Firms with fewer than five AI frames across 2021–2025 SEC filings receive the rule-based label **No AI** ($n =$ `{python} arch_n_noai`). By 2025, nearly nine in ten firms disclose enough AI commentary to exhibit an active posture [@dimaggio1983].
 
-For the active firms ($n =$ `{python} arch_n_fit`), disclosure strategies blend distinct communication registers rather than falling into rigid discrete bins. This thesis applies continuous **Archetypal Analysis** [@cutler1994, pp. 338--47] to the eight standardized posture dimensions: each firm is represented as a convex mixture of $k$ extreme disclosure profiles, with mixture weights giving its posture portfolio (formal specification in Appendix C).
+For the active firms ($n =$ `{python} arch_n_fit`), disclosure strategies blend distinct communication registers rather than falling into rigid discrete bins. This thesis applies continuous **Archetypal Analysis** [@cutler1994] to the eight standardized posture dimensions: each firm is represented as a convex mixture of $k$ extreme disclosure profiles, with mixture weights giving its posture portfolio (formal specification in Appendix C).
 
 ### Archetypal profiles and the disclosure simplex
 
@@ -1499,7 +1496,7 @@ plt.show()
 - **Communications, Business Services, and Retail** lead Defensive Disclosers, framing artificial intelligence primarily as an industry disruption or operational vulnerability rather than an affirmative commercial product.
 - **Energy & Mining and Manufacturing** concentrate in No AI, where operational transformation remains centered on physical assets and capital extraction rather than narrative AI claims.
 
-This sorting aligns with institutional theory: firms facing shared regulatory scrutiny converge on matching disclosure registers [@dimaggio1983, pp. 147--48; @suchman1995, pp. 571--74]. Corporate posture is therefore substantially an industry norm rather than solely an idiosyncratic firm choice.
+This sorting aligns with institutional theory: firms facing shared regulatory scrutiny converge on matching disclosure registers [@dimaggio1983; @suchman1995]. Corporate posture is therefore substantially an industry norm rather than solely an idiosyncratic firm choice.
 
 #### Institutional channels: where vs. how firms disclose
 
@@ -1509,7 +1506,7 @@ Where a firm discloses and how it discloses are empirically inseparable. Across 
 - **Governance-Led Disclosers ($w_{\text{Gov}}$):** Aligns with Form DEF 14A proxy statements ($r = +0.607, R^2 = 36.8\%$), focusing on board committee charters, supervisory accountability, and executive oversight.
 - **Vocal Substantives ($w_{\text{Vocal}}$):** Aligns with Form 10-K Item 1 (Business Description) and Item 7 (MD&A) ($r = +0.575, R^2 = 33.1\%$), which articulate commercial strategy and product milestones.
 
-Statutory channel selection is thus an explicit strategic choice [@campbell2014, pp. 396--98]. Because DEF 14A coverage reaches `{python} _ch_n_coverage_pct`% across disclosing firms (`{python} _ch_n_mention` mention AI, `{python} _ch_n_omit` omit it), a low $w_{\text{Gov}}$ weight reflects active corporate omission rather than missing filings.
+Statutory channel selection is thus an explicit strategic choice [@campbell2014]. Because DEF 14A coverage reaches `{python} _ch_n_coverage_pct`% across disclosing firms (`{python} _ch_n_mention` mention AI, `{python} _ch_n_omit` omit it), a low $w_{\text{Gov}}$ weight reflects active corporate omission rather than missing filings.
 
 ```{python}
 #| echo: false
@@ -2445,7 +2442,7 @@ Only `{python} f"{c5 / c1 * 100:.1f}"`% of disclosed AI activities reach the top
 
 ## More activities, thinner grounding
 
-The generative AI boom multiplied the volume of disclosed activities while diluting their average grounding (@fig-volume-vs-grounding). Following the 2023 inflection, aggregate activity claims expanded several-fold, yet the proportion of activities in production, naming specific tools, or tied to concrete business functions declined steadily. As predicted by institutional theory [@meyer1977, pp. 340--41], once AI terminology became an external market expectation, rhetorical adoption diffused far faster than underlying organizational execution.[^fn-seasonal-46]
+The generative AI boom multiplied the volume of disclosed activities while diluting their average grounding (@fig-volume-vs-grounding). Following the 2023 inflection, aggregate activity claims expanded several-fold, yet the proportion of activities in production, naming specific tools, or tied to concrete business functions declined steadily. As predicted by institutional theory [@meyer1977], once AI terminology became an external market expectation, rhetorical adoption diffused far faster than underlying organizational execution.[^fn-seasonal-46]
 
 [^fn-seasonal-46]: Full-year 2026 volume is projected via the same-window seasonal adjustment used throughout (Data sources and corpus), scaling year-to-date activity counts by a factor of `{python} f"{hd_act_factor:.2f}"` (full-year 2025 activities over the 2025 activities observed through the matching `{python} hd_cutoff_str` cut-off); grounding shares in Panel B are direct rate metrics and need no such adjustment.
 
@@ -2656,7 +2653,7 @@ Disclosed activity carries information that posture alone does not: at equal dis
 
 # Credibility Under Increasing Disclosure Commitment
 
-How credible are corporate AI claims when scrutinized against escalating legal and regulatory commitments? Because enterprise AI adoption lacks an audited reporting census, this thesis evaluates credibility by observing what survives as the cost of misrepresentation rises [@crawford1982, pp. 1431--32; @rogers2011, pp. 2155--56]. Credibility is tested through three complementary designs: (1) within-document decoupling between disclosure intensity and disclosed substance; (2) claim persistence from voluntary earnings calls to statutory filings; and (3) disclosure responses to SEC comment-letter scrutiny. Together, these tests move from internally observable substantiation to externally consequential disclosure settings (@tbl-credibility-designs).
+How credible are corporate AI claims when scrutinized against escalating legal and regulatory commitments? Because enterprise AI adoption lacks an audited reporting census, this thesis evaluates credibility by observing what survives as the cost of misrepresentation rises [@crawford1982; @rogers2011]. Credibility is tested through three complementary designs: (1) within-document decoupling between disclosure intensity and disclosed substance; (2) claim persistence from voluntary earnings calls to statutory filings; and (3) disclosure responses to SEC comment-letter scrutiny. Together, these tests move from internally observable substantiation to externally consequential disclosure settings (@tbl-credibility-designs).
 
 ```{python}
 #| label: tbl-credibility-designs
@@ -3885,7 +3882,7 @@ Corporate AI disclosure is neither a reliable proxy for technological capability
 
 ### Pipeline methodology: KDD/CRISP-DM framing {.unnumbered}
 
-The pipeline that converts raw corporate text into firm-level measures (@fig-pipeline-architecture; @tbl-funnel-summary) is grounded in Knowledge Discovery in Databases (KDD) [@fayyad1996, pp. 37--40] and CRISP-DM [@shearer2000, pp. 13--15], and follows an iterative workflow from document cleaning to empirical validation. As an exploratory academic study, the process terminates at econometric evaluation rather than operational deployment.
+The pipeline that converts raw corporate text into firm-level measures (@fig-pipeline-architecture; @tbl-funnel-summary) is grounded in Knowledge Discovery in Databases (KDD) [@fayyad1996] and CRISP-DM [@shearer2000], and follows an iterative workflow from document cleaning to empirical validation. As an exploratory academic study, the process terminates at econometric evaluation rather than operational deployment.
 
 ### Industrial classification and aggregated sector definitions {.unnumbered}
 
@@ -4109,7 +4106,7 @@ Every automated stage of the pipeline is checked against held-out ground truth, 
 | Benchmark dataset | What it validates | Forms | Sample size | Labels from | Metric / performance |
 |---|---|---|---:|---|---|
 | **LLM-labeled reference set (prefilter training and test)** | Machine-learning gate: does a paragraph discuss AI? | 10-K, 10-Q | 9,900 texts | Qwen 3.7 Flash, cross-checked by Gemini 3.8 | F1 = 0.96 (Prec. 0.98, Rec. 0.94) on held-out texts |
-| **Inter-judge agreement** | Frame classification: do two independent models assign the same frame dimensions? | 10-K, 10-Q | 6,038 pairs | Gemini 3.8 vs. Qwen 3.7 Flash | Cohen's $\kappa = 0.81–0.87$ [@cohen1960, pp. 37--40] across dimensions (agreement beyond chance; 1 = perfect) |
+| **Inter-judge agreement** | Frame classification: do two independent models assign the same frame dimensions? | 10-K, 10-Q | 6,038 pairs | Gemini 3.8 vs. Qwen 3.7 Flash | Cohen's $\kappa = 0.81–0.87$ [@cohen1960] across dimensions (agreement beyond chance; 1 = perfect) |
 | **Out-of-domain proxy statements and 8-Ks** | Gate transfer to forms not used in training | DEF 14A, 8-K | 1,500 texts | Qwen 3.7 Flash | Prec. 0.73, Rec. 0.92; F1 = 0.82 (14A), 0.65 (8-K) |
 | **Out-of-domain earnings calls** | Gate transfer to transcripts | Transcripts | 800 texts | Qwen 3.7 Flash | Prec. 0.59, Rec. 0.98, F1 = 0.73 (Prec. 0.85 on strong positives) |
 | **Semantic anchors** | Gate inputs: reference sentences describing AI concepts against which paragraph similarity is scored | All forms | 27 anchors | Expert curated | 39 gate signals, including similarity to the anchors |
@@ -4201,7 +4198,7 @@ Firm-year document rates aggregate from document-level frame counts via the medi
 
 ### Archetypal Analysis: formal specification {.unnumbered}
 
-Archetypal Analysis [@cutler1994, pp. 338--47] represents every firm $i$ as a convex combination of $k$ extreme boundary vertices in the standardized eight-dimensional posture space:
+Archetypal Analysis [@cutler1994] represents every firm $i$ as a convex combination of $k$ extreme boundary vertices in the standardized eight-dimensional posture space:
 
 $$x_i \approx \sum_{j=1}^k w_{ij} z_j, \quad \text{subject to} \quad \sum_{j=1}^k w_{ij} = 1, \quad w_{ij} \ge 0$$
 
