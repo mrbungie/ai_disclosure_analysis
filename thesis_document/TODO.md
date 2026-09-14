@@ -79,10 +79,21 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       lugares (cover letter y AI Statement). **Nuevo — Prioridad: Alta (cumplimiento)** —
       Hecho: se insertó un párrafo breve en `cover.docx`, después de la declaración de
       trabajo individual, consistente con el AI Statement de `thesis.qmd`.
-- [ ] **12. Figuras/tablas — medir páginas de figuras+tablas del cuerpo (42
+- [x] **12. Figuras/tablas — medir páginas de figuras+tablas del cuerpo (42
       elementos).** Límite: 20 páginas. Si está cerca del límite, mover primero Table 3
       (prevalence) y Table 4 (distribution) al apéndice. **Nuevo — Prioridad: Alta
-      (verificar antes de tocar el resto)**
+      (verificar antes de tocar el resto)** — Hecho: medido sobre el PDF compilado
+      (`GermanOviedo_FinalThesis_20260914_101629.pdf`, 71 páginas). El cuerpo (páginas
+      4–56, antes de "Appendices" en p.57) contiene 43 elementos numerados (19 tablas +
+      24 figuras), no 42 — número casi idéntico al estimado del checklist. Midiendo el
+      espacio vertical real de cada figura/tabla vía `pdftotext -bbox` (altura de imagen
+      exacta para figuras; extensión de fila hasta el siguiente heading/nota para
+      tablas) el total ocupado en el cuerpo es de aproximadamente **15.8 páginas
+      -equivalentes**, con margen razonable (~4 páginas) por debajo del límite de 20.
+      No se movió nada: Table 3 (`tbl-funnel-summary`, "Compact summary of the
+      inference funnel") y Table 4 (`tbl-frame-schema`, "Semantic frame schema...
+      observed corpus distributions") permanecen en el cuerpo, en `thesis.qmd` líneas
+      579 y 638 respectivamente.
 - [ ] **12b. Figure 25 ("Incremental value of NLP layers over mention counts") —
       mover de Appendix E al cuerpo**, en §6.6 o como apertura de §8.1, un párrafo de
       cuatro frases. El cuerpo nunca la cita hoy. Es la respuesta más directa a la RQ
