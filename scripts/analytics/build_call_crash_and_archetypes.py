@@ -184,3 +184,41 @@ print("\n=== RESULTS: DUVOL with Decoupling W ===")
 r_du_w, d_du_w = fit_outcome(panel, "duvol_post", "duvol_pre", add_dummies=False, add_w=True)
 for v in ["w_call", "hist_disclosure", "hist_substance", "duvol_pre"]:
     print(f"  {v:22s}: beta={r_du_w.params[v]:+.4f}, se={r_du_w.bse[v]:.4f}, p={r_du_w.pvalues[v]:.4f}")
+
+print("\n=== RESULTS: DUVOL (Down-to-Up Volatility) Active Sample with Dummies ===")
+r_du_a, d_du_a = fit_outcome(active, "duvol_post", "duvol_pre", add_dummies=True)
+print(f"N calls: {len(d_du_a)}, Firms: {d_du_a.ticker.nunique()}, R2: {r_du_a.rsquared:.4f}")
+for v in AI_VARS + DUMMIES + ["duvol_pre"]:
+    print(f"  {v:22s}: beta={r_du_a.params[v]:+.4f}, se={r_du_a.bse[v]:.4f}, p={r_du_a.pvalues[v]:.4f}")
+
+# --- Export coefficient tables (with 95% CIs) for the crash-risk figure and
+# tables in the thesis text, so those numbers are read from a file rather
+# than retyped by hand. ---
+def _coef_table(res, varlist, target):
+    rows = []
+    for v in varlist:
+        b, se = res.params[v], res.bse[v]
+        rows.append({"target": target, "variable": v, "beta_std": b, "se": se,
+                     "ci95_low": b - 1.96 * se, "ci95_high": b + 1.96 * se, "p": res.pvalues[v]})
+    return pd.DataFrame(rows)
+
+_export = pd.concat([
+    _coef_table(r_nc_f, AI_VARS + ["ncskew_pre"], "ncskew_full"),
+    _coef_table(r_nc_w, ["w_call", "hist_disclosure", "hist_substance", "ncskew_pre"], "ncskew_w"),
+    _coef_table(r_nc_a, AI_VARS + DUMMIES + ["ncskew_pre"], "ncskew_active_dummies"),
+    _coef_table(r_du_f, AI_VARS + ["duvol_pre"], "duvol_full"),
+    _coef_table(r_du_w, ["w_call", "hist_disclosure", "hist_substance", "duvol_pre"], "duvol_w"),
+    _coef_table(r_du_a, AI_VARS + DUMMIES + ["duvol_pre"], "duvol_active_dummies"),
+], ignore_index=True)
+_samples = pd.DataFrame([
+    {"target": "ncskew_full", "n_calls": len(d_nc_f), "n_firms": d_nc_f.ticker.nunique(), "r2": r_nc_f.rsquared},
+    {"target": "ncskew_w", "n_calls": len(d_nc_w), "n_firms": d_nc_w.ticker.nunique(), "r2": r_nc_w.rsquared},
+    {"target": "ncskew_active_dummies", "n_calls": len(d_nc_a), "n_firms": d_nc_a.ticker.nunique(), "r2": r_nc_a.rsquared},
+    {"target": "duvol_full", "n_calls": len(d_du_f), "n_firms": d_du_f.ticker.nunique(), "r2": r_du_f.rsquared},
+    {"target": "duvol_w", "n_calls": len(d_du_w), "n_firms": d_du_w.ticker.nunique(), "r2": r_du_w.rsquared},
+    {"target": "duvol_active_dummies", "n_calls": len(d_du_a), "n_firms": d_du_a.ticker.nunique(), "r2": r_du_a.rsquared},
+])
+_export.to_csv(CLUSTERS / "call_crash_archetype_regressions.csv", index=False)
+_samples.to_csv(CLUSTERS / "call_crash_archetype_regression_samples.csv", index=False)
+print(f"\n-> {CLUSTERS / 'call_crash_archetype_regressions.csv'}")
+print(f"-> {CLUSTERS / 'call_crash_archetype_regression_samples.csv'}")

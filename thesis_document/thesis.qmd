@@ -246,7 +246,7 @@ Reading `{python} hd_paragraphs_m` million paragraphs from `{python} f"{hd_n_doc
 
 Credibility also depends on where a claim is made. Within the same firm and year, earnings calls and SEC filings describe a similar mix of activities, but calls carry markedly more promotional language and quantified claims per word than the matching filings do -- part of that gap reflects filings simply running longer and more boilerplate-heavy, not only what firms chose to say -- and specific figures backing an AI claim are substantially less likely to appear in the filing than in the call that preceded it. The story a firm tells on the earnings call does not travel intact into the document that carries legal exposure. This is not a discrete "washing" style practiced by a few bad actors; it behaves as a general, persistent feature of firm communication that shows up more in some firm-years than others, and functions as a due-diligence flag rather than proof of wrongdoing. The one case in the sample where the SEC directly questioned a company's AI disclosure, Welltower, is consistent with that kind of scrutiny narrowing the gap, though a single case cannot establish a general regulatory effect.
 
-Capital markets do not reward the more verifiable evidence behind a firm's AI claims. It is how much a firm has historically talked about AI -- not the substance behind a given quarter's claims -- that lines up with its subsequent risk profile and fundamentals, and since firms that already talk more about AI already carry more risk before any given call, the call itself does not appear to move the market. That the market prices the talk rather than the substance is itself a finding worth taking seriously, not a gap to explain away. The one exception is downside tail risk: Governance-Led firms exhibit significantly lower crash-risk exposure, the only archetype effect to survive multiplicity correction across the full outcome family. Rather than labeling any firm as fraudulent or technologically capable, the framework gives managers, boards, regulators, and investors a disciplined, three-step way to move beyond AI mention counts: identify a firm's disclosure posture, test whether that posture is backed by grounded execution, and check whether the same claims hold from the earnings call to the statutory filing.
+Capital markets do not reward the more verifiable evidence behind a firm's AI claims. It is how much a firm has historically talked about AI -- not the substance behind a given quarter's claims -- that lines up with its subsequent risk profile and fundamentals, and since firms that already talk more about AI already carry more risk before any given call, the call itself does not appear to move the market. That the market prices the talk rather than the substance is itself a finding worth taking seriously, not a gap to explain away. Persistent disclosure volume is also associated with lower downside crash risk, while a governance-oriented disclosure posture shows the same direction nominally but not once the test family is corrected for multiple comparisons. Rather than labeling any firm as fraudulent or technologically capable, the framework gives managers, boards, regulators, and investors a disciplined, three-step way to move beyond AI mention counts: identify a firm's disclosure posture, test whether that posture is backed by grounded execution, and check whether the same claims hold from the earnings call to the statutory filing.
 
 {{< pagebreak >}}
 
@@ -769,7 +769,7 @@ $$\underbrace{\text{Semantic frames}}_{\text{frame extraction}} \Longrightarrow 
 
 Firm-year financial and market controls combine SEC XBRL disclosures and daily stock returns aligned to fiscal period ends. Coverage of the firm-year panel reaches 99% for revenue and net margin; less consistently reported items (capex, SG&A) are recovered through standardized XBRL concept-tag fallback hierarchies, with full coverage figures and the fallback mechanism detailed in Appendix D. Annual changes use a [340, 380]-day window.
 
-Baseline controls comprise market capitalization, R&D-to-sales, gross margin, operating margin, asset turnover, price-to-sales, forward revenue growth, market beta, and idiosyncratic volatility [@campbell2001; @ang2006]. Because XBRL R&D coverage is 46%, this thesis includes a non-reporting indicator rather than imputing zero. Financial ratios are winsorized at the 1st and 99th percentiles (Appendix D).
+Baseline controls comprise market capitalization, R&D-to-sales, gross margin, return on assets (ROA), price-to-sales, forward revenue growth, market beta, and idiosyncratic volatility [@campbell2001; @ang2006]. ROA is preferred to margin- or turnover-based accounting controls because it is reported under a near-universal XBRL concept pair (net income, total assets), reaching 99.7% coverage of the firm-year panel, whereas single-tag ratios such as operating margin concentrate their missingness in regulated financial and insurance sectors. Because XBRL R&D coverage is 46%, this thesis includes a non-reporting indicator rather than imputing zero. Financial ratios are winsorized at the 1st and 99th percentiles (Appendix D).
 
 ## Measurement validation
 
@@ -3180,7 +3180,7 @@ While promotional claims frequently fail to survive into binding filings, they r
 
 # Market Relevance of Disclosure Signals
 
-This chapter evaluates how equity markets price corporate AI disclosures around earnings calls across S&P 500 constituents from 2021 to 2025.
+This chapter evaluates how equity markets price corporate AI disclosures around earnings calls across S&P 500 constituents from 2021 through 2026.
 
 Following @gelman2014, these evaluations are exploratory diagnostics, not confirmatory tests: theoretical channels are pre-specified, Benjamini–Hochberg False Discovery Rate corrections address multiple testing, and every regression conditions on the outcome's own predetermined lag.
 
@@ -3198,11 +3198,11 @@ This thesis tests three distinct economic channels connecting AI disclosure to m
 
 ## Empirical design
 
-The unit of observation is a firm-date earnings call event ($i,t$) from 2021 to 2025 (transcripts on the same date are aggregated; zero-mention calls remain as valid zeros), modeled with an Analysis of Covariance (ANCOVA) specification that conditions each outcome directly on its own predetermined lag ($Y^{\text{pre}}_{i,t}$ at $t-1$) to avoid conflating unobserved firm heterogeneity with call impact. Industry-by-year fixed effects ($\text{SIC2} \times \text{Year}$) absorb industry-year shocks, standard errors are clustered by firm, and the disclosure vector — expanding historical posture ($\text{HistD}_{i,t^{-}}, \text{HistS}_{i,t^{-}}$), call-specific surprise ($\text{SurpriseD}_{i,t}, \text{SurpriseS}_{i,t}$), prior-year decoupling ($W_{i,t-1}$), and expanding-window archetype indicators ($\mathbf{1}_{\{\text{GovLed}\}_{i,t}}, \mathbf{1}_{\{\text{Vocal}\}_{i,t}}$, with *Defensive Disclosers* as reference; Section 3.3.3) — is estimated alongside predetermined controls for firm size, momentum, and operating fundamentals. Model $R^2$ is dominated by the lagged outcome by construction, so each table reports both the total and the partial $R^2$ of the disclosure block, which is the quantity of interest; the full equation, notation, and control list are given in Appendix E.
+The unit of observation is a firm-date earnings call event ($i,t$) from 2021 through 2026 (transcripts on the same date are aggregated; zero-mention calls remain as valid zeros), modeled with an Analysis of Covariance (ANCOVA) specification that conditions each outcome directly on its own predetermined lag ($Y^{\text{pre}}_{i,t}$ at $t-1$) to avoid conflating unobserved firm heterogeneity with call impact. Industry-by-year fixed effects ($\text{SIC2} \times \text{Year}$) absorb industry-year shocks, standard errors are clustered by firm, and the disclosure vector — expanding historical posture ($\text{HistD}_{i,t^{-}}, \text{HistS}_{i,t^{-}}$), call-specific surprise ($\text{SurpriseD}_{i,t}, \text{SurpriseS}_{i,t}$), prior-year decoupling ($W_{i,t-1}$), and expanding-window archetype indicators ($\mathbf{1}_{\{\text{GovLed}\}_{i,t}}, \mathbf{1}_{\{\text{Vocal}\}_{i,t}}$, with *Defensive Disclosers* as reference; Section 3.3.3) — is estimated alongside predetermined controls for firm size, momentum, and operating fundamentals. Model $R^2$ is dominated by the lagged outcome by construction, so each table reports both the total and the partial $R^2$ of the disclosure block, which is the quantity of interest; the full equation, notation, and control list are given in Appendix E.
 
 ## Channel 1 — Disclosure intensity, systematic risk and valuation (H6a)
 
-This section tests whether disclosure intensity acts as thematic factor exposure, shifting systematic risk ($\beta$) and valuation multiples. Regressors are $\text{HistD}$ and $\text{SurpriseD}$, controlling for $\text{HistS}$ and $\text{SurpriseS}$. @fig-call-beta-baseline reports the baseline beta estimates.
+This section tests whether disclosure intensity acts as thematic factor exposure, shifting systematic risk ($\beta$) and valuation multiples. Regressors are $\text{HistD}$ and $\text{SurpriseD}$, controlling for $\text{HistS}$ and $\text{SurpriseS}$. Post-call beta is estimated over the quarterly window $[+21, +63]$ trading days after the call, a window short enough to remain inside a single reporting quarter -- isolating the market reaction attributable to that specific call and keeping the estimation window fully observed for calls held through the end of the sample period. @fig-call-beta-baseline reports the baseline beta estimates.
 
 ```{python}
 #| label: fig-call-beta-baseline
@@ -3218,12 +3218,11 @@ def find_path(rel):
     p = Path(f"../{rel}")
     return p if p.exists() else Path(rel)
 
-_win_all = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_windows.csv"))
-base_df = _win_all[_win_all["block"] == "beta_window[post_126]"].copy()
+_reg_all = pd.read_csv(find_path("data/processed/clusters/call_beta_regressions.csv"))
+base_df = _reg_all[_reg_all["model"] == "baseline"].copy()
 AI_LABELS = {"hist_disclosure": "Historical disclosure intensity", "hist_substance": "Historical substantive activity",
              "surprise_disclosure": "Call-specific disclosure surprise", "surprise_substance": "Call-specific substance surprise"}
 base_df["label"] = base_df["variable"].map(AI_LABELS)
-base_df["model"] = "beta_post_126_baseline"
 ai_vars = list(AI_LABELS)
 base_ai = base_df[base_df["variable"].isin(ai_vars)].copy()
 
@@ -3257,20 +3256,17 @@ plt.show()
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* Standardized coefficients and 95% confidence intervals clustered by firm, with industry-by-year fixed effects ($\text{SIC2} \times \text{Year}$) and lagged pre-call beta ($N = 8,555$ calls, 430 firms, total $R^2 = 0.692$, partial $R^2 (\text{AI block}) = 0.0046$).
+*Notes:* Standardized coefficients and 95% confidence intervals clustered by firm, with industry-by-year fixed effects ($\text{SIC2} \times \text{Year}$) and lagged pre-call beta ($N = 8,637$ calls, 446 firms, 316 fixed-effect cells, $R^2 = 0.628$).
 :::
 
 ```{python}
 #| echo: false
 #| output: false
-import json
-
-_panel_main = pd.read_parquet(find_path("data/processed/clusters/call_beta_main_panel_10k10q_asof.parquet"))
-_est = _panel_main.dropna(subset=["beta_post_126", "beta_pre", "hist_disclosure", "hist_substance",
-                                  "surprise_disclosure", "surprise_substance", "log_market_cap", "return60", "fe"])
-_baseline_sample = {"n_calls": len(_est), "n_firms": _est["ticker"].nunique(), "n_fe_cells": _est["fe"].nunique(),
-                    "median_prior_calls": float(_est["n_prior_calls"].median()) if "n_prior_calls" in _est else float("nan")}
-_formal = json.loads(find_path("data/processed/clusters/call_beta_robustness_formal_tests.json").read_text())
+_samples_df = pd.read_csv(find_path("data/processed/clusters/call_beta_regression_samples.csv")).set_index("model")
+_baseline_sample = {"n_calls": int(_samples_df.loc["baseline", "n_calls"]),
+                     "n_firms": int(_samples_df.loc["baseline", "n_firms"]),
+                     "n_fe_cells": int(_samples_df.loc["baseline", "n_fe_cells"]),
+                     "r2": float(_samples_df.loc["baseline", "r2"])}
 
 def _bp(var):
     row = base_ai.set_index("variable").loc[var]
@@ -3284,13 +3280,9 @@ ss_b, ss_p, ss_pstr = _bp("surprise_substance")
 
 def _sig(p):
     return "positive and significant" if p < 0.05 else "not statistically significant"
-
-_disc_joint = _formal["joint_disclosure_terms"]
-_sub_joint = _formal["joint_substance_terms"]
-_partial_r2 = _formal["partial_r2_ai_block"]
 ```
 
-Across `{python} f"{int(_formal['n_calls']):,}"` calls and `{python} int(_baseline_sample['n_firms'])` firms, historical disclosure intensity is positively associated with post-call market beta ($\beta = +0.079, p = 0.006$), whereas single-call surprises and substantive operational activity are statistically indistinguishable from zero (joint disclosure $F = 5.55, p = 0.004$; joint substance $F = 0.35, p = 0.703$; @fig-call-beta-baseline). This effect is stable across leave-one-year-out re-estimations and archetype-conditional specifications (Appendix E).
+Across `{python} f"{_baseline_sample['n_calls']:,}"` calls and `{python} _baseline_sample['n_firms']` firms, historical disclosure intensity is positively associated with post-call market beta ($\beta =$ `{python} f"{hd_b:+.3f}"`, $p$ `{python} hd_pstr`), whereas single-call surprises ($\beta =$ `{python} f"{sd_b:+.3f}"`, $p$ `{python} sd_pstr`) and historical or single-call substantive operational activity ($\beta =$ `{python} f"{hs_b:+.3f}"`, $p$ `{python} hs_pstr`; $\beta =$ `{python} f"{ss_b:+.3f}"`, $p$ `{python} ss_pstr`) are statistically indistinguishable from zero (@fig-call-beta-baseline). This effect is stable across leave-one-year-out re-estimations and archetype-conditional specifications (Appendix E).
 
 This extends to valuation and revenue growth in @fig-economic-coefficients-c1.
 
@@ -3304,7 +3296,11 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-_res_c1 = pd.read_csv(find_path("data/processed/clusters/call_multi_target_archetypes_results.csv"))
+_gen_c1 = pd.read_csv(find_path("data/processed/clusters/call_beta_generalized_targets.csv"))
+_beta_c1 = pd.read_csv(find_path("data/processed/clusters/call_beta_regressions.csv"))
+_beta_c1 = _beta_c1[_beta_c1["model"] == "baseline"].copy()
+_beta_c1["target"] = "beta"
+_res_c1 = pd.concat([_gen_c1, _beta_c1[["target", "variable", "label", "beta_std", "ci95_low", "ci95_high", "p"]]], ignore_index=True)
 
 OUTCOMES_C1 = [
     ("beta", "Market Beta"),
@@ -3351,7 +3347,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-As shown in @fig-economic-coefficients-c1, historical disclosure intensity consistently predicts higher valuations: larger market cap ($\beta = +0.124, p < 0.001$), higher price-to-sales ($\beta = +0.177, p < 0.001$), and faster revenue growth ($\beta = +0.357, p = 0.028$). Markets consistently price persistent narrative volume, supporting $H_{6a}$.
+As shown in @fig-economic-coefficients-c1, historical disclosure intensity predicts larger market cap ($\beta = +0.086, p < 0.001$) and faster revenue growth ($\beta = +0.147, p = 0.014$); its association with price-to-sales is directionally positive but only marginal ($\beta = +0.013, p = 0.055$). Markets price persistent narrative volume through firm size and growth expectations, supporting $H_{6a}$ for scale and growth while leaving its valuation-multiple channel weaker than for beta.
 
 ```{python}
 #| echo: false
@@ -3380,7 +3376,7 @@ rob_delta = _rob_delta_df[_rob_delta_df["variable"] == "hist_disclosure"].iloc[0
 rob_placebo_d = _rob_placebo_df[(_rob_placebo_df["block"] == "placebo_pre_beta") & (_rob_placebo_df["variable"] == "disclosure")].iloc[0]
 ```
 
-This effect survives a battery of specification checks reported in Appendix E (accounting controls, the Fama–French 3-factor benchmark, an extended post-call window, firm fixed effects, first differences, and archetype-indicator controls; @tbl-call-beta-paper, @tbl-e-archetype-regressions). The check that matters for interpretation is a placebo test: regressing *pre-call* beta — measured before the earnings call occurs — on the same historical disclosure measure yields $\beta^{\text{pre}} =$ `{python} f"{rob_placebo_d['beta_std']:.3f}"` ($p < 0.001$, substance null), over double the post-call estimate. Because disclosure cannot retroactively cause a beta that was already fixed before the call, this rules out the call itself as the mechanism: the association is cross-sectional — firms that already carry higher narrative visibility already carry higher systematic beta — and not call-induced.
+This effect survives a battery of specification checks reported in Appendix E (accounting controls, the Fama–French 3-factor benchmark, an extended post-call window, firm fixed effects, first differences, and archetype-indicator controls; @tbl-call-beta-paper, @tbl-e-archetype-regressions). The check that matters for interpretation is a placebo test: regressing *pre-call* beta — measured before the earnings call occurs — on the same historical disclosure measure yields $\beta^{\text{pre}} =$ `{python} f"{rob_placebo_d['beta_std']:.3f}"` ($p < 0.001$, substance null), nearly double the post-call estimate. Because disclosure cannot retroactively cause a beta that was already fixed before the call, this rules out the call itself as the mechanism: the association is cross-sectional — firms that already carry higher narrative visibility already carry higher systematic beta — and not call-induced.
 
 ## Channel 2 — Disclosed substance and operating fundamentals (H6b)
 
@@ -3403,7 +3399,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-_res_c2 = pd.read_csv(find_path("data/processed/clusters/call_multi_target_archetypes_results.csv"))
+_res_c2 = pd.read_csv(find_path("data/processed/clusters/call_archetype_full_battery_targets.csv"))
+_res_c2["target"] = _res_c2["target"].str.replace("_post_63", "", regex=False).str.replace("_post", "", regex=False)
+_res_c2["ci95_low"] = _res_c2["beta_std"] - 1.96 * _res_c2["se"]
+_res_c2["ci95_high"] = _res_c2["beta_std"] + 1.96 * _res_c2["se"]
 
 OUTCOMES_C2 = [
     ("beta", "Market Beta"),
@@ -3452,17 +3451,17 @@ plt.tight_layout()
 plt.show()
 ```
 
-The results in @fig-economic-coefficients-c2 show an absence of operational premiums for disclosed substance: gross margin, R&D intensity, capital efficiency ($\text{ROIC}-\text{WACC}$), and systematic market risk all carry null coefficients on historical substance (@tbl-e-archetype-regressions). Disclosing granular operational activities does not confer short-term fundamental or risk advantages over peers.
+The results in @fig-economic-coefficients-c2 show an absence of operational premiums for disclosed substance: gross margin, R&D intensity, capital efficiency ($\text{ROIC}-\text{WACC}$), and systematic market risk all carry null coefficients on historical substance ($p \ge 0.14$; @tbl-e-archetype-regressions). Disclosing granular operational activities does not confer short-term fundamental or risk advantages over peers.
 
-Communication archetypes likewise offer no operational premium. Conditional on continuous narrative volume and substance, *Vocal Substantives* yields null coefficients across all seven economic outcomes ($p \ge 0.056$; @tbl-e-archetype-regressions), indicating that promotional commercial positioning does not earn fundamental rewards ($H_{6b}'$).
+Communication archetypes likewise offer no operational premium once continuous narrative volume and substance are held constant. *Governance-Led* carries a null coefficient across all seven economic outcomes ($p \ge 0.13$; @tbl-e-archetype-regressions). *Vocal Substantives* is null on six of the seven outcomes and only marginally associated with lower gross margin ($\beta = -0.041, p = 0.046$), indicating that promotional commercial positioning does not earn fundamental rewards ($H_{6b}'$).
 
-Across the 14 fundamental and valuation tests ($2 \text{ dummies} \times 7 \text{ outcomes}$), no archetype coefficient survives Benjamini–Hochberg [@benjamini1995] FDR correction ($q^* = 0.05 / 14 \approx 0.0036$; @tbl-e-archetype-regressions). The uncorrected associations of *Governance-Led* with higher capital efficiency and lower beta reflect sectoral sorting into regulated sectors (commercial banking, insurance, and utilities) rather than an operational return from AI governance communication. When extending the test family to 18 outcomes with the tail-risk metrics of Section 6.5, only Governance-Led on crash risk survives.
+Across the 14 fundamental and valuation tests ($2 \text{ dummies} \times 7 \text{ outcomes}$), no archetype coefficient survives Benjamini–Hochberg [@benjamini1995] FDR correction ($q^* = 0.05 / 14 \approx 0.0036$; @tbl-e-archetype-regressions); the smallest uncorrected p-value, Vocal Substantives on gross margin, is an order of magnitude short of the threshold at its rank. Extending the test family to 18 outcomes with the tail-risk metrics of Section 6.5 does not change this verdict: none of the archetype coefficients, including Governance-Led on crash risk, clears multiplicity correction (Appendix E).
 
 Conclusion: **$H_{6b}$ is not supported**. Capital markets price narrative visibility ($D$), not verifiable operational depth ($S$).
 
 ## Channel 3 — Decoupling and idiosyncratic risk (H6c)
 
-This section evaluates Channel 3 ($H_{6c}$): whether narrative decoupling ($W = \text{pctrank}(D) - \text{pctrank}(S)$) represents cheap talk and opacity. Adding firm-year $W$ to the baseline beta specification (on `{python} f"{hd_inc_n:,}"` calls) yields $\Delta R^2 = +0.0002$ with a Wald test of $F = 0.69$ ($p = 0.406$), failing to reject the null of zero incremental explanatory power. Decoupling is not a priced systematic risk factor: theoretical models of cheap talk and information opacity [@crawford1982; @jin2006] predict that narrative decoupling should not alter market-wide covariance ($\beta$), but should instead manifest in firm-specific tail risk.
+This section evaluates Channel 3 ($H_{6c}$): whether narrative decoupling ($W = \text{pctrank}(D) - \text{pctrank}(S)$) represents cheap talk and opacity. Theoretical models of cheap talk and information opacity [@crawford1982; @jin2006] predict that narrative decoupling should not alter market-wide covariance ($\beta$) but should instead manifest, if at all, in firm-specific tail risk; @fig-call-crash-risk reports both tests directly.
 
 ### Stock price crash risk (NCSKEW)
 
@@ -3482,8 +3481,9 @@ def find_path(rel):
     p = Path(f"../{rel}")
     return p if p.exists() else Path(rel)
 
-_crash_df = pd.read_csv(find_path("data/processed/clusters/call_multi_target_archetypes_results.csv"))
-_sub_nc = _crash_df[_crash_df["target"] == "ncskew"].copy()
+_crash_df = pd.read_csv(find_path("data/processed/clusters/call_crash_archetype_regressions.csv"))
+_crash_samples = pd.read_csv(find_path("data/processed/clusters/call_crash_archetype_regression_samples.csv")).set_index("target")
+_sub_nc = _crash_df[_crash_df["target"] == "ncskew_active_dummies"].copy()
 
 order = ["dum_gov", "dum_voc", "surprise_substance", "surprise_disclosure", "hist_substance", "hist_disclosure"]
 labels = {
@@ -3517,14 +3517,14 @@ plt.show()
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* Standardized coefficients and 95% confidence intervals clustered by firm, with industry-by-year fixed effects ($\text{SIC2} \times \text{Year}$) and lagged pre-call crash risk ($N = 8,199$ calls across 310 firms, total $R^2 = 0.312$, partial $R^2 (\text{archetype block}) = 0.0031$). The Governance-Led indicator ($\beta = -0.150, p = 0.0016$) is highlighted in rust; it is the sole estimate surviving Benjamini–Hochberg FDR multiplicity correction across the 18-test family ($p \le 0.05/18 \approx 0.0028$).
+*Notes:* Standardized coefficients and 95% confidence intervals clustered by firm, with industry-by-year fixed effects ($\text{SIC2} \times \text{Year}$) and lagged pre-call crash risk ($N = 8,642$ calls across 428 firms, $R^2 = 0.113$; sample includes firms with no qualifying AI-disclosure history via a fourth, unreported "No AI" indicator). The Governance-Led indicator ($\beta = -0.124, p = 0.046$) is highlighted in rust; it clears the conventional 5% threshold uncorrected but does not survive Benjamini–Hochberg FDR correction across the pre-specified 18-test archetype family ($p \le 0.05/18 \approx 0.0028$ at its rank).
 :::
 
-The crash risk estimates in @fig-call-crash-risk yield two findings. Continuous decoupling shows no short-run association with crash risk over a 6-month horizon ($\beta = -0.005, p = 0.814$), running counter to an immediate reading of $H_{6c}$; whether bad news instead accumulates over longer, multi-year horizons remains an open extension.
+The crash risk estimates in @fig-call-crash-risk yield two findings. Historical disclosure intensity is associated with *lower* crash risk ($\beta = -0.049, p = 0.029$ on $NCSKEW$), the opposite direction from its positive association with post-call beta in Channel 1: the same persistent narrative visibility that raises systematic exposure also coincides with fewer idiosyncratic negative-return surprises. Continuous decoupling shows no short-run association with crash risk over a 6-month horizon ($\beta = +0.006, p = 0.666$), running counter to an immediate reading of $H_{6c}$; whether bad news instead accumulates over longer, multi-year horizons remains an open extension.
 
-The *Governance-Led* archetype, however, is associated with lower downside crash risk than Defensive Disclosers ($\beta = -0.150, p = 0.0016$ on $NCSKEW$; $\beta = -0.153, p = 0.0406$ on $DUVOL$) -- the sole estimate in the 18-test archetype family to clear Benjamini–Hochberg [@benjamini1995] FDR correction ($p \le 0.05/18 \approx 0.0028$), consistent with governance and structured risk disclosure mitigating bad-news withholding [@hutton2009; @kim2011; @au2023]. The result is an incremental post-call association over the lagged pre-call baseline, not a static sorting effect, and it holds under sector-exclusion and posture-switcher robustness checks reported in Appendix E.
+The *Governance-Led* archetype carries a negative, nominally significant coefficient on $NCSKEW$ relative to Defensive Disclosers ($\beta = -0.124, p = 0.046$), directionally consistent with governance and structured risk disclosure mitigating bad-news withholding [@hutton2009; @kim2011; @au2023], and a similarly signed but non-significant coefficient on $DUVOL$ ($\beta = -0.132, p = 0.051$). Neither clears Benjamini–Hochberg [@benjamini1995] FDR correction across the pre-specified 18-test archetype family: the smallest p-value in that family (Vocal Substantives on gross margin, $p = 0.046$) already falls short of the rank-1 threshold ($q^* \approx 0.0028$), so Governance-Led on crash risk clears no rank either. The association also attenuates below conventional significance excluding Financial Services, Utilities, and Healthcare & Pharma ($\beta = -0.075, p = 0.416$) and restricting the sample to firms that move into or out of the archetype over the panel ($\beta = -0.060, p = 0.287$; Appendix E reports an additional robustness check). Taken together, the Governance-Led/crash-risk association is a directionally consistent but fragile result: nominally significant only before correcting for the size of the test family, and not robust to sector composition or to isolating within-firm posture changes.
 
-This pattern qualifies @yang2026, who find that AI adoption reduces crash risk in Chinese listed firms via internal-control quality: in this S&P 500 setting, it is not AI mention volume that compresses tail risk -- continuous disclosure and substance surprises remain statistically indistinguishable from zero -- but specifically the Governance-Led disclosure configuration.
+Historical disclosure intensity's negative association with crash risk qualifies @yang2026, who find that AI adoption reduces crash risk in Chinese listed firms via internal-control quality: in this S&P 500 setting it is not disclosed AI substance but persistent AI narrative volume itself -- the same construct priced in systematic beta -- that coincides with lower downside tail risk, while the Governance-Led disclosure configuration is only a suggestive, not a robust, complement to that pattern.
 
 ## Synthesis and empirical limits
 
@@ -3532,9 +3532,9 @@ Across the three empirical channels, the econometric results distinguish narrati
 
 | Hypothesis | Empirical Result | Economic Interpretation |
 |:---|:---|:---|
-| **$H_{6a}$: Thematic Factor Exposure ($D$)** | Supported as cross-sectional association, null as call impact ($\beta = +0.079, p = 0.006$ post-call; pre-call placebo already $\beta = +$`{python} f"{rob_placebo_d['beta_std']:.3f}"`, over double the post-call estimate; market cap $\beta = +0.124$; P/S $\beta = +0.177$) | Firms with persistently higher narrative volume carry higher systematic exposure to the AI theme; the earnings call itself does not move that exposure. |
-| **$H_{6b}$: Costly Signaling ($S$)** | Not supported (gross margin $p = 0.780$; ROIC$-$WACC $p = 0.551$; beta $p = 0.195$) | Disclosed operational depth earns no valuation premium or risk discount in the short run. |
-| **$H_{6c}$: Tail Risk / Opacity ($W$)** | Not supported for continuous $W$ ($p = 0.814$); exploratory support for Governance-Led ($\beta = -0.150, p = 0.0016$) | Narrative decoupling does not predict 6-month crashes. Governance-focused disclosure is associated with lower downside tail risk. |
+| **$H_{6a}$: Thematic Factor Exposure ($D$)** | Supported as cross-sectional association, null as call impact ($\beta =$ `{python} f"{hd_b:+.3f}"`, $p$ `{python} hd_pstr` post-call; pre-call placebo already $\beta = +$`{python} f"{rob_placebo_d['beta_std']:.3f}"`, nearly double the post-call estimate; market cap $\beta = +0.086$; revenue growth $\beta = +0.147$) | Firms with persistently higher narrative volume carry higher systematic exposure to the AI theme; the earnings call itself does not move that exposure. |
+| **$H_{6b}$: Costly Signaling ($S$)** | Not supported (gross margin $p = 0.172$; ROIC$-$WACC $p = 0.544$; beta $p = 0.401$) | Disclosed operational depth earns no valuation premium or risk discount in the short run. |
+| **$H_{6c}$: Tail Risk / Opacity ($W$)** | Not supported for continuous $W$ ($p = 0.666$); Governance-Led nominally significant uncorrected ($\beta = -0.124, p = 0.046$) but fails FDR correction and sector-exclusion/posture-switcher checks | Narrative decoupling does not predict 6-month crashes. Governance-focused disclosure's association with lower downside tail risk is suggestive, not robust. |
 
 : Empirical verdicts across the three disclosure channels. {#tbl-market-synthesis}
 
@@ -3833,7 +3833,7 @@ For corporate issuers, disclosure governance requires ensuring external communic
 | **2. Evidentiary Grounding** | Anchor claims with named products, proprietary tools, and quantified operational metrics (costs, latency, revenue). | Look for falsifiable metrics; generic buzzwords warrant additional verification rather than being taken as execution. |
 | **3. Technology Provenance** | Disclose solution origin: in-house proprietary, commercial vendor licensed, or co-developed partnership. | Check vendor dependence; unstated provenance concentrates in the least grounded corporate claims. |
 | **4. Cross-Venue Consistency** | Reconcile voluntary conference-call remarks against signed Form 10-K filings under statutory legal liability. | Scrutinize promotional claims that disappear from 10-Ks; cross-venue divergence may warrant regulatory or diligence attention. |
-| **5. Supervision & Governance** | Institutionalize board and audit committee oversight of AI risk in proxy statements (DEF 14A) and Item 10. | Board oversight disclosures are associated with lower downside tail risk ($NCSKEW$), the only archetype effect to survive multiplicity correction across the outcome family. |
+| **5. Supervision & Governance** | Institutionalize board and audit committee oversight of AI risk in proxy statements (DEF 14A) and Item 10. | Board oversight disclosures show a directionally lower downside tail risk ($NCSKEW$), though the association does not survive correction for the outcome family's multiple comparisons. |
 
 : The AI Disclosure Credibility Checklist: operational guidance for corporate issuers and investment due diligence. {#tbl-checklist}
 
@@ -3843,7 +3843,7 @@ By pairing diagnostic questions with concrete implementation guidance, the Credi
 
 ## Answer to the research question
 
-Corporate AI disclosure diffused across almost the entire market -- from one third of S&P 500 firms in 2021 to over nine in ten by 2025-2026 -- while the concrete evidence behind each disclosed activity thinned over the same period, so companies talk about AI more than they used to, but each mention now carries less proof. Firms sort into three stable, industry-shaped ways of communicating about AI, and that communication style tracks what firms actually report doing, not just how much they say: at equal disclosure volume, some styles report several times as many concrete AI activities as others. Promotional claims run further ahead of the evidence behind them on earnings calls than in statutory filings, that gap between talk and evidence is a stable trait of a firm rather than a one-off, and the one company observed under direct SEC scrutiny for its AI disclosures narrowed that gap rather than disputing it. Capital markets, however, price how much and how persistently a firm talks about AI, not how well-evidenced its claims are, and verifiable substance adds nothing to what narrative volume already predicts about valuation or systematic risk. One exception is economically meaningful: Governance-Led firms exhibit lower downside crash-risk exposure, the only archetype effect that survives multiplicity correction, suggesting that governance-oriented disclosure may capture a form of organizational discipline that matters for tail risk even where grounded AI substance itself is not priced. Taken together, the evidence supports the hypothesis that disclosure posture and grounded substance carry real information about how firms operate, and does not support the hypothesis that capital markets reward that same grounded substance once narrative volume is already priced in.
+Corporate AI disclosure diffused across almost the entire market -- from one third of S&P 500 firms in 2021 to over nine in ten by 2025-2026 -- while the concrete evidence behind each disclosed activity thinned over the same period, so companies talk about AI more than they used to, but each mention now carries less proof. Firms sort into three stable, industry-shaped ways of communicating about AI, and that communication style tracks what firms actually report doing, not just how much they say: at equal disclosure volume, some styles report several times as many concrete AI activities as others. Promotional claims run further ahead of the evidence behind them on earnings calls than in statutory filings, that gap between talk and evidence is a stable trait of a firm rather than a one-off, and the one company observed under direct SEC scrutiny for its AI disclosures narrowed that gap rather than disputing it. Capital markets, however, price how much and how persistently a firm talks about AI, not how well-evidenced its claims are, and verifiable substance adds nothing to what narrative volume already predicts about valuation or systematic risk. Persistent disclosure volume is itself associated with lower downside crash risk; a governance-oriented disclosure posture points in the same direction but is not a reliably significant effect once the outcome family's multiple comparisons are corrected for. Taken together, the evidence supports the hypothesis that disclosure posture and grounded substance carry real information about how firms operate, and does not support the hypothesis that capital markets reward that same grounded substance once narrative volume is already priced in.
 
 ## Managerial implications
 
@@ -3851,7 +3851,7 @@ The measurement architecture built for this thesis is also a monitoring tool tha
 
 - **Managers** should not manage AI communication as a volume target. Building an auditable inventory of use cases -- by owner, maturity stage, evidentiary support, and disclosure venue -- costs little, and concrete operational detail provides the evidentiary grounding that narrative volume cannot deliver on its own.
 - **Investors and analysts** should separate narrative persistence, disclosed activity, and evidentiary quality before reading "more AI talk" as more AI capability. The decoupling index ($W$) is a triage signal for where to look closer, not a verdict.
-- **Boards and regulators** get more traction from asking for quantified outcomes and call-filing consistency than from policing generic AI language: the one observed instance of direct regulatory scrutiny is consistent with regulatory inquiry narrowing the disclosure gap. Boards and regulators should also treat governance-oriented AI disclosure as more than compliance formality: it is the only disclosure posture in this study associated with lower downside tail risk after multiplicity correction.
+- **Boards and regulators** get more traction from asking for quantified outcomes and call-filing consistency than from policing generic AI language: the one observed instance of direct regulatory scrutiny is consistent with regulatory inquiry narrowing the disclosure gap. Persistent AI disclosure volume, not any single archetype, is the pattern most robustly associated with lower downside tail risk in this study; the governance-oriented posture points the same direction but is not a reliable substitute for that broader pattern.
 
 ## What the evidence says AI washing is
 
@@ -4017,14 +4017,14 @@ for ch, label in [("filing", "Disclosed AI activities in statutory filings"), ("
     d = _by_year(_act[_act["channel"] == ch]); der_rows.append([label] + [_cell(*d[y]) for y in INV_YEARS])
 _wsc = pd.read_parquet(_p("firm_year_washing_score.parquet"))[["ticker", "year"]]
 d = _by_year(_wsc[_wsc["year"].isin(INV_YEARS)]); der_rows.append(["Firm-years with Decoupling ($W$) (disclosing firms)"] + [_cell(*d[y]) for y in INV_YEARS])
-_cb = pd.read_parquet(_p("call_beta_main_panel_10k10q_asof.parquet"), columns=["ticker", "fecha", "beta_post_126"])
+_cb = pd.read_parquet(_p("call_beta_main_panel_10k10q_asof.parquet"), columns=["ticker", "fecha", "beta_post_63"])
 _cb["year"] = pd.to_datetime(_cb["fecha"]).dt.year
-d = _by_year(_cb[_cb["year"].isin(INV_YEARS) & _cb["beta_post_126"].notna()]); der_rows.append(["Earnings-call events with post-call beta"] + [_cell(*d[y]) for y in INV_YEARS])
+d = _by_year(_cb[_cb["year"].isin(INV_YEARS) & _cb["beta_post_63"].notna()]); der_rows.append(["Earnings-call events with post-call beta"] + [_cell(*d[y]) for y in INV_YEARS])
 Markdown(tabulate(der_rows, headers=["Artifact"] + [str(y) for y in INV_YEARS]))
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* Frames are unique semantic frames per document (a frame shared by identical paragraphs in several documents counts once per document). Activities are counted once per firm × text × activity index and dated by the document that contains them. Post-call beta requires 126 trading days after the call, so the 2026 count stops at calls held before mid-March 2026.
+*Notes:* Frames are unique semantic frames per document (a frame shared by identical paragraphs in several documents counts once per document). Activities are counted once per firm × text × activity index and dated by the document that contains them. Post-call beta requires 63 trading days after the call, roughly one reporting quarter.
 :::
 
 ### Computational infrastructure and analytical stack {.unnumbered}
@@ -4526,15 +4526,15 @@ $$
 Y_{i,t}^{\text{post}} = \alpha + \boldsymbol{\beta}' \text{AI}_{i,t} + \gamma Y^{\text{pre}}_{i,t} + \boldsymbol{\delta}' X^{\text{pre}}_{i,t} + \alpha_{s,y} + \varepsilon_{i,t},
 $$
 
-where $\alpha_{s,y} \equiv \text{SIC2} \times \text{Year}$ fixed effects absorb industry-year shocks, and standard errors are clustered by firm. The vector $\text{AI}_{i,t}$ comprises expanding historical posture ($\text{HistD}_{i,t^{-}}, \text{HistS}_{i,t^{-}}$), incremental call-specific surprise ($\text{SurpriseD}_{i,t}, \text{SurpriseS}_{i,t}$), prior-year decoupling ($W_{i,t-1}$), and expanding-window archetype indicators ($\mathbf{1}_{\{\text{GovLed}\}_{i,t}}, \mathbf{1}_{\{\text{Vocal}\}_{i,t}}$, with *Defensive Disclosers* as reference; Section 3.3.3). Predetermined controls $X^{\text{pre}}_{i,t}$ include log market cap, 60-day return momentum, operating margin, asset turnover, and pre-call volatility. Model $R^2$ is dominated by the lagged outcome by construction; each table therefore reports both the total $R^2$ and the partial $R^2$ of the disclosure block, which is the quantity of interest.
+where $\alpha_{s,y} \equiv \text{SIC2} \times \text{Year}$ fixed effects absorb industry-year shocks, and standard errors are clustered by firm. The vector $\text{AI}_{i,t}$ comprises expanding historical posture ($\text{HistD}_{i,t^{-}}, \text{HistS}_{i,t^{-}}$), incremental call-specific surprise ($\text{SurpriseD}_{i,t}, \text{SurpriseS}_{i,t}$), prior-year decoupling ($W_{i,t-1}$), and expanding-window archetype indicators ($\mathbf{1}_{\{\text{GovLed}\}_{i,t}}, \mathbf{1}_{\{\text{Vocal}\}_{i,t}}$, with *Defensive Disclosers* as reference; Section 3.3.3). Predetermined controls $X^{\text{pre}}_{i,t}$ include log market cap, 60-day return momentum, return on assets (ROA), and pre-call volatility. Model $R^2$ is dominated by the lagged outcome by construction; each table therefore reports both the total $R^2$ and the partial $R^2$ of the disclosure block, which is the quantity of interest.
 
 ### Governance-Led crash-risk finding: sector exclusion and posture switchers {.unnumbered}
 
-Two checks probe whether the Governance-Led association with lower crash risk ($\beta = -0.150, p = 0.0016$ on $NCSKEW$; @fig-call-crash-risk, Section 6.5.1) reflects sector composition or a static sorting effect rather than the disclosure posture itself.
+Two checks probe whether the Governance-Led association with lower crash risk ($\beta = -0.124, p = 0.046$ on $NCSKEW$, uncorrected; @fig-call-crash-risk, Section 6.5.1) reflects sector composition or a static sorting effect rather than the disclosure posture itself. Both checks are run on the same sample as the headline model, which includes a fourth "No AI" indicator alongside Governance-Led and Vocal Substantives.
 
-The first re-estimates the specification excluding Financial Services, Utilities, and Healthcare & Pharma -- the sectors carrying the heaviest regulatory risk-disclosure requirements. The Governance-Led coefficient is essentially unchanged ($\beta = -0.176, p = 0.021$), so the result is not an artifact of sector-specific regulation concentrating both Governance-Led firms and low crash risk in the excluded industries.
+The first re-estimates the specification excluding Financial Services, Utilities, and Healthcare & Pharma -- the sectors carrying the heaviest regulatory risk-disclosure requirements. The Governance-Led coefficient attenuates and loses significance ($\beta = -0.075, p = 0.416$), so at least part of the uncorrected association is attributable to sector-specific regulation concentrating both Governance-Led firms and low crash risk in the excluded industries.
 
-The second restricts the sample to firm-years that switch into or out of the Governance-Led archetype over the panel, rather than holding it throughout. The coefficient retains similar sign and magnitude ($\beta = -0.161, p = 0.063$), with a wider confidence interval reflecting the smaller switcher subsample. Because switchers are observed both inside and outside the archetype, this rules out a purely static sorting effect in which firms with permanently low crash risk simply happen to adopt Governance-Led posture.
+The second restricts the sample to firm-years that switch into or out of the Governance-Led archetype over the panel, rather than holding it throughout. The coefficient again attenuates and loses significance ($\beta = -0.060, p = 0.287$). Because switchers are observed both inside and outside the archetype, this subsample isolates within-firm variation from static sorting; that the coefficient does not survive here indicates the crash-risk association is, at least in part, a between-firm sorting pattern rather than an effect of adopting Governance-Led posture.
 
 ### Model-fit statistics for the incremental-value decomposition {.unnumbered}
 
@@ -4674,7 +4674,7 @@ Markdown(tabulate(rows, headers=["Check", "Sample", "Spearman", "p"]))
 
 ### Robustness of post-call beta regressions across specifications {.unnumbered}
 
-@tbl-call-beta-paper evaluates the baseline post-call beta model across accounting controls (ROA and leverage), the Fama–French 3-factor benchmark, a full-year post-call window (+252 days), within-firm fixed effects, and first differences (Delta Beta).
+@tbl-call-beta-paper evaluates the baseline post-call beta model (window $[+21,+63]$) against accounting controls (ROA and leverage) on the same window, and against four further checks estimated directly from raw daily prices over the $[+21,+126]$ window: the Fama–French 3-factor benchmark, a full-year post-call window (+252 days), within-firm fixed effects, and first differences (Delta Beta).
 
 ```{python}
 #| label: tbl-call-beta-paper
@@ -4694,9 +4694,9 @@ acct = pd.read_csv(find_path("data/processed/clusters/call_beta_regressions.csv"
 fe = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_firm_fe.csv"))
 delta = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_delta_beta.csv"))
 ff = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_market_model.csv"))
-samples = pd.read_csv(find_path("data/processed/clusters/call_beta_regression_samples.csv"))
+samples = pd.read_csv(find_path("data/processed/clusters/call_beta_regression_samples.csv")).set_index("model")
 
-base_win = win[win["block"] == "beta_window[post_126]"].set_index("variable")
+base_63 = acct[acct["model"] == "baseline"].set_index("variable")
 win252 = win[win["block"] == "beta_window[post_252]"].set_index("variable")
 acct_m1 = acct[acct["model"] == "accounting_M1"].set_index("variable")
 fe_df = fe.set_index("variable")
@@ -4717,7 +4717,7 @@ rows = []
 for v_key, v_label in vars_map:
     rows.append([
         v_label,
-        fmt(base_win.loc[v_key]),
+        fmt(base_63.loc[v_key]),
         fmt(acct_m1.loc[v_key]),
         fmt(ff3_df.loc[v_key]),
         fmt(win252.loc[v_key]),
@@ -4725,34 +4725,36 @@ for v_key, v_label in vars_map:
         fmt(delta_df.loc[v_key])
     ])
 
+rows.append(["Window", "[+21,+63]", "[+21,+63]", "[+21,+126]", "[+21,+252]", "[+21,+126]", "[+21,+126]"])
 rows.append(["Beta pre", "✓", "✓", "✓", "✓", "✓", "—"])
 rows.append(["Market controls", "✓", "✓", "✓", "✓", "✓", "✓"])
 rows.append(["Accounting (ROA, Lev)", "—", "✓", "—", "—", "—", "—"])
 rows.append(["SIC2 × CallYear FE", "✓", "✓", "✓", "✓", "—", "✓"])
 rows.append(["Firm FE", "—", "—", "—", "—", "✓", "—"])
-_acct_n = int(samples.set_index("model").loc["accounting_M1", "n_calls"])
+_acct_n = int(samples.loc["accounting_M1", "n_calls"])
+_base_n = int(samples.loc["baseline", "n_calls"])
 rows.append(["N",
-             f"{int(base_win.loc['hist_disclosure', 'n_calls']):,}" if "n_calls" in win.columns else "—",
+             f"{_base_n:,}",
              f"{_acct_n:,}",
              f"{int(ff3_df.loc['hist_disclosure', 'n_calls']):,}" if "n_calls" in ff.columns else "—",
              f"{int(win252.loc['hist_disclosure', 'n_calls']):,}" if "n_calls" in win.columns else "—",
              f"{int(fe_df.loc['hist_disclosure', 'n_calls']):,}" if "n_calls" in fe.columns else "—",
              f"{int(delta_df.loc['hist_disclosure', 'n_calls']):,}" if "n_calls" in delta.columns else "—"])
-rows.append(["R²", "0.692", "0.744", "0.644", "0.742", "0.037", "0.240"])
+rows.append(["R²", f"{samples.loc['baseline', 'r2']:.3f}", f"{samples.loc['accounting_M1', 'r2']:.3f}", "—", "—", "—", "—"])
 
 headers = ["Variable", "Baseline", "+ Acct.", "FF3", "[+21,+252]", "Firm FE", "Delta Beta"]
 Markdown(tabulate(rows, headers=headers))
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* Baseline ANCOVA model compared against accounting controls (ROA and leverage), the Fama–French 3-factor benchmark, a full-year post-call window (+252 days), within-firm fixed effects, and first differences (Delta Beta). For the Firm FE model, R² reports the within-firm R² (total R² including firm fixed effects is 0.701).
+*Notes:* Baseline and accounting-control columns use the $[+21,+63]$ headline window; the remaining four columns are estimated over $[+21,+126]$ (or $[+21,+252]$) and their R² is omitted as not directly comparable to the baseline's. HistDisclosure remains positive across every specification; only its statistical significance varies.
 :::
 
 ### Leave-one-year-out and archetype-conditional estimates for post-call beta {.unnumbered}
 
 The historical disclosure effect on post-call beta remains significant across all seven single-year leave-one-out re-estimations ($p \le 0.023$ in every exclusion), indicating that the association reflects persistent disclosure posture rather than any single call or reporting year.
 
-Conditioning on strategic archetype indicators ($\mathbf{1}_{\{\text{GovLed}\}}, \mathbf{1}_{\{\text{Vocal}\}}$; @tbl-e-archetype-regressions) attenuates the continuous $\text{HistDisclosure}$ coefficient on post-call market beta from $\beta = 0.076$ ($p = 0.0097$, same archetype-eligible sample, $N = 4{,}102$, no archetype controls) to $\beta = +0.051$ ($p = 0.140$, with archetype controls), because the indicators absorb between-archetype differences in communication posture that overlap with continuous disclosure intensity. Valuation and revenue growth remain robustly positive under the same conditioning.
+Conditioning on strategic archetype indicators ($\mathbf{1}_{\{\text{GovLed}\}}, \mathbf{1}_{\{\text{Vocal}\}}$; @tbl-e-archetype-regressions) leaves the continuous $\text{HistDisclosure}$ coefficient on post-call market beta essentially unchanged ($\beta = 0.106$, $p = 0.0011$, same archetype-eligible sample, $N = 4{,}781$, without archetype controls; $\beta = 0.107$, $p = 0.0011$, with archetype controls added), indicating that communication posture and continuous disclosure intensity carry largely independent information about post-call beta rather than one subsuming the other. Market cap and revenue growth remain robustly positive under the same conditioning.
 
 ### Expanding-window archetype regressions across firm fundamentals {.unnumbered}
 
@@ -4762,27 +4764,58 @@ To test whether communication posture adds explanatory power for corporate finan
 #| label: tbl-e-archetype-regressions
 #| tbl-cap: "[Firm fundamentals and systematic risk regressed on expanding-window archetype dummies and continuous AI signals.]{custom-style=\"CaptionText\"}"
 #| echo: false
+from pathlib import Path
+import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-arch_reg_rows = [
-    ["Market Beta (post)", "4,102", "280", "0.748", "0.007", "-0.148 (0.042)", "-0.046 (0.342)", "+0.051 (0.140)", "+0.042 (0.195)"],
-    ["Log Market Cap", "4,208", "298", "0.918", "0.007", "+0.025 (0.594)", "-0.016 (0.657)", "+0.124 (<0.001)", "-0.011 (0.646)"],
-    ["R&D / Sales", "1,734", "149", "0.963", "0.001", "+0.005 (0.836)", "+0.001 (0.964)", "-0.061 (0.085)", "+0.024 (0.239)"],
-    ["Gross Margin", "3,234", "201", "0.962", "<0.001", "-0.029 (0.095)", "-0.047 (0.056)", "+0.012 (0.402)", "-0.004 (0.780)"],
-    ["Price-to-Sales", "4,204", "298", "0.849", "0.011", "-0.017 (0.554)", "+0.034 (0.520)", "+0.177 (<0.001)", "-0.062 (0.070)"],
-    ["Revenue Growth (t+1)", "3,093", "261", "0.665", "0.066", "+0.054 (0.435)", "-0.045 (0.718)", "+0.357 (0.028)", "-0.011 (0.881)"],
-    ["ROIC - WACC", "3,981", "275", "0.680", "0.005", "+0.187 (0.009)", "+0.111 (0.457)", "+0.026 (0.744)", "-0.036 (0.551)"],
+def find_path(rel):
+    p = Path(f"../{rel}")
+    return p if p.exists() else Path(rel)
+
+_arch_full = pd.read_csv(find_path("data/processed/clusters/call_archetype_full_battery_targets.csv"))
+
+_arch_targets = [
+    ("beta_post_63", "Market Beta (post)"),
+    ("log_market_cap_post", "Log Market Cap"),
+    ("rd_intensity_post", "R&D / Sales"),
+    ("gross_margin_post", "Gross Margin"),
+    ("ps_ratio_post", "Price-to-Sales"),
+    ("next_revenue_yoy_post", "Revenue Growth (t+1)"),
+    ("roic_minus_wacc_post", "ROIC - WACC"),
 ]
+
+def _arch_fmt(sub, var):
+    row = sub[sub["variable"] == var].iloc[0]
+    p_str = "<0.001" if row["p"] < 0.001 else f"{row['p']:.3f}"
+    return f"{row['beta_std']:+.3f} ({p_str})"
+
+arch_reg_rows = []
+for key, label in _arch_targets:
+    sub = _arch_full[_arch_full["target"] == key]
+    meta = sub.iloc[0]
+    arch_reg_rows.append([
+        label, f"{int(meta['n_calls']):,}", f"{int(meta['n_firms']):,}", f"{meta['r2']:.3f}",
+        f"{meta['partial_r2_ai_arch']:.4f}",
+        _arch_fmt(sub, "dum_gov"), _arch_fmt(sub, "dum_voc"),
+        _arch_fmt(sub, "hist_disclosure"), _arch_fmt(sub, "hist_substance"),
+    ])
 
 headers_arch = ["Target Outcome", "N Calls", "Firms", "R²", "Partial R² (AI + arch)", "Governance-Led (vs Def.)", "Vocal Substantives (vs Def.)", "Hist. Disclosure", "Hist. Substance"]
 Markdown(tabulate(arch_reg_rows, headers=headers_arch))
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* Standardized coefficients with $p$-values in parentheses, standard errors clustered by firm, industry-by-year fixed effects ($\text{SIC2} \times \text{Year}$). Continuous controls include the outcome's own pre-call level, 60-day return momentum, operating margin, and asset turnover (and log market cap where not the target). Partial R² (AI + arch) measures the incremental variance explained by adding the continuous AI signals and strategic archetype indicators over baseline controls and fixed effects. Across the 14 archetype tests on economic fundamentals ($2 \text{ dummies} \times 7 \text{ outcomes}$), the Benjamini--Hochberg [@benjamini1995] FDR critical threshold at rank 1 is $q^* = 0.05 \times 1/14 \approx 0.0036$; neither Governance-Led coefficient ($p = 0.0086$ on ROIC-WACC, $p = 0.0420$ on Beta) clears multiplicity correction. When extending the family to 18 tests with the tail-risk outcomes of Section 6.5.2 ($q^* = 0.05 \times 1/18 \approx 0.0028$), only Governance-Led on crash risk ($NCSKEW$, $p = 0.0016$) survives multiplicity correction.
+*Notes:* Standardized coefficients with $p$-values in parentheses, standard errors clustered by firm, industry-by-year fixed effects ($\text{SIC2} \times \text{Year}$). Continuous controls include the outcome's own pre-call level, 60-day return momentum, and return on assets (ROA) (and log market cap where not the target). Partial R² (AI + arch) measures the incremental variance explained by adding the continuous AI signals and strategic archetype indicators over baseline controls and fixed effects. Across the 14 archetype tests on economic fundamentals ($2 \text{ dummies} \times 7 \text{ outcomes}$), the Benjamini--Hochberg [@benjamini1995] FDR critical threshold at rank 1 is $q^* = 0.05 \times 1/14 \approx 0.0036$; the smallest uncorrected p-value in this family (Vocal Substantives on gross margin, $p = 0.046$) falls short of that threshold, so no coefficient clears multiplicity correction. Extending the family to 18 tests with the tail-risk outcomes of Section 6.5.2 ($q^* = 0.05 \times 1/18 \approx 0.0028$) does not change this: Governance-Led on crash risk ($NCSKEW$, $p = 0.046$) also fails to clear its rank.
 :::
 
+### Robustness: continuous, strictly predetermined archetype configuration {.unnumbered}
+
+A further robustness check reestimates the archetype-configuration and decoupling channels with continuous, strictly predetermined regressors in place of the contemporaneous archetype dummies used elsewhere in this chapter. Archetype-mixture weights ($w_{\text{Vocal}}, w_{\text{Gov}}$ from the Archetypal Analysis of Section 3.3.2, re-fit at quarterly cutoffs) are matched to the fiscal quarter strictly before each call's own quarter, with firms lacking a prior classification receiving zero weight rather than being dropped. The four disclosure/substance terms are replaced with two blocks: configuration ($w_{\text{Vocal}}, w_{\text{Gov}}$, plus continuous historical disclosure $\text{HistD}_{i,t^{-}}$) and decoupling ($\text{HistW}_{i,t^{-}}$, $\text{SurpriseW}_{i,t}$), the latter standardized with a calendar-date-expanding cross-section rather than the whole-sample standardization used for $W$ elsewhere in this chapter, so that no future disclosure level informs an earlier call's decoupling score.
+
+On the cleaned panel ($N = 8{,}637$ calls, 446 firms), continuous Governance-Led configuration ($w_{\text{Gov}}$) is positive and significant for post-call beta ($\beta = +0.021, p = 0.036$) and not significant for crash risk at either horizon ($\beta = +0.008, p = 0.611$ at 126 days, $N = 7{,}939$; $\beta = -0.008, p = 0.549$ at 63 days, $N = 8{,}641$). Continuous Vocal configuration ($w_{\text{Vocal}}$) is null throughout. The decoupling term ($\text{HistW}$) predicts lower $NCSKEW$ at the 63-day horizon ($\beta = -0.041, p = 0.012$) but not at 126 days ($p = 0.103$) or for beta at either horizon.
+
+This strictly predetermined specification finds no crash-risk association for Governance-Led configuration, and a positive association with systematic risk. Combined with the contemporaneous archetype dummy already failing Benjamini--Hochberg correction and losing significance under sector exclusion and posture-switcher subsamples (@tbl-e-archetype-regressions), the Governance-Led/crash-risk link should be read as suggestive rather than established.
 
 ## Appendix F: SEC Comment-Letter Inventory and Case Comparisons {.unnumbered}
 
