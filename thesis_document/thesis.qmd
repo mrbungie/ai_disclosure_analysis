@@ -1094,17 +1094,24 @@ ax.text(0.50, 0.14, "Mixed Postures", fontsize=7.2, color="#A5AFB6", ha="center"
 ax.scatter(fit_pop["x_tern"], fit_pop["y_tern"],
            c="#A5AFB6", s=18, alpha=0.35, edgecolors="none", zorder=4)
 
+# This is a spatial scatter, not a legend-only bar chart: sector centroids
+# routinely land close together, so -- like the vertex poles above -- they
+# need real hue separation rather than the document's restrained family
+# palette (which would put 4-5 sectors in the same cool blue-teal zone and
+# make adjacent centroids indistinguishable). Ten hues evenly rotated from
+# the official teal (36deg apart), held at a muted, consistent lightness
+# and saturation so the set still reads as one editorial family.
 SECTOR_COLORS = {
-    "Technology": "#008B7B",
-    "Industrials & Mfg": "#263B4A",
-    "Financial Services": "#355F6B",
-    "Healthcare & Pharma": "#6A89A0",
-    "Retail & Wholesale": "#B85F42",
-    "Utilities": "#8EA7A3",
-    "Energy & Mining": "#D5B1A5",
-    "Transportation": "#7AA2AE",
-    "Business Services": "#69B5AC",
-    "Communications": "#D9E3E1",
+    "Technology": "#3B9187",
+    "Industrials & Mfg": "#3B6791",
+    "Financial Services": "#423B91",
+    "Healthcare & Pharma": "#763B91",
+    "Retail & Wholesale": "#913B78",
+    "Utilities": "#913B45",
+    "Energy & Mining": "#91653B",
+    "Transportation": "#8A913B",
+    "Business Services": "#56913B",
+    "Communications": "#3B9154",
 }
 
 sec_grp = fit_pop[fit_pop["sector"] != "Other / Diversified"].groupby("sector").agg(
