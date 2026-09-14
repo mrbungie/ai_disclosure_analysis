@@ -128,12 +128,14 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       z-scores → apéndice. **Hecho (cuerpo a una frase; correlaciones y z-scores del
       refit a nueva tabla @tbl-e-10k-refit en Appendix E, no existían antes en ninguna
       tabla) — Prioridad: Muy alta**
-- [ ] **19. §7.1 — Table 15 + casos en prosa. Decisión a tomar al tocar la sección:**
-      (a) solo Microsoft y Welltower en prosa, JPM/GS y Apple solo en tabla, o (b) los
-      cuatro casos a 2-3 líneas cada uno en vez de dos mini-casos largos. Los worked
-      examples son lo más MBA de la tesis. Si hay que elegir entre cortar acá o en 3.3.4
-      (ítem 13), cortar en 3.3.4. **Corregido (decisión abierta, preferir (b) si el
-      espacio alcanza) — Prioridad: Muy alta**
+- [x] **19. §7.1 — Table 15 + casos en prosa.** Resuelto con opción **(b)**: los cuatro
+      casos (Microsoft, JPM vs. Goldman Sachs, Apple, Welltower) se mantienen en prosa,
+      cada uno a 2-3 líneas (hallazgo → magnitud/mecanismo → interpretación). El estado
+      previo ya tenía los cuatro casos en prosa pero repetía literalmente los valores de
+      D/S/W de Table 15 dentro del texto; la revisión quita esa duplicación (los números
+      quedan solo en la tabla, la prosa pasa a interpretación/mecanismo) sin sacrificar
+      ningún caso — consistente con la preferencia explícita del autor por mantener los
+      cuatro worked examples. **Prioridad: Muy alta**
 - [ ] **20. §2.8 — dos frases.** Human audit valida producción; cross-model agreement
       es check secundario. **Original — Prioridad: Muy alta**
 - [ ] **21. §5.4 (Welltower) — comprimir los tres caveats causales.** A: "descriptive
