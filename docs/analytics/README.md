@@ -17,6 +17,7 @@ cuando no hablan de IA, intensidad por 1.000 párrafos (`10_pipeline.md`).
 | 08 | `08_definiciones_de_washing.md` | tres definiciones de AI-washing y por qué no coinciden | `washing_score.py`, `validate_washing_score.py` |
 | 09 | `09_actividades_ia.md` | qué dicen las empresas que hacen con IA: acciones, funciones, etapa, proveedores; por segmento y por empresa | `ai_activities_from_frames.py`, `activity_profiles.py`, `activity_grounding.py` |
 | 10 | `10_pipeline.md` | cómo se produce todo y cómo se regenera | `make analytics` |
+| 12 | `12_config_decoupling_asof.md` | bugs de integridad en el panel de beta/crash risk (duplicados, factores stale, tags XBRL sin fallback) y una especificación alternativa (configuración + decoupling, todo as-of) al hallazgo de Governance-Led | `build_archetype_weights_quarterly_asof.py`, `build_ncskew_63.py`, `call_beta_config_decoupling_asof.py` |
 
 `apendice/`: material secundario que no entra al cuerpo — descriptivos SQL
 del corpus, correlaciones simples y FDR (superadas por `05`), factores

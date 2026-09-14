@@ -32,7 +32,7 @@ PANEL = ROOT / "data/processed/clusters/call_beta_main_panel_10k10q_asof.parquet
 FACTS = ROOT / "data/raw/xbrl_facts/us_by_filing/*.parquet"
 OUT = ROOT / "data/processed/clusters"
 BASE = ["hist_disclosure", "hist_substance", "surprise_disclosure", "surprise_substance",
-        "beta_pre", "log_market_cap", "return60", "operating_margin", "asset_turnover"]
+        "beta_pre", "log_market_cap", "return60", "roa"]
 LABELS = {
     "hist_disclosure": "Historical disclosure intensity",
     "hist_substance": "Historical substantive activity",
@@ -47,7 +47,7 @@ LABELS = {
 # not run/M1 per single leverage measure like the M0/M1 pairs below) --
 # thesis.qmd's prose specifically says "accounting controls (ROA and
 # liabilities/assets)".
-ACCOUNTING_VARS = ["roa", "liabilities_to_assets"]
+ACCOUNTING_VARS = ["liabilities_to_assets"]  # roa now lives in BASE itself
 CONCEPTS = {
     "assets": ["us-gaap:Assets"],
     "liabilities": ["us-gaap:Liabilities"],
@@ -110,9 +110,9 @@ def attach_roa(panel: pd.DataFrame) -> pd.DataFrame:
 
 
 def fit(panel: pd.DataFrame, variables: list[str]) -> tuple[sm.regression.linear_model.RegressionResultsWrapper, pd.DataFrame]:
-    d = panel.dropna(subset=["beta_post_126", "fe", *variables]).copy()
+    d = panel.dropna(subset=["beta_post_63", "fe", *variables]).copy()
     d = d[d.groupby("fe")["ticker"].transform("size") >= 2].copy()
-    y = (d["beta_post_126"] - d["beta_post_126"].mean()) / d["beta_post_126"].std(ddof=0)
+    y = (d["beta_post_63"] - d["beta_post_63"].mean()) / d["beta_post_63"].std(ddof=0)
     standardized = d[variables].apply(lambda col: (col - col.mean()) / col.std(ddof=0))
     fe = pd.get_dummies(d["fe"], prefix="fe", drop_first=True, dtype=float)
     design = sm.add_constant(pd.concat([standardized, fe], axis=1))
@@ -168,7 +168,7 @@ def main() -> None:
     parser.add_argument("--panel", type=Path, default=PANEL)
     parser.add_argument("--output-dir", type=Path, default=OUT)
     args = parser.parse_args()
-    panel = attach_roa(attach_leverage(pd.read_parquet(args.panel)))
+    panel = attach_leverage(pd.read_parquet(args.panel))  # roa now comes pre-attached from build_call_beta_panel.py
     models = ["baseline", "debt_to_equity", "liabilities_to_assets", "accounting"] if args.model == "all" else [args.model]
     tables, summaries = zip(*(run(panel, model) for model in models))
     args.output_dir.mkdir(parents=True, exist_ok=True)

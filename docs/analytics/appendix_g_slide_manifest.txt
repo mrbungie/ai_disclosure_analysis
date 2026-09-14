@@ -1,11 +1,3 @@
 file	slide_topic	visualization
-appendix_g_sic_posture.csv	sector posture and archetype mix	table
-appendix_g_sic_role_mix.csv	heatmap of sector x AI activity role	heatmap
-appendix_g_sic_volume_grounding.csv	sector volume vs grounding scatter	scatter
-appendix_g_sic_grounding_components.csv	heatmap of sector x grounding component	heatmap
 appendix_g_cohort_grounding.csv	grounding decline: fixed cohort vs new filers	line chart
-appendix_g_sic_channel_gap.csv	forest plot of call-filing gap by sector	forest plot
-appendix_g_archetype_transitions.csv	archetype transition matrix	transition matrix
 appendix_g_rollup_sensitivity.csv	rollup sensitivity table	table
-appendix_g_patents_controls.csv	patents vs activity, controlling for size/SIC	table
-appendix_g_vignette_pairs.csv	company vignette cards (same SIC, contrasting posture)	comparison card

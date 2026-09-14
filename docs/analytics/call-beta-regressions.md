@@ -1,5 +1,13 @@
 # Earnings-call beta regressions
 
+> Bugs de integridad de datos encontrados y corregidos en el panel que
+> alimenta esta especificación (duplicados por dual-class shares y
+> retailers con año fiscal no-calendario, merge sin `call_accession_number`
+> en `attach_market()`, factores FF3 stale, `operating_margin`/`shares_out`
+> sin fallback de concept-tag, ventana de beta a 63 vs 126 días) y una
+> especificación alternativa (configuración + decoupling, as-of, sin
+> leakage) al hallazgo de Governance-Led: ver `12_config_decoupling_asof.md`.
+
 La unidad de observación es una earnings call agregada por firma y fecha. Las
 calls que ocurren el mismo día para una firma se agregan antes de calcular
 historiales. Los ceros de disclosure o substance son observaciones válidas.
