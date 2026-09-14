@@ -3204,7 +3204,7 @@ While promotional claims frequently fail to survive into binding filings, they r
 
 This chapter evaluates how equity markets price corporate AI disclosures around earnings calls across S&P 500 constituents from 2021 to 2025.
 
-Following @tukey1977 and @gelman2014, these market evaluations are framed as exploratory diagnostics rather than confirmatory trials. To discipline the analysis against the garden of forking paths inherent in multi-outcome observational testing, this thesis pre-specifies theoretical channels, applies Benjamini–Hochberg False Discovery Rate corrections, and conditions every regression on the outcome's own predetermined lag (a lagged-dependent-variable, or ANCOVA, specification; formal notation in Appendix E). The findings distinguish persistent communication posture from quarterly surprises, testing whether markets reward substantive execution or promotional narrative.
+Following @gelman2014, these evaluations are exploratory diagnostics, not confirmatory tests: theoretical channels are pre-specified, Benjamini–Hochberg False Discovery Rate corrections address multiple testing, and every regression conditions on the outcome's own predetermined lag.
 
 ## Theoretical channels and hypotheses
 

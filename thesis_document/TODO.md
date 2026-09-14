@@ -145,7 +145,7 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       nuevas. **Prioridad: Muy alta**
 - [x] **21. §5.4 (Welltower) — comprimir los tres caveats causales.** A: "descriptive
       case evidence, not causal identification." **Original — Prioridad: Muy alta**
-- [ ] **22. Apertura Cap. 6 — a la mitad.** "Analyses are exploratory, common
+- [x] **22. Apertura Cap. 6 — a la mitad.** "Analyses are exploratory, common
       specifications plus FDR correction." Cortar Tukey; conservar la cita a
       Gelman-Loken (es la señal de por qué se corrige por multiplicidad). **Corregido
       (Gelman-Loken se queda, solo Tukey se corta) — Prioridad: Muy alta**
