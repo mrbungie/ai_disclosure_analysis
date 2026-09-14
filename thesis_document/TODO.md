@@ -235,10 +235,15 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       vive en Appendix E, sección "Leave-one-year-out and archetype-conditional
       estimates for post-call beta" (línea ~4763). Sin cambios en thesis.qmd.
       **Original — Prioridad: Alta**
-- [ ] **37. §6.4 — mantener el null result + multiplicity correction.** Antes de sacar
-      cada p-value listado, verificar que esté en Figure 23 o Table 33; los que no estén
-      ahí van a una tabla compacta en Appendix E (no se borran sin más). **Corregido
-      (verificar antes de cortar) — Prioridad: Alta**
+- [x] **37. §6.4 — mantener el null result + multiplicity correction.** Hecho: los
+      cuatro p-values individuales de Channel 2 sobre substance (gross margin, R&D/sales,
+      ROIC−WACC, beta) y los dos p-values de Governance-Led (capital efficiency, beta)
+      ya estaban, exactos, en @tbl-e-archetype-regressions (Appendix E) y su nota —
+      no hizo falta crear ninguna entrada nueva. Se sacaron esos p-values de la prosa
+      del cuerpo (línea ~3459 y ~3463), dejando el hallazgo nulo y la referencia a la
+      tabla; se conservó intacta la mención de FDR/Benjamini–Hochberg ($q^*=0.05/14$)
+      y el rango agregado de *Vocal Substantives* ($p \ge 0.056$), que ya citaba la
+      tabla. **Corregido (verificar antes de cortar) — Prioridad: Alta**
 - [ ] **38. §6.5.1 — horizonte a una frase.** Sector-exclusion y posture-switchers →
       Appendix E. La comparación con Yang (2026) NO se toca: es el único resultado de
       mercado robusto y es lo que lo sitúa en la literatura en vez de dejarlo como
