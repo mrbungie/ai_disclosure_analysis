@@ -72,7 +72,7 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       resuelve también el ítem 1 (expected outcomes) y el ítem 4 (§8.1 respondiendo cada
       RQ) al mismo tiempo. **Corregido (no eliminar, convertir a tabla) — Prioridad:
       Alta**
-- [ ] **10. Todo el texto + AI Statement — "we/our" → "this thesis" / primera persona
+- [x] **10. Todo el texto + AI Statement — "we/our" → "this thesis" / primera persona
       singular.** La guía MIB insiste en que el trabajo es individual. **Nuevo —
       Prioridad: Media**
 - [ ] **11. Cover letter — declarar uso de AI también ahí.** La guía lo exige en ambos
