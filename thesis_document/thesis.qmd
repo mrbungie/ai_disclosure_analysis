@@ -301,10 +301,10 @@ Four theoretical perspectives motivate the empirical design:
 
 Corporate AI disclosures have grown rapidly, and managers adjust qualitative tone strategically. That leaves investors, board members, and regulators facing four practical questions that existing tools and evidence do not answer:
 
-1. **Separating substance from boilerplate at scale.** With hundreds of firms repeating AI language every quarter, can an investor or analyst tell which mentions describe a named system, a deployment stage, or a quantified result, and which are undifferentiated promotional text, without reading every paragraph of every filing by hand?
-2. **Weighting a claim by where it was made.** Should an investor or analyst treat the same AI initiative as equally credible when described on an earnings call and when repeated in the Form 10-K filed weeks later, or does promotional language run further ahead of verifiable evidence on the call than in the filing that carries statutory liability?
-3. **Flagging decoupling without an internal audit.** Can the gap between how much a company talks about AI and how much grounded, verifiable activity it discloses be measured from public filings alone -- with no access to the company's internal AI program -- and used as a governance flag?
-4. **Deciding whether grounding is priced.** If two firms disclose AI initiatives with similar frequency but one grounds its claims in named systems, metrics, and partners while the other does not, does that difference show up in the firms' operating characteristics or market risk, or does the market treat both disclosures alike?
+1. **Separating substance from boilerplate at scale.** With hundreds of firms repeating AI language every quarter, can an analyst separate mentions that name a system, a deployment stage, or a quantified result from undifferentiated promotional text without reading every filing by hand?
+2. **Weighting a claim by where it was made.** Should an analyst treat the same AI initiative as equally credible on an earnings call and in the 10-K filed weeks later, or does promotional language outrun verifiable evidence more on the call than in the filing that carries statutory liability?
+3. **Flagging decoupling without an internal audit.** Can the gap between how much a company talks about AI and how much grounded activity it discloses be measured from public filings alone, with no access to its internal AI program, and used as a governance flag?
+4. **Deciding whether grounding is priced.** If two firms disclose AI initiatives with similar frequency but only one grounds its claims in named systems, metrics, and partners, does that difference show up in operating characteristics or market risk, or does the market treat both alike?
 
 ## Hypotheses and research questions
 
