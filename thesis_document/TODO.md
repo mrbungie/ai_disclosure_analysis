@@ -164,7 +164,7 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
 
 ## Bloque C — poda menor y precisión
 
-- [ ] **25. §2.1 — detalle 499/504/M&A a nota o apéndice.** Figure 1 a 2-3
+- [x] **25. §2.1 — detalle 499/504/M&A a nota o apéndice.** Figure 1 a 2-3
       observaciones en prosa. **Original — Prioridad: Alta**
 - [ ] **26. §2.2 (KDD/CRISP-DM) — no borrar, mover a Appendix A, sección "pipeline".**
       Framework que el comité (management) reconoce; ahí no estorba y suma. **Corregido
