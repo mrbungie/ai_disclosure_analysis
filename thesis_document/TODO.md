@@ -20,7 +20,7 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       ML + extractor LLM, seis constructos D/P/A/G/S/W, tres diseños empíricos: archetypes,
       cross-venue, mercado) + expected outcome por RQ (una línea cada uno). Criterio
       explícito de nota de la guía MIB. **Nuevo — Prioridad: Máxima**
-- [ ] **2. Executive Summary — reescribir para lector ejecutivo.** Eliminar β, p,
+- [x] **2. Executive Summary — reescribir para lector ejecutivo.** Eliminar β, p,
       "pooled per-1,000-word rates without firm-year fixed effects", "survives
       multiplicity correction". Quedarse con: problema, tres archetypes, gap
       call→filing, mercado no premia evidencia, framework de tres pasos. Los dos
@@ -163,6 +163,30 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       párrafo se corta si repite algo ya dicho, no si cita a alguien).
 
 ---
+
+## Regla general de poda (aplica a todo el Bloque B y C)
+
+- **Lo único que se borra de verdad es texto repetido.** Un caveat/frase/fórmula dicho
+  dos o tres veces en el cuerpo (capability caveat, caveat del denominador, "never input
+  to clustering", "AI washing ≠ prueba legal", "W ≠ fraud classifier", la fórmula de W
+  repetida en §5.1, el párrafo que explica Table 12 antes de Table 12, el recap de
+  teorías en §8.4 que ya está en §1.4, etc.) se deja dicho **una sola vez**, no cero
+  veces. No es un criterio de "esto es prescindible", es un criterio de "esto ya está
+  dicho en otro lugar del cuerpo".
+- **Ningún número desaparece de la tesis.** Cuando un ítem dice "sacar los p-values /
+  correlaciones / porcentajes de la prosa", significa sacarlos de la prosa, no del
+  documento. Regla única: todo número que sale de la prosa tiene que seguir existiendo
+  en una figura, tabla o apéndice existente; si no existe ahí, **crear la tabla/entrada
+  en el apéndice antes de borrar el número de la prosa**, nunca después ni "por ahora".
+  No asumir que ya está en una tabla — verificarlo (grep por el número/la figura/tabla
+  citada) antes de cortar. Esto aplica en particular a los ítems 37 (p-values de §6.4 →
+  Figure 23 / Table 33) y 18 (r=.928/.677/.234 del refit 10-K-only → Appendix E); ambos
+  quedan pendientes de esa verificación explícita, no dar por hecho que ya están cubiertos.
+- Al terminar la poda, si se quiere cerrar sin duda: comparar el PDF anterior contra el
+  podado y extraer todos los números del cuerpo viejo para confirmar que cada uno sigue
+  apareciendo en algún lugar de la versión nueva (cuerpo o apéndice). Es un cruce
+  mecánico, hacerlo antes de dar el Bloque B/C por terminado si hay dudas sobre algún
+  ítem.
 
 ## Notas de proceso
 
