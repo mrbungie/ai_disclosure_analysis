@@ -3094,7 +3094,7 @@ plt.show()
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* Relative amplification in quantified evidence exceeds that of promotional claims. Pooled per-1,000-word means without firm-year fixed effects; part of the ratio reflects the longer, boilerplate-heavy denominator of statutory filings.
+*Notes:* Relative amplification in quantified evidence exceeds that of promotional claims.
 :::
 
 This co-movement is consistent with @jia2025, who find that post-ChatGPT discussions of generative AI frequently combine positive tone with action initiatives; their initiative measure includes plans, whereas this thesis separately examines activity grounding and reported outcomes. Together, these findings support evaluating tone and disclosed evidence as distinct dimensions of corporate communication, not as opposite ends of the same one.

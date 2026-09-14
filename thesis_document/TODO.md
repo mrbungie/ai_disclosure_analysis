@@ -220,8 +220,14 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       notación, lista de controles) ya vivía verbatim en Apéndice E, así que no
       se pierde ningún número. La frase de "statutory liability" en "Promotion is
       not the opposite of evidence" (Ch.4) ahora usa lenguaje asociativo.
-- [ ] **35. §5.3 — el caveat del denominador solo en un lugar** (nota o prosa, no
-      ambos). **Original — Prioridad: Alta**
+- [x] **35. §5.3 — el caveat del denominador solo en un lugar** (nota o prosa, no
+      ambos). **Original — Prioridad: Alta**. Hecho: el caveat ("part of each ratio
+      reflects the longer, boilerplate-heavy denominator of statutory filings")
+      se mantiene solo en la prosa de "Promotion is not the opposite of evidence"
+      (línea junto al hallazgo, necesario para interpretar el ratio); se eliminó
+      la repetición en la nota de @fig-promotion-and-evidence, que ahora solo
+      retiene la comparación relativa (evidencia cuantificada vs. reclamos
+      promocionales) que no estaba en la prosa.
 - [ ] **36. §6.3 — leave-one-year-out → Appendix E.** Párrafo de atenuación a una
       frase. **Original — Prioridad: Alta**
 - [ ] **37. §6.4 — mantener el null result + multiplicity correction.** Antes de sacar
