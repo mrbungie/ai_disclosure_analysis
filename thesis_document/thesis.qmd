@@ -276,9 +276,9 @@ This thesis examines whether corporate AI disclosures contain sufficiently groun
 
 The thesis makes three main contributions:
 
-1. **A multi-dimensional measurement pipeline.** Moving beyond keyword counts and simple sentiment dictionaries, the study builds a pipeline combining a tree-based classifier with zero-shot large language models. It measures disclosure across six constructs -- narrative intensity ($D$), communication posture ($P$), disclosed activity ($A$), verification grounding ($G$), disclosed substance ($S$), and decoupling ($W$) -- and reconciles them across communication venues (earnings calls versus statutory filings). Because the architecture is modular and general, it serves as a reusable template to study corporate credibility in other narrative settings, such as ESG, cybersecurity, or future technology waves.
+1. **A practical credibility framework for issuers and investors.** Translating measurement into practical tools, the study introduces a disclosure-intensity/substance screening matrix and a due-diligence checklist to help investors and managers distinguish real technical integration from promotional cheap talk.
 2. **Empirical tests linking theory to corporate evidence.** The study tests economic and organizational theories across four empirical settings: market-wide diffusion and disclosure archetypes, operational activity mapping and firm fundamentals, cross-venue credibility gaps under SEC comment letters, and market pricing of systematic risk.
-3. **A practical credibility framework for issuers and investors.** Translating measurement into practical tools, the study introduces a disclosure-intensity/substance screening matrix and a due-diligence checklist to help investors and managers distinguish real technical integration from promotional cheap talk.
+3. **A multi-dimensional measurement architecture.** Moving beyond keyword counts and simple sentiment dictionaries, the study builds a pipeline combining a tree-based classifier with zero-shot large language models. It measures disclosure across six constructs -- narrative intensity ($D$), communication posture ($P$), disclosed activity ($A$), verification grounding ($G$), disclosed substance ($S$), and decoupling ($W$) -- and reconciles them across communication venues (earnings calls versus statutory filings). Because the architecture is modular and general, it serves as a reusable template to study corporate credibility in other narrative settings, such as ESG, cybersecurity, or future technology waves.
 
 ## Theoretical foundations and state of the art
 
@@ -333,7 +333,7 @@ Each research question carries a distinct expected outcome under the theoretical
 - **RQ3** expects promotional language to run ahead of grounded evidence more in earnings calls than in statutory filings, with SEC comment-letter scrutiny narrowing that gap.
 - **RQ4** expects capital markets to price grounded operational substance rather than narrative volume alone, if signalling rather than cheap talk dominates corporate AI communication.
 
-The next chapter details the empirical data and multi-stage measurement methodology; the subsequent empirical chapters present the findings on communication archetypes, operational substance, cross-venue credibility, and market risk; and the final chapter synthesizes the results into a managerial and investment credibility framework.
+Chapters 2 through 6 build the measurement framework applied in Chapter 7: Chapter 2 details the empirical data and multi-stage measurement methodology that produces the six constructs, and Chapters 3 through 6 apply that framework to communication archetypes, operational substance, cross-venue credibility, and market risk in turn. Chapter 7 then operationalizes the resulting measurement architecture into a practical credibility framework for issuers and investors, and Chapter 8 concludes.
 
 # Methodology
 

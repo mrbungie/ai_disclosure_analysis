@@ -45,10 +45,16 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       managers/boards, regulators), y el párrafo de adopción post-ChatGPT pasa a segundo
       lugar, conectado como el motivo de urgencia actual del problema. Sin contenido nuevo,
       solo reordenamiento y ajuste mínimo de conectores.
-- [ ] **6. §1.3 + roadmap §1.5 — reordenar contribuciones.** framework → evidencia →
+- [x] **6. §1.3 + roadmap §1.5 — reordenar contribuciones.** framework → evidencia →
       arquitectura de medición. El roadmap debe decir explícitamente que los capítulos
       2-6 construyen el framework aplicado en el capítulo 7 — si no, la intro promete un
       orden que el cuerpo no entrega. **Modificado — Prioridad: Alta**
+      — Hecho: las tres contribuciones de §1.3 quedaron en orden framework de
+      credibilidad práctica → evidencia empírica → arquitectura de medición
+      multidimensional. El párrafo final de "Methodology overview and expected outcomes"
+      (roadmap de cierre del cap. 1) ahora dice explícitamente que los capítulos 2-6
+      construyen el framework de medición aplicado en el capítulo 7, y que el capítulo 8
+      concluye.
 - [ ] **7. §1.4.2 — recortar definición teórica.** Agregar 1 línea de implicancia
       managerial por cada teoría citada. **Original — Prioridad: Alta**
 - [ ] **8. §1.4.3 — reescribir literature gaps.** Como cuatro preguntas que un
