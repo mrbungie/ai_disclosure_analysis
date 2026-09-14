@@ -2706,11 +2706,7 @@ year_min, year_max = int(_df_w["year"].min()), int(_df_w["year"].max())
 
 This chapter asks whether a firm's disclosure volume keeps pace with its concrete operational substance. Volume is Disclosure Intensity ($D$: AI frames per thousand words); substance is Disclosed Substance ($S$: log activity count weighted by AI Activity Grounding). The sample is `{python} f"{n_firm_years:,}"` disclosing firm-years (`{python} n_firms_panel` S&P 500 firms, `{python} year_min`–`{python} year_max`, `{python} year_max` shown as year-to-date).
 
-Decoupling ($W_{it}$) is the signed difference between the percentile ranks of Disclosure Intensity ($D_{it}$) and Disclosed Substance ($S_{it}$):
-$$
-W_{it} = \text{pct\_rank}(D_{it}) - \text{pct\_rank}(S_{it}) \in [-1, 1]
-$$
-By construction, $W = 0$ means talk and substance rank the same, $W > 0$ means narrative runs ahead of grounded substance ("decoupling"), and $W < 0$ means "quiet substance."
+Decoupling ($W_{it}$, defined as the percentile-rank gap between Disclosure Intensity and Disclosed Substance in Section 2.6) tests that alignment directly: $W = 0$ means talk and substance rank the same, $W > 0$ means narrative runs ahead of grounded substance ("decoupling"), and $W < 0$ means "quiet substance."
 
 ```{python}
 #| label: fig-ds-alignment-scatter
@@ -2858,11 +2854,11 @@ split_half_p_str = "< 0.001" if split_half_p < 0.001 else f"= {split_half_p:.3g}
 persistence_n_pairs = validation["persistence"]["n_pairs"]
 ```
 
-$W$ is widely dispersed across firms (@fig-washing-distribution; $\text{standard deviation} =$ `{python} f"{std_w:.2f}"`). A descriptive cut at the 95th percentile ($W \ge$ `{python} f"{cutoff:.2f}"`) flags `{python} n_tail` firm-years in the decoupled tail. These are not firms with zero AI interest. They are companies that talk about AI a lot in outward communications while disclosing almost no verifiable operational substance.
+$W$ is widely dispersed across firms (@fig-washing-distribution; $\text{standard deviation} =$ `{python} f"{std_w:.2f}"`), with `{python} n_tail` firm-years flagged in the decoupled tail at the 95th percentile ($W \ge$ `{python} f"{cutoff:.2f}"`) -- not firms with no AI interest, but ones that talk about AI heavily while disclosing almost no verifiable operational substance.
 
 > **Persistence of the Decoupling Posture:**
 >
-> Decoupling persists from one year to the next. Across `{python} persistence_n_pairs` consecutive firm-year pairs, the year-over-year Spearman $\rho =$ `{python} f"{persistence_rho:+.3f}"` (p `{python} persistence_p_str`), and split-half reliability is $\rho =$ `{python} f"{split_half_rho:+.3f}"` (p `{python} split_half_p_str`, n = `{python} split_half_n`). This looks like a lasting communication posture, not annual reporting noise.
+> Decoupling persists from one year to the next: across `{python} persistence_n_pairs` consecutive firm-year pairs, the year-over-year Spearman $\rho =$ `{python} f"{persistence_rho:+.3f}"` (p `{python} persistence_p_str`). This looks like a lasting communication posture, not annual reporting noise; a split-half reliability check (Appendix E, @tbl-c4-washing-validation) confirms the same persistence within a single year.
 
 ## What changes from filing to call
 

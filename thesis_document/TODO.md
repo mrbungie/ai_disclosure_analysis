@@ -202,8 +202,15 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       ("raises the question of whether these operational claims survive as legal and
       regulatory commitment escalates"). Ningún número ni hallazgo desaparece;
       `hd_vs_ratio` y la cita a @barrios2025 quedan intactos.
-- [ ] **33. §5.1 — no repetir la fórmula de W.** Prosa de Figure 16 −30-40%; split-half
-      → apéndice. **Original — Prioridad: Alta**
+- [x] **33. §5.1 — no repetir la fórmula de W.** **Original — Prioridad: Alta**
+      La fórmula completa de $W$ queda solo en su primera definición (§2.6, "From
+      extracted evidence to analytical constructs"); en "Where disclosure runs ahead
+      of substance" (Ch.4) se referencia por nombre/símbolo sin repetir la notación.
+      Prosa de la figura de distribución de $W$ reducida (~35%), fusionando el corte
+      del percentil 95 con su interpretación. El párrafo de persistencia ya no repite
+      los números de split-half inline; se dejó una frase que remite a la tabla de
+      validación existente en Apéndice E (@tbl-c4-washing-validation), que ya reporta
+      split-half con n, ρ y p. Ningún número desaparece.
 - [ ] **34. §5.2 — FE a 3 líneas.** "filtering under statutory liability" →
       "consistent with filtering under greater statutory exposure" (lenguaje de
       asociación, no causal). **Original — Prioridad: Alta**
