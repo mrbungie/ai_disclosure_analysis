@@ -108,7 +108,7 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
 - [x] **13. §3.3.4 — cuerpo solo con el resultado.** k=3 estable bajo ambos bootstraps
       + una frase de validación temporal OOS. PCA, k=2, fixed-N, K-means, ARI/Jaccard →
       apéndice. **Original — Prioridad: Máxima**
-- [ ] **14. §6.3 (robustness) — casi todo a Appendix E.** Conservar solo el punchline
+- [x] **14. §6.3 (robustness) — casi todo a Appendix E.** Conservar solo el punchline
       del placebo (asociación cross-sectional, no call-induced). **Original — Prioridad:
       Máxima**
 - [ ] **15. §6.2 — sacar "martingale processes" y la justificación técnica.** Ecuación

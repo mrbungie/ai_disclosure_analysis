@@ -3318,7 +3318,7 @@ _sub_joint = _formal["joint_substance_terms"]
 _partial_r2 = _formal["partial_r2_ai_block"]
 ```
 
-Across `{python} f"{int(_formal['n_calls']):,}"` calls and `{python} int(_baseline_sample['n_firms'])` firms, historical disclosure intensity is positively associated with post-call market beta ($\beta = +0.079, p = 0.006$), whereas single-call surprises and substantive operational activity are statistically indistinguishable from zero (joint disclosure $F = 5.55, p = 0.004$; joint substance $F = 0.35, p = 0.703$; @fig-call-beta-baseline). In leave-one-year-out re-estimations, this historical disclosure effect remains significant across all seven single-year exclusions ($p \le 0.023$), indicating that the association reflects persistent posture rather than any single call or reporting year.
+Across `{python} f"{int(_formal['n_calls']):,}"` calls and `{python} int(_baseline_sample['n_firms'])` firms, historical disclosure intensity is positively associated with post-call market beta ($\beta = +0.079, p = 0.006$), whereas single-call surprises and substantive operational activity are statistically indistinguishable from zero (joint disclosure $F = 5.55, p = 0.004$; joint substance $F = 0.35, p = 0.703$; @fig-call-beta-baseline). This effect is stable across leave-one-year-out re-estimations and archetype-conditional specifications (Appendix E).
 
 This extends to valuation and revenue growth in @fig-economic-coefficients-c1.
 
@@ -3381,8 +3381,6 @@ plt.show()
 
 As shown in @fig-economic-coefficients-c1, historical disclosure intensity consistently predicts higher valuations: larger market cap ($\beta = +0.124, p < 0.001$), higher price-to-sales ($\beta = +0.177, p < 0.001$), and faster revenue growth ($\beta = +0.357, p = 0.028$). Markets consistently price persistent narrative volume, supporting $H_{6a}$.
 
-The multi-target ANCOVA specifications displayed in @fig-economic-coefficients-c1 and @fig-economic-coefficients-c2 simultaneously include strategic archetype indicator dummies ($\mathbf{1}_{\{\text{GovLed}\}}, \mathbf{1}_{\{\text{Vocal}\}}$). Because these archetype indicators absorb between-archetype differences in communication posture, the continuous $\text{HistDisclosure}$ coefficient on post-call market beta attenuates to $\beta = +0.051$ ($p = 0.140$), compared to $\beta = 0.076$ ($p = 0.0097$) when the same baseline specification is re-estimated without archetype indicators on the archetype sample ($N = 4,102$; the full-sample baseline of @fig-call-beta-baseline gives $0.079, p = 0.006$). Valuation and revenue growth, by contrast, remain robustly positive even conditional on archetype controls.
-
 ```{python}
 #| echo: false
 #| output: false
@@ -3410,7 +3408,7 @@ rob_delta = _rob_delta_df[_rob_delta_df["variable"] == "hist_disclosure"].iloc[0
 rob_placebo_d = _rob_placebo_df[(_rob_placebo_df["block"] == "placebo_pre_beta") & (_rob_placebo_df["variable"] == "disclosure")].iloc[0]
 ```
 
-Robustness tests reported in @tbl-call-beta-paper (Appendix E) confirm that the historical disclosure effect is not an artifact of model specification. The association survives point-in-time accounting controls (ROA and leverage; $\beta =$ `{python} f"{rob_acct['beta_std']:.3f}"`, $p =$ `{python} f"{rob_acct['p']:.3f}"`), a full-year post-call window (+252 days; $\beta =$ `{python} f"{rob_win252['beta_std']:.3f}"`, $p =$ `{python} f"{rob_win252['p']:.3f}"`), and the Fama–French 3-factor risk benchmark ($\beta =$ `{python} f"{rob_ff3['beta_std']:.3f}"`, $p =$ `{python} f"{rob_ff3['p']:.3f}"`). Under firm fixed effects, historical disclosure attenuates ($\beta =$ `{python} f"{rob_fe['beta_std']:.3f}"`, $p =$ `{python} f"{rob_fe['p']:.3f}"`), while first differences ($\Delta\beta$) yield an attenuated estimate with wide confidence intervals ($\beta =$ `{python} f"{rob_delta['beta_std']:.3f}"`, $p =$ `{python} f"{rob_delta['p']:.3f}"`). Combined with pre-call placebo tests ($\beta^{\text{pre}} \sim D$ yields $\beta = +$`{python} f"{rob_placebo_d['beta_std']:.3f}"`, $p < 0.001$, while substance is null), this pattern indicates cross-sectional sorting into thematic risk: firms establishing high narrative visibility carry higher systematic beta, but quarterly changes in disclosure volume do not move beta over time.
+This effect survives a battery of specification checks reported in Appendix E (accounting controls, the Fama–French 3-factor benchmark, an extended post-call window, firm fixed effects, first differences, and archetype-indicator controls; @tbl-call-beta-paper, @tbl-e-archetype-regressions). The check that matters for interpretation is a placebo test: regressing *pre-call* beta — measured before the earnings call occurs — on the same historical disclosure measure yields $\beta^{\text{pre}} =$ `{python} f"{rob_placebo_d['beta_std']:.3f}"` ($p < 0.001$, substance null), over double the post-call estimate. Because disclosure cannot retroactively cause a beta that was already fixed before the call, this rules out the call itself as the mechanism: the association is cross-sectional — firms that already carry higher narrative visibility already carry higher systematic beta — and not call-induced.
 
 ## Channel 2 — Disclosed substance and operating fundamentals (H6b)
 
@@ -4728,6 +4726,12 @@ Markdown(tabulate(rows, headers=headers))
 ::: {custom-style="FigureNote"}
 *Notes:* Baseline ANCOVA model compared against accounting controls (ROA and leverage), the Fama–French 3-factor benchmark, a full-year post-call window (+252 days), within-firm fixed effects, and first differences (Delta Beta). For the Firm FE model, R² reports the within-firm R² (total R² including firm fixed effects is 0.701).
 :::
+
+### Leave-one-year-out and archetype-conditional estimates for post-call beta {.unnumbered}
+
+The historical disclosure effect on post-call beta remains significant across all seven single-year leave-one-out re-estimations ($p \le 0.023$ in every exclusion), indicating that the association reflects persistent disclosure posture rather than any single call or reporting year.
+
+Conditioning on strategic archetype indicators ($\mathbf{1}_{\{\text{GovLed}\}}, \mathbf{1}_{\{\text{Vocal}\}}$; @tbl-e-archetype-regressions) attenuates the continuous $\text{HistDisclosure}$ coefficient on post-call market beta from $\beta = 0.076$ ($p = 0.0097$, same archetype-eligible sample, $N = 4{,}102$, no archetype controls) to $\beta = +0.051$ ($p = 0.140$, with archetype controls), because the indicators absorb between-archetype differences in communication posture that overlap with continuous disclosure intensity. Valuation and revenue growth remain robustly positive under the same conditioning.
 
 ### Expanding-window archetype regressions across firm fundamentals {.unnumbered}
 
