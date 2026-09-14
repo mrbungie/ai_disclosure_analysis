@@ -172,7 +172,7 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
       como nueva subsección "Pipeline methodology: KDD/CRISP-DM framing" (primera subsección
       del apéndice). En el cuerpo (Data sources and corpus) queda una frase con referencia
       al apéndice.
-- [ ] **27. §2.6 (aggregation) — mantener la mediana en el cuerpo.** Reliability rho y
+- [x] **27. §2.6 (aggregation) — mantener la mediana en el cuerpo.** Reliability rho y
       empirical Bayes → Appendix B/E. **Original — Prioridad: Alta**
 - [ ] **28. §2.7 — coverage % y fallback → Appendix D.** **Original — Prioridad: Alta**
 - [ ] **29. §3.3 (AA setup) — una frase.** "AA represents each firm as a convex

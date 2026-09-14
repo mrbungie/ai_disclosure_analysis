@@ -769,7 +769,7 @@ $$\underbrace{\text{Semantic frames}}_{\text{frame extraction}} \Longrightarrow 
 
    A high positive score reflects high narrative volume paired with low grounded substance ("AI washing").
 
-**Aggregation and robustness.** Document rates aggregate to firm-years via median document rates to dampen boilerplate exhibits. Concept counts are log-transformed, yielding higher year-over-year reliability than raw shares ($\rho = 0.845$ vs. $0.528$). Rates for firms with sparse text are shrunk toward the sample mean using empirical-Bayes estimation [@efron1973].
+**Aggregation and robustness.** Document rates aggregate to firm-years via the median document rate, which dampens the influence of boilerplate exhibits and other outlier documents that a mean would let dominate a firm-year estimate. Reliability checks on this aggregation -- a comparison of log-transformed against raw concept counts, and empirical-Bayes shrinkage for firms with sparse AI-related text -- are reported in Appendix B.
 
 ## Financial and market variables
 
@@ -4137,6 +4137,10 @@ Disclosed AI activity predicts AI patenting even after controlling for firm size
 Frame extraction is deliberately non-discarding: only the prefilter gate rejects a passage outright, and it is calibrated to keep the false-negative rate low (recall $\ge 0.92$) at the cost of passing some borderline material forward. Passages that reach the extractor but yield no semantic frame are the visible trace of that trade-off -- most commonly passages containing only incidental keywords, macro commentary, or generic disclaimers that the gate's high-recall calibration cannot rule out on lexical features alone. Because the extractor, not the gate, makes the final call on these cases, no relevant disclosure is dropped silently before an LLM has read it in context.
 
 Systematic error analysis of the frames that are extracted reveals that extraction discrepancies are heavily concentrated at the margin between forward-looking promotional claims and early-stage exploratory research descriptions. Importantly, these borderline cases exhibit zero systematic correlation with firm size, leverage, or sector classification. Collapsing or adjusting the weighting of borderline categories leaves the resulting firm-level posture scores and archetype assignments virtually identical (Spearman $\rho > 0.96$ across all specifications), demonstrating that downstream empirical findings are robust to residual measurement noise.
+
+### Aggregation reliability and empirical-Bayes shrinkage {.unnumbered}
+
+Firm-year document rates aggregate from document-level frame counts via the median (main text). Two further checks probe the sensitivity of that choice. First, log-transforming concept counts before aggregation yields higher year-over-year reliability than aggregating raw shares directly ($\rho = 0.845$ vs. $0.528$), indicating that the log transform contributes to aggregation stability beyond the robustness the median itself provides. Second, for firms with sparse AI-related text -- where a firm-year rate rests on very few documents -- rates are shrunk toward the sample mean using empirical-Bayes estimation [@efron1973], which reduces the variance of estimates built on thin evidence without discarding the underlying documents.
 
 ## Appendix C: Supplementary Disclosure and AI Activity Results {.unnumbered}
 
