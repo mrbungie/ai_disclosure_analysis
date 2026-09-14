@@ -111,7 +111,7 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
 - [x] **14. §6.3 (robustness) — casi todo a Appendix E.** Conservar solo el punchline
       del placebo (asociación cross-sectional, no call-induced). **Original — Prioridad:
       Máxima**
-- [ ] **15. §6.2 — sacar "martingale processes" y la justificación técnica.** Ecuación
+- [x] **15. §6.2 — sacar "martingale processes" y la justificación técnica.** Ecuación
       ANCOVA pasa a opcional/appendix. Detalle → Appendix D/E. **Original — Prioridad:
       Máxima**
 - [ ] **16. §7.2.1 — comprimir solo la defensa de W, Simonian queda intacto.**

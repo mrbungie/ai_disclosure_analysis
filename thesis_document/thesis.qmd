@@ -3204,7 +3204,7 @@ While promotional claims frequently fail to survive into binding filings, they r
 
 This chapter evaluates how equity markets price corporate AI disclosures around earnings calls across S&P 500 constituents from 2021 to 2025.
 
-Following @tukey1977 and @gelman2014, these market evaluations are framed as exploratory diagnostics rather than confirmatory trials. To discipline the analysis against the garden of forking paths inherent in multi-outcome observational testing, this thesis pre-specifies theoretical channels, applies Benjamini–Hochberg False Discovery Rate corrections, and employs unified martingale-conditioned ANCOVA specifications. The findings distinguish persistent communication posture from quarterly surprises, testing whether markets reward substantive execution or promotional narrative.
+Following @tukey1977 and @gelman2014, these market evaluations are framed as exploratory diagnostics rather than confirmatory trials. To discipline the analysis against the garden of forking paths inherent in multi-outcome observational testing, this thesis pre-specifies theoretical channels, applies Benjamini–Hochberg False Discovery Rate corrections, and conditions every regression on the outcome's own predetermined lag (a lagged-dependent-variable, or ANCOVA, specification; formal notation in Appendix E). The findings distinguish persistent communication posture from quarterly surprises, testing whether markets reward substantive execution or promotional narrative.
 
 ## Theoretical channels and hypotheses
 
@@ -3220,13 +3220,9 @@ This thesis tests three distinct economic channels connecting AI disclosure to m
 
 ## Empirical design
 
-The unit of observation is a firm-date earnings call event ($i,t$) from 2021 to 2025 (transcripts on the same date are aggregated; zero-mention calls remain as valid zeros). Because asset prices, beta, and fundamentals follow persistent martingale processes ($\mathbb{E}[Y^{\text{post}}_{i,t} \mid \mathcal{F}_{t^{-}}] \approx Y^{\text{pre}}_{i,t}$), static regressions conflate unobserved firm heterogeneity with call impact. This thesis uses a unified Analysis of Covariance (ANCOVA) conditioning directly on the outcome's own predetermined lag ($Y^{\text{pre}}_{i,t}$ at $t-1$):
+The unit of observation is a firm-date earnings call event ($i,t$) from 2021 to 2025 (transcripts on the same date are aggregated; zero-mention calls remain as valid zeros). Asset prices, beta, and fundamentals persist strongly from one period to the next, so a static regression would conflate unobserved firm heterogeneity with call impact. This thesis instead uses a unified Analysis of Covariance (ANCOVA) specification that conditions each outcome directly on its own predetermined lag ($Y^{\text{pre}}_{i,t}$ at $t-1$); the formal equation and notation are given in Appendix E.
 
-$$
-Y_{i,t}^{\text{post}} = \alpha + \boldsymbol{\beta}' \text{AI}_{i,t} + \gamma Y^{\text{pre}}_{i,t} + \boldsymbol{\delta}' X^{\text{pre}}_{i,t} + \alpha_{s,y} + \varepsilon_{i,t},
-$$
-
-where $\alpha_{s,y} \equiv \text{SIC2} \times \text{Year}$ fixed effects absorb industry-year shocks, and standard errors are clustered by firm. The vector $\text{AI}_{i,t}$ comprises expanding historical posture ($\text{HistD}_{i,t^{-}}, \text{HistS}_{i,t^{-}}$), incremental call-specific surprise ($\text{SurpriseD}_{i,t}, \text{SurpriseS}_{i,t}$), prior-year decoupling ($W_{i,t-1}$), and expanding-window archetype indicators ($\mathbf{1}_{\{\text{GovLed}\}_{i,t}}, \mathbf{1}_{\{\text{Vocal}\}_{i,t}}$, with *Defensive Disclosers* as reference; Section 3.3.3). Predetermined controls $X^{\text{pre}}_{i,t}$ include log market cap, 60-day return momentum, operating margin, asset turnover, and pre-call volatility. Model $R^2$ is dominated by the lagged outcome by construction; each table therefore reports both the total $R^2$ and the partial $R^2$ of the disclosure block, which is the quantity of interest.
+Industry-by-year fixed effects ($\text{SIC2} \times \text{Year}$) absorb industry-year shocks, and standard errors are clustered by firm. The disclosure vector comprises expanding historical posture ($\text{HistD}_{i,t^{-}}, \text{HistS}_{i,t^{-}}$), incremental call-specific surprise ($\text{SurpriseD}_{i,t}, \text{SurpriseS}_{i,t}$), prior-year decoupling ($W_{i,t-1}$), and expanding-window archetype indicators ($\mathbf{1}_{\{\text{GovLed}\}_{i,t}}, \mathbf{1}_{\{\text{Vocal}\}_{i,t}}$, with *Defensive Disclosers* as reference; Section 3.3.3). Predetermined controls include log market cap, 60-day return momentum, operating margin, asset turnover, and pre-call volatility. Model $R^2$ is dominated by the lagged outcome by construction; each table therefore reports both the total $R^2$ and the partial $R^2$ of the disclosure block, which is the quantity of interest.
 
 ## Channel 1 — Disclosure intensity, systematic risk and valuation (H6a)
 
@@ -4448,6 +4444,16 @@ uni_delisted = int(_uni.loc[_uni["active_status"] == "delisted", "n"].sum())
 Daily price series begin on 2020-01-01, providing a full 252-day estimation history for early-2021 filings. Reconstructing index membership at 2021-01-01 explicitly includes `{python} uni_delisted` delisted firms among the `{python} uni_total` universe constituents, mitigating survivorship bias. Prices are gathered from Yahoo Finance, falling back to Stooq and Tiingo for delisted tickers.
 
 ## Appendix E: Supplementary Robustness and Alternative Specifications {.unnumbered}
+
+### Earnings-call ANCOVA specification {.unnumbered}
+
+The market-relevance regressions condition each post-call outcome on its own predetermined lag rather than estimating a static level regression. This choice follows from the persistence of asset prices, beta, and firm fundamentals: because these series behave approximately as martingale processes ($\mathbb{E}[Y^{\text{post}}_{i,t} \mid \mathcal{F}_{t^{-}}] \approx Y^{\text{pre}}_{i,t}$), a static regression of the post-call outcome on disclosure alone would conflate unobserved, time-invariant firm heterogeneity with the effect of the call itself. Conditioning on the pre-call value of the same outcome removes that source of confounding. The estimated specification is a unified Analysis of Covariance (ANCOVA) model:
+
+$$
+Y_{i,t}^{\text{post}} = \alpha + \boldsymbol{\beta}' \text{AI}_{i,t} + \gamma Y^{\text{pre}}_{i,t} + \boldsymbol{\delta}' X^{\text{pre}}_{i,t} + \alpha_{s,y} + \varepsilon_{i,t},
+$$
+
+where $\alpha_{s,y} \equiv \text{SIC2} \times \text{Year}$ fixed effects absorb industry-year shocks, and standard errors are clustered by firm. The vector $\text{AI}_{i,t}$ comprises expanding historical posture ($\text{HistD}_{i,t^{-}}, \text{HistS}_{i,t^{-}}$), incremental call-specific surprise ($\text{SurpriseD}_{i,t}, \text{SurpriseS}_{i,t}$), prior-year decoupling ($W_{i,t-1}$), and expanding-window archetype indicators ($\mathbf{1}_{\{\text{GovLed}\}_{i,t}}, \mathbf{1}_{\{\text{Vocal}\}_{i,t}}$, with *Defensive Disclosers* as reference; Section 3.3.3). Predetermined controls $X^{\text{pre}}_{i,t}$ include log market cap, 60-day return momentum, operating margin, asset turnover, and pre-call volatility. Model $R^2$ is dominated by the lagged outcome by construction; each table therefore reports both the total $R^2$ and the partial $R^2$ of the disclosure block, which is the quantity of interest.
 
 ### Incremental value of NLP layers over simple mention counts {.unnumbered}
 
