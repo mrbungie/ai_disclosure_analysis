@@ -66,7 +66,7 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
 - [x] **8. §1.4.3 — reescribir literature gaps.** Como cuatro preguntas que un
       decision-maker no puede responder hoy (no como vacíos académicos abstractos).
       **Original — Prioridad: Media**
-- [ ] **9. §1.5 (RQs) — reemplazar las cuatro colas "Derived from X theory…" por una
+- [x] **9. §1.5 (RQs) — reemplazar las cuatro colas "Derived from X theory…" por una
       tabla de 4 filas** (RQ | Teoría | Expected outcome | Capítulo). No borrar el mapa
       RQ→teoría (criterio "adequate use of theories in framing the topic"); la tabla
       resuelve también el ítem 1 (expected outcomes) y el ítem 4 (§8.1 respondiendo cada

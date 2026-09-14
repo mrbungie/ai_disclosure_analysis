@@ -317,21 +317,25 @@ To address these gaps, we state a central hypothesis and four guiding research q
 
 Four research questions guide the empirical analysis:
 
-- **RQ1: Evolution and composition.** *How has corporate AI disclosure evolved across the market, and what concrete operational activities do firms report?* Derived from institutional diffusion theory, this question asks whether market-wide AI adoption reflects ceremonial compliance or genuine operational deployment.
-- **RQ2: Strategic heterogeneity and economic coherence.** *Which recurring communication archetypes set firms apart, and does that posture cohere with disclosed operational activity and economically relevant firm outcomes?* Derived from configuration theory and signalling, this question tests whether distinct disclosure postures reflect real economic endowments rather than random noise.
-- **RQ3: Credibility, decoupling, and venue divergence.** *Where do gaps open between narrative volume and grounded substance, and how do promotional claims shift between informal calls and statutory filings?* Derived from cheap talk, decoupling, and regulatory enforcement, this question tests whether liability differences and SEC comment letters discipline corporate communication.
-- **RQ4: Market pricing and information content.** *Does capital-market pricing reflect grounded operational substance, or do investors respond indiscriminately to narrative volume?* Derived from signalling theory, this question tests whether post-call systematic risk responds to substantive operational signals or cheap talk.
+- **RQ1: Evolution and composition.** *How has corporate AI disclosure evolved across the market, and what concrete operational activities do firms report?*
+- **RQ2: Strategic heterogeneity and economic coherence.** *Which recurring communication archetypes set firms apart, and does that posture cohere with disclosed operational activity and economically relevant firm outcomes?*
+- **RQ3: Credibility, decoupling, and venue divergence.** *Where do gaps open between narrative volume and grounded substance, and how do promotional claims shift between informal calls and statutory filings?*
+- **RQ4: Market pricing and information content.** *Does capital-market pricing reflect grounded operational substance, or do investors respond indiscriminately to narrative volume?*
 
-## Methodology overview and expected outcomes
+Each research question derives from a distinct theoretical mechanism, carries a corresponding expected outcome, and is answered in a specific later chapter:
+
+| RQ | Theory | Expected outcome | Chapter |
+|---|---|---|---|
+| **RQ1** | Institutional diffusion | AI language spreads broadly across the market while disclosed, verifiable operational activity grows more slowly than narrative volume, consistent with institutional pressure to adopt AI terminology regardless of underlying adoption. | 3–4 |
+| **RQ2** | Configuration theory and signalling | A small number of stable, economically coherent archetypes emerge, with communication posture predicting disclosed activity and firm outcomes beyond narrative volume alone. | 3, 6 |
+| **RQ3** | Cheap talk, decoupling, and regulatory enforcement | Promotional language runs ahead of grounded evidence more in earnings calls than in statutory filings, with SEC comment-letter scrutiny narrowing that gap. | 5 |
+| **RQ4** | Signalling theory | Capital markets price grounded operational substance rather than narrative volume alone, if signalling rather than cheap talk dominates corporate AI communication. | 6 |
+
+: Theoretical grounding, expected outcome, and answering chapter for each research question. {#tbl-rq-theory}
+
+## Methodology overview
 
 The empirical analysis fixes the firm sample to S&P 500 constituents as of January 1, 2021, and covers `{python} f"{hd_n_docs:,}"` SEC filings and earnings-call transcripts drawn from that panel. A supervised gradient-boosted classifier first screens paragraphs for AI relevance at high recall, and a zero-shot large language model then extracts structured claims from the retained text, producing six constructs: narrative intensity ($D$), communication posture ($P$), disclosed activity ($A$), verification grounding ($G$), disclosed substance ($S$), and decoupling ($W$). Three empirical designs organize the tests that follow: an archetype design that groups firms by communication posture and links those groups to disclosed activity and firm outcomes; a cross-venue design that compares the same firm-year's earnings call against its statutory filing under SEC comment-letter scrutiny; and a market design that regresses systematic risk and firm fundamentals on the six constructs.
-
-Each research question carries a distinct expected outcome under the theoretical mechanisms motivating it:
-
-- **RQ1** expects AI language to spread broadly across the market while disclosed, verifiable operational activity grows more slowly than narrative volume, consistent with institutional pressure to adopt AI terminology regardless of underlying adoption.
-- **RQ2** expects a small number of stable, economically coherent archetypes, with communication posture predicting disclosed activity and firm outcomes beyond narrative volume alone.
-- **RQ3** expects promotional language to run ahead of grounded evidence more in earnings calls than in statutory filings, with SEC comment-letter scrutiny narrowing that gap.
-- **RQ4** expects capital markets to price grounded operational substance rather than narrative volume alone, if signalling rather than cheap talk dominates corporate AI communication.
 
 Chapters 2 through 6 build the measurement framework applied in Chapter 7: Chapter 2 details the empirical data and multi-stage measurement methodology that produces the six constructs, and Chapters 3 through 6 apply that framework to communication archetypes, operational substance, cross-venue credibility, and market risk in turn. Chapter 7 then operationalizes the resulting measurement architecture into a practical credibility framework for issuers and investors, and Chapter 8 concludes.
 
