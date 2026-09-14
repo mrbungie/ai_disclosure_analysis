@@ -1003,11 +1003,7 @@ arch_n_fit = arch_n_universe - arch_n_noai
 
 This thesis computes the posture dimensions across all `{python} arch_n_universe` firms. Firms with fewer than five AI frames across 2021–2025 SEC filings receive the rule-based label **No AI** ($n =$ `{python} arch_n_noai`). By 2025, nearly nine in ten firms disclose enough AI commentary to exhibit an active posture [@dimaggio1983, pp. 147--48].
 
-For the active firms ($n =$ `{python} arch_n_fit`), disclosure strategies blend distinct communication registers rather than falling into rigid discrete bins. This thesis applies continuous **Archetypal Analysis** [@cutler1994, pp. 338--47] to the eight standardized posture dimensions. Every firm $i$ is represented as a convex combination of $k$ extreme boundary vertices:
-
-$$x_i \approx \sum_{j=1}^k w_{ij} z_j, \quad \text{subject to} \quad \sum_{j=1}^k w_{ij} = 1, \quad w_{ij} \ge 0$$
-
-where $z_j \in \mathbb{R}^7$ are the archetypal coordinate vectors and $w_{ij}$ are the barycentric weights reflecting the firm's posture portfolio.
+For the active firms ($n =$ `{python} arch_n_fit`), disclosure strategies blend distinct communication registers rather than falling into rigid discrete bins. This thesis applies continuous **Archetypal Analysis** [@cutler1994, pp. 338--47] to the eight standardized posture dimensions: each firm is represented as a convex mixture of $k$ extreme disclosure profiles, with mixture weights giving its posture portfolio (formal specification in Appendix C).
 
 ### Archetypal profiles and the disclosure simplex
 
@@ -4143,6 +4139,14 @@ Systematic error analysis of the frames that are extracted reveals that extracti
 Firm-year document rates aggregate from document-level frame counts via the median (main text). Two further checks probe the sensitivity of that choice. First, log-transforming concept counts before aggregation yields higher year-over-year reliability than aggregating raw shares directly ($\rho = 0.845$ vs. $0.528$), indicating that the log transform contributes to aggregation stability beyond the robustness the median itself provides. Second, for firms with sparse AI-related text -- where a firm-year rate rests on very few documents -- rates are shrunk toward the sample mean using empirical-Bayes estimation [@efron1973], which reduces the variance of estimates built on thin evidence without discarding the underlying documents.
 
 ## Appendix C: Supplementary Disclosure and AI Activity Results {.unnumbered}
+
+### Archetypal Analysis: formal specification {.unnumbered}
+
+Archetypal Analysis [@cutler1994, pp. 338--47] represents every firm $i$ as a convex combination of $k$ extreme boundary vertices in the standardized eight-dimensional posture space:
+
+$$x_i \approx \sum_{j=1}^k w_{ij} z_j, \quad \text{subject to} \quad \sum_{j=1}^k w_{ij} = 1, \quad w_{ij} \ge 0$$
+
+where $z_j \in \mathbb{R}^7$ are the archetypal coordinate vectors and $w_{ij}$ are the barycentric weights reflecting firm $i$'s posture portfolio.
 
 The archetype count ($k=3$) used throughout this thesis is chosen by the 200-replicate dual bootstrap reported in Chapter 3 (@fig-archetype-stability). The supporting robustness checks -- a principal-components diagnostic, the substantive comparison against $k=2$, a fixed-$N$ check, a K-means discrete-clustering cross-check, and out-of-sample temporal validation -- are reported in full below.
 

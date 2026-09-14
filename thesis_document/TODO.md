@@ -175,9 +175,13 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
 - [x] **27. §2.6 (aggregation) — mantener la mediana en el cuerpo.** Reliability rho y
       empirical Bayes → Appendix B/E. **Original — Prioridad: Alta**
 - [x] **28. §2.7 — coverage % y fallback → Appendix D.** **Original — Prioridad: Alta**
-- [ ] **29. §3.3 (AA setup) — una frase.** "AA represents each firm as a convex
+- [x] **29. §3.3 (AA setup) — una frase.** "AA represents each firm as a convex
       mixture of extreme disclosure profiles." Ecuación pasa a opcional. **Original —
-      Prioridad: Alta**
+      Prioridad: Alta** — Hecho: cuerpo de §3.3 reducido a una frase (convex mixture of
+      extreme disclosure profiles, con referencia a Appendix C para la formalización).
+      Ecuación completa ($x_i \approx \sum w_{ij} z_j$, con notación) movida a nueva
+      subsección "Archetypal Analysis: formal specification" al inicio de Appendix C,
+      antes de los robustness checks que el ítem 13 ya había movido ahí.
 - [ ] **30. §3.3.3 — metodología a una frase** (expanding windows, no look-ahead);
       prosa a 3 mensajes. **Original — Prioridad: Alta**
 - [ ] **31. §3.4 — −30% recap empírico.** k=4 fallido a una frase. **Original —
