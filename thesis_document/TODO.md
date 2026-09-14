@@ -166,9 +166,12 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
 
 - [x] **25. §2.1 — detalle 499/504/M&A a nota o apéndice.** Figure 1 a 2-3
       observaciones en prosa. **Original — Prioridad: Alta**
-- [ ] **26. §2.2 (KDD/CRISP-DM) — no borrar, mover a Appendix A, sección "pipeline".**
+- [x] **26. §2.2 (KDD/CRISP-DM) — no borrar, mover a Appendix A, sección "pipeline".**
       Framework que el comité (management) reconoce; ahí no estorba y suma. **Corregido
-      (mover, no cortar) — Prioridad: Alta**
+      (mover, no cortar) — Prioridad: Alta** — Hecho: párrafo completo movido a Appendix A
+      como nueva subsección "Pipeline methodology: KDD/CRISP-DM framing" (primera subsección
+      del apéndice). En el cuerpo (Data sources and corpus) queda una frase con referencia
+      al apéndice.
 - [ ] **27. §2.6 (aggregation) — mantener la mediana en el cuerpo.** Reliability rho y
       empirical Bayes → Appendix B/E. **Original — Prioridad: Alta**
 - [ ] **28. §2.7 — coverage % y fallback → Appendix D.** **Original — Prioridad: Alta**

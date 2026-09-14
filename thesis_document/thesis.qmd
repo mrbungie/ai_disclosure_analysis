@@ -571,7 +571,7 @@ Markdown(tabulate([[form, f"{n:,}"] for form, n in rows], headers=["Form", "Docu
 
 ![End-to-end data acquisition, inference, and multi-source fusion pipeline.](svgs/pipeline_diagrama.svg){#fig-pipeline-architecture width="100%"}
 
-Grounded in Knowledge Discovery in Databases (KDD) [@fayyad1996, pp. 37--40] and CRISP-DM [@shearer2000, pp. 13--15], the pipeline follows an iterative workflow from document cleaning to empirical validation. As an exploratory academic study, the process terminates at econometric evaluation rather than operational deployment. In practice, this architecture (@fig-pipeline-architecture; @tbl-funnel-summary) converts raw corporate text into structured metrics through two intermediate extraction layers:
+This thesis follows a structured pipeline consistent with standard data-mining methodology (KDD/CRISP-DM framing in Appendix A). In practice, this architecture (@fig-pipeline-architecture; @tbl-funnel-summary) converts raw corporate text into structured metrics through two intermediate extraction layers:
 
 $$\text{Raw text} \longrightarrow \text{AI claims (Frames)} \longrightarrow \text{Disclosed AI activities} \longrightarrow \text{Firm-level measures}$$
 
@@ -3827,6 +3827,10 @@ Corporate AI disclosure is neither a reliable proxy for technological capability
 # Appendices {.unnumbered}
 
 ## Appendix A: Data, Computational Environment and Pipeline {.unnumbered}
+
+### Pipeline methodology: KDD/CRISP-DM framing {.unnumbered}
+
+The pipeline that converts raw corporate text into firm-level measures (@fig-pipeline-architecture; @tbl-funnel-summary) is grounded in Knowledge Discovery in Databases (KDD) [@fayyad1996, pp. 37--40] and CRISP-DM [@shearer2000, pp. 13--15], and follows an iterative workflow from document cleaning to empirical validation. As an exploratory academic study, the process terminates at econometric evaluation rather than operational deployment.
 
 ### Industrial classification and aggregated sector definitions {.unnumbered}
 
