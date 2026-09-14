@@ -105,7 +105,7 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
 
 ## Bloque B — poda mayor (robustez al apéndice)
 
-- [ ] **13. §3.3.4 — cuerpo solo con el resultado.** k=3 estable bajo ambos bootstraps
+- [x] **13. §3.3.4 — cuerpo solo con el resultado.** k=3 estable bajo ambos bootstraps
       + una frase de validación temporal OOS. PCA, k=2, fixed-N, K-means, ARI/Jaccard →
       apéndice. **Original — Prioridad: Máxima**
 - [ ] **14. §6.3 (robustness) — casi todo a Appendix E.** Conservar solo el punchline

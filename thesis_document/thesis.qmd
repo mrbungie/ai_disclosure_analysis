@@ -1875,127 +1875,7 @@ plt.show()
 *Notes:* Panel A: frame-level resampling within firms (measurement error). Panel B: firm-level resampling (sample sensitivity). Only k = 3 keeps every archetype above the 0.60 Jaccard floor in both regimes.
 :::
 
-```{python}
-#| echo: false
-#| warning: false
-#| message: false
-# Live k=2 fit (same population, same 8 posture dimensions, same seed as the
-# k=3 fit above) purely to source the substantive-rejection footnote below
-# from real z-scores instead of hand-typed ones. Self-contained (re-reads
-# and re-standardizes rather than reusing another chunk's variables) so it
-# doesn't depend on chunk execution order elsewhere on the page.
-import contextlib as _contextlib
-import io as _io
-from pathlib import Path as _Path
-import pandas as _pd
-
-with _contextlib.redirect_stdout(_io.StringIO()), _contextlib.redirect_stderr(_io.StringIO()):
-    from archetypes import AA as _AA
-
-def _p_k2(name):
-    p = _Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else _Path(f"data/processed/clusters/{name}")
-
-_df_k2 = _pd.read_parquet(_p_k2("firm_strategy_dimensions.parquet"))
-_k2_feats = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
-             "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
-_fit_k2 = _df_k2[_df_k2["archetype"] != "No AI"]
-_X_k2 = _fit_k2[_k2_feats].values
-_X_k2_std = (_X_k2 - _X_k2.mean(axis=0)) / _X_k2.std(axis=0, ddof=0)
-
-with _contextlib.redirect_stdout(_io.StringIO()), _contextlib.redirect_stderr(_io.StringIO()):
-    aa_k2 = _AA(n_archetypes=2, random_state=42, max_iter=500)
-    aa_k2.fit_transform(_X_k2_std)
-A_k2 = aa_k2.archetypes_
-k2_promo = A_k2[:, _k2_feats.index("promotional_posture")]
-k2_risk = A_k2[:, _k2_feats.index("risk_orientation")]
-k2_gov = A_k2[:, _k2_feats.index("governance_orientation")]
-k2_spec = A_k2[:, _k2_feats.index("specificity")]
-```
-
-The bootstrap evidence establishes three empirical conclusions (@fig-archetype-stability):
-
-1. **$k = 3$ is robust across resampling regimes:** It is the only candidate model where every archetype clears the 0.60 reproducibility floor under both frame-level measurement error and firm-level sample composition sensitivity.
-2. **Failed falsification at $k = 4$:** Partition stability breaks down globally at $k = 4$. The fourth vertex isolates ungrounded promotional rhetoric without technical specificity, anchored by only a handful of firms -- too few, and too unstable under resampling, to support a discrete fourth archetype.
-3. **Rejection of $k = 2$ on substantive grounds:** Although mathematically stable, collapsing to two poles eliminates governance orientation entirely, erasing the institutional distinction between board oversight and statutory risk warnings.[^k2-note]
-
-[^k2-note]: In $k = 2$, Archetype 0 exhibits promotional $=$ `{python} f"{k2_promo[0]:+.2f}"`, risk $=$ `{python} f"{k2_risk[0]:+.2f}"`, governance $=$ `{python} f"{k2_gov[0]:+.2f}"`, specificity $=$ `{python} f"{k2_spec[0]:+.2f}"`; Archetype 1 exhibits promotional $=$ `{python} f"{k2_promo[1]:+.2f}"`, risk $=$ `{python} f"{k2_risk[1]:+.2f}"`, governance $=$ `{python} f"{k2_gov[1]:+.2f}"`, specificity $=$ `{python} f"{k2_spec[1]:+.2f}"`. A discrete K-means benchmark on the same standardized posture matrix reproduces the same three-archetype partition (kept in the project's supplementary analytics files rather than reproduced in the appendix).
-
-A principal components diagnostic confirms that the space cannot be collapsed into one score without heavy information loss: the first two components capture `{python} f"{hd_pca_ev[0] + hd_pca_ev[1]:.1f}"`% of the variance (PC1: `{python} f"{hd_pca_ev[0]:.1f}"`%, PC2: `{python} f"{hd_pca_ev[1]:.1f}"`%).
-
-As a further check, this thesis asks whether the vertex separation of @fig-archetype-composition-annual's expanding fits reflects genuine sharpening of the archetypes or simply the larger samples available in later years: fixing $N$ at the 2021 pool size and refitting on repeated random subsamples of that size drawn from each later window's pool, mean pairwise vertex separation does not increase cleanly with calendar time -- it moves within sampling variability across windows, unlike the raw (uncontrolled) separation, which does climb as the pool grows nearly seven-fold (full replicate distributions kept in the supplementary analytics files). The $k=3$ taxonomy's stability rests on the bootstrap evidence above, not on this uncontrolled trend.
-
-#### Out-of-sample temporal validation
-
-```{python}
-#| echo: false
-#| output: false
-# Out-of-sample temporal validation on firm-year posture vectors: fit k-means
-# (k = 3) on the training window, assign 2025 firm-years to the frozen
-# centroids, and compare with an unconstrained k-means refit on 2025 alone.
-from pathlib import Path
-import numpy as np
-import pandas as pd
-
-
-_fy = pd.read_parquet(_p("firm_year_strategy_dimensions.parquet"))
-_FE = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation", "temporal_posture",
-       "ai_positioning", "specificity", "disclosure_intensity"]
-_fy = _fy[(_fy["archetype"] != "No AI") & _fy[_FE].notna().all(axis=1)]
-
-def _kmeans(X, k=3, seed=42, n_init=10, iters=300):
-    best = None
-    for s in range(n_init):
-        rng = np.random.default_rng(seed + s)
-        C = X[rng.choice(len(X), k, replace=False)]
-        for _ in range(iters):
-            lab = np.argmin(((X[:, None, :] - C[None]) ** 2).sum(-1), axis=1)
-            C2 = np.array([X[lab == j].mean(0) if (lab == j).any() else C[j] for j in range(k)])
-            if np.allclose(C, C2):
-                break
-            C = C2
-        inertia = ((X - C[lab]) ** 2).sum()
-        if best is None or inertia < best[0]:
-            best = (inertia, C, lab)
-    return best[1], best[2]
-
-def _ari(a, b):
-    ct = pd.crosstab(a, b).values
-    comb = lambda x: x * (x - 1) / 2
-    n = ct.sum(); sij = comb(ct).sum(); si = comb(ct.sum(1)).sum(); sj = comb(ct.sum(0)).sum()
-    e = si * sj / comb(n)
-    return (sij - e) / ((si + sj) / 2 - e)
-
-def _oos(train_years, test_year=2025):
-    tr = _fy[_fy["year"].isin(train_years)]
-    te = _fy[_fy["year"] == test_year]
-    mu, sd = tr[_FE].mean(), tr[_FE].std()
-    Xtr = ((tr[_FE] - mu) / sd).values
-    Xte = ((te[_FE] - mu) / sd).values
-    C, _ = _kmeans(Xtr)
-    frozen = np.argmin(((Xte[:, None, :] - C[None]) ** 2).sum(-1), axis=1)
-    _, refit = _kmeans(Xte)
-    lab_tr = np.argmin(((Xtr[:, None, :] - C[None]) ** 2).sum(-1), axis=1)
-    names = {}
-    for j in range(3):
-        names[j] = tr["archetype"].values[lab_tr == j].tolist()
-        names[j] = max(set(names[j]), key=names[j].count) if names[j] else f"cluster {j}"
-    jac = {}
-    for j in range(3):
-        a = frozen == j
-        jac[names[j]] = max(((a & (refit == r)).sum() / max((a | (refit == r)).sum(), 1)) for r in range(3)) * 100
-    return _ari(frozen, refit), jac, len(te)
-
-oos_ari_2124, oos_jac_2124, oos_n_2025 = _oos([2021, 2022, 2023, 2024])
-oos_ari_2123, oos_jac_2123, _ = _oos([2021, 2022, 2023])
-oos_ari_2125, _, oos_n_2026 = _oos([2021, 2022, 2023, 2024, 2025], test_year=2026)
-oos_jac_min, oos_jac_max = min(oos_jac_2124.values()), max(oos_jac_2124.values())
-oos_vs_2123 = oos_jac_2123.get("Vocal Substantives", float("nan"))
-```
-
-The taxonomy also holds out of sample. A model frozen on the 2021–2024 firm-years is applied to the `{python} oos_n_2025` firm-years of 2025, reaching ARI = `{python} f"{oos_ari_2124:.3f}"` against an unconstrained 2025 refit with Jaccard recovery of `{python} f"{oos_jac_min:.1f}"`–`{python} f"{oos_jac_max:.1f}"`% across archetypes. Even the stricter pre-GenAI 2021–2023 training window keeps meaningful post-2023 recovery (ARI = `{python} f"{oos_ari_2123:.3f}"`; Vocal Substantives recovered at `{python} f"{oos_vs_2123:.1f}"`%).
-
-Freezing on 2021–2025 and testing on the `{python} oos_n_2026` firm-years observed so far in 2026 gives ARI = `{python} f"{oos_ari_2125:.3f}"`. Posture rates do not depend on calendar progress, confirming that the taxonomy is not an artifact of the initial commercialization wave.
+Only $k = 3$ clears the 0.60 Jaccard floor under both the frame-level and the firm-level bootstrap; partition stability breaks down globally at $k = 4$, where the fourth vertex isolates ungrounded promotional rhetoric without technical specificity, anchored by only a handful of firms -- too few, and too unstable under resampling, to support a discrete fourth archetype. The taxonomy also holds out of sample: a model frozen on earlier firm-years recovers the archetype partition of later, unseen firm-years with high agreement, and that recovery does not weaken with calendar progress. Full model-selection robustness checks -- the principal-components diagnostic, the substantive comparison against $k = 2$, a fixed-$N$ check that isolates genuine archetype sharpening from sample growth, a K-means cross-check, and the ARI/Jaccard recovery metrics behind the out-of-sample result -- are reported in Appendix C.
 
 ## Theoretical interpretation: signaling and disclosure costs
 
@@ -4262,7 +4142,125 @@ Systematic error analysis reveals that extraction discrepancies are heavily conc
 
 ## Appendix C: Supplementary Disclosure and AI Activity Results {.unnumbered}
 
-The archetype count ($k=3$) used throughout this thesis is chosen by the 200-replicate dual bootstrap reported in Chapter 3 (@fig-archetype-stability); a PCA dimensionality check, a K-means discrete-clustering cross-check, and a smaller exploratory stability screen were also run and agree with that choice, but are not reproduced here to keep this appendix focused.
+The archetype count ($k=3$) used throughout this thesis is chosen by the 200-replicate dual bootstrap reported in Chapter 3 (@fig-archetype-stability). The supporting robustness checks -- a principal-components diagnostic, the substantive comparison against $k=2$, a fixed-$N$ check, a K-means discrete-clustering cross-check, and out-of-sample temporal validation -- are reported in full below.
+
+### Archetype count: PCA, $k=2$ comparison, fixed-$N$, and K-means robustness {.unnumbered}
+
+```{python}
+#| echo: false
+#| warning: false
+#| message: false
+# Live k=2 fit (same population, same 8 posture dimensions, same seed as the
+# k=3 fit in Chapter 3) purely to source the substantive-rejection paragraph
+# below from real z-scores instead of hand-typed ones. Self-contained (re-reads
+# and re-standardizes rather than reusing another chunk's variables) so it
+# doesn't depend on chunk execution order elsewhere on the page.
+import contextlib as _contextlib
+import io as _io
+from pathlib import Path as _Path
+import pandas as _pd
+
+with _contextlib.redirect_stdout(_io.StringIO()), _contextlib.redirect_stderr(_io.StringIO()):
+    from archetypes import AA as _AA
+
+def _p_k2(name):
+    p = _Path(f"../data/processed/clusters/{name}")
+    return p if p.exists() else _Path(f"data/processed/clusters/{name}")
+
+_df_k2 = _pd.read_parquet(_p_k2("firm_strategy_dimensions.parquet"))
+_k2_feats = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
+             "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
+_fit_k2 = _df_k2[_df_k2["archetype"] != "No AI"]
+_X_k2 = _fit_k2[_k2_feats].values
+_X_k2_std = (_X_k2 - _X_k2.mean(axis=0)) / _X_k2.std(axis=0, ddof=0)
+
+with _contextlib.redirect_stdout(_io.StringIO()), _contextlib.redirect_stderr(_io.StringIO()):
+    aa_k2 = _AA(n_archetypes=2, random_state=42, max_iter=500)
+    aa_k2.fit_transform(_X_k2_std)
+A_k2 = aa_k2.archetypes_
+k2_promo = A_k2[:, _k2_feats.index("promotional_posture")]
+k2_risk = A_k2[:, _k2_feats.index("risk_orientation")]
+k2_gov = A_k2[:, _k2_feats.index("governance_orientation")]
+k2_spec = A_k2[:, _k2_feats.index("specificity")]
+```
+
+**Rejection of $k = 2$ on substantive grounds:** Although mathematically stable under both bootstrap regimes, collapsing to two poles eliminates governance orientation entirely, erasing the institutional distinction between board oversight and statutory risk warnings. In $k = 2$, Archetype 0 exhibits promotional $=$ `{python} f"{k2_promo[0]:+.2f}"`, risk $=$ `{python} f"{k2_risk[0]:+.2f}"`, governance $=$ `{python} f"{k2_gov[0]:+.2f}"`, specificity $=$ `{python} f"{k2_spec[0]:+.2f}"`; Archetype 1 exhibits promotional $=$ `{python} f"{k2_promo[1]:+.2f}"`, risk $=$ `{python} f"{k2_risk[1]:+.2f}"`, governance $=$ `{python} f"{k2_gov[1]:+.2f}"`, specificity $=$ `{python} f"{k2_spec[1]:+.2f}"`. A discrete K-means benchmark on the same standardized posture matrix reproduces the same three-archetype partition.
+
+A principal components diagnostic confirms that the space cannot be collapsed into one score without heavy information loss: the first two components capture `{python} f"{hd_pca_ev[0] + hd_pca_ev[1]:.1f}"`% of the variance (PC1: `{python} f"{hd_pca_ev[0]:.1f}"`%, PC2: `{python} f"{hd_pca_ev[1]:.1f}"`%).
+
+As a further check, this thesis asks whether the vertex separation of the annual archetype composition's expanding fits reflects genuine sharpening of the archetypes or simply the larger samples available in later years: fixing $N$ at the 2021 pool size and refitting on repeated random subsamples of that size drawn from each later window's pool, mean pairwise vertex separation does not increase cleanly with calendar time -- it moves within sampling variability across windows, unlike the raw (uncontrolled) separation, which does climb as the pool grows nearly seven-fold. The $k=3$ taxonomy's stability rests on the bootstrap evidence in Chapter 3, not on this uncontrolled trend.
+
+#### Out-of-sample temporal validation {.unnumbered}
+
+```{python}
+#| echo: false
+#| output: false
+# Out-of-sample temporal validation on firm-year posture vectors: fit k-means
+# (k = 3) on the training window, assign 2025 firm-years to the frozen
+# centroids, and compare with an unconstrained k-means refit on 2025 alone.
+from pathlib import Path
+import numpy as np
+import pandas as pd
+
+
+_fy = pd.read_parquet(_p("firm_year_strategy_dimensions.parquet"))
+_FE = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation", "temporal_posture",
+       "ai_positioning", "specificity", "disclosure_intensity"]
+_fy = _fy[(_fy["archetype"] != "No AI") & _fy[_FE].notna().all(axis=1)]
+
+def _kmeans(X, k=3, seed=42, n_init=10, iters=300):
+    best = None
+    for s in range(n_init):
+        rng = np.random.default_rng(seed + s)
+        C = X[rng.choice(len(X), k, replace=False)]
+        for _ in range(iters):
+            lab = np.argmin(((X[:, None, :] - C[None]) ** 2).sum(-1), axis=1)
+            C2 = np.array([X[lab == j].mean(0) if (lab == j).any() else C[j] for j in range(k)])
+            if np.allclose(C, C2):
+                break
+            C = C2
+        inertia = ((X - C[lab]) ** 2).sum()
+        if best is None or inertia < best[0]:
+            best = (inertia, C, lab)
+    return best[1], best[2]
+
+def _ari(a, b):
+    ct = pd.crosstab(a, b).values
+    comb = lambda x: x * (x - 1) / 2
+    n = ct.sum(); sij = comb(ct).sum(); si = comb(ct.sum(1)).sum(); sj = comb(ct.sum(0)).sum()
+    e = si * sj / comb(n)
+    return (sij - e) / ((si + sj) / 2 - e)
+
+def _oos(train_years, test_year=2025):
+    tr = _fy[_fy["year"].isin(train_years)]
+    te = _fy[_fy["year"] == test_year]
+    mu, sd = tr[_FE].mean(), tr[_FE].std()
+    Xtr = ((tr[_FE] - mu) / sd).values
+    Xte = ((te[_FE] - mu) / sd).values
+    C, _ = _kmeans(Xtr)
+    frozen = np.argmin(((Xte[:, None, :] - C[None]) ** 2).sum(-1), axis=1)
+    _, refit = _kmeans(Xte)
+    lab_tr = np.argmin(((Xtr[:, None, :] - C[None]) ** 2).sum(-1), axis=1)
+    names = {}
+    for j in range(3):
+        names[j] = tr["archetype"].values[lab_tr == j].tolist()
+        names[j] = max(set(names[j]), key=names[j].count) if names[j] else f"cluster {j}"
+    jac = {}
+    for j in range(3):
+        a = frozen == j
+        jac[names[j]] = max(((a & (refit == r)).sum() / max((a | (refit == r)).sum(), 1)) for r in range(3)) * 100
+    return _ari(frozen, refit), jac, len(te)
+
+oos_ari_2124, oos_jac_2124, oos_n_2025 = _oos([2021, 2022, 2023, 2024])
+oos_ari_2123, oos_jac_2123, _ = _oos([2021, 2022, 2023])
+oos_ari_2125, _, oos_n_2026 = _oos([2021, 2022, 2023, 2024, 2025], test_year=2026)
+oos_jac_min, oos_jac_max = min(oos_jac_2124.values()), max(oos_jac_2124.values())
+oos_vs_2123 = oos_jac_2123.get("Vocal Substantives", float("nan"))
+```
+
+A model frozen on the 2021–2024 firm-years is applied to the `{python} oos_n_2025` firm-years of 2025, reaching ARI = `{python} f"{oos_ari_2124:.3f}"` against an unconstrained 2025 refit with Jaccard recovery of `{python} f"{oos_jac_min:.1f}"`–`{python} f"{oos_jac_max:.1f}"`% across archetypes. Even the stricter pre-GenAI 2021–2023 training window keeps meaningful post-2023 recovery (ARI = `{python} f"{oos_ari_2123:.3f}"`; Vocal Substantives recovered at `{python} f"{oos_vs_2123:.1f}"`%).
+
+Freezing on 2021–2025 and testing on the `{python} oos_n_2026` firm-years observed so far in 2026 gives ARI = `{python} f"{oos_ari_2125:.3f}"`. Posture rates do not depend on calendar progress, confirming that the taxonomy is not an artifact of the initial commercialization wave.
 
 ### AI disclosure strategy dimensions: correlation diagnostics {.unnumbered}
 
