@@ -124,8 +124,10 @@ aprieta, A completo + los primeros 6 de B ya cambian la lectura del documento.
 - [x] **17. §2.4 — recortar a la mitad.** False negatives y borderline passages →
       Appendix B. **Hecho (150→~74 palabras de prosa; detalle movido a "Error taxonomy
       and classification robustness" en Appendix B) — Prioridad: Muy alta**
-- [ ] **18. §3.3.2.1 (refit 10-K-only) — una frase en el cuerpo.** Correlaciones y
-      z-scores → apéndice. **Original — Prioridad: Muy alta**
+- [x] **18. §3.3.2.1 (refit 10-K-only) — una frase en el cuerpo.** Correlaciones y
+      z-scores → apéndice. **Hecho (cuerpo a una frase; correlaciones y z-scores del
+      refit a nueva tabla @tbl-e-10k-refit en Appendix E, no existían antes en ninguna
+      tabla) — Prioridad: Muy alta**
 - [ ] **19. §7.1 — Table 15 + casos en prosa. Decisión a tomar al tocar la sección:**
       (a) solo Microsoft y Welltower en prosa, JPM/GS y Apple solo en tabla, o (b) los
       cuatro casos a 2-3 líneas cada uno en vez de dos mini-casos largos. Los worked

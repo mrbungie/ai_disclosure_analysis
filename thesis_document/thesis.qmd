@@ -1602,7 +1602,7 @@ _z_def_full_on_risk = A[def_col, SIMPLEX_FEATS.index("risk_orientation")]
 _z_def10k_on_risk = _A10k[_def_col10k, _feats10k.index("risk_orientation")]
 ```
 
-Recomputing the archetypes on Form 10-K frames alone (`{python} len(_common10k)` firms) confirms that governance disclosure is inherently channel-specific. While Vocal Substantives ($r =$ `{python} f"{_r_vocal_10k:.3f}"`) and Defensive Disclosers ($r =$ `{python} f"{_r_def_10k:.3f}"`) replicate robustly, the governance vertex collapses ($r =$ `{python} f"{_r_gov_10k:.3f}"`), absorbing `{python} f"{_z_gov10k_on_risk:+.2f}"` SD of risk orientation while the defensive vertex attenuates from `{python} f"{_z_def_full_on_risk:+.2f}"` to `{python} f"{_z_def10k_on_risk:+.2f}"` SD ($z_{\text{gov}} =$ `{python} f"{_z_gov10k_on_gov:+.2f}"` SD). Proxy statements are therefore indispensable to disentangle board oversight from statutory risk warnings.
+A refit of the archetypes on Form 10-K frames alone reproduces Vocal Substantives and Defensive Disclosers closely ($r =$ `{python} f"{_r_vocal_10k:.3f}"` and `{python} f"{_r_def_10k:.3f}"`) but not Governance-Led ($r =$ `{python} f"{_r_gov_10k:.3f}"`, since board-oversight language lives in DEF 14A proxy statements rather than in 10-K text), confirming that proxy statements are indispensable to disentangle board oversight from statutory risk warnings; full correlations and vertex-level detail appear in Appendix E.
 
 ### The evolving composition of disclosure postures, 2021-2026
 
@@ -4580,6 +4580,33 @@ Markdown(tabulate(table, headers=["Outcome", "R2 M0", "R2 M1", "R2 M2", "R2 M3",
 
 ::: {custom-style="FigureNote"}
 *Notes:* Beta starts with negative adjusted R² at M0 because sector-by-year fixed effects consume many degrees of freedom relative to firms per cell, a penalty the adjustment applies even though raw R² stays positive throughout.
+:::
+
+### Archetype recovery under a Form 10-K-only refit {.unnumbered}
+
+@tbl-e-10k-refit recomputes the archetypal weights ($w_{\text{Vocal}}, w_{\text{Gov}}, w_{\text{Def}}$) on Form 10-K frames alone and correlates them, per firm, with the full-corpus weights reported in Section 3.3.2. The last two rows report the standardized-unit (SD) location of the Governance-Led and Defensive vertices on the risk-orientation dimension, full corpus vs. 10-K-only, to show where the two disagree.
+
+```{python}
+#| label: tbl-e-10k-refit
+#| tbl-cap: "[Full-corpus vs. Form 10-K-only archetype weights: per-firm correlation and vertex location.]{custom-style=\"CaptionText\"}"
+#| echo: false
+from tabulate import tabulate
+from IPython.display import Markdown
+
+table = [
+    ["Vocal Substantives", f"{_r_vocal_10k:.3f}", "--"],
+    ["Defensive Disclosers", f"{_r_def_10k:.3f}", "--"],
+    ["Governance-Led Disclosers", f"{_r_gov_10k:.3f}", "--"],
+    ["Governance vertex, on governance_orientation (SD)", "--", f"{_z_gov10k_on_gov:+.2f}"],
+    ["Governance vertex, on risk_orientation (SD)", "--", f"{_z_gov10k_on_risk:+.2f}"],
+    ["Defensive vertex, on risk_orientation (SD), full corpus", "--", f"{_z_def_full_on_risk:+.2f}"],
+    ["Defensive vertex, on risk_orientation (SD), 10-K-only", "--", f"{_z_def10k_on_risk:+.2f}"],
+]
+Markdown(tabulate(table, headers=["Quantity", "r (full corpus vs. 10-K-only)", "Value"]))
+```
+
+::: {custom-style="FigureNote"}
+*Notes:* Correlations computed across the `{python} len(_common10k)` firms common to both fits. Vocal Substantives and Defensive Disclosers replicate closely on 10-K text alone; Governance-Led collapses because board-oversight language concentrated in DEF 14A proxy statements is absent from 10-K filings, so the governance vertex partly absorbs risk-orientation variance instead.
 :::
 
 ### Decoupling index construction and sensitivity {.unnumbered}
