@@ -19,8 +19,7 @@
 #   run_cached.sh <cache_key> <watch_glob> [<watch_glob> ...] -- <command...>
 #
 # A watch glob with no matches is silently skipped (e.g. an optional input
-# that doesn't exist yet) -- same "skip cleanly" convention build_duckdb.py
-# uses for a country whose files aren't built yet.
+# that doesn't exist yet).
 set -euo pipefail
 
 if [[ $# -lt 3 ]]; then

@@ -35,7 +35,7 @@
 # Con --delete el borrado queda acotado al mismo subárbol/filtro: lo que
 # --path o --include dejan fuera no se mira y por lo tanto no se borra.
 #
-# In-flight files are skipped: *.partial is how scripts/common/ai_prefilter.py
+# In-flight files are skipped: *.partial is how scripts/enrichment/ai_prefilter.py
 # stages a parquet part before renaming it into place, so uploading one would
 # publish a truncated part.
 #

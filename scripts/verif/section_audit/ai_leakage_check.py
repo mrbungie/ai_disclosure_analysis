@@ -25,7 +25,7 @@ import yaml
 from tqdm import tqdm
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO_ROOT / "scripts" / "us"))
+sys.path.insert(0, str(REPO_ROOT / "scripts" / "raw_processing" / "us"))
 from section_segmenter import clean_html_to_lines, general_segment  # noqa: E402
 
 AI_KEYWORDS = [

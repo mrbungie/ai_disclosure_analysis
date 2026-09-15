@@ -37,7 +37,7 @@ distinta del párrafo (v1 pedía "el mínimo" y dejó una sola actividad en el
 archivadas en `data/archive/interim/ai_activities/`.
 
 `object` y `function` quedan libres a propósito: anticipar todos los casos de
-uso produce una ontología monstruosa; `scripts/analytics/activity_profiles.py`
+uso produce una ontología monstruosa; `scripts/analytics/archetypes/activity_profiles.py`
 normaliza y agrupa las etiquetas después.
 
 Mismo contrato operativo que `ai_classify.py`: aditivo, partes atómicas,

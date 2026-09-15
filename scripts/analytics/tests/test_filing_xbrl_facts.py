@@ -11,7 +11,7 @@ from pathlib import Path
 class InlineXbrlFactTests(unittest.TestCase):
     def test_parses_duration_and_instant_facts_with_filing_provenance(self) -> None:
         """Dropping the filing metadata or context dates would reintroduce leakage."""
-        from scripts.analytics.filing_xbrl_facts import parse_inline_xbrl
+        from scripts.common.filing_xbrl_facts import parse_inline_xbrl
 
         html = """
         <html><body>
@@ -65,7 +65,7 @@ class InlineXbrlFactTests(unittest.TestCase):
 
     def test_can_limit_extraction_to_the_financial_concepts_needed_downstream(self) -> None:
         """A broad parser must not turn every presentational tag into raw data."""
-        from scripts.analytics.filing_xbrl_facts import parse_inline_xbrl
+        from scripts.common.filing_xbrl_facts import parse_inline_xbrl
 
         html = """
         <xbrli:context id="instant"><xbrli:period><xbrli:instant>2024-03-31</xbrli:instant></xbrli:period></xbrli:context>
@@ -84,11 +84,11 @@ class InlineXbrlFactTests(unittest.TestCase):
         self.assertEqual([fact["concept"] for fact in facts], ["us-gaap:Assets"])
 
     def test_filing_with_no_numeric_facts_writes_a_readable_empty_parquet(self) -> None:
-        """An empty filing must not poison DuckDB's glob reader with a zero-column file."""
+        """An empty filing must not poison a glob reader over the facts directory with a zero-column file."""
         import importlib
         import pandas as pd
 
-        extract_one = importlib.import_module("scripts.us.04_extract_inline_xbrl_facts").extract_one
+        extract_one = importlib.import_module("scripts.raw_processing.us.04_extract_inline_xbrl_facts").extract_one
 
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "empty.html.gz"

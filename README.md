@@ -11,47 +11,62 @@ AI-related text and what it says) is future work, not built yet.
 
 ## Structure
 
-Fetch AND extraction scripts are organized **by country** under
-`scripts/<country>/` — extraction is sensitive to local filing-format
-idiosyncrasies (SEC's "Item N" heading convention doesn't generalize to
-another country's filings), so both live together rather than being
-split into generic pipeline-stage folders. Only genuinely country-agnostic
-plumbing (checkpointing, logging, the DuckDB view builder) lives in
-`scripts/common/`. `configs/` mirrors the same per-country layout.
+Scripts are organized **by pipeline stage first, country/topic second**
+under `scripts/<stage>/`: fetch (`raw_ingestion/`) and extraction
+(`raw_processing/`) are separate stages, but each still splits by
+country/form underneath, since extraction is sensitive to local
+filing-format idiosyncrasies (SEC's "Item N" heading convention doesn't
+generalize to another country's filings). Only genuinely country-agnostic
+plumbing (checkpointing, logging, the parquet layer catalog) lives in
+`scripts/common/`. `configs/` mirrors the per-country layout.
 
 ```
 scripts/
-  us/                 SEC EDGAR / US-listed firms — the only country today
-    00_build_firm_universe.py
-    edgar_fetch.py            SEC EDGAR fetch logic (edgartools wrapper)
-    section_segmenter.py      TOC-vs-heading segmentation — US/SEC-specific
-    known_segmenter_issues.yaml  documented, investigated extraction gaps
-    sector_map.py, tui_tickers.py
-    docs/              universe construction notes
-    tests/             unit tests
+  raw_ingestion/
+    us/               SEC EDGAR / US-listed firms — the only country today
+      00_build_firm_universe.py
+      edgar_fetch.py          SEC EDGAR fetch logic (edgartools wrapper)
+      sector_map.py, tui_tickers.py
+      docs/            universe construction notes
 
-    10k/               10-K panel (core instrument)
-      01_fetch_filings.py      manifest + fetch, via edgartools, idempotent
-      02_extract_sections.py   Item 1/1A/7 -> data/interim/sections/
+      10k/             10-K panel (core instrument)
+        01_fetch_filings.py    manifest + fetch, via edgartools, idempotent
 
-    10q/               10-Q shock series — a SEPARATE instrument, never
-      01_fetch_filings.py      pooled with 10-K.
-      02_extract_sections.py   Item 2 (MD&A) + Item 1A (Risk Factor
-                                updates) -> data/interim/sections/
+      10q/             10-Q shock series — a SEPARATE instrument, never
+        01_fetch_filings.py    pooled with 10-K.
 
-  03_market_data/      Prices + Fama-French factors — independent of
-    01_collect_market_data.py   both filing tracks, joins on ticker/date later
+    market/            Prices + Fama-French factors — independent of
+      01_collect_market_data.py  both filing tracks, joins on ticker/date later
+
+  raw_processing/
+    us/                 section_segmenter.py (TOC-vs-heading segmentation —
+                        US/SEC-specific), known_segmenter_issues.yaml
+                        (documented, investigated extraction gaps), tests/
+
+      10k/             02_extract_sections.py   Item 1/1A/7 -> data/interim/sections/
+      10q/             02_extract_sections.py   Item 2 (MD&A) + Item 1A
+                                                (Risk Factor updates) -> data/interim/sections/
 
   common/              Country-AGNOSTIC infra only: pipeline_logger.py,
                        section_extraction.py (run/checkpoint/traceability
                        plumbing — takes a country's segmenter functions as
                        parameters rather than importing one directly),
-                       build_duckdb.py
+                       layers.py (catalog of the bronze/silver parquet tables)
 
-  verif/section_audit/ Verification, not pipeline — checks scripts/us/10k's
+  bronze/              data/bronze/: one cleaned table per source (polars)
+                       manifests.py, paragraphs.py (+ text_split.py),
+                       unique_paragraphs.py, market.py, prefilter.py,
+                       llm_outputs.py
+  enrichment/          embeddings, prefilter, LLM frames/activities, golden
+                       set -> append-only data/interim/ outputs
+  silver/              data/silver/: analysis universe + LLM outputs per
+                       paragraph instance, ready for gold
+                       universe.py, ai_outputs.py
+
+  verif/section_audit/ Verification, not pipeline — checks the 10-K
                        extraction coverage against the full filing text
 
-10_fusion/             Merging scripts/us + 03_market_data — not built yet
+10_fusion/             Merging scripts/raw_ingestion/us + scripts/raw_ingestion/market — not built yet
 
 configs/
   us/                  config.yaml (SEC user agent, filing windows, sector
@@ -59,13 +74,13 @@ configs/
                        universe_membership.csv — a future 2nd country gets
                        its own configs/<country>/ sibling
 docs/                  thesis_proposal.md and other project-level docs
-duckdb/thesis.duckdb   SQL views over every parquet output (see below)
+models/                trained models (ai_classification/ = prefilter)
 ```
 
 ## Sample
 
 - **US-listed firms** in the frozen S&P 500 (2021-12-31) universe plus a
-  delisted-satellite core (see `scripts/us/docs/universe_expansion_plan.md`),
+  delisted-satellite core (see `scripts/raw_ingestion/us/docs/universe_expansion_plan.md`),
   spanning aggregated sectors (tech, semis, defense, industrials, telecom,
   autos, retail, consumer, energy, utilities, health, financials, insurance,
   real estate, materials, media, travel/leisure).
@@ -78,7 +93,7 @@ duckdb/thesis.duckdb   SQL views over every parquet output (see below)
 
 ## Fetching: edgartools, not hand-rolled requests
 
-`scripts/us/edgar_fetch.py` is shared by both `10k/` and `10q/`.
+`scripts/raw_ingestion/us/edgar_fetch.py` is shared by both `10k/` and `10q/`.
 Uses `edgartools` (`Company.get_filings()` + `Filing.html()`) rather than
 plain `requests.get()` calls, for two concrete reasons, both verified in
 this repo's history, not assumed:
@@ -172,39 +187,44 @@ CRSP export dropped into the same per-ticker layout with `source='crsp'`
 upgrades the data with no code changes — also the path to returns for
 delisted firms.
 
-### 4. SQL access: duckdb/thesis.duckdb
+### 4. Parquet layers: data/bronze/ and data/silver/
 
 ```bash
-make duckdb
-duckdb duckdb/thesis.duckdb
+make bronze silver     # or: make layers
 ```
 
-VIEWS (not materialized tables — re-evaluate their `read_parquet(glob)` on
-every query, so they're always current, no reimport step after a new
-extraction run or fetch):
+```python
+import sys; sys.path.insert(0, "scripts/common")
+import layers as L
+L.scan("silver.ai_frames")          # polars LazyFrame
+```
 
-| view | source |
-|---|---|
-| `firm_universe` | `data/interim/manifests/firm_universe.parquet` |
-| `filing_manifest` | `data/interim/manifests/filing_manifest.parquet` |
-| `extraction_trace` | every `filing_sections__run=*__part=*.parquet`, deduped to the latest run per (filing, item) — found or not |
-| `filing_sections` | `extraction_trace` filtered to `found` |
-| `filing_manifest_10q` | `data/interim/manifests/filing_manifest_10q.parquet` |
-| `extraction_trace_10q` / `filing_sections_10q` | 10-Q equivalents of the two views above — never unioned with the 10-K ones |
-| `market_prices` | every per-ticker price parquet |
-| `market_factors_daily` / `market_factors_monthly` | Fama-French factor files |
+| layer | tables | rule |
+|---|---|---|
+| `bronze` | `firm_universe`, `filing_manifest`, `filing_manifest_10q`, `extraction_trace`, `paragraphs`, `sentences`, `unique_paragraphs`, `market_prices`, `market_factors_*`, `prefilter_scores`, `prefilter_predictions`, `prefilter_anchors`, `prefilter_entity_terms`, `ai_frames`, `ai_activities`, `ai_entity_mentions` | one table per source, current run per key, US, no universe filter |
+| `silver` | `firm_universe`, `filing_manifest`, `filing_manifest_10q`, `ai_frames`, `ai_activities`, `ai_entity_mentions` | S&P 500 at 2021-01-01; LLM outputs broadcast to paragraph instances and restricted to the deployed prefilter population |
+
+Lineage keys: `(country_code, form, accession_number, item_key, paragraph_index)`
+→ `text_hash` → `frame_id` → `activity_id`; `bronze.extraction_trace` points
+each section at its interim part file. Every table writes a
+`<table>._manifest.json` (rows, key uniqueness, input files, git sha).
+
+**Additive outputs** (`layers.ADDITIVE_SOURCES`: embeddings, prefilter
+scores/predictions, LLM frames/activities, entity mentions, golden set)
+cost GPU hours or LLM calls. They are append-only, live in
+`data/interim/` and B2, and the layer builders only read them.
 
 ### 5. 10_fusion (not built yet)
 
-Merging scripts/us + 03_market_data is future work.
+Merging scripts/raw_ingestion/us + scripts/raw_ingestion/market is future work.
 
 ## Logging & Diagnostics
 
 Centralized structured logging (`scripts/common/pipeline_logger.py`)
 writes JSONL events to `data/interim/manifests/pipeline_log.jsonl`
 (timestamp, pipeline_step, level, message, ticker, cik, accession_number,
-duration_seconds, details) — queryable directly from DuckDB too
-(`read_json_auto('data/interim/manifests/pipeline_log.jsonl')`).
+duration_seconds, details) — readable with
+`polars.read_ndjson('data/interim/manifests/pipeline_log.jsonl')`.
 
 ## Unit Testing
 
@@ -212,7 +232,7 @@ duration_seconds, details) — queryable directly from DuckDB too
 make test
 ```
 
-Runs everything under `scripts/us/tests/` — currently
+Runs everything under `scripts/raw_processing/us/tests/` — currently
 `test_section_segmenter.py`, covering the item-heading regex (the 3
 letter-suffix formats filers actually use) and the TOC-vs-real-heading
 structural detection.

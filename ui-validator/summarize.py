@@ -17,7 +17,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-import duckdb
+import polars as pl
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent
@@ -118,12 +118,13 @@ def main() -> None:
 
     # ---- prefiltro, reponderado por estrato ----
     run = REPO_ROOT / "data" / "interim" / "prefilter_predictions_unique" / data["predictions_run"]
-    con = duckdb.connect()
-    pop = con.execute(f"""
-        SELECT form, CASE WHEN is_ai_prefiltered THEN 'positivo' WHEN predicted_proba >= 0.05 THEN 'zona_gris' ELSE 'negativo' END estrato, count(*) n
-        FROM read_parquet('{run}') WHERE country_code = 'us' GROUP BY 1, 2
-    """).fetchall()
-    pop_n = {(f, e): n for f, e, n in pop}
+    pop = (pl.scan_parquet(run).filter(pl.col("country_code") == "us")
+           .with_columns(pl.when(pl.col("is_ai_prefiltered")).then(pl.lit("positivo"))
+                         .when(pl.col("predicted_proba") >= 0.05).then(pl.lit("zona_gris"))
+                         .otherwise(pl.lit("negativo")).alias("estrato"))
+           .group_by("form", "estrato").len()
+           .collect(engine="streaming"))
+    pop_n = {(r["form"], r["estrato"]): r["len"] for r in pop.iter_rows(named=True)}
     sample_n = Counter((it["form"], it["estrato"]) for it in data["prefilter"])
     cells = {"tp": 0.0, "fp": 0.0, "fn": 0.0, "tn": 0.0}
     raw = {"tp": 0, "fp": 0, "fn": 0, "tn": 0}

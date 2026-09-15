@@ -76,49 +76,43 @@ plt.rcParams.update({
     ]),
 })
 
-# Headline corpus quantities used in the front matter, computed once from the
-# analysis universe (S&P 500 at 2021-01-01; the DuckDB manifest views are
-# already restricted to it, `paragraphs` is joined back through PANEL_DOCS).
-import duckdb
+# Data access. Every number in this document is read from the gold data
+# (data/gold, models/) or the analytics results (data/results/<topic>/) built by
+# `make layers analytics`; nothing is queried or fitted inline.
+import json
+import sys
 import pandas as pd
 
-_db = Path("../duckdb/thesis.duckdb")
-if not _db.exists():
-    _db = Path("duckdb/thesis.duckdb")
-_db = _db.resolve()
-_repo_root = _db.parent.parent
+_repo_root = next(r for r in (Path("..").resolve(), Path(".").resolve()) if (r / "scripts" / "common" / "layers.py").exists())
+sys.path.insert(0, str(_repo_root / "scripts" / "common"))
+import layers as L  # noqa: E402
 
-# Persistent connection and search path configuration (views resolve relative to repo root)
-_shared_duckdb_conn = duckdb.connect(str(_db), read_only=True)
-_shared_duckdb_conn.execute(f"SET file_search_path = '.., {_repo_root}';")
-_shared_duckdb_conn.execute("SET enable_progress_bar = false;")
+_MAKE_HINT = "run `make layers analytics` from the repository root"
 
-class _DuckDBProxy:
-    def __init__(self, conn):
-        self._conn = conn
-    def close(self):
-        pass
-    def __getattr__(self, name):
-        return getattr(self._conn, name)
 
-_db_proxy = _DuckDBProxy(_shared_duckdb_conn)
+def results(topic, name):
+    """data/results/<topic>/<name>, written by scripts/analytics/<topic>/."""
+    p = L.RESULTS / topic / name
+    if not p.exists():
+        raise FileNotFoundError(f"{p} is missing: {_MAKE_HINT}")
+    return p
 
-con = _db_proxy
 
-def get_db():
-    return _db_proxy
+def gold(kind, grain, name):
+    """data/gold/<kind>/<grain>/<name>.parquet (docs/gold_pipeline.md)."""
+    p = L.GOLD / kind / grain / f"{name}.parquet"
+    if not p.exists():
+        raise FileNotFoundError(f"{p} is missing: {_MAKE_HINT}")
+    return p
 
-# Intercept duckdb.connect so all subsequent cells transparently reuse the shared connection
-_orig_duckdb_connect = duckdb.connect
-duckdb.connect = lambda *args, **kwargs: _db_proxy
 
-# In-memory Parquet cache to avoid redundant disk I/O and decompression across cells
+def results_json(topic, name):
+    return json.loads(results(topic, name).read_text())
+
+
+# In-memory parquet cache: several chunks read the same gold/results files.
 _orig_read_parquet = pd.read_parquet
 _parquet_cache = {}
-
-def _p(name):
-    p = Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else Path(f"data/processed/clusters/{name}")
 
 def _cached_read_parquet(path, *args, **kwargs):
     try:
@@ -137,27 +131,18 @@ def _cached_read_parquet(path, *args, **kwargs):
 
 pd.read_parquet = _cached_read_parquet
 
-PANEL_DOCS = ("accession_number IN ("
-              "SELECT accession_number FROM filing_manifest WHERE country_code = 'us' AND accession_number IS NOT NULL "
-              "UNION ALL SELECT document_id FROM filing_manifest WHERE country_code = 'us' AND document_id IS NOT NULL "
-              "UNION ALL SELECT accession_number FROM filing_manifest_10q WHERE country_code = 'us')")
-
-_c = con
-hd_n_docs, hd_n_paragraphs = _c.execute(
-    f"SELECT count(DISTINCT accession_number), count(*) FROM paragraphs WHERE country_code = 'us' "
-    f"AND form IN ('10-K', '10-Q', '20-F', 'DEF 14A', '8-K', 'Earnings call') AND {PANEL_DOCS}").fetchone()
-hd_n_universe = _c.execute("SELECT count(*) FROM firm_universe WHERE country_code = 'us'").fetchone()[0]
-_ap = _p("firm_activities.parquet")
-_a = pd.read_parquet(_ap, columns=["ticker", "text_hash", "activity_id"]).drop_duplicates()
+# Headline corpus quantities used in the front matter (analysis universe: S&P 500
+# at 2021-01-01).
+_hc = results_json("corpus", "headline_counts.json")
+hd_n_docs, hd_n_paragraphs, hd_n_universe = _hc["hd_n_docs"], _hc["hd_n_paragraphs"], _hc["hd_n_universe"]
+hd_paragraphs_m = f"{hd_n_paragraphs / 1e6:.1f}"
+_a = pd.read_parquet(gold("spines", "activity", "activity"), columns=["ticker", "text_hash", "activity_id"])
 hd_n_activities = len(_a)
 hd_n_activity_firms = int(_a["ticker"].nunique())
-hd_paragraphs_m = f"{hd_n_paragraphs / 1e6:.1f}"
 
 # Headline results quoted in the front matter and conclusions, read from the
-# same artifacts the empirical chapters compute them from.
-import json
-_cl = _ap.parent
-_m = pd.read_parquet(_cl / "firm_year_master_v2.parquet")
+# same artifacts the empirical chapters use.
+_m = pd.read_parquet(gold("covariates", "firm_year", "disclosure_volume"), columns=["ticker", "year", "any_ai", "frames_per_1k"])
 _yr = _m.groupby("year").agg(any_ai=("any_ai", "mean"), frames=("frames_per_1k", "mean"))
 hd_share = {int(y): float(v * 100) for y, v in _yr["any_ai"].items()}
 hd_frames = {int(y): float(v) for y, v in _yr["frames"].items()}
@@ -167,8 +152,8 @@ hd_frames_ratio_26 = hd_frames[2026] / hd_frames[2021]
 # Same-window seasonal adjustment for the partial 2026 year: the change in a
 # measure between the 2025 window that ends on the same calendar day as the
 # 2026 cut-off and the full 2025 year is applied to the 2026 year-to-date value.
-_dp = pd.read_parquet(_cl / "document_panel.parquet")
-_dp = _dp[_dp["form"].isin(["10-K", "10-Q", "DEF 14A", "8-K"])].copy()
+_dp_all = L.read_gold("document", ("covariates", "disclosure_volume"))
+_dp = _dp_all[_dp_all["form"].isin(["10-K", "10-Q", "DEF 14A", "8-K"])].copy()
 _dp["year"] = _dp["fecha"].dt.year
 _dp["md"] = _dp["fecha"].dt.month * 100 + _dp["fecha"].dt.day
 hd_cutoff = _dp.loc[_dp["year"] == 2026, "fecha"].max()
@@ -188,27 +173,18 @@ hd_int_est_2026 = _ytd26[0] * hd_int_factor
 hd_share_est_2026 = min(_ytd26[1] * hd_share_factor, 100.0)
 hd_int_ratio_est = hd_int_est_2026 / hd_frames[2021]
 # Activity volumes: same-window factor on the activity count itself.
-_ad = pd.read_parquet(_ap, columns=["accession_number", "text_hash", "activity_id"]).drop_duplicates()
-_ad = _ad.merge(pd.read_parquet(_cl / "document_panel.parquet", columns=["accession_number", "fecha"]), on="accession_number", how="inner")
+_ad = pd.read_parquet(gold("spines", "activity", "activity"), columns=["accession_number", "text_hash", "activity_id"]).drop_duplicates()
+_ad = _ad.merge(_dp_all[["accession_number", "fecha"]], on="accession_number", how="inner")
 _ad["year"] = _ad["fecha"].dt.year
 _ad["md"] = _ad["fecha"].dt.month * 100 + _ad["fecha"].dt.day
 hd_act_factor = float(((_ad["year"] == 2025).sum()) / ((_ad["year"] == 2025) & (_ad["md"] <= hd_cutoff_md)).sum())
-_c = get_db()
-_tenk = _c.execute(f"""
-    SELECT extract(year FROM fm.filing_date)::INT AS y,
-           count(DISTINCT p.accession_number) AS docs,
-           count(DISTINCT CASE WHEN f.accession_number IS NOT NULL THEN p.accession_number END) AS docs_ai
-    FROM (SELECT DISTINCT accession_number FROM paragraphs WHERE country_code = 'us' AND form = '10-K' AND {PANEL_DOCS}) p
-    JOIN filing_manifest fm ON fm.accession_number = p.accession_number AND fm.country_code = 'us'
-    LEFT JOIN (SELECT DISTINCT accession_number FROM gold_ai_frames WHERE country_code = 'us' AND has_frame AND form = '10-K') f
-           ON f.accession_number = p.accession_number
-    GROUP BY 1 ORDER BY 1
-""").df()
-hd_tenk_share = {int(r.y): float(r.docs_ai / r.docs * 100) for r in _tenk.itertuples()}
-_gapw = json.loads((_cl / "channel_gap_words_robustness.json").read_text())
+# Share of 10-K filings with at least one AI frame, by filing year.
+_tenk = _dp_all[_dp_all["form"] == "10-K"].assign(y=lambda d: d["fecha"].dt.year)
+hd_tenk_share = {int(y): float((g["n_frames"] > 0).mean() * 100) for y, g in _tenk.groupby("y")}
+_gapw = results_json("channel_gap", "channel_gap_words_robustness.json")
 hd_promo_ratio = _gapw["promo_per_1k_words"]["ratio"]
 hd_quant_ratio = _gapw["quant_per_1k_words"]["ratio"]
-_sm = json.loads((_cl / "strategy_dimensions_manifest.json").read_text())
+_sm = results_json("posture", "strategy_dimensions_diagnostics.json")
 hd_corr = _sm["correlation_matrix"]
 hd_stab = {int(k): v for k, v in _sm["stability_by_k"].items()}
 hd_stab3 = dict(zip(_sm["cluster_sizes"].keys(), hd_stab[3])) if len(_sm["cluster_sizes"]) == 3 else {}
@@ -217,21 +193,21 @@ _var = _sm["activity_volume_regression"]
 hd_vs_ratio = _var["volume_adjusted"]["Vocal Substantives"]["ratio"]
 hd_gl_ratio = _var["volume_adjusted"]["Governance-Led Disclosers"]["ratio"]
 hd_vol_r2 = _var["r2_adjusted"]
-_wv = json.loads((_cl / "washing_score_validation.json").read_text())
+_wv = results_json("washing", "washing_score_validation.json")
 hd_w_rho = _wv["persistence"]["spearman"]
-_apj = json.loads((_cl / "activity_profiles.json").read_text())
+_apj = results_json("posture", "activity_profiles.json")
 hd_quant_pooled = _apj["top_behaviours"]["quantified_outcome"]
 hd_quant_filings = _apj["top_behaviours_filings_only"]["quantified_outcome"]
 hd_obj_unspec_firms = _apj["object_families"]["AI, unspecified object"]["pct_firms"]
 hd_src_unspec = _apj["distributions"]["source"]["unspecified"]
-_inc = json.loads((_cl / "incremental_signal.json").read_text())["outcomes"]["beta"]
+_inc = results_json("shock", "incremental_signal.json")["outcomes"]["beta"]
 hd_inc_n = int(_inc["n_washing"])
 hd_inc_r2_base = _inc["r2_M2AB_washing_sample"]
 hd_inc_r2_w = _inc["r2_M4"]
 hd_inc_dr2 = _inc["delta_r2_washing"]
 hd_inc_F = _inc["wald_washing"]["F"]
 hd_inc_p = _inc["wald_washing"]["p"]
-_cg = json.loads((_cl / "activity_grounding.json").read_text())["channel_gap"]["pooled"]
+_cg = results_json("washing", "activity_grounding.json")["channel_gap"]["pooled"]
 hd_gap_quant_pp = _cg["quantified_outcome"]["gap_pp"]
 hd_gap_named_pp = _cg["named_product_or_process"]["gap_pp"]
 ```
@@ -338,32 +314,22 @@ To address the research questions above, this thesis constructs an empirical pip
 ```{python}
 #| echo: false
 #| output: false
-_u = con.execute("SELECT active_status, count(*) AS n FROM firm_universe WHERE country_code = 'us' GROUP BY 1").df()
-uni_frame_total = int(_u["n"].sum())
-uni_frame_delisted = int(_u.loc[_u["active_status"] == "delisted", "n"].sum())
+_hc2 = results_json("corpus", "headline_counts.json")
+uni_frame_total = _hc2["uni_frame_total"]
+uni_frame_delisted = _hc2["uni_frame_delisted"]
+cov_last_date = _hc2["cov_last_date"]
+cov_10k_2026 = _hc2["cov_10k_2026"]
+cov_10k_2025 = _hc2["cov_10k_2025"]
+cov_10q_2026 = _hc2["cov_10q_2026"]
+cov_calls_2026 = _hc2["cov_calls_2026"]
+cov_months_2026 = _hc2["cov_months_2026"]
 
-_master = pd.read_parquet(_p("firm_year_master_v2.parquet"))
-uni_n_firms = int(_master["ticker"].nunique())
-_yrs = _master.groupby("ticker")["year"].nunique()
+uni_n_firms = int(_m["ticker"].nunique())
+_yrs = _m.groupby("ticker")["year"].nunique()
 bal_n = int((_yrs == 6).sum())
-bal_share = (_master[_master["ticker"].isin(_yrs[_yrs == 6].index)]
-             .groupby("year").apply(lambda s: (s["n_frames"] > 0).mean() * 100)).to_dict()
-uni_n_activity_firms = int(pd.read_parquet(_p("firm_activities.parquet"))["ticker"].nunique())
-
-# Temporal coverage of the partial 2026 year, from the manifests.
-_cov = con.execute("""
-    SELECT form_type, count(DISTINCT ticker) AS firms, max(filing_date) AS last_date
-    FROM (SELECT form_type, ticker, filing_date FROM filing_manifest WHERE country_code = 'us'
-          UNION ALL SELECT '10-Q', ticker, filing_date FROM filing_manifest_10q WHERE country_code = 'us')
-    WHERE extract(year FROM filing_date) = 2026 GROUP BY 1
-""").df().set_index("form_type")
-_cov25 = con.execute("SELECT count(DISTINCT ticker) FROM filing_manifest WHERE country_code = 'us' AND form_type = '10-K' AND extract(year FROM filing_date) = 2025").fetchone()[0]
-cov_last_date = str(pd.to_datetime(_cov["last_date"].max()).date())
-cov_10k_2026 = int(_cov.loc["10-K", "firms"]) if "10-K" in _cov.index else 0
-cov_10k_2025 = int(_cov25)
-cov_10q_2026 = int(_cov.loc["10-Q", "firms"]) if "10-Q" in _cov.index else 0
-cov_calls_2026 = int(_cov.loc["Earnings call transcript", "firms"]) if "Earnings call transcript" in _cov.index else 0
-cov_months_2026 = pd.to_datetime(cov_last_date).month
+bal_share = (_m[_m["ticker"].isin(_yrs[_yrs == 6].index)]
+             .groupby("year")["any_ai"].mean() * 100).to_dict()
+uni_n_activity_firms = hd_n_activity_firms
 ```
 
 The empirical investigation focuses on constituents of the S&P 500 index fixed as of January 1, 2021 (`{python} uni_frame_total` firms). Fixing the cohort at the start of the observation period provides an ex-ante baseline of large-cap U.S. enterprises prior to the commercial diffusion of generative AI. The archived constituent roster as of December 31, 2020 [@wikipedia2020sp500], cross-validated against S&P Dow Jones' replacement announcements, contains 499 unique issuers.[^sp500-lines]
@@ -381,22 +347,7 @@ This ex-ante construction prevents look-ahead selection bias: defining the unive
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
-fu = con.execute("SELECT ticker, company_name, sic, industry_group, active_status FROM firm_universe WHERE country_code = 'us'").df()
-fu["sic2"] = fu["sic"].astype(str).str.zfill(4).str[:2]
-fu["sic_int"] = pd.to_numeric(fu["sic"], errors="coerce")
-
-def sic_div(s):
-    if pd.isna(s): return "Other / Diversified"
-    s = int(s)
-    if s < 2000: return "Mining & Construction"
-    elif s < 4000: return "Manufacturing"
-    elif s < 5000: return "Transport & Utilities"
-    elif s < 6000: return "Wholesale & Retail"
-    elif s < 6800: return "Finance, Ins. & Real Estate"
-    elif s < 9000: return "Services"
-    else: return "Other / Diversified"
-
-fu["division"] = fu["sic_int"].apply(sic_div)
+fu = pd.read_parquet(results("corpus", "universe_sectors.parquet"))
 div_counts = fu["division"].value_counts().sort_values(ascending=True)
 
 SIC2_LABELS = {
@@ -424,22 +375,6 @@ labels_s2 = [f"Other ({n_other_groups} groups)"] + [SIC2_LABELS.get(s, f"SIC {s}
 vals_s2 = [other_count] + list(top_s2.values)
 colors_s2 = ["#A5AFB6"] + ["#355F6B"] * len(top_s2)
 
-def map_sector(sic2):
-    try: s = int(sic2)
-    except: return "Other / Diversified"
-    if s in [73, 35, 36]: return "Technology"
-    elif s in [48]: return "Communications"
-    elif s in [28, 38, 80]: return "Healthcare & Pharma"
-    elif 60 <= s <= 67: return "Financial Services"
-    elif 20 <= s <= 39: return "Industrials & Mfg"
-    elif 40 <= s <= 47: return "Transportation"
-    elif s == 49: return "Utilities"
-    elif 10 <= s <= 14 or s == 29: return "Energy & Mining"
-    elif 50 <= s <= 59: return "Retail & Wholesale"
-    elif 70 <= s <= 89: return "Business Services"
-    else: return "Other / Diversified"
-
-fu["agg_sector"] = fu["sic2"].apply(map_sector)
 sec_counts = fu["agg_sector"].value_counts().sort_values(ascending=True)
 
 fig = plt.figure(figsize=(10.0, 7.6), dpi=300)
@@ -521,24 +456,12 @@ All document counts and summary metrics are computed directly from the underlyin
 
 ```{python}
 #| echo: false
-from IPython.display import Markdown
-# Documents of the analysis universe (S&P 500 at 2021-01-01). The manifest
-# views are already restricted to that panel; `paragraphs` is a base table
-# keyed by accession_number (calls use their document_id), so every corpus
-# count joins back to the manifests through this predicate.
-PANEL_DOCS = ("accession_number IN ("
-              "SELECT accession_number FROM filing_manifest WHERE country_code = 'us' AND accession_number IS NOT NULL "
-              "UNION ALL SELECT document_id FROM filing_manifest WHERE country_code = 'us' AND document_id IS NOT NULL "
-              "UNION ALL SELECT accession_number FROM filing_manifest_10q WHERE country_code = 'us')")
-scope = f"country_code = 'us' AND form IN ('10-K', '10-Q', '20-F', 'DEF 14A', '8-K', 'Earnings call') AND {PANEL_DOCS}"
-totals = con.execute(f"""
-    SELECT count(DISTINCT accession_number) AS documents,
-           count(*) AS paragraphs,
-           sum(is_scorable::INT) AS scorable,
-           count(DISTINCT CASE WHEN is_scorable THEN text_hash END) AS unique_texts
-    FROM paragraphs WHERE {scope}
-""").fetchone()
-con.close()
+#| output: false
+# Corpus totals for the analysis universe (S&P 500 at 2021-01-01), from the
+# prefilter funnel's own accounting (results/prefilter/funnel.json), which
+# applies the same document scope used throughout this chapter.
+_funnel = results_json("prefilter", "funnel.json")["funnel"]
+totals = (_funnel["n_docs"], _funnel["n_raw"], _funnel["n_scorable"], _funnel["n_unique"])
 ```
 
 ```{python}
@@ -548,13 +471,12 @@ con.close()
 from tabulate import tabulate
 from IPython.display import Markdown
 
-scope = f"country_code = 'us' AND form IN ('10-K', '10-Q', '20-F', 'DEF 14A', '8-K', 'Earnings call') AND {PANEL_DOCS}"
-rows = con.execute(f"""
-    SELECT form, count(DISTINCT accession_number) AS documents
-    FROM paragraphs WHERE {scope}
-    GROUP BY 1
-    ORDER BY CASE form WHEN '10-K' THEN 1 WHEN '10-Q' THEN 2 WHEN '20-F' THEN 3 WHEN 'DEF 14A' THEN 4 WHEN '8-K' THEN 5 ELSE 6 END
-""").fetchall()
+_form_order = {"10-K": 1, "10-Q": 2, "20-F": 3, "DEF 14A": 4, "8-K": 5}
+_dfy = pd.read_parquet(results("corpus", "documents_by_form_year.parquet"))
+_by_form = _dfy.groupby("form", as_index=False)["documents"].sum()
+_by_form["_order"] = _by_form["form"].map(_form_order).fillna(6)
+_by_form = _by_form.sort_values("_order")
+rows = list(_by_form[["form", "documents"]].itertuples(index=False, name=None))
 rows.append(["Total", sum(n for _, n in rows)])
 Markdown(tabulate([[form, f"{n:,}"] for form, n in rows], headers=["Form", "Documents"]))
 ```
@@ -573,29 +495,11 @@ from tabulate import tabulate
 from IPython.display import Markdown
 
 n_docs, n_raw, n_scorable, n_unique = totals[0], totals[1], totals[2], totals[3]
-n_prefiltered = con.execute(f"""
-    SELECT count(*) FROM (
-        SELECT text_hash, is_ai_prefiltered
-        FROM read_parquet('data/interim/prefilter_predictions_unique/prefilter_predictions__run=*.parquet', union_by_name=true)
-        WHERE country_code = 'us'
-        QUALIFY row_number() OVER (PARTITION BY text_hash ORDER BY model_version DESC) = 1
-    ) WHERE is_ai_prefiltered
-      AND text_hash IN (SELECT text_hash FROM paragraphs WHERE country_code='us' AND is_scorable AND {PANEL_DOCS})
-""").fetchone()[0]
-
-con.execute(f"""
-    CREATE OR REPLACE TEMP TABLE _us_frames AS
-    SELECT form, accession_number, paragraph_index, text_hash, frame_id, subject, ai_type, temporal, specificity, rhetoric
-    FROM gold_ai_frames WHERE country_code='us' AND has_frame AND {PANEL_DOCS}
-""")
-n_framed, n_frames_total, share_firm_subject, n_firm_texts = con.execute("""
-    SELECT 
-        count(DISTINCT text_hash) AS n_framed,
-        count(*) AS n_frames_total,
-        avg((subject = 'firm')::INT) * 100 AS share_firm_subject,
-        count(DISTINCT CASE WHEN subject = 'firm' THEN text_hash END) AS n_firm_texts
-    FROM (SELECT DISTINCT text_hash, frame_id, subject FROM _us_frames)
-""").fetchone()
+n_prefiltered = _funnel["n_prefiltered"]
+n_framed = _funnel["n_framed"]
+n_frames_total = _funnel["n_frames_total"]
+share_firm_subject = _funnel["share_firm_subject"]
+n_firm_texts = _funnel["n_firm_texts"]
 n_activities = hd_n_activities
 
 rows = [
@@ -631,46 +535,24 @@ Candidate texts pass to a zero-shot LLM extractor (`openai/gpt-5.6-luna`, select
 from tabulate import tabulate
 from IPython.display import Markdown
 
-con.execute(f"""
-    CREATE TEMP TABLE IF NOT EXISTS _us_frames AS
-    SELECT form, accession_number, paragraph_index, text_hash, frame_id, subject, ai_type, temporal, specificity, rhetoric
-    FROM gold_ai_frames WHERE country_code='us' AND has_frame AND {PANEL_DOCS}
-""")
-# Same dedup as n_frames_total in tbl-funnel-summary (DISTINCT text_hash,
-# frame_id, subject): the raw _us_frames table still has a handful of rows
-# where the identical paragraph and frame appear under more than one
-# accession_number, which would otherwise double-count them here and make
-# this table's n diverge from the funnel's.
-con.execute("""
-    CREATE OR REPLACE TEMP TABLE _us_frames_dedup AS
-    SELECT DISTINCT text_hash, frame_id, subject, ai_type, temporal, specificity, rhetoric FROM _us_frames
-""")
-counts_subj = con.execute("SELECT subject, count(*) n FROM _us_frames_dedup GROUP BY 1 ORDER BY 2 DESC").df()
-tot_subj = counts_subj['n'].sum()
-subj_str = "; ".join(f"{r.subject.replace('_', ' ').title()}: {r.n/tot_subj*100:.1f}%" for _, r in counts_subj.iterrows())
+_fsd = pd.read_parquet(results("corpus", "frame_schema_distribution.parquet"))
 
-counts_ai = con.execute("SELECT ai_type, count(*) n FROM _us_frames_dedup GROUP BY 1 ORDER BY 2 DESC").df()
-tot_ai = counts_ai['n'].sum()
-ai_str = "; ".join(f"{r.ai_type.replace('_', ' ').title()}: {r.n/tot_ai*100:.1f}%" for _, r in counts_ai.iterrows())
+def _field_str(field, title=True):
+    sub = _fsd[_fsd["field"] == field].sort_values("n", ascending=False)
+    return "; ".join(f"{(v.replace('_', ' ').title() if title else v.title())}: {p:.1f}%"
+                      for v, p in zip(sub["value"], sub["pct"]))
 
-counts_temp = con.execute("SELECT temporal, count(*) n FROM _us_frames_dedup GROUP BY 1 ORDER BY 2 DESC").df()
-tot_temp = counts_temp['n'].sum()
-temp_str = "; ".join(f"{r.temporal.title()}: {r.n/tot_temp*100:.1f}%" for _, r in counts_temp.iterrows())
+tot_subj = int(_fsd.loc[_fsd["field"] == "subject", "n"].sum())
+subj_str = _field_str("subject")
+ai_str = _field_str("ai_type")
+temp_str = _field_str("temporal", title=False)
 
-spec_prod, spec_proc, spec_date, spec_metr, spec_vend, rhet_strat, rhet_prom, rhet_hedg = con.execute("""
-    SELECT 
-        round(avg(list_contains(specificity, 'product')::int)*100, 1),
-        round(avg(list_contains(specificity, 'process')::int)*100, 1),
-        round(avg(list_contains(specificity, 'timeline')::int)*100, 1),
-        round(avg(list_contains(specificity, 'metric')::int)*100, 1),
-        round(avg(list_contains(specificity, 'vendor')::int)*100, 1),
-        round(avg(list_contains(rhetoric, 'strategic')::int)*100, 1),
-        round(avg(list_contains(rhetoric, 'promotional')::int)*100, 1),
-        round(avg(list_contains(rhetoric, 'hedged')::int)*100, 1)
-    FROM _us_frames_dedup
-""").fetchone()
-spec_str = f"Product: {spec_prod}%; Process: {spec_proc}%; Timeline: {spec_date}%; Metric: {spec_metr}%; Vendor: {spec_vend}%"
-rhet_str = f"Strategic importance: {rhet_strat}%; Promotional tone: {rhet_prom}%; Hedged: {rhet_hedg}%"
+_spec = _fsd[_fsd["field"] == "specificity"].set_index("value")["pct"]
+_rhet = _fsd[_fsd["field"] == "rhetoric"].set_index("value")["pct"]
+spec_str = (f"Product: {_spec['product']}%; Process: {_spec['process']}%; "
+            f"Timeline: {_spec['timeline']}%; Metric: {_spec['metric']}%; Vendor: {_spec['vendor']}%")
+rhet_str = (f"Strategic importance: {_rhet['strategic']}%; "
+            f"Promotional tone: {_rhet['promotional']}%; Hedged: {_rhet['hedged']}%")
 
 t4_rows = [
     ["Subject", "Identifies the focal entity of the corporate claim", "Firm, partners, customers, industry, regulators", subj_str],
@@ -692,36 +574,39 @@ Claims attributing operational action to the firm (deploying, developing, partne
 #| label: tbl-activity-schema
 #| tbl-cap: "[Disclosed AI activity schema: operational definitions, taxonomic families, and observed activity volumes.]{custom-style=\"CaptionText\"}"
 #| echo: false
-from pathlib import Path
 import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-data_path = Path("../data/processed/clusters/firm_activities.parquet")
-if not data_path.exists():
-    data_path = Path("data/processed/clusters/firm_activities.parquet")
-df = pd.read_parquet(data_path)
-n_act = len(df)
+_asd = pd.read_parquet(results("corpus", "activity_schema_distribution.parquet"))
+n_act = int(_asd.loc[_asd["field"] == "action", "n"].sum())
 
-counts_act = df['action'].value_counts()
-act_top = "; ".join([f"{k.replace('_', ' ').title()}: {v/n_act*100:.1f}%" for k, v in counts_act.head(4).items()])
+def _act_field_str(field, k=4, exclude=()):
+    sub = _asd[(_asd["field"] == field) & (~_asd["value"].isin(exclude))].sort_values("n", ascending=False).head(k)
+    return "; ".join(f"{v.replace('_', ' ').title()}: {p:.1f}%" for v, p in zip(sub["value"], sub["pct"]))
 
-counts_func = df['function_family'].value_counts()
-func_top = "; ".join([f"{k.replace('_', ' ').title()}: {v/n_act*100:.1f}%" for k, v in counts_func.head(4).items() if k != 'unspecified'])
+act_top = _act_field_str("action")
+stg_top = _act_field_str("stage")
+src_top = _act_field_str("source")
+tgt_top = _act_field_str("target")
+ev_top = "; ".join(f"{v.replace('_', ' ').title()}: {p:.1f}%"
+                    for v, p in zip(_asd.loc[_asd["field"] == "evidence_type", "value"],
+                                     _asd.loc[_asd["field"] == "evidence_type", "pct"]))
 
-counts_stg = df['stage'].value_counts()
-stg_top = "; ".join([f"{k.title()}: {v/n_act*100:.1f}%" for k, v in counts_stg.head(4).items()])
+# Business-function taxonomy: silver.ai_activities' schema-level `domain`
+# field is a coarse 3-value split (customer_facing/internal/unspecified),
+# not the finer functional taxonomy firms' disclosed activities are actually
+# tagged with; that lives on the gold covariate's `function_family` (18
+# categories, gold-layer business rule -- see
+# scripts/gold/activity/build_activity.py), read directly here rather
+# than duplicated into the corpus-level schema-distribution result.
+_ff = L.read_dataset("activity", ("covariates", "extraction", ["frame_id"]), ("covariates", "taxonomy", ["function_family"]))[
+    ["text_hash", "frame_id", "activity_id", "function_family"]].drop_duplicates(subset=["text_hash", "frame_id", "activity_id"])
+counts_func = _ff["function_family"].value_counts()
+func_top = "; ".join(f"{k.replace('_', ' ').title()}: {v / len(_ff) * 100:.1f}%"
+                      for k, v in counts_func.head(4).items() if k != "unspecified")
 
-counts_src = df['source'].value_counts()
-src_top = "; ".join([f"{k.replace('_', ' ').title()}: {v/n_act*100:.1f}%" for k, v in counts_src.head(4).items()])
-
-counts_tgt = df['target'].value_counts()
-tgt_top = "; ".join([f"{k.replace('_', ' ').title()}: {v/n_act*100:.1f}%" for k, v in counts_tgt.head(4).items()])
-
-counts_ev = df['evidence_type'].value_counts()
-ev_top = "; ".join([f"{k.replace('_', ' ').title()}: {v/n_act*100:.1f}%" for k, v in counts_ev.items()])
-
-n_entities = df['entities'].explode().dropna().shape[0]
+n_entities = int(_asd.loc[(_asd["field"] == "named_entities") & (_asd["value"] == "entity_citations"), "n"].iloc[0])
 
 t5_rows = [
     ["Action Verb", "Discrete operational action taken by the disclosing firm", "Deploy, invest, scale, develop, procure, staff", act_top],
@@ -789,16 +674,10 @@ Because filings cluster heavily in the first quarter, full-year 2026 is projecte
 #| echo: false
 #| fig-width: 9.5
 #| fig-height: 3.8
-from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 
-data_path = Path("../data/processed/clusters/firm_year_master_v2.parquet")
-if not data_path.exists():
-    data_path = Path("data/processed/clusters/firm_year_master_v2.parquet")
-
-m = pd.read_parquet(data_path)
-y = m.groupby("year").agg(
+y = _m.groupby("year").agg(
     any_ai=("any_ai", "mean"),
     frames=("frames_per_1k", "mean")
 )
@@ -918,13 +797,12 @@ The empirical distribution across the S&P 500 reveals substantial structural het
 #| echo: false
 #| fig-width: 8.8
 #| fig-height: 3.8
-from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 
-df = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
+df = pd.read_parquet(gold("covariates", "firm", "posture_archetype_static"))
 
 FEATURES = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
             "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
@@ -982,13 +860,8 @@ The correlation structure of these eight dimensions shows two key properties (@t
 ```{python}
 #| echo: false
 #| output: false
-from pathlib import Path
-import pandas as pd
-
-
-_arch = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
-arch_n_universe = len(_arch)
-arch_n_noai = int((_arch["archetype"] == "No AI").sum())
+arch_n_universe = uni_n_firms
+arch_n_noai = int((df["archetype"] == "No AI").sum())
 arch_n_fit = arch_n_universe - arch_n_noai
 ```
 
@@ -1008,211 +881,18 @@ Fitting Archetypal Analysis at $k = 3$ projects every active disclosing firm ont
 #| message: false
 #| fig-width: 15
 #| fig-height: 14
-import contextlib
-import io
-from pathlib import Path
-import numpy as np
-import pandas as pd
+# Pre-rendered by scripts/analytics/posture/plot_archetypal_simplex.py, which
+# applies the frozen posture-archetype model bundle
+# (models/posture_archetype_static/model.pkl) to
+# predictions/firm/posture_archetype_static.parquet -- the fit is not
+# repeated here.
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 
-with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-    from archetypes import AA
-
-fu = con.execute("SELECT ticker, company_name, sic, industry_group FROM firm_universe WHERE country_code = 'us' AND ticker IS NOT NULL").df()
-fu["sic2"] = fu["sic"].astype(str).str.zfill(4).str[:2]
-
-def map_sector(sic2):
-    try: s = int(sic2)
-    except: return "Other / Diversified"
-    if s in [73, 35, 36]: return "Technology"
-    elif s in [48]: return "Communications"
-    elif s in [28, 38, 80]: return "Healthcare & Pharma"
-    elif 60 <= s <= 67: return "Financial Services"
-    elif 20 <= s <= 39: return "Industrials & Mfg"
-    elif 40 <= s <= 47: return "Transportation"
-    elif s == 49: return "Utilities"
-    elif 10 <= s <= 14 or s == 29: return "Energy & Mining"
-    elif 50 <= s <= 59: return "Retail & Wholesale"
-    elif 70 <= s <= 89: return "Business Services"
-    else: return "Other / Diversified"
-
-fu["sector"] = fu["sic2"].apply(map_sector)
-fu_sector_map = fu.set_index("ticker")["sector"].to_dict()
-fu_name_map = fu.set_index("ticker")["company_name"].to_dict()
-
-df_simplex = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
-SIMPLEX_FEATS = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
-                 "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
-fit_pop = df_simplex[df_simplex["archetype"] != "No AI"].copy()
-X = fit_pop[SIMPLEX_FEATS].values
-X_std = (X - X.mean(axis=0)) / X.std(axis=0, ddof=0)
-aa = AA(n_archetypes=3, random_state=42, max_iter=500)
-W = aa.fit_transform(X_std)
-
-A = aa.archetypes_
-def_col = int(np.argmax(A[:, SIMPLEX_FEATS.index("risk_orientation")]))
-rem_cols = [i for i in range(3) if i != def_col]
-gov_col = max(rem_cols, key=lambda i: A[i, SIMPLEX_FEATS.index("governance_orientation")])
-voc_col = [i for i in range(3) if i not in (def_col, gov_col)][0]
-
-W_named = pd.DataFrame({
-    "Vocal": W[:, voc_col],
-    "Governance": W[:, gov_col],
-    "Defensive": W[:, def_col]
-}, index=fit_pop["ticker"])
-
-fit_pop["w_Vocal"] = W_named["Vocal"].values
-fit_pop["w_Gov"] = W_named["Governance"].values
-fit_pop["w_Def"] = W_named["Defensive"].values
-fit_pop["sector"] = fit_pop["ticker"].map(fu_sector_map).fillna("Other / Diversified")
-fit_pop["company_name"] = fit_pop["ticker"].map(fu_name_map)
-
-w_v = fit_pop["w_Vocal"].values
-w_g = fit_pop["w_Gov"].values
-w_d = fit_pop["w_Def"].values
-fit_pop["x_tern"] = w_g + 0.5 * w_d
-fit_pop["y_tern"] = (np.sqrt(3) / 2) * w_d
-
+img = mpimg.imread(results("posture", "fig_archetypal_ternary_simplex.png"))
 fig, ax = plt.subplots(figsize=(15, 14), dpi=300)
-
-ax.plot([0, 1, 0.5, 0], [0, 0, np.sqrt(3)/2, 0], "k-", lw=2.2, zorder=3)
-
-c_x, c_y = 0.5, np.sqrt(3)/6
-ax.plot([0.5, c_x], [0, c_y], color="#A5AFB6", lw=1.1, ls=":", zorder=2)
-ax.plot([0.75, c_x], [np.sqrt(3)/4, c_y], color="#A5AFB6", lw=1.1, ls=":", zorder=2)
-ax.plot([0.25, c_x], [np.sqrt(3)/4, c_y], color="#A5AFB6", lw=1.1, ls=":", zorder=2)
-
-ax.text(0.33, 0.06, "Pure Vocal (w > 0.5)", fontsize=7.2, color="#A5AFB6", ha="center", style="italic")
-ax.text(0.67, 0.06, "Pure Governance (w > 0.5)", fontsize=7.2, color="#A5AFB6", ha="center", style="italic")
-ax.text(0.50, 0.60, "Pure Defensive (w > 0.5)", fontsize=7.2, color="#A5AFB6", ha="center", style="italic")
-ax.text(0.50, 0.14, "Mixed Postures", fontsize=7.2, color="#A5AFB6", ha="center", style="italic")
-
-ax.scatter(fit_pop["x_tern"], fit_pop["y_tern"],
-           c="#A5AFB6", s=18, alpha=0.35, edgecolors="none", zorder=4)
-
-# This is a spatial scatter, not a legend-only bar chart: sector centroids
-# routinely land close together, so -- like the vertex poles above -- they
-# need real hue separation rather than the document's restrained family
-# palette (which would put 4-5 sectors in the same cool blue-teal zone and
-# make adjacent centroids indistinguishable). Ten hues evenly rotated from
-# the official teal (36deg apart), held at a muted, consistent lightness
-# and saturation so the set still reads as one editorial family.
-SECTOR_COLORS = {
-    "Technology": "#3B9187",
-    "Industrials & Mfg": "#3B6791",
-    "Financial Services": "#423B91",
-    "Healthcare & Pharma": "#763B91",
-    "Retail & Wholesale": "#913B78",
-    "Utilities": "#913B45",
-    "Energy & Mining": "#91653B",
-    "Transportation": "#8A913B",
-    "Business Services": "#56913B",
-    "Communications": "#3B9154",
-}
-
-sec_grp = fit_pop[fit_pop["sector"] != "Other / Diversified"].groupby("sector").agg(
-    n=("ticker", "count"),
-    x=("x_tern", "mean"),
-    y=("y_tern", "mean")
-).reset_index()
-
-RIGHT_ORDER = [
-    "Energy & Mining", "Utilities", "Financial Services", "Transportation",
-    "Healthcare & Pharma", "Industrials & Mfg", "Retail & Wholesale", "Communications", "Business Services"
-]
-LEFT_ORDER = ["Technology"]
-
-sec_dict = sec_grp.set_index("sector").to_dict(orient="index")
-
-y_right = np.linspace(0.20, 0.83, len(RIGHT_ORDER))
-for idx, sec in enumerate(RIGHT_ORDER):
-    sid = idx + 1
-    d = sec_dict[sec]
-    sx, sy, n = d["x"], d["y"], int(d["n"])
-    col = SECTOR_COLORS[sec]
-    ly = y_right[idx]
-    lx = (1.0 - ly / np.sqrt(3)) + 0.080
-    marker_size = 75 + 18 * np.sqrt(n)
-    ax.scatter(sx, sy, s=marker_size, facecolor=col, edgecolor="#1C1F22", linewidth=1.4, zorder=6)
-    ax.text(sx, sy, str(sid), fontsize=7.2, fontweight="bold", color="white", ha="center", va="center", zorder=7)
-    ax.plot([sx, lx], [sy, ly], color=col, lw=1.2, alpha=0.85, zorder=5)
-    label_text = f" {sid}  {sec} (n={n}) "
-    ax.text(lx, ly, label_text, fontsize=7.8, fontweight="bold", ha="left", va="center", color="#1C1F22",
-            bbox=dict(boxstyle="round,pad=0.25", fc="white", ec=col, lw=1.3, alpha=0.96), zorder=8)
-
-y_left = [0.20]
-for idx, sec in enumerate(LEFT_ORDER):
-    sid = len(RIGHT_ORDER) + idx + 1
-    d = sec_dict[sec]
-    sx, sy, n = d["x"], d["y"], int(d["n"])
-    col = SECTOR_COLORS[sec]
-    ly = y_left[idx]
-    lx = (ly / np.sqrt(3)) - 0.085
-    marker_size = 75 + 18 * np.sqrt(n)
-    ax.scatter(sx, sy, s=marker_size, facecolor=col, edgecolor="#1C1F22", linewidth=1.4, zorder=6)
-    ax.text(sx, sy, str(sid), fontsize=7.2, fontweight="bold", color="white", ha="center", va="center", zorder=7)
-    ax.plot([sx, lx], [sy, ly], color=col, lw=1.2, alpha=0.85, zorder=5)
-    label_text = f" {sid}  {sec} (n={n}) "
-    ax.text(lx, ly, label_text, fontsize=7.8, fontweight="bold", ha="right", va="center", color="#1C1F22",
-            bbox=dict(boxstyle="round,pad=0.25", fc="white", ec=col, lw=1.3, alpha=0.96), zorder=8)
-
-ticker_map = fit_pop.set_index("ticker").to_dict(orient="index")
-
-def get_exemplar_label(t):
-    r = ticker_map[t]
-    weights = {"v": r["w_Vocal"], "g": r["w_Gov"], "d": r["w_Def"]}
-    dom_code, max_val = max(weights.items(), key=lambda item: item[1])
-    return f"{t} ({max_val:.2f}{dom_code})"
-
-BOTTOM_EXEMPLARS = [
-    ("NVDA",  (0, -14), "center", "top"), ("MSFT",  (0, -14), "center", "top"),
-    ("GOOGL", (0, -14), "center", "top"), ("AMZN",  (0, -14), "center", "top"),
-    ("AAPL",  (0, -14), "center", "top"), ("RTX",   (0, -14), "center", "top"),
-    ("VLO",   (0, -14), "center", "top"),
-]
-LEFT_EXEMPLARS = [
-    ("ANET", (-10, 0), "right", "center"), ("BKNG", (-10, 0), "right", "center"),
-    ("CLX",  (-10, 0), "right", "center"), ("ETN",  (-10, 0), "right", "center"),
-]
-RIGHT_EXEMPLARS = [
-    ("C",    (-10, 0), "right", "center"), ("AZO",  (-10, 0), "right", "center"),
-    ("ADM",  (-10, 0), "right", "center"), ("ED",   (-10, 0), "right", "center"),
-]
-CENTER_EXEMPLARS = [
-    ("OXY",  (-8, -12), "right", "top"), ("JPM",  (12, -8),  "left",  "top"),
-]
-
-dltr_lbl = get_exemplar_label("DLTR")
-ax.scatter([0.5], [np.sqrt(3)/2], color="#1C1F22", s=32, zorder=9)
-ax.annotate(dltr_lbl, xy=(0.5, np.sqrt(3)/2), xytext=(0, 10),
-            textcoords="offset points", fontsize=8.0, fontweight="bold",
-            ha="center", va="bottom", color="#1C1F22",
-            bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="#D5D9DD", lw=0.8, alpha=0.95),
-            zorder=10)
-
-for exemplars, ha_default in ((BOTTOM_EXEMPLARS, None), (LEFT_EXEMPLARS, None), (RIGHT_EXEMPLARS, None), (CENTER_EXEMPLARS, None)):
-    for t, off, ha, va in exemplars:
-        r = ticker_map[t]
-        lbl = get_exemplar_label(t)
-        ax.scatter([r["x_tern"]], [r["y_tern"]], color="#1C1F22", s=28, zorder=9)
-        ax.annotate(lbl, xy=(r["x_tern"], r["y_tern"]), xytext=off,
-                    textcoords="offset points", fontsize=7.6, fontweight="bold",
-                    ha=ha, va=va, color="#1C1F22",
-                    bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="#D5D9DD", lw=0.8, alpha=0.95),
-                    zorder=10)
-
-ax.set_xlim(-0.48, 1.52)
-ax.set_ylim(-0.16, 1.05)
-ax.set_aspect("equal")
+ax.imshow(img)
 ax.axis("off")
-
-ax.text(-0.05, -0.07, "Vocal Substantives\n(Commercial Execution)",
-        fontsize=11, fontweight="bold", ha="center", va="top", color="#1C1F22")
-ax.text(1.05, -0.07, "Governance-Led Disclosers\n(Institutional Guardrails)",
-        fontsize=11, fontweight="bold", ha="center", va="top", color="#1C1F22")
-ax.text(0.5, np.sqrt(3)/2 + 0.05, "Defensive Disclosers\n(Risk-Framed)",
-        fontsize=11, fontweight="bold", ha="center", va="bottom", color="#1C1F22")
-
 plt.tight_layout()
 plt.show()
 ```
@@ -1226,13 +906,12 @@ Archetypal Analysis identifies three distinct, highly stable disclosure strategi
 ```{python}
 #| label: tbl-archetypes-glance
 #| tbl-cap: "[AI corporate disclosure archetypes at a glance.]{custom-style=\"CaptionText\"}"
-from pathlib import Path
 import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
 
-_g = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
+_g = df  # gold predictions/firm/posture_archetype_static.parquet, loaded above
 _feats = {"promotional_posture": "promotional", "hedging_posture": "hedging", "risk_orientation": "risk", "governance_orientation": "governance",
           "temporal_posture": "realized", "ai_positioning": "customer-facing", "specificity": "specificity",
           "disclosure_intensity": "intensity"}
@@ -1284,37 +963,20 @@ Each vertex maps an extreme, interpretable configuration (@fig-archetype-heatmap
 #| message: false
 #| fig-width: 8.2
 #| fig-height: 4.2
-import contextlib
-import io
-from pathlib import Path
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-
-with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-    from archetypes import AA
-
-
-df = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
 
 FEATURES = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
            "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
 LABELS = ["Promotional", "Hedging", "Risk", "Governance", "Claim\nrealization", "Customer-\nfacing", "Claim\nspecificity", "Intensity"]
 ARCHETYPES = ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]
 
-fit_pop = df[df["archetype"] != "No AI"]
-X = fit_pop[FEATURES].values
-X_std = (X - X.mean(axis=0)) / X.std(axis=0, ddof=0)
-aa = AA(n_archetypes=3, random_state=42, max_iter=500)
-W = aa.fit_transform(X_std)
-A = aa.archetypes_
-
-def_col = int(np.argmax(A[:, FEATURES.index("risk_orientation")]))
-rem_cols = [i for i in range(3) if i != def_col]
-gov_col = max(rem_cols, key=lambda i: A[i, FEATURES.index("governance_orientation")])
-voc_col = [i for i in range(3) if i not in (def_col, gov_col)][0]
-
-mat = pd.DataFrame(A[[voc_col, gov_col, def_col], :], columns=FEATURES, index=ARCHETYPES)
+# Standardized vertex coordinates (matrix A) of the frozen model bundle
+# (models/posture_archetype_static/model.pkl), extracted by
+# scripts/analytics/posture/archetype_vertices.py -- not refit here.
+_vert = pd.read_parquet(results("posture", "archetype_vertices.parquet"))
+mat = _vert.pivot(index="archetype", columns="feature", values="value").reindex(index=ARCHETYPES, columns=FEATURES)
 
 fig, ax = plt.subplots(figsize=(8.2, 4.2), dpi=300)
 vmax = float(np.abs(mat.values).max())
@@ -1339,21 +1001,19 @@ Individual firms illustrate how the taxonomy distinguishes communication strateg
 ```{python}
 #| label: tbl-representative-firms
 #| tbl-cap: "[Representative corporations and disclosure registers across AI disclosure archetypes.]{custom-style=\"CaptionText\"}"
-import numpy as np
 import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
-fu = con.execute("SELECT ticker, company_name, sic, active_status FROM firm_universe WHERE country_code = 'us'").df()
-fu_delisted = set(fu.loc[fu["active_status"] == "delisted", "ticker"])
-fu["sic2"] = fu["sic"].astype(str).str.zfill(4).str[:2]
 
-df_strat = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
+fu = pd.read_parquet(results("corpus", "universe_sectors.parquet"))
+fu_delisted = set(fu.loc[fu["active_status"] == "delisted", "ticker"])
+
+df_strat = df  # gold predictions/firm/posture_archetype_static.parquet, loaded above
 df_sec = df_strat.merge(fu, on="ticker", how="left")
 
-_feat_cols = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation", "temporal_posture",
-              "ai_positioning", "specificity", "disclosure_intensity"]
-_fit = df_sec[df_sec["archetype"] != "No AI"].copy()
-_zz = (_fit[_feat_cols] - _fit[_feat_cols].mean()) / _fit[_feat_cols].std()
+# Nearest firms to each archetype's own centroid (rank 1 = closest), from
+# scripts/analytics/posture/representative_firms.py -- not recomputed here.
+_rep = pd.read_parquet(results("posture", "representative_firms.parquet"))
 
 def _clean_name(n):
     n = str(n)
@@ -1362,11 +1022,8 @@ def _clean_name(n):
     return n.strip()
 
 def _closest(a, k=4):
-    idx = _fit.index[_fit["archetype"] == a]
-    c = _zz.loc[idx].mean().values
-    dist = np.linalg.norm(_zz.loc[idx].values - c, axis=1)
-    best = idx[np.argsort(dist)[:k]]
-    return ", ".join(f"{_clean_name(_fit.loc[i, 'company_name'])} (`{_fit.loc[i, 'ticker']}`)" for i in best)
+    top = _rep[(_rep["archetype"] == a) & (_rep["rank"] <= k)].sort_values("rank")
+    return ", ".join(f"{_clean_name(r.company_name)} (`{r.ticker}`)" for r in top.itertuples())
 
 prominent = {
     "Vocal Substantives": "Microsoft (`MSFT`), NVIDIA (`NVDA`), Alphabet (`GOOGL`), Meta (`META`), Amazon (`AMZN`)",
@@ -1414,45 +1071,20 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-fu = con.execute("SELECT ticker, company_name, sic, active_status FROM firm_universe WHERE country_code = 'us'").df()
-_disclosing = set(pd.read_parquet(_p("firm_strategy_dimensions.parquet")).loc[lambda d: d["archetype"] != "No AI", "ticker"])
-_ch_n_disclosing = len(_disclosing)
-_ch_has_def14a = set(con.execute("SELECT ticker FROM filing_manifest WHERE country_code = 'us' AND form_type = 'DEF 14A'").df()["ticker"].dropna())
-_ch_coverage = _disclosing & _ch_has_def14a
-_ch_n_coverage_pct = round(100 * len(_ch_coverage) / _ch_n_disclosing)
-_ch_mentions = set(con.execute("""
-    SELECT DISTINCT fm.ticker FROM gold_ai_frames f
-    JOIN filing_manifest fm USING (country_code, accession_number)
-    WHERE fm.form_type = 'DEF 14A' AND f.has_frame
-""").df()["ticker"].dropna())
-_ch_n_mention = len(_ch_coverage & _ch_mentions)
-_ch_n_omit = len(_ch_coverage) - _ch_n_mention
-fu_delisted = set(fu.loc[fu["active_status"] == "delisted", "ticker"])
+# DEF 14A coverage across disclosing firms, from
+# scripts/analytics/posture/check_archetype_document_channels.py (institutional
+# channels prose below).
+_ch = results_json("posture", "archetype_document_channels.json")["def14a_coverage"]
+_ch_n_disclosing = _ch["n_disclosing"]
+_ch_n_coverage_pct = _ch["coverage_pct"]
+_ch_n_mention = _ch["n_mention"]
+_ch_n_omit = _ch["n_omit"]
 
-fu["sic2"] = fu["sic"].astype(str).str.zfill(4).str[:2]
-df_strat = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
-df_sec = df_strat.merge(fu, on="ticker", how="left")
-
-def map_sector(sic2):
-    try: s = int(sic2)
-    except: return "Other"
-    if s in [73, 35, 36]: return "Technology"
-    elif s in [48]: return "Communications"
-    elif s in [28, 38, 80]: return "Healthcare & Pharma"
-    elif 60 <= s <= 67: return "Financial Services"
-    elif 20 <= s <= 39: return "Industrials & Mfg"
-    elif 40 <= s <= 47: return "Transportation"
-    elif s == 49: return "Utilities"
-    elif 10 <= s <= 14 or s == 29: return "Energy & Mining"
-    elif 50 <= s <= 59: return "Retail & Wholesale"
-    elif 70 <= s <= 89: return "Business Services"
-    else: return "Other / Diversified"
-
-df_sec["sector"] = df_sec["sic2"].apply(map_sector)
-ct = pd.crosstab(df_sec["sector"], df_sec["archetype"])
-baseline = ct.sum(axis=1) / ct.values.sum()
-pct_col = ct.div(ct.sum(axis=0), axis=1)
-rel_rep = pct_col.div(baseline, axis=0)
+# Sector x archetype relative representation, from
+# scripts/analytics/posture/archetype_sector.py.
+_as = pd.read_parquet(results("posture", "archetype_sector.parquet"))
+ct = _as.pivot(index="sector", columns="archetype", values="n_firms")
+rel_rep = _as.pivot(index="sector", columns="archetype", values="relative_representation")
 
 archs = ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers", "No AI"]
 rel_rep = rel_rep[archs].sort_values(by="Vocal Substantives", ascending=False)
@@ -1511,80 +1143,17 @@ Statutory channel selection is thus an explicit strategic choice [@campbell2014]
 ```{python}
 #| echo: false
 #| output: false
-import os
-from archetypes import AA as _AA10k
-
-_posture_cols_10k = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
-                     "temporal_posture", "ai_positioning", "specificity"]
-
-def _posture_10k(d):
-    d = d.copy()
-    concepts = d["concepts"].apply(lambda c: set(c) if c is not None else set())
-    d["promotional_posture"] = d["rhetoric"].apply(
-        lambda r: np.mean([x in list(r) if r is not None else False for x in ("promotional", "strategic")]))
-    d["hedging_posture"] = d["rhetoric"].apply(lambda r: float("hedged" in list(r)) if r is not None else 0.0)
-    d["risk_orientation"] = concepts.apply(lambda s: float(any(str(c).startswith("risk_") for c in s)))
-    d["governance_orientation"] = concepts.apply(lambda s: float(any(str(c).startswith("gov_") for c in s)))
-    d["temporal_posture"] = (d["temporal"] == "realized").astype(float)
-    d["ai_positioning"] = d["is_customer_facing"].astype(float)
-    d["specificity"] = d["specificity"].apply(lambda s: len(s) / 5.0 if s is not None else 0.0)
-    out = d.groupby("ticker")[_posture_cols_10k].mean()
-    out["n_frames_10k"] = d.groupby("ticker").size()
-    return out.reset_index()
-
-def _shrink_10k(rates, counts):
-    out = {}
-    for col in rates.columns:
-        p = rates[col]
-        mean, var = float(p.mean()), float(p.var(ddof=1))
-        if var <= 0 or not 0 < mean < 1:
-            out[col] = p
-            continue
-        strength = max(mean * (1 - mean) / var - 1, 1e-6)
-        alpha, beta = mean * strength, (1 - mean) * strength
-        out[col] = (p * counts + alpha) / (counts + alpha + beta)
-    return pd.DataFrame(out, index=rates.index)
-
-_frames_10k = con.execute("""
-    WITH frame_domains AS (
-        SELECT text_hash, frame_id, bool_or(domain = 'customer_facing') AS is_customer_facing
-        FROM gold_ai_activities WHERE has_activity GROUP BY text_hash, frame_id
-    )
-    SELECT fm.ticker, f.concepts, f.temporal, f.specificity, f.rhetoric,
-           COALESCE(fd.is_customer_facing, false) AS is_customer_facing
-    FROM gold_ai_frames f
-    LEFT JOIN frame_domains fd ON fd.text_hash = f.text_hash AND fd.frame_id = f.frame_id
-    JOIN filing_manifest fm USING (country_code, accession_number)
-    WHERE f.country_code = 'us' AND f.has_frame AND fm.ticker IS NOT NULL AND fm.form_type = '10-K'
-""").fetchdf()
-
-_p10k = _posture_10k(_frames_10k)
-_p10k = _p10k[_p10k["n_frames_10k"] >= 5].reset_index(drop=True)
-_shrunk10k = _shrink_10k(_p10k[_posture_cols_10k], _p10k["n_frames_10k"])
-_shrunk10k["disclosure_intensity"] = _p10k["n_frames_10k"].rank(pct=True).values
-_feats10k = _posture_cols_10k + ["disclosure_intensity"]
-_X10k_raw = _shrunk10k[_feats10k].values
-_X10k = (_X10k_raw - _X10k_raw.mean(axis=0)) / _X10k_raw.std(axis=0, ddof=0)
-_aa10k = _AA10k(n_archetypes=3, random_state=42, max_iter=500)
-_W10k = _aa10k.fit_transform(_X10k)
-_A10k = _aa10k.archetypes_
-_def_col10k = int(np.argmax(_A10k[:, _feats10k.index("risk_orientation")]))
-_rem10k = [i for i in range(3) if i != _def_col10k]
-_gov_col10k = max(_rem10k, key=lambda i: _A10k[i, _feats10k.index("governance_orientation")])
-_voc_col10k = [i for i in range(3) if i not in (_def_col10k, _gov_col10k)][0]
-
-_w10k_named = pd.DataFrame({
-    "Vocal": _W10k[:, _voc_col10k], "Governance": _W10k[:, _gov_col10k], "Defensive": _W10k[:, _def_col10k],
-}, index=_p10k["ticker"])
-
-_common10k = W_named.index.intersection(_w10k_named.index)
-_r_vocal_10k = W_named.loc[_common10k, "Vocal"].corr(_w10k_named.loc[_common10k, "Vocal"])
-_r_gov_10k = W_named.loc[_common10k, "Governance"].corr(_w10k_named.loc[_common10k, "Governance"])
-_r_def_10k = W_named.loc[_common10k, "Defensive"].corr(_w10k_named.loc[_common10k, "Defensive"])
-_z_gov10k_on_gov = _A10k[_gov_col10k, _feats10k.index("governance_orientation")]
-_z_gov10k_on_risk = _A10k[_gov_col10k, _feats10k.index("risk_orientation")]
-_z_def_full_on_risk = A[def_col, SIMPLEX_FEATS.index("risk_orientation")]
-_z_def10k_on_risk = _A10k[_def_col10k, _feats10k.index("risk_orientation")]
+# Robustness check: refit the k=3 posture archetype on Form 10-K frames
+# alone, from scripts/analytics/posture/archetype_10k_refit.py (not refit
+# here; see that script for the full 10-K-only construction and fit).
+_refit10k = results_json("posture", "archetype_10k_refit.json")
+_r_vocal_10k = _refit10k["correlations"]["vocal"]
+_r_gov_10k = _refit10k["correlations"]["governance"]
+_r_def_10k = _refit10k["correlations"]["defensive"]
+_z_gov10k_on_gov = _refit10k["vertices"]["governance_10k_on_governance"]
+_z_gov10k_on_risk = _refit10k["vertices"]["governance_10k_on_risk"]
+_z_def_full_on_risk = _refit10k["vertices"]["defensive_full_on_risk"]
+_z_def10k_on_risk = _refit10k["vertices"]["defensive_10k_on_risk"]
 ```
 
 A refit of the archetypes on Form 10-K frames alone reproduces Vocal Substantives and Defensive Disclosers closely ($r =$ `{python} f"{_r_vocal_10k:.3f}"` and `{python} f"{_r_def_10k:.3f}"`) but not Governance-Led ($r =$ `{python} f"{_r_gov_10k:.3f}"`, since board-oversight language lives in DEF 14A proxy statements rather than in 10-K text), confirming that proxy statements are indispensable to disentangle board oversight from statutory risk warnings; full correlations and vertex-level detail appear in Appendix E.
@@ -1596,121 +1165,35 @@ For each year $t$, every firm's archetype label is assigned by Archetypal Analys
 ```{python}
 #| echo: false
 #| output: false
+# Archetype panel: each firm-year's label is the static posture archetype
+# applied to that year's posture (covariates/firm_year/posture_archetype_static,
+# model in models/posture_archetype_static/, never fit on this chunk's own
+# text). scripts/analytics/posture/archetype_composition_annual.py
+# reshapes that label panel into the annual composition shares and the
+# year-over-year firm-level transition matrices used below -- no fitting
+# happens in this chunk.
 import numpy as np
-from archetypes import AA as _AA_exp
+import pandas as pd
 
 ARCH_ORDER = ["No AI", "Defensive Disclosers", "Governance-Led Disclosers", "Vocal Substantives"]
 ARCH_SHORT = {"No AI": "No AI", "Defensive Disclosers": "Defensive",
               "Governance-Led Disclosers": "Governance", "Vocal Substantives": "Vocal"}
 ARCH_COLORS4 = {"No AI": "#D5D9DD", "Defensive Disclosers": "#A5AFB6",
                 "Governance-Led Disclosers": "#B85F42", "Vocal Substantives": "#355F6B"}
-_POSTURE_EXP = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
-                "temporal_posture", "ai_positioning", "specificity"]
-_CROSS_FEATS_EXP = _POSTURE_EXP + ["disclosure_intensity"]
-_exp_names = ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]
-_MIN_FRAMES_EXP = 5
 
-_frames_exp = con.execute("""
-    WITH frame_domains AS (
-        SELECT text_hash, frame_id, bool_or(domain = 'customer_facing') AS is_customer_facing
-        FROM gold_ai_activities WHERE has_activity GROUP BY text_hash, frame_id
-    )
-    SELECT fm.ticker, extract(year from fm.filing_date)::INT AS year,
-           f.concepts, f.temporal, f.specificity, f.rhetoric,
-           COALESCE(fd.is_customer_facing, false) AS is_customer_facing
-    FROM gold_ai_frames f
-    LEFT JOIN frame_domains fd ON fd.text_hash = f.text_hash AND fd.frame_id = f.frame_id
-    JOIN filing_manifest fm USING (country_code, accession_number)
-    WHERE f.country_code = 'us' AND f.has_frame AND fm.ticker IS NOT NULL
-""").fetchdf()
+_comp = pd.read_parquet(results("posture", "archetype_composition_annual.parquet"))
+_trans = pd.read_parquet(results("posture", "archetype_transitions.parquet"))
+_years_comp = sorted(_comp["year"].unique())
 
-def _posture_frame_rates(df):
-    df = df.copy()
-    concepts = df["concepts"].apply(lambda c: set(c) if c is not None else set())
-    df["promotional_posture"] = df["rhetoric"].apply(
-        lambda r: np.mean([x in list(r) if r is not None else False for x in ("promotional", "strategic")]))
-    df["hedging_posture"] = df["rhetoric"].apply(lambda r: float("hedged" in list(r)) if r is not None else 0.0)
-    df["risk_orientation"] = concepts.apply(lambda s: float(any(str(c).startswith("risk_") for c in s)))
-    df["governance_orientation"] = concepts.apply(lambda s: float(any(str(c).startswith("gov_") for c in s)))
-    df["temporal_posture"] = (df["temporal"] == "realized").astype(float)
-    df["ai_positioning"] = df["is_customer_facing"].astype(float)
-    df["specificity"] = df["specificity"].apply(lambda s: len(s) / 5.0 if s is not None else 0.0)
-    return df
+_share_all = _comp.pivot(index="year", columns="archetype", values="share_pct").reindex(columns=ARCH_ORDER)
 
-_frames_exp = _posture_frame_rates(_frames_exp)
-
-def _shrink_to_prior_exp(rates, counts):
-    out = {}
-    for col in rates.columns:
-        p = rates[col]
-        mean, var = float(p.mean()), float(p.var(ddof=1))
-        if var <= 0 or not 0 < mean < 1:
-            out[col] = p
-            continue
-        strength = max(mean * (1 - mean) / var - 1, 1e-6)
-        alpha, beta = mean * strength, (1 - mean) * strength
-        out[col] = (p * counts + alpha) / (counts + alpha + beta)
-    return pd.DataFrame(out, index=rates.index)
-
-_dp_exp = pd.read_parquet(_p("document_panel.parquet"))
-_dp_exp["year"] = _dp_exp["fecha"].dt.year
-_years_comp = sorted(_frames_exp["year"].unique())
-
-_exp_rows = []
-_train_by_cutoff = {}  # reused by the Appendix C fixed-N robustness check, never rebuilt there
-for _cutoff in _years_comp:
-    _cum = _frames_exp[_frames_exp["year"] <= _cutoff]
-    _grp = _cum.groupby("ticker")
-    _rates, _counts = _grp[_POSTURE_EXP].mean(), _grp.size()
-    _active_tickers = _counts[_counts >= _MIN_FRAMES_EXP].index
-    _rates, _counts = _rates.loc[_active_tickers], _counts.loc[_active_tickers]
-    _shrunk = _shrink_to_prior_exp(_rates, _counts)
-    _words = _dp_exp[_dp_exp["year"] <= _cutoff].groupby("ticker").agg(
-        w=("n_words", "sum"), fr=("n_frames", "sum")).reindex(_active_tickers)
-    _fr1k = 1000 * _words["fr"] / _words["w"].replace(0, np.nan)
-    _shrunk["disclosure_intensity"] = _fr1k.rank(pct=True)
-    _train_df = _shrunk.dropna()
-    _train_by_cutoff[_cutoff] = _train_df
-
-    _mu_e, _sd_e = _train_df.mean(), _train_df.std(ddof=0)
-    _X_train = ((_train_df - _mu_e) / _sd_e).values
-    _aa_e = _AA_exp(n_archetypes=3, random_state=42, max_iter=500)
-    _aa_e.fit_transform(_X_train)
-    _A_e = _aa_e.archetypes_
-    _def_col = int(np.argmax(_A_e[:, _POSTURE_EXP.index("risk_orientation")]))
-    _rem = [i for i in range(3) if i != _def_col]
-    _gov_col = max(_rem, key=lambda i: _A_e[i, _POSTURE_EXP.index("governance_orientation")])
-    _voc_col = [i for i in range(3) if i not in (_def_col, _gov_col)][0]
-    _order_e = [_voc_col, _gov_col, _def_col]
-
-    _cross = _m[_m["year"] == _cutoff][["ticker", "year", "archetype"] + _CROSS_FEATS_EXP].copy()
-    _active = _cross["archetype"] != "No AI"
-    _X_cross = ((_cross.loc[_active, _CROSS_FEATS_EXP] - _mu_e) / _sd_e).values
-    _W_cross = _aa_e.transform(_X_cross)
-    _cross.loc[_active, "arch_exp"] = np.array(_exp_names)[np.argmax(_W_cross[:, _order_e], axis=1)]
-    _cross.loc[~_active, "arch_exp"] = "No AI"
-    _exp_rows.append(_cross[["ticker", "year", "arch_exp"]])
-
-# expanding-window, no-leakage archetype panel: every year's label uses only that firm's
-# own cumulative text through that year, one row per firm, never a firm counted twice
-_panel_exp = pd.concat(_exp_rows, ignore_index=True)
-
-_ct_yr = pd.crosstab(_panel_exp["year"], _panel_exp["arch_exp"]).reindex(columns=ARCH_ORDER, fill_value=0)
-_share_all = _ct_yr.div(_ct_yr.sum(axis=1), axis=0) * 100
-
-# firm-level persistence and full transition matrices, year over year -- used in the
-# figures and text below, and reused as-is (never recomputed) in Appendix C
-_persist = {}
-_trans_pct = {}
-_trans_n = {}
+_persist, _trans_pct, _trans_n = {}, {}, {}
 for y0, y1 in zip(_years_comp[:-1], _years_comp[1:]):
-    a = _panel_exp[_panel_exp["year"] == y0].set_index("ticker")["arch_exp"]
-    b = _panel_exp[_panel_exp["year"] == y1].set_index("ticker")["arch_exp"]
-    common = a.index.intersection(b.index)
-    _persist[(y0, y1)] = float((a.loc[common].values == b.loc[common].values).mean()) * 100
-    _tm = pd.crosstab(a.loc[common], b.loc[common]).reindex(index=ARCH_ORDER, columns=ARCH_ORDER, fill_value=0)
-    _trans_pct[(y0, y1)] = _tm.div(_tm.sum(axis=1), axis=0) * 100
-    _trans_n[(y0, y1)] = _tm.sum(axis=1)
+    _tp = _trans[(_trans["from_year"] == y0) & (_trans["to_year"] == y1)]
+    _persist[(y0, y1)] = float(_tp["persist_pct"].iloc[0])
+    _trans_pct[(y0, y1)] = _tp.pivot(index="origin", columns="dest", values="pct_of_origin").reindex(
+        index=ARCH_ORDER, columns=ARCH_ORDER)
+    _trans_n[(y0, y1)] = _tp.groupby("origin")["n"].sum().reindex(ARCH_ORDER)
 
 _row_pct2324, _row_n2324 = _trans_pct[(2023, 2024)], _trans_n[(2023, 2024)]
 _row_pct2526 = _trans_pct[(2025, 2026)]
@@ -1793,25 +1276,18 @@ The share of Vocal Substantives rises tenfold in relative terms (`{python} f"{_s
 
 ### Model validation
 
-To determine the number of archetypes $k$, this thesis evaluates reproducibility across $k \in \{2, 3, 4, 5\}$ under two non-parametric bootstrap regimes with 200 independent replicates (@fig-archetype-stability): (1) frame-level resampling within firms (evaluating measurement error), and (2) firm-level resampling (evaluating sample composition sensitivity). All archetypes are required to clear a mean Jaccard overlap floor of $\ge 0.60$ under both regimes.
+To determine the number of archetypes $k$, this thesis evaluates reproducibility across $k \in \{2, 3, 4, 5\}$ under two non-parametric bootstrap regimes with 50 independent replicates (@fig-archetype-stability): (1) frame-level resampling within firms (evaluating measurement error), and (2) firm-level resampling (evaluating sample composition sensitivity). All archetypes are required to clear a mean Jaccard overlap floor of $\ge 0.60$ under both regimes.
 
 ```{python}
 #| label: fig-archetype-stability
-#| fig-cap: "[Choosing k by bootstrap stability: reproducibility evaluation across candidate values of k, 200 replicates.]{custom-style=\"CaptionText\"}"
+#| fig-cap: "[Choosing k by bootstrap stability: reproducibility evaluation across candidate values of k, 50 replicates.]{custom-style=\"CaptionText\"}"
 #| echo: false
 #| fig-width: 8.5
 #| fig-height: 3.4
-import json
-from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-
-p_stab = _p("bootstrap_jaccard_200_results.json")
-if not p_stab.exists():
-    p_stab = Path("docs/analytics/bootstrap_jaccard_200_results.json")
-
-d = json.loads(p_stab.read_text())
+d = results_json("posture", "bootstrap_jaccard_results.json")
 ks = [2, 3, 4, 5]
 frame_means = [d["frame_level"][str(k)]["overall_mean"] for k in ks]
 frame_mins = [d["frame_level"][str(k)]["min"] for k in ks]
@@ -1919,90 +1395,32 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-_fu_sec4 = con.execute("SELECT ticker, sic FROM firm_universe WHERE country_code = 'us'").df()
-_fu_sec4["sic2"] = _fu_sec4["sic"].astype(str).str.zfill(4).str[:2]
-
-def map_sector4(sic2):
-    try: s = int(sic2)
-    except: return "Other / Diversified"
-    if s in [73, 35, 36]: return "Technology"
-    elif s in [48]: return "Communications"
-    elif s in [28, 38, 80]: return "Healthcare & Pharma"
-    elif 60 <= s <= 67: return "Financial Services"
-    elif 20 <= s <= 39: return "Industrials & Mfg"
-    elif 40 <= s <= 47: return "Transportation"
-    elif s == 49: return "Utilities"
-    elif 10 <= s <= 14 or s == 29: return "Energy & Mining"
-    elif 50 <= s <= 59: return "Retail & Wholesale"
-    elif 70 <= s <= 89: return "Business Services"
-    else: return "Other / Diversified"
-
-_fu_sec4["sector"] = _fu_sec4["sic2"].apply(map_sector4)
-
-def get_domain4(row):
-    f = str(row["function_family"]); obj = str(row["object_family"]); tgt = str(row["target"])
-    if f in ["product_feature", "content_and_media"] or "product" in obj or tgt == "customers":
-        return "Sell"
-    elif f in ["customer_service", "marketing_and_sales"]:
-        return "Serve"
-    elif f in ["software_development", "hr_and_talent"] or "copilot" in obj or "talent" in obj:
-        return "Enable"
-    elif f in ["it_and_cybersecurity", "fraud_and_risk", "governance"] or "security" in obj or "governance" in obj:
-        return "Control"
-    elif f in ["ai_compute_and_models", "research_and_product_development", "data_and_analytics"] or "compute" in obj or "analytics" in obj:
-        return "Build"
-    else:
-        return "Operate"
-
-def get_action4(row):
-    a = str(row["action"]); obj = str(row["object_family"]); stage = str(row["stage"])
-    # `pilot_or_explore` (v1 action) has no v2 equivalent: piloting/exploring
-    # is now a `stage`, not an action of its own (docs/migration_v1_to_v2_
-    # analytics.md §1.2) -- checked first so it still reads as its own
-    # bucket, same as it did as a standalone v1 action.
-    if stage in ("exploring", "piloting"):
-        return "Pilot / Explore"
-    if a in ["deploy", "scale", "integrate"]:
-        if "automation" in obj:
-            return "Automate"
-        return "Deploy / Integrate"
-    elif a in ["develop", "invest"]:
-        return "Develop / Build"
-    elif a in ["partner", "procure"]:
-        return "Partner / Buy"
-    elif a in ["measure"]:
-        return "Analyze / Measure"
-    elif a in ["govern", "restrict"]:
-        return "Govern / Control"
-    return "Deploy / Integrate"
-
-act_sec4 = pd.read_parquet(_p("firm_activities.parquet")).merge(_fu_sec4[["ticker", "sector"]], on="ticker", how="left")
-act_sec4 = act_sec4[act_sec4["sector"] != "Other / Diversified"].copy()
-act_sec4["role"] = act_sec4.apply(get_domain4, axis=1)
-act_sec4["action_type"] = act_sec4.apply(get_action4, axis=1)
-
-SECTOR_ORDER4 = act_sec4["sector"].value_counts().index.tolist()
 ROLES_SEC4 = ["Sell", "Operate", "Build", "Enable", "Control", "Serve"]
 ACTIONS_SEC4 = ["Deploy / Integrate", "Develop / Build", "Partner / Buy", "Pilot / Explore",
                 "Analyze / Measure", "Automate", "Govern / Control"]
 
-purpose_ct4 = pd.crosstab(act_sec4["sector"], act_sec4["role"]).reindex(index=SECTOR_ORDER4, columns=ROLES_SEC4).fillna(0)
-action_ct4 = pd.crosstab(act_sec4["sector"], act_sec4["action_type"]).reindex(index=SECTOR_ORDER4, columns=ACTIONS_SEC4).fillna(0)
-sector_n4 = act_sec4.groupby("sector").size().reindex(SECTOR_ORDER4)
+# Sector-level business-purpose composition and operational-action deviation,
+# precomputed by scripts/analytics/posture/sector_purpose_action.py from
+# the gold activity tables (excludes "Other / Diversified").
+_spa = pd.read_parquet(results("posture", "sector_purpose_action.parquet"))
+_fu_sec4 = fu[["ticker", "agg_sector"]].rename(columns={"agg_sector": "sector"})  # data/results/corpus/universe_sectors.parquet, loaded above
+_act_n4 = pd.read_parquet(gold("spines", "activity", "activity"), columns=["ticker"]).merge(_fu_sec4, on="ticker", how="left")
+_act_n4 = _act_n4[_act_n4["sector"] != "Other / Diversified"]
 
-# Panel A: row-normalized (within-sector composition), rows ordered by Sell share descending.
-purpose_pct4 = purpose_ct4.div(purpose_ct4.sum(axis=1), axis=0) * 100
+SECTOR_ORDER4 = _act_n4["sector"].value_counts().index.tolist()
+sector_n4 = _act_n4.groupby("sector").size().reindex(SECTOR_ORDER4)
+
+purpose_ct4 = _spa[_spa["kind"] == "purpose_pct"].pivot(index="sector", columns="category", values="value").reindex(index=SECTOR_ORDER4, columns=ROLES_SEC4)
+action_dev_all4 = _spa[_spa["kind"] == "action_deviation_pp"].pivot(index="sector", columns="category", values="value").reindex(index=SECTOR_ORDER4, columns=ACTIONS_SEC4)
+
+# Panel A: row-normalized composition, rows ordered by Sell share descending.
+purpose_pct4 = purpose_ct4
 _sector_order_sell = purpose_pct4["Sell"].sort_values(ascending=False).index.tolist()
 purpose_pct4 = purpose_pct4.loc[_sector_order_sell]
 sector_row_labels4 = [f"{s} (n={int(sector_n4[s]):,})" for s in _sector_order_sell]
 
-# Panel B: deviation from the overall (pooled, cross-sector) action-type mix, in percentage
-# points -- row-normalized composition mostly just re-shows that Deploy/Integrate dominates
-# everywhere (a heatmap or stacked bar of that composition adds little); the deviation from
-# the pooled baseline is what actually varies by sector.
-action_pct4_row = action_ct4.div(action_ct4.sum(axis=1), axis=0) * 100
-_action_overall4 = act_sec4["action_type"].value_counts(normalize=True).reindex(ACTIONS_SEC4) * 100
-action_dev4 = action_pct4_row.sub(_action_overall4, axis=1)
+# Panel B: deviation from the pooled (cross-sector) action-type mix, in percentage points.
+action_dev4 = action_dev_all4
 ```
 
 ## How AI applications differ across industries
@@ -2085,27 +1503,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-df_strat = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
-act = pd.read_parquet(_p("firm_activities.parquet")).merge(df_strat[["ticker", "archetype"]], on="ticker", how="left")
-act["archetype"] = act["archetype"].fillna("No AI")
+# Disclosed-AI-activity profile by archetype, precomputed by
+# scripts/analytics/posture/archetype_activity.py from
+# the gold activity tables joined to
+# covariates/firm/posture_archetype_static.parquet (df_strat, loaded above).
+_aa = pd.read_parquet(results("posture", "archetype_activity.parquet"))
 
 ARCH = ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]
-n_activities = act.groupby("ticker").size()
-per_firm = df_strat.set_index("ticker")["archetype"].to_frame().join(n_activities.rename("n_activities")).fillna(0)
-
-act["proprietary_ai"] = (act["action"] == "develop") | (act["source"] == "own")
-act["own_brand_named"] = act["own_brands"].map(lambda v: len(v) > 0)
-act["quantified_outcome"] = (act["action"] == "measure") | (act["evidence_type"] == "metric")
-act["deployed_or_scaled"] = act["stage"].isin(["deployed", "scaled"])
-act["customer_target"] = act["target"] == "customers"
-
-# Pooled benchmarks: the whole disclosed-activity inventory (all archetypes, all
-# activities) for the five rate metrics, and the whole firm universe for the
-# per-firm activity count -- never a re-average of the three archetype values.
-_pooled_median_n = per_firm["n_activities"].median()
-_rate_cols = ["proprietary_ai", "own_brand_named", "customer_target", "deployed_or_scaled", "quantified_outcome"]
-_pooled_rates = {c: act[c].mean() * 100 for c in _rate_cols}
-
 pct_features = [
     ("Proprietary AI share", "proprietary_ai"),
     ("Own brand named", "own_brand_named"),
@@ -2113,13 +1517,20 @@ pct_features = [
     ("Deployed / scaled", "deployed_or_scaled"),
     ("Quantified metric", "quantified_outcome"),
 ]
-mat_raw = np.array([[act[act.archetype == a][col].mean() * 100 for a in ARCH] for _, col in pct_features])
-mat_dev = np.array([[mat_raw[i, j] - _pooled_rates[col] for j in range(3)] for i, (_, col) in enumerate(pct_features)])
+_rate_rows = _aa[_aa["metric"] != "n_activities_median"]
+_pooled_rates = _rate_rows.drop_duplicates("metric").set_index("metric")["pooled_rate"].to_dict()
+mat_raw = np.array([[_rate_rows[(_rate_rows["metric"] == label) & (_rate_rows["archetype"] == a)]["archetype_rate"].item()
+                     for a in ARCH] for label, _ in pct_features])
+mat_dev = np.array([[_rate_rows[(_rate_rows["metric"] == label) & (_rate_rows["archetype"] == a)]["deviation_pp"].item()
+                     for a in ARCH] for label, _ in pct_features])
+
+_n_rows = _aa[_aa["metric"] == "n_activities_median"].set_index("archetype")
+_pooled_median_n = _n_rows["pooled_rate"].iloc[0]
 
 fig, (ax0, ax1) = plt.subplots(2, 1, figsize=(8.0, 4.6), dpi=300, gridspec_kw={"height_ratios": [0.8, 3.0]}, sharex=False)
 
 # Top mini-panel: median AI activities per firm, as a ratio to the pooled median
-n_vals = [per_firm[per_firm.archetype == a]["n_activities"].median() for a in ARCH]
+n_vals = [_n_rows.loc[a, "archetype_rate"] for a in ARCH]
 ratios = [v / _pooled_median_n for v in n_vals]
 bars = ax0.barh(range(3), ratios, color="#355F6B", height=0.55)
 ax0.axvline(1, color="#1C1F22", lw=1.0, linestyle="--")
@@ -2144,8 +1555,8 @@ ax1.set_xlim(-0.9, 3.5)
 ax1.set_yticks(range(len(pct_features)))
 ax1.set_yticklabels([name for name, _ in pct_features], fontsize=8.8, fontweight="bold")
 
-for i, (_, col) in enumerate(pct_features):
-    ax1.text(-0.2, i, f"{_pooled_rates[col]:.1f}%", ha="center", va="center", fontsize=8.2, color="#454E54")
+for i, (label, _) in enumerate(pct_features):
+    ax1.text(-0.2, i, f"{_pooled_rates[label]:.1f}%", ha="center", va="center", fontsize=8.2, color="#454E54")
     for j in range(3):
         raw_v, dev_v = mat_raw[i, j], mat_dev[i, j]
         ax1.text(j + 1, i, f"{raw_v:.1f}%", ha="center", va="center", fontsize=8.5, fontweight="bold",
@@ -2179,7 +1590,7 @@ from tabulate import tabulate
 from IPython.display import Markdown
 
 
-reg = json.loads(_p("strategy_dimensions_manifest.json").read_text())["activity_volume_regression"]
+reg = _var  # results/posture/strategy_dimensions_diagnostics.json["activity_volume_regression"], loaded above
 OTHERS = ["Governance-Led Disclosers", "Vocal Substantives"]
 
 def fmt_p(p):
@@ -2219,30 +1630,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-df_strat = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))
-act = pd.read_parquet(_p("firm_activities.parquet")).merge(df_strat[["ticker", "archetype"]], on="ticker", how="left")
-act["archetype"] = act["archetype"].fillna("No AI")
-
-def get_role(row):
-    f = str(row["function_family"])
-    obj = str(row["object_family"])
-    tgt = str(row["target"])
-    if f in ["product_feature", "content_and_media"] or "product" in obj or tgt == "customers":
-        return "Sell (Customer products)"
-    elif f in ["customer_service", "marketing_and_sales"]:
-        return "Serve (Sales & service)"
-    elif f in ["software_development", "hr_and_talent"] or "copilot" in obj or "talent" in obj:
-        return "Enable (Productivity & dev)"
-    elif f in ["it_and_cybersecurity", "fraud_and_risk", "governance"] or "security" in obj or "governance" in obj:
-        return "Control (Risk & security)"
-    elif f in ["ai_compute_and_models", "research_and_product_development", "data_and_analytics"] or "compute" in obj or "analytics" in obj:
-        return "Build (Compute & data)"
-    else:
-        return "Operate (Internal operations)"
-
-act["role"] = act.apply(get_role, axis=1)
+# Archetype x domain mix of disclosed AI activity, precomputed by
+# scripts/analytics/posture/archetype_domain.py from
+# the gold activity tables joined to
+# covariates/firm/posture_archetype_static.parquet (df_strat, loaded above).
+_adom = pd.read_parquet(results("posture", "archetype_domain.parquet"))
 ARCH = ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]
-ct_mix = pd.crosstab(act["archetype"], act["role"], normalize="index") * 100
+ct_mix = _adom.pivot(index="archetype", columns="domain", values="pct_of_archetype")
 
 roles_order = [
     "Sell (Customer products)",
@@ -2302,31 +1696,19 @@ Three filings illustrate what that split looks like in practice (@tbl-archetype-
 #| label: tbl-archetype-activity-examples
 #| tbl-cap: "[Illustrative statutory filing excerpts across disclosure archetypes and activity orientations.]{custom-style=\"CaptionText\"}"
 #| echo: false
-import re
-from pathlib import Path
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _quote(ticker, act_df, **filters):
-    sub = act_df[act_df["ticker"] == ticker]
-    for k, v in filters.items():
-        sub = sub[sub[k] == v]
-    r = sub.iloc[0]
-    q = get_db().execute("SELECT paragraph_text FROM paragraphs WHERE accession_number = ? AND paragraph_index = ? LIMIT 1",
-                         [r["accession_number"], int(r["paragraph_index"])]).fetchone()
-    if not q:
-        return ""
-    t = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", q[0])
-    t = re.sub(r"\(see page[s]?\s*[^)]*\)", "", t)  # drop cross-page reference placeholders lost in text extraction
-    t = re.sub(r"\s{2,}", " ", t)
-    return re.sub(r"\s+([.,;:])", r"\1", t).strip()
+# Illustrative excerpts, quote text already resolved at build time by
+# scripts/analytics/posture/activity_examples.py.
+_ex = pd.read_parquet(results("posture", "activity_examples.parquet")).set_index("ticker")["quote"]
 
 def _clip(text, n=190):
     return f'"{text[:n].strip()}..."' if len(text) > n else f'"{text}"'
 
-_amd_quote = _quote("AMD", act, role="Sell (Customer products)", evidence_type="metric")
-_aig_quote = _quote("AIG", act, role="Control (Risk & security)", evidence_type="named")
-_lly_quote = _quote("LLY", act, evidence_type="generic")
+_amd_quote = _ex["AMD"]
+_aig_quote = _ex["AIG"]
+_lly_quote = _ex["LLY"]
 
 _rows_ex = [
     [
@@ -2366,32 +1748,23 @@ $$\text{AI Activity Claim} \;\longrightarrow\; \text{Specific Business Function}
 #| echo: false
 #| fig-width: 9.6
 #| fig-height: 3.8
-from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 
-data_path = Path("../data/processed/clusters/firm_activities.parquet")
-if not data_path.exists():
-    data_path = Path("data/processed/clusters/firm_activities.parquet")
+# Nested concreteness-ladder counts and independent component rates,
+# precomputed by scripts/analytics/washing/ladder_substance.py from
+# the gold activity tables.
+_ladder = pd.read_parquet(results("washing", "ladder_substance.parquet")).iloc[0]
+n_total = int(_ladder["n_total"])
 
-df = pd.read_parquet(data_path)
-n_total = len(df)
+c1, c2, c3, c4, c5 = (int(_ladder[f"c{i}"]) for i in range(1, 6))
+pcts_nested = [_ladder[f"pct_c{i}"] for i in range(1, 6)]
 
-# Nested counts
-c1 = n_total
-c2 = len(df[df["function_family"] != "unspecified"])
-c3 = len(df[(df["function_family"] != "unspecified") & df["stage"].isin(["deployed", "scaled"])])
-c4 = len(df[(df["function_family"] != "unspecified") & df["stage"].isin(["deployed", "scaled"]) & df["evidence_type"].isin(["named", "metric"])])
-c5 = len(df[(df["function_family"] != "unspecified") & df["stage"].isin(["deployed", "scaled"]) & (df["evidence_type"] == "metric")])
-
-pcts_nested = [c / n_total * 100 for c in [c1, c2, c3, c4, c5]]
-
-# Independent component rates
-p_func = (df["function_family"] != "unspecified").mean() * 100
-p_stage = df["stage"].isin(["deployed", "scaled"]).mean() * 100
-p_named = df["evidence_type"].isin(["named", "metric"]).mean() * 100
-p_metric = (df["evidence_type"] == "metric").mean() * 100
-p_vendor = (df["source"] == "third_party").mean() * 100
+p_func = _ladder["p_func"]
+p_stage = _ladder["p_stage"]
+p_named = _ladder["p_named"]
+p_metric = _ladder["p_metric"]
+p_vendor = _ladder["p_vendor"]
 
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9.6, 3.8), dpi=300)
 
@@ -2456,35 +1829,20 @@ from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 
-act = pd.read_parquet(_p("firm_activities.parquet"))
-filings = con.execute("""
-    WITH manifest AS (
-        SELECT country_code, accession_number, filing_date FROM filing_manifest WHERE form_type != 'Earnings call transcript'
-        UNION ALL
-        SELECT country_code, accession_number, filing_date FROM filing_manifest_10q
-    )
-    SELECT accession_number, filing_date FROM manifest
-""").df()
+# Activity volume and grounding by year (filings + calls pooled), precomputed
+# by scripts/analytics/washing/volume_vs_grounding.py from
+# the gold activity tables joined to filing/call dates.
+_vvg = pd.read_parquet(results("washing", "volume_vs_grounding.parquet")).set_index("year")
 
-act_f = act[act.channel == "filing"].merge(filings, on="accession_number", how="left")
-act_f["year"] = pd.to_datetime(act_f["filing_date"]).dt.year
-act_c = act[act.channel == "call"].copy()
-act_c["year"] = act_c["accession_number"].str.extract(r"_(\d{4})Q")[0].astype(float)
-both = pd.concat([act_f, act_c], ignore_index=True)
-both = both[both["year"].between(2021, 2026)]
-both["year"] = both["year"].astype(int)
-
-vol = both.groupby("year").size()
-dep_share = both.groupby("year")["stage"].apply(lambda s: s.isin(["deployed", "scaled"]).mean() * 100)
-gen_ev = both.groupby("year")["evidence_type"].apply(lambda s: (s == "generic").mean() * 100)
-named_prod = both.groupby("year")["evidence_type"].apply(lambda s: (s == "named").mean() * 100)
-ident_func = both.groupby("year")["function_family"].apply(lambda s: (s != "unspecified").mean() * 100)
+vol = _vvg["n_activities"]
+dep_share = _vvg["deployed_share_pct"]
+gen_ev = _vvg["generic_evidence_pct"]
+named_prod = _vvg["named_evidence_pct"]
+ident_func = _vvg["identified_function_pct"]
 
 # Full-year 2026 projection with the same-window seasonal factor (activities
 # in full 2025 / activities in the 2025 window ending on the 2026 cut-off day),
 # computed once in the header chunk as hd_act_factor.
-latest_date_2026 = act_f[act_f["year"] == 2026]["filing_date"].max()
-months_observed = latest_date_2026.month if pd.notnull(latest_date_2026) else 8
 annual_factor = hd_act_factor
 vol_2026_obs = vol[2026]
 vol_2026_proj_total = int(round(vol_2026_obs * annual_factor))
@@ -2568,43 +1926,23 @@ This is a fact about information rather than capability: corporate reporting dil
 ```{python}
 #| echo: false
 #| output: false
-from pathlib import Path
-import pandas as pd
-import numpy as np
+# Corporate branding vs. external-vendor attribution, precomputed by
+# scripts/analytics/washing/tech_provenance.py from
+# the gold activity tables.
+_tp = pd.read_parquet(results("washing", "tech_provenance.parquet")).iloc[0]
+n_activities_total = int(_tp["n_activities_total"])
+own_brand_pct = _tp["own_brand_pct"]
+ext_vendor_pct = _tp["ext_vendor_pct"]
+partner_pct = _tp["partner_pct"]
+third_party_src = _tp["third_party_pct"]
+ext_provider_firm_pct = _tp["ext_provider_firm_pct"]
 
-
-df = pd.read_parquet(_p("firm_activities.parquet"))
-n_activities_total = len(df)
-
-def check_role(entities, roles):
-    if entities is None or len(entities) == 0:
-        return False
-    return any(e.get("role") in roles for e in entities)
-
-own_brand_pct = df["entities"].apply(lambda l: check_role(l, ["own_brand"])).mean() * 100
-ext_vendor_pct = df["entities"].apply(lambda l: check_role(l, ["provider", "model"])).mean() * 100
-partner_pct = df["entities"].apply(lambda l: check_role(l, ["partner"])).mean() * 100
-third_party_src = (df["source"] == "third_party").mean() * 100
-any_ext_provider = df.groupby("ticker")["entities"].apply(lambda s: s.apply(lambda l: check_role(l, ["provider", "model", "partner"])).any())
-ext_provider_firm_pct = 100 * any_ext_provider.mean()
-
-_VENDOR_PATTERNS = {
-    "OpenAI / Microsoft Ecosystem": r"openai|chatgpt|gpt|copilot|microsoft|azure",
-    "Alphabet / Google": r"google|gemini|vertex|bard|deepmind|palm",
-    "NVIDIA": r"nvidia|cuda",
-    "Amazon Web Services": r"amazon|aws|bedrock|sagemaker",
+vendor_pcts = {
+    "OpenAI / Microsoft Ecosystem": _tp["openai_microsoft_pct"],
+    "Alphabet / Google": _tp["alphabet_google_pct"],
+    "NVIDIA": _tp["nvidia_pct"],
+    "Amazon Web Services": _tp["aws_pct"],
 }
-
-def _vendor_firm_pct(pattern):
-    import re
-    def has_vendor(entities):
-        if entities is None or len(entities) == 0:
-            return False
-        return any(e.get("role") in ("provider", "model", "partner") and re.search(pattern, str(e.get("name", "")).lower()) for e in entities)
-    by_firm = df.groupby("ticker")["entities"].apply(lambda s: s.apply(has_vendor).any())
-    return 100 * by_firm.mean()
-
-vendor_pcts = {name: _vendor_firm_pct(pat) for name, pat in _VENDOR_PATTERNS.items()}
 ```
 
 Investors and regulators reading AI claims also want to know where the technology comes from. Do public firms build it themselves, or buy foundation models from outside hyperscalers? Named entity roles across the `{python} f"{n_activities_total:,}"` disclosed AI activity statements show a clear imbalance in where the technology is said to come from (@fig-tech-provenance):
@@ -2689,9 +2027,10 @@ from pathlib import Path
 import pandas as pd
 
 
-_df_w = pd.read_parquet(_p("firm_year_washing_score.parquet"))
-_w = _df_w["w"].dropna()
-_validation = json.loads(_p("washing_score_validation.json").read_text())
+_df_w = pd.read_parquet(gold("covariates", "firm_year", "washing_score"))
+_df_w = _df_w[_df_w["w"].notna()]
+_w = _df_w["w"]
+_validation = results_json("washing", "washing_score_validation.json")
 n_firm_years = _validation["n_panel"]
 n_firms_panel = _validation["n_firms"]
 year_min, year_max = int(_df_w["year"].min()), int(_df_w["year"].max())
@@ -2710,8 +2049,8 @@ Decoupling ($W_{it}$, defined as the percentile-rank gap between Disclosure Inte
 import pandas as pd
 import matplotlib.pyplot as plt
 
-_ds = pd.read_parquet(_p("firm_year_washing_score.parquet")).dropna(subset=["frames_per_1k", "substance", "w"])
-_arch_ds = pd.read_parquet(_p("firm_year_master_v2.parquet"))[["ticker", "year", "archetype"]]
+_ds = L.read_dataset("firm_year", ("covariates", "washing_score"), ("covariates", "disclosure_volume", ["frames_per_1k"])).dropna(subset=["frames_per_1k", "substance", "w"])
+_arch_ds = pd.read_parquet(gold("covariates", "firm_year", "posture_archetype_static"))[["ticker", "year", "archetype"]]
 _ds = _ds.merge(_arch_ds, on=["ticker", "year"], how="left")
 _ds["pct_d"] = _ds["frames_per_1k"].rank(pct=True)
 _ds["pct_s"] = _ds["substance"].rank(pct=True)
@@ -2766,9 +2105,9 @@ import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
 
 
-df = pd.read_parquet(_p("firm_year_washing_score.parquet"))
+df = pd.read_parquet(gold("covariates", "firm_year", "washing_score"))
 w = df['w'].dropna()
-validation = json.loads(_p("washing_score_validation.json").read_text())
+validation = results_json("washing", "washing_score_validation.json")
 n_firm_years = validation["n_panel"]
 n_firms_panel = validation["n_firms"]
 persistence_rho = validation["persistence"]["spearman"]
@@ -2864,7 +2203,7 @@ import json
 from pathlib import Path
 
 
-grounding = json.loads(_p("activity_grounding.json").read_text())
+grounding = results_json("washing", "activity_grounding.json")
 gap = grounding["channel_gap"]
 gap_n_cells, gap_n_firms = gap["n_cells"], gap["n_firms"]
 ```
@@ -2889,7 +2228,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-_pooled = json.loads(_p("activity_grounding.json").read_text())["channel_gap"]["pooled"]
+_pooled = results_json("washing", "activity_grounding.json")["channel_gap"]["pooled"]
 
 def _gap_ci(family):
     row = _pooled[family]
@@ -3030,7 +2369,7 @@ import json
 from pathlib import Path
 
 
-_words_gap = json.loads(_p("channel_gap_words_robustness.json").read_text())
+_words_gap = results_json("channel_gap", "channel_gap_words_robustness.json")
 promo_ratio = _words_gap["promo_per_1k_words"]["ratio"]
 promo_call = _words_gap["promo_per_1k_words"]["call_mean"]
 promo_filing = _words_gap["promo_per_1k_words"]["filing_mean"]
@@ -3097,12 +2436,7 @@ This co-movement is consistent with @jia2025, who find that post-ChatGPT discuss
 ```{python}
 #| echo: false
 #| output: false
-import json
-from pathlib import Path
-def _pp(rel):
-    p = Path(f"../{rel}")
-    return p if p.exists() else Path(rel)
-sec_cases = json.loads(_pp("data/processed/sec_comment_letter_cases.json").read_text())
+sec_cases = results_json("call_beta", "sec_comment_letter_cases.json")
 sec_n_matched = sum(1 for d in sec_cases["letters"] if d["relevance"] != "outside universe")
 sec_n_direct = sec_cases["relevance_counts"].get("direct", 0)
 sec_n_adjacent = sec_cases["relevance_counts"].get("adjacent", 0)
@@ -3207,28 +2541,21 @@ This section tests whether disclosure intensity acts as thematic factor exposure
 #| echo: false
 #| fig-width: 5.0
 #| fig-height: 2.8
-from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def find_path(rel):
-    p = Path(f"../{rel}")
-    return p if p.exists() else Path(rel)
-
-_reg_all = pd.read_csv(find_path("data/processed/clusters/call_beta_regressions.csv"))
+_reg_all = pd.read_csv(results("call_beta", "call_beta_regressions.csv"))
 base_df = _reg_all[_reg_all["model"] == "baseline"].copy()
-AI_LABELS = {"hist_disclosure": "Historical disclosure intensity", "hist_substance": "Historical substantive activity",
-             "surprise_disclosure": "Call-specific disclosure surprise", "surprise_substance": "Call-specific substance surprise"}
+# The call regressors (scripts/analytics/call_regression.py): the AI block and the
+# three archetype weights, labelled as in the results.
+AI_LABELS = {"intensity_expanding": "Cumulative disclosure intensity", "hist_w": "Historical decoupling (HistW)",
+             "w": "Call decoupling (W)", "w_voc": "Vocal Substantives weight",
+             "w_gov": "Governance-Led weight", "w_def": "Defensive weight"}
 base_df["label"] = base_df["variable"].map(AI_LABELS)
 ai_vars = list(AI_LABELS)
 base_ai = base_df[base_df["variable"].isin(ai_vars)].copy()
 
-ai_vars_plot = [
-    ("hist_disclosure", "Historical disclosure intensity"),
-    ("hist_substance", "Historical substantive activity"),
-    ("surprise_disclosure", "Call-specific disclosure surprise"),
-    ("surprise_substance", "Call-specific substance surprise"),
-]
+ai_vars_plot = list(AI_LABELS.items())
 
 labels = [label for _, label in ai_vars_plot]
 sub = base_df.set_index("variable").loc[[k for k, _ in ai_vars_plot]]
@@ -3259,7 +2586,7 @@ plt.show()
 ```{python}
 #| echo: false
 #| output: false
-_samples_df = pd.read_csv(find_path("data/processed/clusters/call_beta_regression_samples.csv")).set_index("model")
+_samples_df = pd.read_csv(results("call_beta", "call_beta_regression_samples.csv")).set_index("model")
 _baseline_sample = {"n_calls": int(_samples_df.loc["baseline", "n_calls"]),
                      "n_firms": int(_samples_df.loc["baseline", "n_firms"]),
                      "n_fe_cells": int(_samples_df.loc["baseline", "n_fe_cells"]),
@@ -3270,16 +2597,16 @@ def _bp(var):
     p_str = "< 0.001" if row["p"] < 0.001 else f"= {row['p']:.3f}"
     return row["beta_std"], row["p"], p_str
 
-hd_b, hd_p, hd_pstr = _bp("hist_disclosure")
-hs_b, hs_p, hs_pstr = _bp("hist_substance")
-sd_b, sd_p, sd_pstr = _bp("surprise_disclosure")
-ss_b, ss_p, ss_pstr = _bp("surprise_substance")
+int_b, int_p, int_pstr = _bp("intensity_expanding")
+hw_b, hw_p, hw_pstr = _bp("hist_w")
+w_b, w_p, w_pstr = _bp("w")
+voc_b, voc_p, voc_pstr = _bp("w_voc")
 
 def _sig(p):
     return "positive and significant" if p < 0.05 else "not statistically significant"
 ```
 
-Across `{python} f"{_baseline_sample['n_calls']:,}"` calls and `{python} _baseline_sample['n_firms']` firms, historical disclosure intensity is positively associated with post-call market beta ($\beta =$ `{python} f"{hd_b:+.3f}"`, $p$ `{python} hd_pstr`), whereas single-call surprises ($\beta =$ `{python} f"{sd_b:+.3f}"`, $p$ `{python} sd_pstr`) and historical or single-call substantive operational activity ($\beta =$ `{python} f"{hs_b:+.3f}"`, $p$ `{python} hs_pstr`; $\beta =$ `{python} f"{ss_b:+.3f}"`, $p$ `{python} ss_pstr`) are statistically indistinguishable from zero (@fig-call-beta-baseline). This effect is stable across leave-one-year-out re-estimations and archetype-conditional specifications (Appendix E).
+Across `{python} f"{_baseline_sample['n_calls']:,}"` calls and `{python} _baseline_sample['n_firms']` firms, historical disclosure intensity is positively associated with post-call market beta ($\beta =$ `{python} f"{int_b:+.3f}"`, $p$ `{python} int_pstr`), whereas single-call surprises ($\beta =$ `{python} f"{w_b:+.3f}"`, $p$ `{python} w_pstr`) and historical or single-call substantive operational activity ($\beta =$ `{python} f"{hw_b:+.3f}"`, $p$ `{python} hw_pstr`; $\beta =$ `{python} f"{voc_b:+.3f}"`, $p$ `{python} voc_pstr`) are statistically indistinguishable from zero (@fig-call-beta-baseline). This effect is stable across leave-one-year-out re-estimations and archetype-conditional specifications (Appendix E).
 
 This extends to valuation and revenue growth in @fig-economic-coefficients-c1.
 
@@ -3293,8 +2620,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-_gen_c1 = pd.read_csv(find_path("data/processed/clusters/call_beta_generalized_targets.csv"))
-_beta_c1 = pd.read_csv(find_path("data/processed/clusters/call_beta_regressions.csv"))
+_gen_c1 = pd.read_csv(results("call_beta", "call_beta_generalized_targets.csv"))
+_beta_c1 = pd.read_csv(results("call_beta", "call_beta_regressions.csv"))
 _beta_c1 = _beta_c1[_beta_c1["model"] == "baseline"].copy()
 _beta_c1["target"] = "beta"
 _res_c1 = pd.concat([_gen_c1, _beta_c1[["target", "variable", "label", "beta_std", "ci95_low", "ci95_high", "p"]]], ignore_index=True)
@@ -3307,19 +2634,17 @@ OUTCOMES_C1 = [
 ]
 
 SERIES_C1 = [
-    ("hist_disclosure", "HistDisclosure", "#8EA7A3"),
-    ("surprise_disclosure", "SurpriseDisclosure", "#7AA2AE"),
-    ("hist_substance", "HistSubstance (control)", "#B85F42"),
-    ("surprise_substance", "SurpriseSubstance (control)", "#D5B1A5"),
+    ("intensity_expanding", "Cumulative intensity", "#8EA7A3"),
+    ("hist_w", "HistW", "#B85F42"),
+    ("w", "W", "#D5B1A5"),
 ]
 
 fig, ax = plt.subplots(figsize=(7.2, 3.8), dpi=300)
 y0 = np.arange(len(OUTCOMES_C1))
 offsets_c1 = {
-    "hist_disclosure": 0.22,
-    "surprise_disclosure": 0.07,
-    "hist_substance": -0.07,
-    "surprise_substance": -0.22,
+    "intensity_expanding": 0.18,
+    "hist_w": 0.0,
+    "w": -0.18,
 }
 
 for var, label, color in SERIES_C1:
@@ -3351,26 +2676,21 @@ As shown in @fig-economic-coefficients-c1, historical disclosure intensity predi
 #| output: false
 # Sourced from the same CSVs that build @tbl-call-beta-paper (Appendix E), so
 # this paragraph's inline numbers can never drift from that table again.
-from pathlib import Path
 import pandas as pd
 
-def find_path(rel):
-    p = Path(f"../{rel}")
-    return p if p.exists() else Path(rel)
+_rob_acct_df = pd.read_csv(results("call_beta", "call_beta_regressions.csv"))
+_rob_ff3_df = pd.read_csv(results("call_beta", "call_beta_robustness_market_model.csv"))
+_rob_win_df = pd.read_csv(results("call_beta", "call_beta_robustness_windows.csv"))
+_rob_fe_df = pd.read_csv(results("call_beta", "call_beta_robustness_firm_fe.csv"))
+_rob_delta_df = pd.read_csv(results("call_beta", "call_beta_robustness_delta_beta.csv"))
+_rob_placebo_df = pd.read_csv(results("call_beta", "call_beta_robustness_placebo.csv"))
 
-_rob_acct_df = pd.read_csv(find_path("data/processed/clusters/call_beta_regressions.csv"))
-_rob_ff3_df = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_market_model.csv"))
-_rob_win_df = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_windows.csv"))
-_rob_fe_df = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_firm_fe.csv"))
-_rob_delta_df = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_delta_beta.csv"))
-_rob_placebo_df = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_placebo.csv"))
-
-rob_acct = _rob_acct_df[(_rob_acct_df["model"] == "accounting_M1") & (_rob_acct_df["variable"] == "hist_disclosure")].iloc[0]
-rob_ff3 = _rob_ff3_df[(_rob_ff3_df["block"] == "ff3") & (_rob_ff3_df["variable"] == "hist_disclosure")].iloc[0]
-rob_win252 = _rob_win_df[(_rob_win_df["block"] == "beta_window[post_252]") & (_rob_win_df["variable"] == "hist_disclosure")].iloc[0]
-rob_fe = _rob_fe_df[_rob_fe_df["variable"] == "hist_disclosure"].iloc[0]
-rob_delta = _rob_delta_df[_rob_delta_df["variable"] == "hist_disclosure"].iloc[0]
-rob_placebo_d = _rob_placebo_df[(_rob_placebo_df["block"] == "placebo_pre_beta") & (_rob_placebo_df["variable"] == "disclosure")].iloc[0]
+rob_acct = _rob_acct_df[(_rob_acct_df["model"] == "accounting_M1") & (_rob_acct_df["variable"] == "intensity_expanding")].iloc[0]
+rob_ff3 = _rob_ff3_df[(_rob_ff3_df["block"] == "ff3") & (_rob_ff3_df["variable"] == "intensity_expanding")].iloc[0]
+rob_win252 = _rob_win_df[(_rob_win_df["block"] == "beta_window[post_252]") & (_rob_win_df["variable"] == "intensity_expanding")].iloc[0]
+rob_fe = _rob_fe_df[_rob_fe_df["variable"] == "intensity_expanding"].iloc[0]
+rob_delta = _rob_delta_df[_rob_delta_df["variable"] == "intensity_expanding"].iloc[0]
+rob_placebo_d = _rob_placebo_df[(_rob_placebo_df["block"] == "placebo_pre_beta") & (_rob_placebo_df["variable"] == "intensity_expanding")].iloc[0]
 ```
 
 This effect survives a battery of specification checks reported in Appendix E (accounting controls, the Fama–French 3-factor benchmark, an extended post-call window, firm fixed effects, first differences, and archetype-indicator controls; @tbl-call-beta-paper, @tbl-e-archetype-regressions). The check that matters for interpretation is a placebo test: regressing *pre-call* beta — measured before the earnings call occurs — on the same historical disclosure measure yields $\beta^{\text{pre}} =$ `{python} f"{rob_placebo_d['beta_std']:.3f}"` ($p < 0.001$, substance null), nearly double the post-call estimate. Because disclosure cannot retroactively cause a beta that was already fixed before the call, this rules out the call itself as the mechanism: the association is cross-sectional — firms that already carry higher narrative visibility already carry higher systematic beta — and not call-induced.
@@ -3396,7 +2716,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-_res_c2 = pd.read_csv(find_path("data/processed/clusters/call_archetype_full_battery_targets.csv"))
+_res_c2 = pd.read_csv(results("crash_archetypes", "call_archetype_full_battery_targets.csv"))
 _res_c2["target"] = _res_c2["target"].str.replace("_post_63", "", regex=False).str.replace("_post", "", regex=False)
 _res_c2["ci95_low"] = _res_c2["beta_std"] - 1.96 * _res_c2["se"]
 _res_c2["ci95_high"] = _res_c2["beta_std"] + 1.96 * _res_c2["se"]
@@ -3409,21 +2729,21 @@ OUTCOMES_C2 = [
 ]
 
 SERIES_C2 = [
-    ("hist_substance", "HistSubstance", "#B85F42"),
-    ("surprise_substance", "SurpriseSubstance", "#D5B1A5"),
-    ("hist_disclosure", "HistDisclosure (control)", "#8EA7A3"),
-    ("dum_gov", "Governance-Led (vs Def.)", "#263B4A"),
-    ("dum_voc", "Vocal Substantives (vs Def.)", "#355F6B"),
+    ("hist_w", "HistW", "#B85F42"),
+    ("w", "W", "#D5B1A5"),
+    ("intensity_expanding", "Cumulative intensity", "#8EA7A3"),
+    ("w_gov", "Governance-Led weight", "#263B4A"),
+    ("w_def", "Defensive weight", "#355F6B"),
 ]
 
 fig, ax = plt.subplots(figsize=(7.2, 3.8), dpi=300)
 y0 = np.arange(len(OUTCOMES_C2))
 offsets_c2 = {
-    "hist_substance": 0.28,
-    "surprise_substance": 0.14,
-    "hist_disclosure": 0.0,
-    "dum_gov": -0.14,
-    "dum_voc": -0.28,
+    "hist_w": 0.28,
+    "w": 0.14,
+    "intensity_expanding": 0.0,
+    "w_gov": -0.14,
+    "w_def": -0.28,
 }
 
 for var, label, color in SERIES_C2:
@@ -3470,26 +2790,21 @@ This section evaluates the tail risk channel by estimating Negative Coefficient 
 #| echo: false
 #| fig-width: 6.5
 #| fig-height: 3.2
-from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def find_path(rel):
-    p = Path(f"../{rel}")
-    return p if p.exists() else Path(rel)
+_crash_df = pd.read_csv(results("crash_archetypes", "call_crash_archetype_regressions.csv"))
+_crash_samples = pd.read_csv(results("crash_archetypes", "call_crash_archetype_regression_samples.csv")).set_index("target")
+_sub_nc = _crash_df[_crash_df["target"] == "ncskew_weights"].copy()
 
-_crash_df = pd.read_csv(find_path("data/processed/clusters/call_crash_archetype_regressions.csv"))
-_crash_samples = pd.read_csv(find_path("data/processed/clusters/call_crash_archetype_regression_samples.csv")).set_index("target")
-_sub_nc = _crash_df[_crash_df["target"] == "ncskew_active_dummies"].copy()
-
-order = ["dum_gov", "dum_voc", "surprise_substance", "surprise_disclosure", "hist_substance", "hist_disclosure"]
+order = ["w_gov", "w_def", "w_voc", "intensity_expanding", "hist_w", "w"]
 labels = {
-    "dum_gov": "Governance-Led (vs. Defensive)",
-    "dum_voc": "Vocal Substantives (vs. Defensive)",
-    "surprise_substance": "Call substance surprise",
-    "surprise_disclosure": "Call disclosure surprise",
-    "hist_substance": "Historical substance",
-    "hist_disclosure": "Historical disclosure",
+    "w_gov": "Governance-Led weight",
+    "w_def": "Defensive weight",
+    "w_voc": "Vocal Substantives weight",
+    "intensity_expanding": "Cumulative disclosure intensity",
+    "hist_w": "Historical decoupling (HistW)",
+    "w": "Call decoupling (W)",
 }
 
 _sub_nc = _sub_nc.set_index("variable").loc[order]
@@ -3497,7 +2812,7 @@ vals = _sub_nc["beta_std"].tolist()
 ci_low = _sub_nc["ci95_low"].tolist()
 ci_high = _sub_nc["ci95_high"].tolist()
 y = list(range(len(order)))
-colors = ["#B85F42" if v == "dum_gov" else "#73828C" for v in order]
+colors = ["#B85F42" if v == "w_gov" else "#73828C" for v in order]
 
 fig, ax = plt.subplots(figsize=(6.5, 3.2), dpi=300)
 for yi, val, lo, hi, col in zip(y, vals, ci_low, ci_high, colors):
@@ -3529,7 +2844,7 @@ Across the three empirical channels, the econometric results distinguish narrati
 
 | Hypothesis | Empirical Result | Economic Interpretation |
 |:---|:---|:---|
-| **$H_{6a}$: Thematic Factor Exposure ($D$)** | Supported as cross-sectional association, null as call impact ($\beta =$ `{python} f"{hd_b:+.3f}"`, $p$ `{python} hd_pstr` post-call; pre-call placebo already $\beta = +$`{python} f"{rob_placebo_d['beta_std']:.3f}"`, nearly double the post-call estimate; market cap $\beta = +0.086$; revenue growth $\beta = +0.147$) | Firms with persistently higher narrative volume carry higher systematic exposure to the AI theme; the earnings call itself does not move that exposure. |
+| **$H_{6a}$: Thematic Factor Exposure ($D$)** | Supported as cross-sectional association, null as call impact ($\beta =$ `{python} f"{int_b:+.3f}"`, $p$ `{python} int_pstr` post-call; pre-call placebo already $\beta = +$`{python} f"{rob_placebo_d['beta_std']:.3f}"`, nearly double the post-call estimate; market cap $\beta = +0.086$; revenue growth $\beta = +0.147$) | Firms with persistently higher narrative volume carry higher systematic exposure to the AI theme; the earnings call itself does not move that exposure. |
 | **$H_{6b}$: Costly Signaling ($S$)** | Not supported (gross margin $p = 0.172$; ROIC$-$WACC $p = 0.544$; beta $p = 0.401$) | Disclosed operational depth earns no valuation premium or risk discount in the short run. |
 | **$H_{6c}$: Tail Risk / Opacity ($W$)** | Not supported for continuous $W$ ($p = 0.666$); Governance-Led nominally significant uncorrected ($\beta = -0.124, p = 0.046$) but fails FDR correction and sector-exclusion/posture-switcher checks | Narrative decoupling does not predict 6-month crashes. Governance-focused disclosure's association with lower downside tail risk is suggestive, not robust. |
 
@@ -3545,15 +2860,10 @@ A sequential variance-decomposition exercise makes this asymmetry between disclo
 #| echo: false
 #| fig-width: 7.5
 #| fig-height: 3.6
-import json
-from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-data_path = Path("../data/processed/clusters/incremental_signal.json")
-if not data_path.exists():
-    data_path = Path("data/processed/clusters/incremental_signal.json")
-d = json.loads(data_path.read_text())
+d = results_json("shock", "incremental_signal.json")
 
 outcomes_map = [
     ("price_to_sales", "Valuation\n(P/S Ratio)"),
@@ -3637,20 +2947,11 @@ This section runs the three-step framework on contrasting firm-years from the S&
 #| label: tbl-firm-comparisons
 #| tbl-cap: "[Illustrative peer comparisons across firm-years within Financials, Technology, and Real Estate.]{custom-style=\"CaptionText\"}"
 #| echo: false
-from pathlib import Path
 import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def find_path(rel):
-    p = Path(f"../{rel}")
-    return p if p.exists() else Path(rel)
-
-_ws = pd.read_parquet(find_path("data/processed/clusters/firm_year_washing_score.parquet"))
-_ws["pct_d"] = _ws.groupby("year")["frames_per_1k"].rank(pct=True) * 100
-_ws["pct_s"] = _ws.groupby("year")["substance"].rank(pct=True) * 100
-_dim = pd.read_parquet(find_path("data/processed/clusters/firm_year_strategy_dimensions.parquet")).set_index(["ticker", "year"])["archetype"]
-_act = pd.read_parquet(find_path("data/processed/clusters/firm_activities.parquet"))
+_fc = pd.read_parquet(results("washing", "firm_comparisons.parquet")).set_index(["ticker", "year"])
 
 CASES = [
     ("JPM", "JPMorgan Chase", 2024),
@@ -3667,7 +2968,6 @@ def _ord(p):
 
 cols = []
 rows = {k: [] for k in ["arch", "D", "A", "G", "S", "W", "diag"]}
-cv = {}
 
 diagnoses = {
     "JPM": "High governance discipline; internal workflow controls prioritized over commercial promotion ($W < 0$).",
@@ -3678,17 +2978,12 @@ diagnoses = {
 }
 
 for t, name, y in CASES:
-    r = _ws[(_ws["ticker"] == t) & (_ws["year"] == y)]
-    a = _act[(_act["ticker"] == t)]
     cols.append(f"{name} ({t}, {y})")
-    arch_val = _dim.get((t, y), "Defensive Disclosers" if t == "WELL" else "—")
-    rows["arch"].append(arch_val)
-    if len(r):
-        r = r.iloc[0]
-        r["n_activities_all"] = len(a[a["channel"] != "filing"]) + len(a[a["channel"] == "filing"])
-        cv[t] = r
+    r = _fc.loc[(t, y)]
+    rows["arch"].append(r["archetype"])
+    if pd.notna(r["pct_d"]):
         rows["D"].append(f"{_ord(r['pct_d'])} pct ({r['frames_per_1k']:.2f}/1k)")
-        rows["A"].append(f"{len(a)} total ({len(a[a['channel']=='filing'])} in 10-K)")
+        rows["A"].append(f"{int(r['n_activities'])} total ({int(r['n_activities_filing'])} in 10-K)")
         rows["G"].append(f"{r['grounding_index']:.3f}")
         rows["S"].append(f"{r['substance']:.2f} ({_ord(r['pct_s'])} pct)")
         rows["W"].append(f"{r['w']:+.3f}")
@@ -3727,17 +3022,12 @@ With posture established in Step 1 (Chapter 3), Step 2 asks whether that posture
 ```{python}
 #| echo: false
 #| output: false
-from pathlib import Path
 import pandas as pd
 
-def find_path(rel):
-    p = Path(f"../{rel}")
-    return p if p.exists() else Path(rel)
-
-_wall = pd.read_parquet(find_path("data/processed/clusters/firm_year_washing_score.parquet"))
-_m26 = pd.read_parquet(find_path("data/processed/clusters/firm_year_master_v2.parquet"))
-_m26 = _m26[_m26["year"] == 2026]
-scr_n_index = int(_m26["ticker"].nunique())
+_wall = L.read_dataset("firm_year", ("covariates", "washing_score"), ("covariates", "disclosure_volume", ["any_ai", "frames_per_1k"]))
+_wall = _wall[_wall["w"].notna()]
+_fy = pd.read_parquet(gold("spines", "firm_year", "firm_year"))
+scr_n_index = int(_fy.loc[_fy["year"] == 2026, "ticker"].nunique())
 _d26 = _wall[(_wall["year"] == 2026) & (_wall["any_ai"] == 1.0)].drop_duplicates("ticker")
 scr_n_disc = len(_d26)
 scr_n_nondisc = scr_n_index - scr_n_disc
@@ -3755,11 +3045,9 @@ scr_deprior_total_pct = scr_deprior_total / scr_n_index * 100
 _q95 = _wall.loc[_wall["any_ai"] == 1.0, "w"].quantile(0.95)
 scr_tail = int((_d26["w"] >= _q95).sum())
 scr_neg = int((_d26["w"] < 0).sum())
-_g = pd.read_parquet(find_path("data/processed/clusters/channel_gap_cells.parquet"))
-_g26 = _g[_g["t"].astype(str) == "2026"]
-_zgap = (_g26["gap_promo_per_1k"] - _g26["gap_promo_per_1k"].mean()) / _g26["gap_promo_per_1k"].std()
-scr_n_dual = len(_g26)
-scr_n_gap = int((_zgap > 1.5).sum())
+_reconcile = results_json("channel_gap", "channel_gap_words_robustness.json")["reconcile_2026"]
+scr_n_dual = _reconcile["n_dual"]
+scr_n_gap = _reconcile["n_gap_z_above_1_5"]
 ```
 
 | | Low Disclosed Substance ($S$) | High Disclosed Substance ($S$) |
@@ -3780,8 +3068,8 @@ Beyond the four primary quadrants in @tbl-screening-matrix, two distributional c
 ```{python}
 #| echo: false
 #| output: false
-_arch_panel = pd.read_parquet(find_path("data/processed/clusters/panel_expanding_archetypes.parquet"))
-_arch26 = _arch_panel[_arch_panel["year"] == 2026][["ticker", "arch_exp"]]
+_arch_panel = pd.read_parquet(gold("covariates", "firm_year", "posture_archetype_static"))
+_arch26 = _arch_panel[_arch_panel["year"] == 2026][["ticker", "archetype"]]
 
 _q26 = _d26.merge(_arch26, on="ticker", how="left").copy()
 _quad = pd.Series("DEPRIORITIZE", index=_q26.index)
@@ -3792,8 +3080,8 @@ _q26["quadrant"] = _quad
 
 _arch_order = ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers", "No AI"]
 _quad_order = ["INVESTIGATE", "VALIDATE", "DEPRIORITIZE", "EXPLORE"]
-arch_ct_n = pd.crosstab(_q26["arch_exp"], _q26["quadrant"]).reindex(index=_arch_order, columns=_quad_order).fillna(0).astype(int)
-arch_ct = pd.crosstab(_q26["arch_exp"], _q26["quadrant"], normalize="index").reindex(index=_arch_order, columns=_quad_order).fillna(0.0) * 100
+arch_ct_n = pd.crosstab(_q26["archetype"], _q26["quadrant"]).reindex(index=_arch_order, columns=_quad_order).fillna(0).astype(int)
+arch_ct = pd.crosstab(_q26["archetype"], _q26["quadrant"], normalize="index").reindex(index=_arch_order, columns=_quad_order).fillna(0.0) * 100
 ```
 
 Steps 1 and 2 are not redundant: posture and the $D \times S$ quadrant sort firms differently. `{python} f"{arch_ct.loc['Vocal Substantives', 'VALIDATE']:.0f}"`% of Vocal Substantives land in VALIDATE, consistent with a register built on claims that are already both frequent and grounded, while Defensive Disclosers spread across all four quadrants -- disclosing a defensive posture caps neither narrative volume nor substance on its own (@tbl-archetype-quadrant).
@@ -3924,9 +3212,8 @@ SIC2_NAMES_APP = {
     "87": "Engineering, Accounting, Research & Management",
 }
 
-fu_app = con.execute("SELECT ticker, company_name, sic FROM firm_universe WHERE country_code = 'us'").df()
-fu_app["sic2"] = fu_app["sic"].astype(str).str.zfill(4).str[:2]
-fu_app["sector"] = fu_app["sic2"].apply(map_sector)
+fu_app = pd.read_parquet(results("corpus", "universe_sectors.parquet"))[["ticker", "company_name", "sic", "sic2", "agg_sector"]]
+fu_app = fu_app.rename(columns={"agg_sector": "sector"})
 
 sector_order_app = [
     "Technology", "Financial Services", "Healthcare & Pharma", "Industrials & Mfg",
@@ -3960,17 +3247,12 @@ Markdown(tabulate(app_rows, headers=headers_app))
 ```{python}
 #| echo: false
 #| output: false
-from pathlib import Path
 import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _pp(name):
-    p = Path(f"../data/processed/{name}")
-    return p if p.exists() else Path(f"data/processed/{name}")
-
 INV_YEARS = [2021, 2022, 2023, 2024, 2025, 2026]
-_docs = pd.read_parquet(_p("document_panel.parquet"))
+_docs = L.read_gold("document", ("covariates", "disclosure_volume"))
 _docs["year"] = pd.to_datetime(_docs["fecha"]).dt.year
 _docs = _docs[_docs["year"].isin(INV_YEARS)]
 
@@ -4008,13 +3290,14 @@ for form, label in [("10-K", "10-K documents with ≥1 AI frame"), ("10-Q", "10-
     d = _by_year(s, item_col="accession_number", count="nunique"); der_rows.append([label] + [_cell(*d[y]) for y in INV_YEARS])
 for ch, label in [("filing", "AI semantic frames in statutory filings"), ("call", "AI semantic frames in earnings calls")]:
     d = _by_year(_docs[_docs["channel"] == ch], item_col="n_frames", count="sum"); der_rows.append([label] + [_cell(*d[y]) for y in INV_YEARS])
-_act = pd.read_parquet(_p("firm_activities.parquet"), columns=["ticker", "accession_number", "text_hash", "activity_id", "channel"]).drop_duplicates(["ticker", "text_hash", "activity_id"])
+_act = L.read_gold("activity", ("covariates", "taxonomy", ["channel"]))[["ticker", "accession_number", "text_hash", "activity_id", "channel"]]
 _act = _act.merge(_docs[["accession_number", "year"]].drop_duplicates("accession_number"), on="accession_number", how="inner")
 for ch, label in [("filing", "Disclosed AI activities in statutory filings"), ("call", "Disclosed AI activities in earnings calls")]:
     d = _by_year(_act[_act["channel"] == ch]); der_rows.append([label] + [_cell(*d[y]) for y in INV_YEARS])
-_wsc = pd.read_parquet(_p("firm_year_washing_score.parquet"))[["ticker", "year"]]
+_wsc = pd.read_parquet(gold("covariates", "firm_year", "washing_score"))
+_wsc = _wsc[_wsc["w"].notna()][["ticker", "year"]]
 d = _by_year(_wsc[_wsc["year"].isin(INV_YEARS)]); der_rows.append(["Firm-years with Decoupling ($W$) (disclosing firms)"] + [_cell(*d[y]) for y in INV_YEARS])
-_cb = pd.read_parquet(_p("call_beta_main_panel_10k10q_asof.parquet"), columns=["ticker", "fecha", "beta_post_63"])
+_cb = pd.read_parquet(gold("targets", "call", "market"), columns=["ticker", "fecha", "beta_post_63"])
 _cb["year"] = pd.to_datetime(_cb["fecha"]).dt.year
 d = _by_year(_cb[_cb["year"].isin(INV_YEARS) & _cb["beta_post_63"].notna()]); der_rows.append(["Earnings-call events with post-call beta"] + [_cell(*d[y]) for y in INV_YEARS])
 Markdown(tabulate(der_rows, headers=["Artifact"] + [str(y) for y in INV_YEARS]))
@@ -4075,20 +3358,11 @@ Markdown(tabulate(rows, headers=["Model", "Provider", "Reasoning", "Latency/call
 from tabulate import tabulate
 from IPython.display import Markdown
 
-_acts_a1 = pd.read_parquet(_p("firm_activities.parquet")).drop_duplicates(subset=["ticker", "text_hash", "activity_id"])
-
-_pp_n = con.execute(f"SELECT count(*) FROM paragraphs WHERE country_code = 'us' AND {PANEL_DOCS} AND is_scorable").fetchone()[0]
-_uniq_n = con.execute(f"SELECT count(DISTINCT text_hash) FROM paragraphs WHERE country_code = 'us' AND {PANEL_DOCS} AND is_scorable").fetchone()[0]
-_pos_n = con.execute("""
-    SELECT count(DISTINCT text_hash) FROM (
-        SELECT text_hash, is_ai_prefiltered
-        FROM read_parquet('data/interim/prefilter_predictions_unique/prefilter_predictions__run=*.parquet', union_by_name=true)
-        WHERE country_code = 'us'
-        QUALIFY row_number() OVER (PARTITION BY text_hash ORDER BY model_version DESC) = 1
-    ) WHERE is_ai_prefiltered
-""").fetchone()[0]
-_fr_n = con.execute("SELECT count(DISTINCT text_hash) FROM _us_frames").fetchone()[0]
-_ac_n = len(_acts_a1)
+_pp_n = _funnel["n_scorable"]
+_uniq_n = _funnel["n_unique"]
+_pos_n = _funnel["n_prefiltered"]
+_fr_n = _funnel["n_framed"]
+_ac_n = hd_n_activities
 
 funnel_rows = [
     ["A. Corpus (scorable paragraph instances)", f"{_pp_n:,}", "100%"],
@@ -4134,55 +3408,29 @@ Under statutory patent rules (35 U.S.C. § 122(b)), applications remain confiden
 #| label: tbl-b1-patents-controls
 #| tbl-cap: "[OLS of log(1 + AI patents, 2021-2023) on log disclosed AI activity, controlling for log market capitalization and 2-digit SIC fixed effects.]{custom-style=\"CaptionText\"}"
 #| echo: false
-from pathlib import Path
-import numpy as np
 import pandas as pd
-import statsmodels.formula.api as smf
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def _pp(name):
-    p = Path(f"../data/processed/{name}")
-    return p if p.exists() else Path(f"data/processed/{name}")
+_pc = pd.read_csv(results("appendix", "patents_controls.csv")).set_index("regressor")
+n_b1 = int(_pc["n"].iloc[0])
+n_sic_b1 = int(_pc["n_sic"].iloc[0])
+_coef_act_b1 = _pc.loc["Disclosed AI activities (log A)", "coefficient"]
+_p_act_b1 = _pc.loc["Disclosed AI activities (log A)", "p"]
+_coef_grd_b1 = _pc.loc["Grounded activities (log G)", "coefficient"]
+_p_grd_b1 = _pc.loc["Grounded activities (log G)", "p"]
 
-m_b1 = pd.read_parquet(_p("firm_year_master_v2.parquet")).dropna(subset=["sic2"])
-m_b1["sic2"] = m_b1["sic2"].astype(int).astype(str)
-sic_by_ticker_b1 = m_b1.groupby("ticker")["sic2"].agg(lambda s: s.mode().iloc[0])
-size_by_ticker_b1 = m_b1.groupby("ticker")["market_cap"].mean()
-
-dim_b1 = pd.read_parquet(_p("firm_strategy_dimensions.parquet"))[["ticker", "archetype"]]
-pt_b1 = pd.read_parquet(_pp("sp500_firm_year_ai_patents_oecd2025.parquet"))
-pt_b1 = pt_b1[pt_b1["ticker"].isin(dim_b1["ticker"]) & pt_b1["year"].between(2021, 2023)]
-pf_b1 = pt_b1.groupby("ticker").agg(ai_pat=("ai_patents_oecd", "sum")).reset_index()
-
-act_b1 = pd.read_parquet(_p("firm_activities.parquet"))
-act_b1["grounded"] = act_b1["evidence_type"].isin(["named", "metric"])
-af_b1 = act_b1.groupby("ticker").agg(n_act=("text_hash", "size"), n_grounded=("grounded", "sum")).reset_index()
-
-bench_b1 = dim_b1.merge(af_b1, on="ticker", how="left").fillna({"n_act": 0, "n_grounded": 0}).merge(pf_b1, on="ticker", how="left")
-bench_b1["sic2"] = bench_b1["ticker"].map(sic_by_ticker_b1)
-bench_b1["market_cap"] = bench_b1["ticker"].map(size_by_ticker_b1)
-bench_b1 = bench_b1.dropna(subset=["ai_pat", "market_cap", "sic2"])
-bench_b1["log_ai_pat"] = np.log1p(bench_b1["ai_pat"])
-bench_b1["log_mktcap"] = np.log1p(bench_b1["market_cap"].clip(lower=0))
-bench_b1["log_n_act"] = np.log1p(bench_b1["n_act"])
-bench_b1["log_n_grounded"] = np.log1p(bench_b1["n_grounded"])
-n_b1 = len(bench_b1)
-n_sic_b1 = bench_b1["sic2"].nunique()
-
-mod_act_b1 = smf.ols("log_ai_pat ~ log_n_act + log_mktcap + C(sic2)", data=bench_b1).fit()
-mod_grd_b1 = smf.ols("log_ai_pat ~ log_n_grounded + log_mktcap + C(sic2)", data=bench_b1).fit()
+def _fmt_p(p):
+    return f"{p:.1e}" if p < 0.001 else f"{p:.3f}"
 
 tbl_rows_b1 = [
-    ["Disclosed AI activities ($\\log A$)", f"{mod_act_b1.params['log_n_act']:+.3f}",
-     f"{mod_act_b1.pvalues['log_n_act']:.1e}" if mod_act_b1.pvalues['log_n_act'] < 0.001 else f"{mod_act_b1.pvalues['log_n_act']:.3f}"],
-    ["Grounded activities ($\\log G$)", f"{mod_grd_b1.params['log_n_grounded']:+.3f}",
-     f"{mod_grd_b1.pvalues['log_n_grounded']:.1e}" if mod_grd_b1.pvalues['log_n_grounded'] < 0.001 else f"{mod_grd_b1.pvalues['log_n_grounded']:.3f}"],
+    ["Disclosed AI activities ($\\log A$)", f"{_coef_act_b1:+.3f}", _fmt_p(_p_act_b1)],
+    ["Grounded activities ($\\log G$)", f"{_coef_grd_b1:+.3f}", _fmt_p(_p_grd_b1)],
 ]
 Markdown(tabulate(tbl_rows_b1, headers=["Regressor (each in a separate model with log market cap + SIC FE)", "Coefficient", "p"]))
 ```
 
-Disclosed AI activity predicts AI patenting even after controlling for firm size and sector: with `{python} n_b1` firms across `{python} n_sic_b1` SIC groups, a one-log-point increase in disclosed AI activities is associated with `{python} f"{mod_act_b1.params['log_n_act']:.2f}"` additional log-patents (p < 0.001), and the same holds for grounded activities alone (`{python} f"{mod_grd_b1.params['log_n_grounded']:.2f}"`, p < 0.001). These relationships confirm that LLM-derived disclosure constructs align with an independent, objective measure of technological development.
+Disclosed AI activity predicts AI patenting even after controlling for firm size and sector: with `{python} n_b1` firms across `{python} n_sic_b1` SIC groups, a one-log-point increase in disclosed AI activities is associated with `{python} f"{_coef_act_b1:.2f}"` additional log-patents (p < 0.001), and the same holds for grounded activities alone (`{python} f"{_coef_grd_b1:.2f}"`, p < 0.001). These relationships confirm that LLM-derived disclosure constructs align with an independent, objective measure of technological development.
 
 ### Error taxonomy and classification robustness {.unnumbered}
 
@@ -4212,38 +3460,16 @@ The archetype count ($k=3$) used throughout this thesis is chosen by the 200-rep
 #| echo: false
 #| warning: false
 #| message: false
-# Live k=2 fit (same population, same 8 posture dimensions, same seed as the
-# k=3 fit in Chapter 3) purely to source the substantive-rejection paragraph
-# below from real z-scores instead of hand-typed ones. Self-contained (re-reads
-# and re-standardizes rather than reusing another chunk's variables) so it
-# doesn't depend on chunk execution order elsewhere on the page.
-import contextlib as _contextlib
-import io as _io
-from pathlib import Path as _Path
-import pandas as _pd
-
-with _contextlib.redirect_stdout(_io.StringIO()), _contextlib.redirect_stderr(_io.StringIO()):
-    from archetypes import AA as _AA
-
-def _p_k2(name):
-    p = _Path(f"../data/processed/clusters/{name}")
-    return p if p.exists() else _Path(f"data/processed/clusters/{name}")
-
-_df_k2 = _pd.read_parquet(_p_k2("firm_strategy_dimensions.parquet"))
-_k2_feats = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
-             "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
-_fit_k2 = _df_k2[_df_k2["archetype"] != "No AI"]
-_X_k2 = _fit_k2[_k2_feats].values
-_X_k2_std = (_X_k2 - _X_k2.mean(axis=0)) / _X_k2.std(axis=0, ddof=0)
-
-with _contextlib.redirect_stdout(_io.StringIO()), _contextlib.redirect_stderr(_io.StringIO()):
-    aa_k2 = _AA(n_archetypes=2, random_state=42, max_iter=500)
-    aa_k2.fit_transform(_X_k2_std)
-A_k2 = aa_k2.archetypes_
-k2_promo = A_k2[:, _k2_feats.index("promotional_posture")]
-k2_risk = A_k2[:, _k2_feats.index("risk_orientation")]
-k2_gov = A_k2[:, _k2_feats.index("governance_orientation")]
-k2_spec = A_k2[:, _k2_feats.index("specificity")]
+# k=2 Archetypal Analysis fit (same population, same 8 posture dimensions,
+# same seed as the k=3 fit in Chapter 3), read from
+# scripts/analytics/posture/archetype_k2_fit.py's output rather than fit
+# inline, purely to source the substantive-rejection paragraph below from
+# real z-scores instead of hand-typed ones.
+_k2 = results_json("posture", "archetype_k2_fit.json")
+k2_promo = _k2["k2_promo"]
+k2_risk = _k2["k2_risk"]
+k2_gov = _k2["k2_gov"]
+k2_spec = _k2["k2_spec"]
 ```
 
 **Rejection of $k = 2$ on substantive grounds:** Although mathematically stable under both bootstrap regimes, collapsing to two poles eliminates governance orientation entirely, erasing the institutional distinction between board oversight and statutory risk warnings. In $k = 2$, Archetype 0 exhibits promotional $=$ `{python} f"{k2_promo[0]:+.2f}"`, risk $=$ `{python} f"{k2_risk[0]:+.2f}"`, governance $=$ `{python} f"{k2_gov[0]:+.2f}"`, specificity $=$ `{python} f"{k2_spec[0]:+.2f}"`; Archetype 1 exhibits promotional $=$ `{python} f"{k2_promo[1]:+.2f}"`, risk $=$ `{python} f"{k2_risk[1]:+.2f}"`, governance $=$ `{python} f"{k2_gov[1]:+.2f}"`, specificity $=$ `{python} f"{k2_spec[1]:+.2f}"`. A discrete K-means benchmark on the same standardized posture matrix reproduces the same three-archetype partition.
@@ -4258,66 +3484,16 @@ As a further check, this thesis asks whether the vertex separation of the annual
 #| echo: false
 #| output: false
 # Out-of-sample temporal validation on firm-year posture vectors: fit k-means
-# (k = 3) on the training window, assign 2025 firm-years to the frozen
-# centroids, and compare with an unconstrained k-means refit on 2025 alone.
-from pathlib import Path
-import numpy as np
-import pandas as pd
-
-
-_fy = pd.read_parquet(_p("firm_year_strategy_dimensions.parquet"))
-_FE = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation", "temporal_posture",
-       "ai_positioning", "specificity", "disclosure_intensity"]
-_fy = _fy[(_fy["archetype"] != "No AI") & _fy[_FE].notna().all(axis=1)]
-
-def _kmeans(X, k=3, seed=42, n_init=10, iters=300):
-    best = None
-    for s in range(n_init):
-        rng = np.random.default_rng(seed + s)
-        C = X[rng.choice(len(X), k, replace=False)]
-        for _ in range(iters):
-            lab = np.argmin(((X[:, None, :] - C[None]) ** 2).sum(-1), axis=1)
-            C2 = np.array([X[lab == j].mean(0) if (lab == j).any() else C[j] for j in range(k)])
-            if np.allclose(C, C2):
-                break
-            C = C2
-        inertia = ((X - C[lab]) ** 2).sum()
-        if best is None or inertia < best[0]:
-            best = (inertia, C, lab)
-    return best[1], best[2]
-
-def _ari(a, b):
-    ct = pd.crosstab(a, b).values
-    comb = lambda x: x * (x - 1) / 2
-    n = ct.sum(); sij = comb(ct).sum(); si = comb(ct.sum(1)).sum(); sj = comb(ct.sum(0)).sum()
-    e = si * sj / comb(n)
-    return (sij - e) / ((si + sj) / 2 - e)
-
-def _oos(train_years, test_year=2025):
-    tr = _fy[_fy["year"].isin(train_years)]
-    te = _fy[_fy["year"] == test_year]
-    mu, sd = tr[_FE].mean(), tr[_FE].std()
-    Xtr = ((tr[_FE] - mu) / sd).values
-    Xte = ((te[_FE] - mu) / sd).values
-    C, _ = _kmeans(Xtr)
-    frozen = np.argmin(((Xte[:, None, :] - C[None]) ** 2).sum(-1), axis=1)
-    _, refit = _kmeans(Xte)
-    lab_tr = np.argmin(((Xtr[:, None, :] - C[None]) ** 2).sum(-1), axis=1)
-    names = {}
-    for j in range(3):
-        names[j] = tr["archetype"].values[lab_tr == j].tolist()
-        names[j] = max(set(names[j]), key=names[j].count) if names[j] else f"cluster {j}"
-    jac = {}
-    for j in range(3):
-        a = frozen == j
-        jac[names[j]] = max(((a & (refit == r)).sum() / max((a | (refit == r)).sum(), 1)) for r in range(3)) * 100
-    return _ari(frozen, refit), jac, len(te)
-
-oos_ari_2124, oos_jac_2124, oos_n_2025 = _oos([2021, 2022, 2023, 2024])
-oos_ari_2123, oos_jac_2123, _ = _oos([2021, 2022, 2023])
-oos_ari_2125, _, oos_n_2026 = _oos([2021, 2022, 2023, 2024, 2025], test_year=2026)
-oos_jac_min, oos_jac_max = min(oos_jac_2124.values()), max(oos_jac_2124.values())
-oos_vs_2123 = oos_jac_2123.get("Vocal Substantives", float("nan"))
+# (k = 3) on the training window, assign a held-out year's firm-years to the
+# frozen centroids, and compare with an unconstrained k-means refit on that
+# year alone. Read from scripts/analytics/posture/oos_validation.py's output
+# (same _kmeans/_ari/_oos algorithm, run there instead of inline).
+_oosv = results_json("posture", "oos_validation.json")
+oos_ari_2124, oos_n_2025 = _oosv["oos_ari_2124"], _oosv["oos_n_2025"]
+oos_ari_2123 = _oosv["oos_ari_2123"]
+oos_ari_2125, oos_n_2026 = _oosv["oos_ari_2125"], _oosv["oos_n_2026"]
+oos_jac_min, oos_jac_max = _oosv["oos_jac_min"], _oosv["oos_jac_max"]
+oos_vs_2123 = _oosv["oos_vs_2123"]
 ```
 
 A model frozen on the 2021–2024 firm-years is applied to the `{python} oos_n_2025` firm-years of 2025, reaching ARI = `{python} f"{oos_ari_2124:.3f}"` against an unconstrained 2025 refit with Jaccard recovery of `{python} f"{oos_jac_min:.1f}"`–`{python} f"{oos_jac_max:.1f}"`% across archetypes. Even the stricter pre-GenAI 2021–2023 training window keeps meaningful post-2023 recovery (ARI = `{python} f"{oos_ari_2123:.3f}"`; Vocal Substantives recovered at `{python} f"{oos_vs_2123:.1f}"`%).
@@ -4332,15 +3508,11 @@ The correlation structure across the eight AI disclosure strategy dimensions is 
 #| label: tbl-a3-posture-correlation
 #| tbl-cap: "[Correlation matrix of the eight posture dimensions.]{custom-style=\"CaptionText\"}"
 #| echo: false
-import json
-from pathlib import Path
 import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-
-manifest = json.loads(_p("strategy_dimensions_manifest.json").read_text())
-corr = pd.DataFrame(manifest["correlation_matrix"])
+corr = pd.DataFrame(hd_corr)
 LABELS = {"promotional_posture": "Promotional", "hedging_posture": "Hedging", "risk_orientation": "Risk", "governance_orientation": "Governance",
           "temporal_posture": "Claim realization", "ai_positioning": "Customer-facing", "specificity": "Claim specificity",
           "disclosure_intensity": "Intensity"}
@@ -4359,17 +3531,11 @@ The full distribution of disclosed AI activities across all six dimensions (`{py
 #| label: tbl-a2-six-dimensions
 #| tbl-cap: "[Full distribution of disclosed AI activities across all six dimensions.]{custom-style=\"CaptionText\"}"
 #| echo: false
-import json
-from pathlib import Path
 from tabulate import tabulate
 from IPython.display import Markdown
 
-data_path = Path("../data/processed/clusters/activity_profiles.json")
-if not data_path.exists():
-    data_path = Path("data/processed/clusters/activity_profiles.json")
-d = json.loads(data_path.read_text())
-dist = d["distributions"]
-func = d["function_families"]
+dist = _apj["distributions"]
+func = _apj["function_families"]
 
 def col(items):
     # Raw identifiers (e.g. "infrastructure_investment") have no space for Word
@@ -4408,15 +3574,10 @@ The external technology ecosystem cited by S&P 500 corporations (@tbl-vendor-eco
 #| label: tbl-vendor-ecosystem
 #| tbl-cap: "[External AI technology ecosystem cited by S&P 500 corporations.]{custom-style=\"CaptionText\"}"
 #| echo: false
-import json
-from pathlib import Path
 from tabulate import tabulate
 from IPython.display import Markdown
 
-data_path = Path("../data/processed/clusters/activity_profiles.json")
-if not data_path.exists():
-    data_path = Path("data/processed/clusters/activity_profiles.json")
-providers = json.loads(data_path.read_text())["named_providers"]
+providers = _apj["named_providers"]
 RENAME = {"other_named": "Specialized Enterprise & Data Vendors", "OpenAI / Microsoft": "OpenAI / Microsoft Ecosystem",
           "Google": "Google / Alphabet", "Meta": "Meta Platforms"}
 rows = sorted(providers.items(), key=lambda kv: -kv[1]["pct_firms"])
@@ -4480,11 +3641,10 @@ The beta-estimation procedure identifies the first trading day on or after the f
 ```{python}
 #| echo: false
 #| output: false
-from pathlib import Path
 import pandas as pd
 
-
-_mf = pd.read_parquet(_p("firm_year_market_factors.parquet"))
+_mf = pd.read_parquet(gold("covariates", "firm_year", "market"))
+_mf = _mf[_mf["beta_n_obs"].notna()]  # firm-years with a 10-K and a price window
 mf_n_cells, mf_n_tickers = len(_mf), _mf["ticker"].nunique()
 mf_year_min, mf_year_max = int(_mf["year"].min()), int(_mf["year"].max())
 _beta_ok = _mf["beta"].notna()
@@ -4506,9 +3666,12 @@ The market-factors panel spans `{python} f"{mf_n_cells:,}"` firm-years across `{
 ```{python}
 #| echo: false
 #| output: false
-_uni = con.execute("SELECT active_status, count(*) AS n FROM firm_universe WHERE country_code = 'us' GROUP BY 1").df()
-uni_total = int(_uni["n"].sum())
-uni_delisted = int(_uni.loc[_uni["active_status"] == "delisted", "n"].sum())
+import pandas as pd
+
+_uni = pd.read_parquet(L.path("silver.firm_universe"))
+_uni = _uni[_uni["country_code"] == "us"]
+uni_total = int(len(_uni))
+uni_delisted = int((_uni["active_status"] == "delisted").sum())
 ```
 
 Daily price series begin on 2020-01-01, providing a full 252-day estimation history for early-2021 filings. Reconstructing index membership at 2021-01-01 explicitly includes `{python} uni_delisted` delisted firms among the `{python} uni_total` universe constituents, mitigating survivorship bias. Prices are gathered from Yahoo Finance, falling back to Stooq and Tiingo for delisted tickers.
@@ -4541,16 +3704,10 @@ A sequential horse race evaluates the incremental explanatory power of each NLP 
 #| label: tbl-c1-m0m3
 #| tbl-cap: "[Full M0-M3 model fit, beta.]{custom-style=\"CaptionText\"}"
 #| echo: false
-import json
-from pathlib import Path
 from tabulate import tabulate
 from IPython.display import Markdown
 
-data_path = Path("../data/processed/clusters/incremental_signal.json")
-if not data_path.exists():
-    data_path = Path("data/processed/clusters/incremental_signal.json")
-d = json.loads(data_path.read_text())
-o = d["outcomes"]["beta"]
+o = results_json("shock", "incremental_signal.json")["outcomes"]["beta"]
 # Model 3 in @fig-nlp-horse-race and the surrounding prose is "+ Disclosed AI Activity
 # Inventory" stacked on top of M2, i.e. the r2_M2AB field -- not the legacy, non-nested
 # r2_M3 field (a differently specified model that does not chain from M2 and so is not
@@ -4589,7 +3746,7 @@ Markdown(tabulate(table, headers=["Quantity", "r (full corpus vs. 10-K-only)", "
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* Correlations computed across the `{python} len(_common10k)` firms common to both fits. Vocal Substantives and Defensive Disclosers replicate closely on 10-K text alone; Governance-Led collapses because board-oversight language concentrated in DEF 14A proxy statements is absent from 10-K filings, so the governance vertex partly absorbs risk-orientation variance instead.
+*Notes:* Correlations computed across the `{python} _refit10k["n_common_tickers"]` firms common to both fits. Vocal Substantives and Defensive Disclosers replicate closely on 10-K text alone; Governance-Led collapses because board-oversight language concentrated in DEF 14A proxy statements is absent from 10-K filings, so the governance vertex partly absorbs risk-orientation variance instead.
 :::
 
 ### Decoupling index construction and sensitivity {.unnumbered}
@@ -4597,15 +3754,12 @@ Markdown(tabulate(table, headers=["Quantity", "r (full corpus vs. 10-K-only)", "
 ```{python}
 #| echo: false
 #| output: false
-import json
-from pathlib import Path
 import pandas as pd
 
-
-_wv = json.loads(_p("washing_score_validation.json").read_text())
+_wv = results_json("washing", "washing_score_validation.json")
 w_n_panel, w_n_firms = _wv["n_panel"], _wv["n_firms"]
-w_n_firmyears_total = len(pd.read_parquet(_p("firm_year_master_v2.parquet")))
-w_n_firms_total = len(pd.read_parquet(_p("firm_strategy_dimensions.parquet")))
+w_n_firmyears_total = len(pd.read_parquet(gold("spines", "firm_year", "firm_year")))
+w_n_firms_total = len(pd.read_parquet(gold("spines", "firm", "firm")))
 ```
 
 **Decoupling index ($W$), full specification.** Disclosed substance is defined as:
@@ -4634,15 +3788,10 @@ The residual decoupling measure is defined as $W^*_{it} \equiv -\hat{\varepsilon
 #| label: tbl-c4-washing-validation
 #| tbl-cap: "[Decoupling index ($W$) validation summary (firm-year panel, firm-years disclosing AI).]{custom-style=\"CaptionText\"}"
 #| echo: false
-import json
-from pathlib import Path
 from tabulate import tabulate
 from IPython.display import Markdown
 
-data_path = Path("../data/processed/clusters/washing_score_validation.json")
-if not data_path.exists():
-    data_path = Path("data/processed/clusters/washing_score_validation.json")
-d = json.loads(data_path.read_text())
+d = _wv
 
 def fmt_p(p):
     return "<0.001" if p < 0.001 else f"{p:.3f}"
@@ -4677,21 +3826,16 @@ Markdown(tabulate(rows, headers=["Check", "Sample", "Spearman", "p"]))
 #| label: tbl-call-beta-paper
 #| tbl-cap: "[Robustness specifications for earnings-call beta regressions.]{custom-style=\"CaptionText\"}"
 #| echo: false
-from pathlib import Path
 import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def find_path(rel):
-    p = Path(f"../{rel}")
-    return p if p.exists() else Path(rel)
-
-win = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_windows.csv"))
-acct = pd.read_csv(find_path("data/processed/clusters/call_beta_regressions.csv"))
-fe = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_firm_fe.csv"))
-delta = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_delta_beta.csv"))
-ff = pd.read_csv(find_path("data/processed/clusters/call_beta_robustness_market_model.csv"))
-samples = pd.read_csv(find_path("data/processed/clusters/call_beta_regression_samples.csv")).set_index("model")
+win = pd.read_csv(results("call_beta", "call_beta_robustness_windows.csv"))
+acct = pd.read_csv(results("call_beta", "call_beta_regressions.csv"))
+fe = pd.read_csv(results("call_beta", "call_beta_robustness_firm_fe.csv"))
+delta = pd.read_csv(results("call_beta", "call_beta_robustness_delta_beta.csv"))
+ff = pd.read_csv(results("call_beta", "call_beta_robustness_market_model.csv"))
+samples = pd.read_csv(results("call_beta", "call_beta_regression_samples.csv")).set_index("model")
 
 base_63 = acct[acct["model"] == "baseline"].set_index("variable")
 win252 = win[win["block"] == "beta_window[post_252]"].set_index("variable")
@@ -4704,10 +3848,12 @@ def fmt(row):
     return f"{row['beta_std']:.3f} (p={row['p']:.3f})"
 
 vars_map = [
-    ("hist_disclosure", "HistDisclosure"),
-    ("hist_substance", "HistSubstance"),
-    ("surprise_disclosure", "SurpriseDisclosure"),
-    ("surprise_substance", "SurpriseSubstance")
+    ("w", "W"),
+    ("hist_w", "HistW"),
+    ("intensity_expanding", "Cumulative intensity"),
+    ("w_voc", "Vocal Substantives weight"),
+    ("w_gov", "Governance-Led weight"),
+    ("w_def", "Defensive weight"),
 ]
 
 rows = []
@@ -4733,10 +3879,10 @@ _base_n = int(samples.loc["baseline", "n_calls"])
 rows.append(["N",
              f"{_base_n:,}",
              f"{_acct_n:,}",
-             f"{int(ff3_df.loc['hist_disclosure', 'n_calls']):,}" if "n_calls" in ff.columns else "—",
-             f"{int(win252.loc['hist_disclosure', 'n_calls']):,}" if "n_calls" in win.columns else "—",
-             f"{int(fe_df.loc['hist_disclosure', 'n_calls']):,}" if "n_calls" in fe.columns else "—",
-             f"{int(delta_df.loc['hist_disclosure', 'n_calls']):,}" if "n_calls" in delta.columns else "—"])
+             f"{int(ff3_df.loc['w', 'n_calls']):,}" if "n_calls" in ff.columns else "—",
+             f"{int(win252.loc['w', 'n_calls']):,}" if "n_calls" in win.columns else "—",
+             f"{int(fe_df.loc['w', 'n_calls']):,}" if "n_calls" in fe.columns else "—",
+             f"{int(delta_df.loc['w', 'n_calls']):,}" if "n_calls" in delta.columns else "—"])
 rows.append(["R²", f"{samples.loc['baseline', 'r2']:.3f}", f"{samples.loc['accounting_M1', 'r2']:.3f}", "—", "—", "—", "—"])
 
 headers = ["Variable", "Baseline", "+ Acct.", "FF3", "[+21,+252]", "Firm FE", "Delta Beta"]
@@ -4761,16 +3907,11 @@ To test whether communication posture adds explanatory power for corporate finan
 #| label: tbl-e-archetype-regressions
 #| tbl-cap: "[Firm fundamentals and systematic risk regressed on expanding-window archetype dummies and continuous AI signals.]{custom-style=\"CaptionText\"}"
 #| echo: false
-from pathlib import Path
 import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-def find_path(rel):
-    p = Path(f"../{rel}")
-    return p if p.exists() else Path(rel)
-
-_arch_full = pd.read_csv(find_path("data/processed/clusters/call_archetype_full_battery_targets.csv"))
+_arch_full = pd.read_csv(results("crash_archetypes", "call_archetype_full_battery_targets.csv"))
 
 _arch_targets = [
     ("beta_post_63", "Market Beta (post)"),
@@ -4794,11 +3935,11 @@ for key, label in _arch_targets:
     arch_reg_rows.append([
         label, f"{int(meta['n_calls']):,}", f"{int(meta['n_firms']):,}", f"{meta['r2']:.3f}",
         f"{meta['partial_r2_ai_arch']:.4f}",
-        _arch_fmt(sub, "dum_gov"), _arch_fmt(sub, "dum_voc"),
-        _arch_fmt(sub, "hist_disclosure"), _arch_fmt(sub, "hist_substance"),
+        _arch_fmt(sub, "w_gov"), _arch_fmt(sub, "w_def"), _arch_fmt(sub, "w_voc"),
+        _arch_fmt(sub, "intensity_expanding"), _arch_fmt(sub, "hist_w"),
     ])
 
-headers_arch = ["Target Outcome", "N Calls", "Firms", "R²", "Partial R² (AI + arch)", "Governance-Led (vs Def.)", "Vocal Substantives (vs Def.)", "Hist. Disclosure", "Hist. Substance"]
+headers_arch = ["Target Outcome", "N Calls", "Firms", "R²", "Partial R² (AI + arch)", "Governance-Led weight", "Defensive weight", "Vocal weight", "Cumulative intensity", "HistW"]
 Markdown(tabulate(arch_reg_rows, headers=headers_arch))
 ```
 
@@ -4873,28 +4014,7 @@ Markdown(tabulate(_rows, headers=_hdr))
 
 ## Appendix G: Sector, Cohort, and Rollup Disaggregation {.unnumbered}
 
-The disclosure-posture, activity, decoupling, and credibility results above are computed on the pooled S&P 500 panel. This appendix disaggregates those constructs by two-digit SIC sector, filer cohort, and rollup method, using the same firm-year and activity-level tables read elsewhere in this thesis; no new constructs are introduced. Each table and figure below also writes the data behind it to `docs/analytics/`, and `docs/analytics/appendix_g_slide_manifest.txt` records which exported file backs which prospective slide.
-
-```{python}
-#| echo: false
-#| output: false
-import json
-from pathlib import Path
-
-def _gdir():
-    d = Path("../docs/analytics")
-    return d if d.exists() else Path("docs/analytics")
-
-_manifest_rows = []
-
-def _export(filename, obj, slide, viz):
-    p = _gdir() / filename
-    if filename.endswith(".csv"):
-        obj.to_csv(p)
-    else:
-        p.write_text(json.dumps(obj, indent=2, default=float))
-    _manifest_rows.append(f"{filename}\t{slide}\t{viz}")
-```
+The disclosure-posture, activity, decoupling, and credibility results above are computed on the pooled S&P 500 panel. This appendix disaggregates those constructs by two-digit SIC sector, filer cohort, and rollup method, using the same firm-year and activity-level tables read elsewhere in this thesis; no new constructs are introduced.
 
 ### Is the grounding decline within firms, or driven by new filers? {.unnumbered}
 
@@ -4902,24 +4022,13 @@ def _export(filename, obj, slide, viz):
 #| label: tbl-h5-cohort-grounding
 #| tbl-cap: "[Mean AI activity grounding ($G$) by year, fixed cohort vs. new filers.]{custom-style=\"CaptionText\"}"
 #| echo: false
-from pathlib import Path
-import numpy as np
 import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-
-wy = pd.read_parquet(_p("firm_year_washing_score.parquet"))
-first_year = wy.groupby("ticker")["year"].min()
-y0 = int(wy["year"].min())
-fixed_cohort = first_year[first_year == y0].index
-wy["is_new_filer_year"] = wy["year"] == wy["ticker"].map(first_year)
-
-fixed_traj = wy[wy["ticker"].isin(fixed_cohort)].groupby("year")["grounding_index"].mean()
-new_filer_traj = wy[wy["is_new_filer_year"]].groupby("year")["grounding_index"].mean()
-years = sorted(wy["year"].unique())
-tbl = pd.DataFrame({"fixed_cohort_grounding": fixed_traj, "new_filer_year_grounding": new_filer_traj}).reindex(years)
-_export("appendix_g_cohort_grounding.csv", tbl, "grounding decline: fixed cohort vs new filers", "line chart")
+tbl = pd.read_csv(results("washing", "appendix_g_cohort_grounding.csv")).set_index("year")
+y0 = int(tbl.index.min())
+years = sorted(tbl.index)
 rows = [[y, f"{tbl.loc[y, 'fixed_cohort_grounding']:.3f}" if pd.notna(tbl.loc[y, "fixed_cohort_grounding"]) else "—",
          f"{tbl.loc[y, 'new_filer_year_grounding']:.3f}" if pd.notna(tbl.loc[y, "new_filer_year_grounding"]) else "—"]
         for y in years]
@@ -4938,21 +4047,12 @@ Grounding falls within the same fixed cohort of firms, not only because less-gro
 #| label: tbl-h8-rollup-sensitivity
 #| tbl-cap: "[Share of disclosed AI activities meeting the named-product-or-metric grounding bar, by channel, under two rollup methods.]{custom-style=\"CaptionText\"}"
 #| echo: false
-from pathlib import Path
 import pandas as pd
 from tabulate import tabulate
 from IPython.display import Markdown
 
-
-act = pd.read_parquet(_p("firm_activities.parquet"))
-act["grounded"] = act["evidence_type"].isin(["named", "metric"])
-
-activity_weighted = act.groupby("channel")["grounded"].mean() * 100
-firm_share = act.groupby(["ticker", "channel"])["grounded"].mean().reset_index()
-firm_weighted = firm_share.groupby("channel")["grounded"].mean() * 100
-tbl = pd.DataFrame({"Activity-weighted (pooled)": activity_weighted, "Firm-weighted (equal per firm)": firm_weighted})
-_export("appendix_g_rollup_sensitivity.csv", tbl, "rollup sensitivity table", "table")
-
+tbl = pd.read_csv(results("washing", "appendix_g_rollup_sensitivity.csv")).set_index("channel")
+tbl = tbl.rename(columns={"activity_weighted_pct": "Activity-weighted (pooled)", "firm_weighted_pct": "Firm-weighted (equal per firm)"})
 rows = [[ch] + [f"{tbl.loc[ch, c]:.1f}%" for c in tbl.columns] for ch in tbl.index]
 Markdown(tabulate(rows, headers=["Channel"] + list(tbl.columns)))
 ```
@@ -4960,19 +4060,6 @@ Markdown(tabulate(rows, headers=["Channel"] + list(tbl.columns)))
 Activity-weighted rollups (each disclosed activity counted once, so heavy disclosers dominate) and firm-weighted rollups (each firm-year counted once regardless of how many activities it discloses) answer different questions: "how grounded is the typical disclosed activity?" versus "how grounded is the typical firm's disclosure?" They give different levels here: the firm-weighted grounded share runs roughly 15–18 percentage points below the activity-weighted share in both channels, because firms with fewer disclosed activities tend to ground a smaller share of them.
 
 Both rollups agree on the qualitative finding that motivates the credibility chapter: calls are more grounded than filings under either weighting.
-
-```{python}
-#| echo: false
-#| output: false
-from pathlib import Path
-
-def _gdir():
-    d = Path("../docs/analytics")
-    return d if d.exists() else Path("docs/analytics")
-(_gdir() / "appendix_g_slide_manifest.txt").write_text(
-    "file\tslide_topic\tvisualization\n" + "\n".join(_manifest_rows) + "\n"
-)
-```
 
 # AI Statement {.unnumbered}
 

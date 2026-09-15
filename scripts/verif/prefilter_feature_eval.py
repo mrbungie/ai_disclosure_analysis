@@ -32,52 +32,41 @@ import json
 import sys
 from pathlib import Path
 
-import duckdb
 import numpy as np
 import pandas as pd
+import polars as pl
 from sklearn.linear_model import LogisticRegression
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
+sys.path.insert(0, str(REPO_ROOT / "scripts" / "enrichment"))
 import ai_prefilter_classify as pc  # noqa: E402
+import ai_prefilter_deploy as deploy  # noqa: E402
 import golden_set as gs  # noqa: E402
 
 FORMS_DIR = REPO_ROOT / "data" / "interim" / "golden_set_forms"
 JUDGE = "qwen/qwen3.7-flash"
 
 
-def feature_sql(text_expr: str) -> str:
-    parts = [f"{sql} AS {name}" for name, sql in pc.LEXICAL_STEP_COLUMNS]
-    parts += [f"{sql} AS {name}" for name, sql in pc.text_feature_columns(text_expr)]
-    return (", ".join(f"p.{c}" for c in pc.SIGNAL_COLUMNS) + ", " + ", ".join(parts)
-            + ", " + pc.sentence_feature_sql())
-
-
-SENTENCE_JOIN = f"LEFT JOIN {pc.sentence_scores_relation()} sent ON sent.text_hash = up.text_hash"
-
-
-def load_training(con) -> pd.DataFrame:
+def load_training() -> pd.DataFrame:
     """Golden set (10-K/10-Q) con todas las señales, un solo juez."""
-    return con.execute(f"""
-        SELECT l.relevance != 'none' AS y, l.inclusion_weight, l.accession_number,
-               {feature_sql('par.paragraph_text')}
-        FROM read_parquet('data/interim/golden_set/golden_set_labels__session=*__part=*.parquet',
-                          union_by_name=True) l
-        JOIN paragraphs par
-          ON par.country_code = l.country_code AND par.form = l.form
-         AND par.accession_number = l.accession_number AND par.item_key = l.item_key
-         AND par.paragraph_index = l.paragraph_index
-        JOIN unique_paragraphs up ON up.text_hash = par.text_hash
-        JOIN {pc.scores_relation()} p
-          ON p.country_code = up.country_code AND p.form = up.form
-         AND p.accession_number = up.accession_number AND p.item_key = up.item_key
-         AND p.paragraph_index = up.paragraph_index
-        {SENTENCE_JOIN}
-        WHERE l.error IS NULL AND up.is_scorable AND l.judge_model = '{JUDGE}'
-    """).df()
+    return (pc.join_sentence_scores(
+                pc.join_scores_via_paragraphs(pc.golden_labels(JUDGE)).filter(pl.col("is_scorable")))
+            .sort([*pc.PARAGRAPH_KEY, "session_id"])
+            .select((pl.col("relevance") != "none").alias("y"), "inclusion_weight", "accession_number",
+                    *deploy.feature_columns("paragraph_text"))
+            .collect().to_pandas())
 
 
-def load_form_training(con, labels: pd.DataFrame) -> pd.DataFrame:
+def _labels_with_features(labels: pd.DataFrame, extra: list[str]) -> pd.DataFrame:
+    """Etiquetas cuya llave es la del representante de unique_paragraphs, con
+    todas las señales (sin filtrar `is_scorable`)."""
+    return (pc.join_sentence_scores(pc.join_scores_via_unique_paragraphs(pl.from_pandas(labels).lazy()))
+            .sort(pc.PARAGRAPH_KEY)
+            .select("y", "inclusion_weight", *extra, *deploy.feature_columns("paragraph_text"))
+            .collect().to_pandas())
+
+
+def load_form_training(labels: pd.DataFrame) -> pd.DataFrame:
     """Etiquetas de DEF 14A / 8-K reservadas para ENTRENAR (muestra disjunta de
     la de validación, `prefilter_form_validation.py sample --purpose train`).
 
@@ -85,34 +74,12 @@ def load_form_training(con, labels: pd.DataFrame) -> pd.DataFrame:
     propio formulario, y los del golden set sobre la de 10-K/10-Q. Como los dos
     diseños cubren particiones disjuntas del corpus, la unión sigue siendo una
     muestra ponderada válida del corpus completo."""
-    con.register("form_train_labels", labels)
-    return con.execute(f"""
-        SELECT l.y, l.inclusion_weight, l.accession_number,
-               {feature_sql('up.paragraph_text')}
-        FROM form_train_labels l
-        JOIN unique_paragraphs up
-          ON up.country_code = l.country_code AND up.form = l.form
-         AND up.accession_number = l.accession_number AND up.item_key = l.item_key
-         AND up.paragraph_index = l.paragraph_index
-        JOIN {pc.scores_relation()} p ON p.text_hash = up.text_hash
-        {SENTENCE_JOIN}
-    """).df()
+    return _labels_with_features(labels, ["accession_number"])
 
 
-def load_holdout(con, labels: pd.DataFrame) -> pd.DataFrame:
+def load_holdout(labels: pd.DataFrame) -> pd.DataFrame:
     """Las 1.500 de DEF 14A / 8-K, con las mismas señales."""
-    con.register("form_labels", labels)
-    return con.execute(f"""
-        SELECT l.y, l.inclusion_weight, l.form, l.stratum,
-               {feature_sql('up.paragraph_text')}
-        FROM form_labels l
-        JOIN unique_paragraphs up
-          ON up.country_code = l.country_code AND up.form = l.form
-         AND up.accession_number = l.accession_number AND up.item_key = l.item_key
-         AND up.paragraph_index = l.paragraph_index
-        JOIN {pc.scores_relation()} p ON p.text_hash = up.text_hash
-        {SENTENCE_JOIN}
-    """).df()
+    return _labels_with_features(labels, ["form", "stratum"])
 
 
 def weighted_scores(y: np.ndarray, yhat: np.ndarray, w: np.ndarray) -> dict:
@@ -222,7 +189,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--forms-dir", type=Path, default=FORMS_DIR)
-    parser.add_argument("--output", type=Path, default=FORMS_DIR / "feature_eval.json")
+    parser.add_argument("--output", type=Path,
+                        default=REPO_ROOT / "data" / "interim" / "audits" / "prefilter" / "feature_eval.json")
     parser.add_argument("--include-form-train", action="store_true",
                         help="Sumar al ajuste las etiquetas de DEF 14A / 8-K reservadas para "
                              "entrenar. El holdout de validación NO cambia, así que las cifras "
@@ -241,17 +209,13 @@ def main() -> None:
     labels = read_labels("golden_set_labels__*.parquet", ["stratum"])
     form_train = read_labels("train/golden_set_labels__*.parquet", [])
 
-    con = duckdb.connect(str(pc.DB), read_only=True)
-    try:
-        train = load_training(con)
-        holdout = load_holdout(con, labels)
-        if args.include_form_train and not form_train.empty:
-            extra = load_form_training(con, form_train)
-            print(f"+ {len(extra):,} etiquetas de entrenamiento de DEF 14A / 8-K "
-                  f"({int(extra['y'].sum()):,} positivas), disjuntas del holdout")
-            train = pd.concat([train, extra], ignore_index=True)
-    finally:
-        con.close()
+    train = load_training()
+    holdout = load_holdout(labels)
+    if args.include_form_train and not form_train.empty:
+        extra = load_form_training(form_train)
+        print(f"+ {len(extra):,} etiquetas de entrenamiento de DEF 14A / 8-K "
+              f"({int(extra['y'].sum()):,} positivas), disjuntas del holdout")
+        train = pd.concat([train, extra], ignore_index=True)
     print(f"entrenamiento: {len(train):,} etiquetas ({int(train['y'].sum()):,} positivas)")
     print(f"holdout: {len(holdout):,} etiquetas DEF 14A / 8-K "
           f"({int(holdout['y'].sum()):,} positivas) — nunca vistas por el modelo\n")
@@ -287,6 +251,7 @@ def main() -> None:
                                            key=lambda kv: -abs(kv[1]))[:12]:
             print(f"  {feature:24s} {coefficient:+.3f}")
 
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, default=float))
     print(f"\n-> {args.output}")
 

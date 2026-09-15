@@ -1,12 +1,12 @@
 .venv/
 data/
 reports/
-duckdb/
 __pycache__/
 *.pyc
 .DS_Store
 .ipynb_checkpoints/
 *.db
+*.duckdb
 *.log
 .env
 scratch/

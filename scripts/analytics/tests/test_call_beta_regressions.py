@@ -6,7 +6,7 @@ import pandas as pd
 
 
 def test_select_instant_values_prefers_primary_tag_and_latest_context() -> None:
-    from scripts.analytics.call_beta_regressions import select_instant_values
+    from scripts.gold.call.build_market_financials import select_instant_values
 
     facts = pd.DataFrame({
         "accession_number": ["a", "a", "a", "a"],

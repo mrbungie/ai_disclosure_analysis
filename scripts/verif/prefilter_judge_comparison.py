@@ -32,13 +32,13 @@ import json
 import sys
 from pathlib import Path
 
-import duckdb
 import numpy as np
 import pandas as pd
+import polars as pl
 from sklearn.linear_model import LogisticRegression
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
+sys.path.insert(0, str(REPO_ROOT / "scripts" / "enrichment"))
 import ai_prefilter_classify as pc  # noqa: E402
 
 JUDGES = {"qwen": "qwen/qwen3.7-flash", "gemini": "gemini-3.8-flash", "all": None}
@@ -66,7 +66,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output", type=Path,
-                        default=REPO_ROOT / "data" / "interim" / "prefilter_predictions_unique"
+                        default=REPO_ROOT / "data" / "interim" / "audits" / "prefilter"
                         / "judge_comparison.json")
     parser.add_argument("--corpus-limit", type=int, default=0,
                         help="0 = corpus completo. Un número lo trunca, para probar rápido.")
@@ -86,22 +86,19 @@ def main() -> None:
                          if k.startswith(("f1", "prec", "recall"))))
 
     print("\nAplicando cada modelo al corpus puntuable...")
-    con = duckdb.connect(str(pc.DB), read_only=True)
-    try:
-        limit = f"LIMIT {args.corpus_limit}" if args.corpus_limit else ""
-        corpus = con.execute(f"""
-            SELECT up.form, {', '.join(f'p.{c}' for c in pc.SIGNAL_COLUMNS)},
-                   {', '.join(f'{sql} AS {name}' for name, sql in pc.LEXICAL_STEP_COLUMNS)}
-            FROM {pc.scores_relation()} p
-            JOIN unique_paragraphs up
-              ON up.country_code = p.country_code AND up.form = p.form
-             AND up.accession_number = p.accession_number AND up.item_key = p.item_key
-             AND up.paragraph_index = p.paragraph_index
-            WHERE up.is_scorable
-            {limit}
-        """).fetchdf()
-    finally:
-        con.close()
+    # Unido por llave de instancia: sólo los scores cuya llave es la del
+    # representante actual de bronze.unique_paragraphs.
+    keys = list(pc.PARAGRAPH_KEY)
+    corpus = (pc.scores_relation().select(*keys, *pc.SIGNAL_COLUMNS, "strong_matched_terms",
+                                          "weak_matched_terms")
+              .join(pc.L.scan("bronze.unique_paragraphs").select(*keys, "is_scorable"),
+                    on=keys)
+              .filter(pl.col("is_scorable"))
+              .sort(keys))
+    if args.corpus_limit:
+        corpus = corpus.head(args.corpus_limit)
+    corpus = (corpus.select("form", *pc.SIGNAL_COLUMNS, *pc.lexical_step_columns())
+              .collect().to_pandas())
     features = corpus[pc.ALL_SIGNAL_COLUMNS].astype(float).to_numpy()
     print(f"{len(corpus):,} textos únicos puntuables")
 
@@ -125,6 +122,7 @@ def main() -> None:
     report = {name: {k: v for k, v in row.items() if k != "model"} for name, row in fits.items()}
     for name in marks:
         report[name]["corpus_marked"] = int(marks[name].sum())
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, default=float))
     print(f"\n-> {args.output}")
 

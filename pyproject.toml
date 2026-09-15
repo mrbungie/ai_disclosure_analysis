@@ -14,20 +14,21 @@ dependencies = [
     "markdownify>=0.11.0",
     "python-dotenv>=1.0.0",
     "yfinance>=1.7.0",
-    "pyyaml>=6.0.2",   # 6.0.3 was an arbitrary floor; paddleocr (pdf-vlm) pins ==6.0.2
+    "pyyaml>=6.0.2",
     "edgartools>=5.55.0",
     "sf-hamilton>=1.89.0",
-    "duckdb>=1.5.5",
     "pymupdf>=1.28.2",
     "sentence-transformers>=6.0.1",
     "xlrd>=2.0.2",
     "pydantic-ai>=2.38.0",
     "dspy-ai>=3.3.1",
+    "polars>=1.44.2",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "python-docx>=1.2.0",
 ]
 # Operación de la máquina, no del pipeline de datos. `vastai` lo usa
 # scripts/common/finish_and_stop.sh para apagar la instancia cuando la
@@ -36,22 +37,20 @@ dev = [
 ops = [
     "vastai>=1.6",
 ]
-# GPU document-parsing backends for scripts/common/pdf/backends/. Optional
-# and NOT in the default install: they pull torch/paddle and multi-GB model
-# weights, and the pymupdf backend (which is in the base dependencies) runs
-# the whole Chilean pipeline without them. See
-# docs/analytics/pdf-backend-poc.md for which one to install and why.
-#
-# paddlepaddle-gpu is deliberately absent: its wheel must match the CUDA
-# arch of the card in the machine and is not on PyPI. On the RTX 5090
-# (Blackwell, sm_120) that is the cu129 build, NOT the cu126 one the model
-# card suggests:
-#   uv pip install paddlepaddle-gpu==3.3.1 \
-#     --index-url https://www.paddlepaddle.org.cn/packages/stable/cu129/
-pdf-vlm = [
-    "paddleocr[doc-parser]>=3.6.0",
-    "opencv-python-headless>=4.10",   # opencv-python needs libGL; headless doesn't
+# What Quarto's executable Python chunks in thesis_document/thesis.qmd need
+# beyond the base pipeline dependencies above. render.py itself is a
+# self-contained `uv run --script` with its own inline deps (python-docx,
+# docxcompose) — this group is for QUARTO_PYTHON (.venv), which is what
+# actually executes the chunks.
+thesis = [
+    "matplotlib>=3.5",
+    "tabulate>=0.10",
+    "ipython>=8.0",
+    "statsmodels>=0.14",
+    "scipy>=1.11",
+    "archetypes>=0.12.2",
+    "jupyter>=1.0",   # Quarto's notebook engine needs a Jupyter kernel to execute thesis.qmd's Python chunks
 ]
 
 [tool.pytest.ini_options]
-pythonpath = [".", "scripts/01_10k", "scripts/03_market_data", "scripts/common"]
+pythonpath = [".", "scripts/raw_processing/us", "scripts/raw_ingestion/market", "scripts/common"]
