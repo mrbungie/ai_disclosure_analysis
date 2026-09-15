@@ -10,9 +10,10 @@
 Render the thesis into a final, submission-ready .docx.
 
 Pipeline:
-  0. Refresh every deterministic analytics output the thesis cites
-     (`make analytics`) so the render can never bake in stale numbers from
-     a script someone forgot to re-run -- see `refresh_analytics()`.
+  0. Refresh every deterministic data layer and analytics output the thesis
+     cites (`make layers analytics`) so the render can never bake in stale
+     numbers from a script someone forgot to re-run -- see
+     `refresh_analytics()`.
   1. Render thesis.qmd with Quarto (executing inline Python blocks for all figures).
   2. Post-process all data tables in docx: compact booktabs styling, tight cell
      margins, repeating headers, non-splitting rows, and calibrated typography.
@@ -393,27 +394,27 @@ def fix_hyperlink_style(document: Document) -> None:
 
 
 def refresh_analytics() -> None:
-    """Rebuild every deterministic data/processed/clusters/ output the thesis
-    cites (`make analytics`, see the repo Makefile), before Quarto ever
-    reads them.
+    """Rebuild every deterministic data/gold/ and data/results/ output the
+    thesis cites (`make layers analytics`, see the repo Makefile), before
+    Quarto ever reads them.
 
     Without this, a render is only as fresh as whoever last remembered to
     re-run the right scripts by hand -- exactly how `call_beta_*`,
-    `strategy_economic_profiles.json`, and `bootstrap_jaccard_200_results.
+    `strategy_economic_profiles.json`, and `bootstrap_jaccard_results.
     json` went stale for days after `activity_profiles.py`/
     `build_strategy_dimensions.py` changed (2026-09-13). No LLM calls, no
-    API spend: everything here reads `gold_ai_frames`/`gold_ai_activities`
-    (which DID cost LLM calls and are never touched) and the raw XBRL/
-    market data, and is safe to re-run on every render.
+    API spend: `make layers` rebuilds the gold layer from silver/bronze
+    (which DID cost LLM calls upstream and are never touched here), and
+    `make analytics` rebuilds the results layer on top of it.
 
-    Does NOT run `duckdb-text` (rebuilding `gold_ai_frames` itself from the
-    raw corpus, minutes-long) or `b2-check` (multi-session B2 sync) -- run
-    `make refresh-stale` by hand first if the underlying corpus or the AI
-    classify/activities runs themselves changed, not just the analytics
-    layer built on top of them.
+    Does NOT rebuild silver/bronze from the raw corpus (minutes-long) or run
+    `b2-check` (multi-session B2 sync) -- run `make refresh-stale` by hand
+    first if the underlying corpus or the AI classify/activities runs
+    themselves changed, not just the gold/analytics layers built on top of
+    them.
     """
     repo_root = ROOT.parent
-    subprocess.run(["make", "analytics"], check=True, cwd=repo_root)
+    subprocess.run(["make", "layers", "analytics"], check=True, cwd=repo_root)
 
 
 def render_quarto_content(tmp_dir: Path) -> Path:
@@ -626,7 +627,7 @@ def main() -> None:
     if "--skip-analytics" in sys.argv:
         print("[0/6] Skipping analytics refresh (--skip-analytics) -- numbers may be stale.")
     else:
-        print("[0/6] Refreshing analytics outputs (make analytics)...")
+        print("[0/6] Refreshing analytics outputs (make layers analytics)...")
         refresh_analytics()
 
     with tempfile.TemporaryDirectory(prefix="thesis_render_") as tmp:

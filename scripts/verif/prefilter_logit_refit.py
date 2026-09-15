@@ -2,25 +2,29 @@
 las 11 señales del prefiltro") now that the golden set is complete (9,900
 labels, not the 6,038 it was fit on when that doc was written — see §9 point 1,
 now resolved). No re-embedding, no new scoring: reuses the already-computed
-prefilter_scores (latest anchors run) as-is. Same 11 signals, same GroupKFold-
-by-filing methodology, same weighted metrics — only the label count changed.
+prefilter_scores (bronze, deduplicated to the current run) as-is. Same 11
+signals, same GroupKFold-by-filing methodology, same weighted metrics — only
+the label count changed.
 
 Usage:
     uv run python scripts/verif/prefilter_logit_refit.py
 """
 
+import sys
 from pathlib import Path
 
-import duckdb
 import numpy as np
 import pandas as pd
+import polars as pl
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, precision_score, recall_score
 from sklearn.model_selection import GroupKFold
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DB = REPO_ROOT / "duckdb" / "thesis.duckdb"
-LATEST_PREFILTER_RUN = "20260902T225928Z"  # newest anchors_fingerprint, per manifest
+sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
+import layers as L  # noqa: E402
+
+GOLDEN_DIR = REPO_ROOT / "data" / "interim" / "golden_set"
 
 SIGNAL_COLUMNS = [
     "score_ai_use", "score_ai_exploration", "score_ai_capability", "score_ai_outcome",
@@ -30,26 +34,24 @@ SIGNAL_COLUMNS = [
 
 
 def load() -> pd.DataFrame:
-    con = duckdb.connect(str(DB), read_only=True)
-    try:
-        df = con.execute(f"""
-            SELECT l.is_ai_disclosure, l.inclusion_weight, l.accession_number,
-                   {', '.join(f'p.{c}' for c in SIGNAL_COLUMNS)}
-            FROM read_parquet('data/interim/golden_set/golden_set_labels__session=*__part=*.parquet',
-                               union_by_name=True) l
-            JOIN read_parquet('data/interim/prefilter_scores/prefilter_scores__run={LATEST_PREFILTER_RUN}__part=*.parquet') p
-                USING (country_code, form, accession_number, item_key, paragraph_index)
-            -- Un solo juez. El golden set tiene etiquetas de gemini-3.8-flash y de
-            -- qwen3.7-flash sobre los MISMOS párrafos (el re-etiquetado dejó las
-            -- viejas en disco a propósito, para poder medir acuerdo). Sin este
-            -- filtro cada párrafo re-etiquetado entra DOS veces, con dos targets
-            -- posiblemente distintos, y el CV agrupado por filing ni siquiera los
-            -- separa. Ver scripts/verif/judge_agreement.py.
-            WHERE l.error IS NULL AND l.judge_model = 'qwen/qwen3.7-flash'
-        """).df()
-    finally:
-        con.close()
-    return df
+    """Golden set (un solo juez, sin error) unido por llave de instancia a
+    `bronze.prefilter_scores`."""
+    # Un solo juez. El golden set tiene etiquetas de gemini-3.8-flash y de
+    # qwen3.7-flash sobre los MISMOS párrafos (el re-etiquetado dejó las
+    # viejas en disco a propósito, para poder medir acuerdo). Sin este
+    # filtro cada párrafo re-etiquetado entra DOS veces, con dos targets
+    # posiblemente distintos, y el CV agrupado por filing ni siquiera los
+    # separa. Ver scripts/verif/judge_agreement.py.
+    keys = ["country_code", "form", "accession_number", "item_key", "paragraph_index"]
+    labels = (pl.concat([pl.scan_parquet(f) for f in sorted(GOLDEN_DIR.glob(
+                  "golden_set_labels__session=*__part=*.parquet"))], how="diagonal_relaxed")
+              .filter(pl.col("error").is_null() & (pl.col("judge_model") == "qwen/qwen3.7-flash")))
+    scores = L.scan("bronze.prefilter_scores")
+    return (labels.select(*keys, "is_ai_disclosure", "inclusion_weight")
+            .join(scores.select(*keys, *SIGNAL_COLUMNS), on=keys)
+            .sort(*keys)
+            .select(["is_ai_disclosure", "inclusion_weight", "accession_number", *SIGNAL_COLUMNS])
+            .collect().to_pandas())
 
 
 def main() -> None:

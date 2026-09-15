@@ -114,7 +114,8 @@ def main() -> None:
         print(table.round(3).to_string(index=False))
         report["by_tier"] = table.to_dict("records")
 
-    destination = args.golden_dir / "judge_agreement.json"
+    destination = REPO_ROOT / "data" / "interim" / "audits" / "golden_set" / "judge_agreement.json"
+    destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(report, indent=2, default=float))
     print(f"\n-> {destination}")
 

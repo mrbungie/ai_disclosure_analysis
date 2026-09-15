@@ -10,15 +10,7 @@
 #   */15 * * * * /workspace/scripts/my_job.sh >> /workspace/logs/cron.log 2>&1
 MAILTO=""
 
-# --- pipeline italiano: relanzar tras reinicio y apagar al terminar ---
-# Añadido 2026-09-06. /workspace es el volumen, así que esto sobrevive a un
-# reinicio del contenedor (que ya pasó una vez hoy, a las 21:56 UTC).
-#
-# El watchdog sale sin hacer nada mientras quede trabajo, así que correrlo
-# cada 5 min es gratis. Sincroniza a git y B2 y COMPRUEBA que quedó antes
-# de pedir el apagado; si la sincronización falla, no apaga y reintenta.
-*/5 * * * * HOME=/root flock -n /tmp/finish_stop.lock /workspace/repos/mib_tesis_ai_disclosure/scripts/common/finish_and_stop.sh >> /workspace/logs/finish_and_stop.log 2>&1
-
+# --- sync loop ---
 # El loop de sync no sobrevive un reinicio (es un nohup), así que se
 # relanza al arrancar. `flock` evita dos copias si cron y un lanzamiento
 # manual coinciden.

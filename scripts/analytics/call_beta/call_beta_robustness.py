@@ -1,0 +1,365 @@
+"""Robustness battery for the post-call beta regression.
+
+Regressors, panel and estimation come from scripts/analytics/call_regression.py:
+the AI block (W, HistW, cumulative disclosure intensity; `AI_VARS`) and the
+three posture archetype weights (`WEIGHTS`, entered unstandardized); controls
+log market cap, 60-day return, ROA and pre-call idiosyncratic volatility; SIC2
+x year fixed effects unless stated; errors clustered by firm. Every table
+reports the AI block and the weights.
+
+Blocks: alternate beta windows, DeltaBeta, firm FE, AI sub-blocks,
+collinearity (VIF), influence (winsorization), beta-estimation thresholds,
+market-model choice (CAPM vs FF3; FF5 and an alternate broad benchmark are not
+available in this repo's data), leave-one-year/sector/decile-out, the placebo
+(the same regressors on pre-call beta), and the formal tests: joint F of the AI
+block, joint F of the three weights, and the partial R^2 of the AI block (the
+full model against the model without the AI block, weights kept, on the same
+sample).
+
+Beta/idio-vol windows are recomputed directly from daily prices
+(silver.market_prices: universe tickers, nothing after a delisting) so every
+window variant uses the same estimator (market-model OLS on trading-day offsets
+relative to the exact call date), rather than trusting precomputed panel
+columns that may differ in method.
+
+Usage:
+  .venv/bin/python scripts/analytics/call_beta/call_beta_robustness.py
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import statsmodels.api as sm
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "scripts" / "analytics"))
+sys.path.insert(0, str(ROOT / "scripts" / "common"))
+import call_regression as C  # noqa: E402
+import layers as L  # noqa: E402
+
+FACTORS = ROOT / "data/raw/market/factors/ff3_daily.parquet"
+OUT = ROOT / "data/results/call_beta"
+
+AI = C.AI_VARS
+REPORTED = C.AI_VARS + C.WEIGHTS
+CONTROLS = C.BASE_CTRLS + ["idio_vol_pre_default"]
+TECH_SIC2 = {"35", "36", "73"}
+
+
+# --------------------------------------------------------------------------
+# Window-level market-model estimation
+# --------------------------------------------------------------------------
+
+def load_price_series(tickers: set[str]) -> dict[str, pd.DataFrame]:
+    """Per-ticker daily adjusted prices and returns from silver.market_prices.
+    This battery recomputes every beta window with a shared estimator (see the
+    module docstring) rather than reading the gold market columns."""
+    prices = L.read("silver.market_prices").select("ticker", "date", "adj_close").to_pandas()
+    result: dict[str, pd.DataFrame] = {}
+    for ticker, d in prices[prices["ticker"].isin(tickers)].groupby("ticker"):
+        d = d[["date", "adj_close"]].assign(date=lambda x: pd.to_datetime(x["date"]))
+        d = d.dropna(subset=["adj_close"]).sort_values("date").reset_index(drop=True)
+        d["ret"] = d["adj_close"].pct_change()
+        result[ticker] = d
+    return result
+
+
+def window_metrics(prices: pd.DataFrame, mkt: pd.DataFrame, event_date: pd.Timestamp,
+                    start: int, end: int, factor_cols: list[str], min_obs: int) -> dict[str, float]:
+    """Market-model beta/idio-vol over trading-day offsets ``[start, end)``
+    relative to the call date's price index, using ``factor_cols`` as the
+    right-hand side (``["mktrf"]`` for CAPM, ``["mktrf", "smb", "hml"]`` for FF3)."""
+    result = {"beta": np.nan, "idio_vol": np.nan, "n_obs": 0}
+    idx = int(np.searchsorted(prices["date"].values, np.datetime64(event_date), side="left"))
+    lo, hi = idx + start, idx + end
+    if lo < 0 or hi > len(prices) or hi <= lo:
+        return result
+    window = prices.iloc[lo:hi].merge(mkt, on="date", how="inner")
+    window = window.dropna(subset=["ret", *factor_cols, "rf"])
+    if len(window) < min_obs:
+        return result
+    excess = window["ret"].to_numpy() - window["rf"].to_numpy()
+    design = np.column_stack([np.ones(len(window)), *[window[c].to_numpy() for c in factor_cols]])
+    coef, *_ = np.linalg.lstsq(design, excess, rcond=None)
+    result["beta"] = float(coef[1])
+    result["idio_vol"] = float((excess - design @ coef).std(ddof=len(factor_cols) + 1) * np.sqrt(252))
+    result["n_obs"] = len(window)
+    return result
+
+
+def attach_windows(panel: pd.DataFrame, factors_path: Path,
+                    windows: dict[str, tuple[int, int]], factor_cols: list[str],
+                    min_obs: int | dict[str, int] | None = None, min_frac: float = 0.7) -> pd.DataFrame:
+    """``min_obs`` is either a fixed threshold applied to every window (only
+    sensible for long windows), a per-window dict, or (default) ``None`` to
+    scale the requirement to ``min_frac`` of each window's trading-day span
+    so short windows (e.g. ``[+21,+63]``) are not required to clear a
+    threshold only a long window could ever reach."""
+    factors = pd.read_parquet(factors_path, columns=["date", "mktrf", "smb", "hml", "rf"])
+    factors["date"] = pd.to_datetime(factors["date"])
+    series = load_price_series(set(panel["ticker"]))
+    thresholds = {}
+    for name, (start, end) in windows.items():
+        if isinstance(min_obs, dict):
+            thresholds[name] = min_obs[name]
+        elif isinstance(min_obs, int):
+            thresholds[name] = min_obs
+        else:
+            thresholds[name] = max(15, int(min_frac * (end - start)))
+    rows = []
+    for row in panel[["call_accession_number", "ticker", "fecha"]].itertuples(index=False):
+        price = series.get(row.ticker)
+        out = {"call_accession_number": row.call_accession_number}
+        if price is not None:
+            for name, (start, end) in windows.items():
+                m = window_metrics(price, factors, pd.Timestamp(row.fecha), start, end,
+                                    factor_cols, thresholds[name])
+                out[f"beta_{name}"] = m["beta"]
+                out[f"idio_vol_{name}"] = m["idio_vol"]
+                out[f"n_obs_{name}"] = m["n_obs"]
+        rows.append(out)
+    keep = panel.drop(columns=[c for c in panel.columns if c.startswith("beta_") or c.startswith("idio_vol_")])
+    return keep.merge(pd.DataFrame(rows), on="call_accession_number", how="left", validate="one_to_one")
+
+
+# --------------------------------------------------------------------------
+# Regression helpers
+# --------------------------------------------------------------------------
+
+def fit_fe(panel: pd.DataFrame, variables: list[str], outcome: str, fe_col: str = "fe",
+           min_fe_size: int = 2):
+    """call_regression.fit with the archetype weights entered unstandardized."""
+    return C.fit(panel, outcome, variables, raw=C.WEIGHTS, fe_col=fe_col, min_fe_size=min_fe_size)
+
+
+def coef_row(result, variable: str) -> dict:
+    beta, se = result.params[variable], result.bse[variable]
+    return {"variable": variable, "beta_std": beta, "ci95_low": beta - 1.96 * se,
+            "ci95_high": beta + 1.96 * se, "p": result.pvalues[variable]}
+
+
+def ai_coef_table(result, block: str, variables: list[str], n_calls: int | None = None) -> pd.DataFrame:
+    rows = [{"block": block, **coef_row(result, v)} for v in REPORTED if v in result.params]
+    if n_calls is not None:
+        for row in rows:
+            row["n_calls"] = n_calls
+    return pd.DataFrame(rows)
+
+
+def wald_joint(result, variables: list[str]) -> dict:
+    names = list(result.params.index)
+    R = np.zeros((len(variables), len(names)))
+    for i, v in enumerate(variables):
+        R[i, names.index(v)] = 1.0
+    f = result.f_test(R)
+    return {"variables": variables, "F": float(np.squeeze(f.fvalue)), "p": float(f.pvalue)}
+
+
+# --------------------------------------------------------------------------
+# Robustness blocks
+# --------------------------------------------------------------------------
+
+def block_windows(panel: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for post in ["post_63", "post_126", "post_252"]:
+        outcome = f"beta_{post}"
+        variables = AI + ["beta_pre_default", *CONTROLS]
+        result, d = fit_fe(panel, variables, outcome)
+        rows.append(ai_coef_table(result, f"beta_window[{post}]", AI, n_calls=len(d)))
+    for pre in ["pre_default", "pre_126_21", "pre_252_42"]:
+        outcome = "beta_post_126"
+        variables = AI + [f"beta_{pre}", *CONTROLS]
+        result, d = fit_fe(panel, variables, outcome)
+        rows.append(ai_coef_table(result, f"beta_pre_window[{pre}]", AI, n_calls=len(d)))
+    return pd.concat(rows, ignore_index=True)
+
+
+def block_delta_beta(panel: pd.DataFrame) -> pd.DataFrame:
+    d = panel.copy()
+    d["delta_beta"] = d["beta_post_126"] - d["beta_pre_default"]
+    variables = AI + CONTROLS
+    result, d2 = fit_fe(d, variables, "delta_beta")
+    return ai_coef_table(result, "delta_beta", AI, n_calls=len(d2))
+
+
+def block_firm_fe(panel: pd.DataFrame) -> pd.DataFrame:
+    variables = AI + ["beta_pre_default", *CONTROLS]
+    result, d = fit_fe(panel, variables, "beta_post_126", fe_col="ticker", min_fe_size=2)
+    return ai_coef_table(result, "firm_fe_within", AI, n_calls=len(d))
+
+
+def block_ai_subsets(panel: pd.DataFrame) -> pd.DataFrame:
+    history = ["hist_w", "intensity_expanding"]
+    call = ["w"]
+    rows = []
+    for name, ai_vars in [("history_only", history), ("call_only", call), ("both", AI)]:
+        variables = ai_vars + ["beta_pre_default", *CONTROLS]
+        result, _ = fit_fe(panel, variables, "beta_post_126")
+        for v in ai_vars + C.WEIGHTS:
+            rows.append({"block": name, **coef_row(result, v)})
+    return pd.DataFrame(rows)
+
+
+def block_collinearity(panel: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    d = panel.dropna(subset=REPORTED).copy()
+    corr = d[REPORTED].corr()
+    x = sm.add_constant(d[REPORTED])
+    vif = pd.DataFrame({"variable": ["const", *REPORTED],
+                        "vif": [variance_inflation_factor(x.values, i) for i in range(x.shape[1])]})
+    return corr, vif[vif.variable != "const"]
+
+
+def block_influence(panel: pd.DataFrame) -> pd.DataFrame:
+    variables = AI + ["beta_pre_default", *CONTROLS]
+    winsor_cols = ["beta_post_126", "beta_pre_default", "idio_vol_pre_default", "log_market_cap", "return60"]
+    d = panel.copy()
+    for c in winsor_cols:
+        if c not in d:
+            continue
+        lo, hi = d[c].quantile(0.01), d[c].quantile(0.99)
+        d[c] = d[c].clip(lo, hi)
+    result_w, _ = fit_fe(d, variables, "beta_post_126")
+    d2 = panel.copy()
+    for c in winsor_cols:
+        if c not in d2:
+            continue
+        lo, hi = d2[c].quantile(0.01), d2[c].quantile(0.99)
+        d2 = d2[(d2[c] >= lo) & (d2[c] <= hi)]
+    result_e, _ = fit_fe(d2, variables, "beta_post_126")
+    return pd.concat([ai_coef_table(result_w, "winsorized_1pct", AI),
+                       ai_coef_table(result_e, "extremes_excluded_1pct", AI)], ignore_index=True)
+
+
+def block_beta_threshold(panel_min60: pd.DataFrame, panel_min80: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for name, panel in [("min_obs_60", panel_min60), ("min_obs_80", panel_min80)]:
+        variables = AI + ["beta_pre_default", *CONTROLS]
+        result, d = fit_fe(panel, variables, "beta_post_126")
+        rows.append(ai_coef_table(result, name, AI).assign(n_calls=len(d)))
+    return pd.concat(rows, ignore_index=True)
+
+
+def block_market_model(panel_capm: pd.DataFrame, panel_ff3: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for name, panel in [("capm", panel_capm), ("ff3", panel_ff3)]:
+        variables = AI + ["beta_pre_default", *CONTROLS]
+        result, d = fit_fe(panel, variables, "beta_post_126")
+        rows.append(ai_coef_table(result, name, AI, n_calls=len(d)))
+    return pd.concat(rows, ignore_index=True)
+
+
+def block_leave_one_year_out(panel: pd.DataFrame) -> pd.DataFrame:
+    variables = AI + ["beta_pre_default", *CONTROLS]
+    rows = []
+    for year in sorted(panel["fecha"].dt.year.unique()):
+        d = panel[panel["fecha"].dt.year != year]
+        result, dd = fit_fe(d, variables, "beta_post_126")
+        rows.append(ai_coef_table(result, f"excl_{year}", AI).assign(n_calls=len(dd)))
+    return pd.concat(rows, ignore_index=True)
+
+
+def block_leave_one_sector_out(panel: pd.DataFrame) -> pd.DataFrame:
+    variables = AI + ["beta_pre_default", *CONTROLS]
+    rows = []
+    for sic2 in sorted(panel["sic2"].dropna().unique()):
+        d = panel[panel["sic2"] != sic2]
+        if d["fe"].nunique() < 2:
+            continue
+        result, dd = fit_fe(d, variables, "beta_post_126")
+        tag = f"excl_sic2_{sic2}" + ("_tech" if sic2 in TECH_SIC2 else "")
+        rows.append(ai_coef_table(result, tag, AI).assign(n_calls=len(dd)))
+    return pd.concat(rows, ignore_index=True)
+
+
+def block_call_frequency(panel: pd.DataFrame) -> pd.DataFrame:
+    freq = panel.groupby("ticker").size()
+    threshold = freq.quantile(0.9)
+    heavy = freq[freq > threshold].index
+    d = panel[~panel["ticker"].isin(heavy)]
+    variables = AI + ["beta_pre_default", *CONTROLS]
+    result, dd = fit_fe(d, variables, "beta_post_126")
+    return ai_coef_table(result, "excl_top_decile_call_freq", AI).assign(
+        n_calls=len(dd), n_excluded_firms=len(heavy), threshold_calls=float(threshold))
+
+
+def block_placebo(panel: pd.DataFrame) -> pd.DataFrame:
+    """Pre-call beta on the same predictors: an association with a beta fixed
+    before the call is cross-sectional, not call-induced."""
+    variables = [*AI, *CONTROLS]
+    result, _ = fit_fe(panel, variables, "beta_pre_default")
+    return pd.DataFrame([{"block": "placebo_pre_beta", **coef_row(result, v)} for v in REPORTED])
+
+
+def block_formal_tests(panel: pd.DataFrame) -> dict:
+    variables = AI + ["beta_pre_default", *CONTROLS]
+    result, d = fit_fe(panel, variables, "beta_post_126")
+    reduced, _ = fit_fe(d, [v for v in variables if v not in AI], "beta_post_126")
+    return {
+        "joint_ai_block": wald_joint(result, AI),
+        "joint_archetype_weights": wald_joint(result, C.WEIGHTS),
+        "partial_r2_ai_block": float(result.rsquared - reduced.rsquared),
+        "n_calls": int(len(d)),
+    }
+
+
+# --------------------------------------------------------------------------
+# Main
+# --------------------------------------------------------------------------
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--factors", type=Path, default=FACTORS)
+    parser.add_argument("--output-dir", type=Path, default=OUT)
+    args = parser.parse_args()
+
+    base = C.load_call_panel()
+    base["fecha"] = pd.to_datetime(base["fecha"])
+
+    windows = {
+        "pre_default": (-252, -21), "pre_126_21": (-126, -21), "pre_252_42": (-252, -42),
+        "post_63": (21, 63), "post_126": (21, 126), "post_252": (21, 252),
+    }
+    default_windows = {"pre_default": (-252, -21), "post_126": (21, 126)}
+    panel = attach_windows(base, args.factors, windows, ["mktrf"])
+    panel_min60 = attach_windows(base, args.factors, default_windows, ["mktrf"], min_obs=60)
+    panel_min80 = attach_windows(base, args.factors, default_windows, ["mktrf"], min_obs=80)
+    panel_ff3 = attach_windows(base, args.factors, default_windows, ["mktrf", "smb", "hml"])
+
+    out = {}
+    out["windows"] = block_windows(panel)
+    out["delta_beta"] = block_delta_beta(panel)
+    out["firm_fe"] = block_firm_fe(panel)
+    out["ai_subsets"] = block_ai_subsets(panel)
+    corr, vif = block_collinearity(panel)
+    out["ai_correlation"] = corr.reset_index().rename(columns={"index": "variable"})
+    out["ai_vif"] = vif
+    out["influence"] = block_influence(panel)
+    out["beta_threshold"] = block_beta_threshold(panel_min60, panel_min80)
+    out["market_model"] = block_market_model(panel_min60, panel_ff3)
+    out["leave_one_year_out"] = block_leave_one_year_out(panel)
+    out["leave_one_sector_out"] = block_leave_one_sector_out(panel)
+    out["call_frequency"] = block_call_frequency(panel)
+    out["placebo"] = block_placebo(panel)
+    formal = block_formal_tests(panel)
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    for name, df in out.items():
+        df.to_csv(args.output_dir / f"call_beta_robustness_{name}.csv", index=False)
+    with open(args.output_dir / "call_beta_robustness_formal_tests.json", "w") as f:
+        json.dump(formal, f, indent=2)
+
+    print("Not implemented (data unavailable in this repo): FF5 factors, alternate broad benchmark.")
+    print(json.dumps(formal, indent=2))
+    for name, df in out.items():
+        print(f"\n== {name} ==")
+        print(df.to_string(index=False))
+
+
+if __name__ == "__main__":
+    main()

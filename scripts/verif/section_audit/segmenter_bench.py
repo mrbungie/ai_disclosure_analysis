@@ -22,7 +22,7 @@ import pandas as pd
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO_ROOT / "scripts" / "us"))
+sys.path.insert(0, str(REPO_ROOT / "scripts" / "raw_processing" / "us"))
 from section_segmenter import clean_html_to_lines, general_segment, known_issue  # noqa: E402
 
 # What "plausible" means per item, per form — a real company's content for

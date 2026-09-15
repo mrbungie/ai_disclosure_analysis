@@ -38,7 +38,7 @@ from tqdm import tqdm
 REPO_ROOT = Path(__file__).resolve().parents[3]
 OUTPUT_DIR = REPO_ROOT / "data" / "interim" / "audits" / "section_audit"
 
-sys.path.insert(0, str(REPO_ROOT / "scripts" / "us"))
+sys.path.insert(0, str(REPO_ROOT / "scripts" / "raw_processing" / "us"))
 from section_segmenter import clean_html_to_lines, general_segment, load_filing_sections  # noqa: E402
 
 # The 3 items scripts/us/10k/02_extract_sections.py actually extracts today.

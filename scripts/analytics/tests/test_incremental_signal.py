@@ -7,7 +7,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from scripts.analytics import incremental_signal as signal
+from scripts.analytics.shock import incremental_signal as signal
 
 
 class CoefficientReportingTests(unittest.TestCase):

@@ -7,7 +7,7 @@ from pathlib import Path
 import unittest
 
 
-MODULE = Path(__file__).resolve().parents[1] / "build_firm_financials.py"
+MODULE = Path(__file__).resolve().parents[2] / "gold" / "financials" / "build_firm_financials.py"
 
 
 def duration_metrics() -> dict[str, list[str]]:

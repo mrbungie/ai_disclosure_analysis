@@ -1,0 +1,139 @@
+# Pipeline de analytics: qué produce cada script y cómo se regenera
+
+## Modo de análisis final: margen extensivo
+
+Todo agregado sobre empresas o períodos se calcula sobre **todos los
+documentos**, con cero cuando el documento no habla de IA. La unidad es la
+intensidad por 1.000 párrafos del canal (`scripts/gold/posture/ai_intensity.py`:
+tabla de documentos 10-K, 10-Q, DEF 14A, 8-K y calls con sus párrafos y sus
+conteos de frames, unidos a todas las instancias de cada texto). Condicionar a
+hablar de IA —"la empresa entra si tiene ≥N frames"— selecciona sobre el
+fenómeno y no se usa como diseño (`docs/problemas_academicos.md` #12). Lo
+único que necesita frames para existir es el test binomial de `08` y los ejes
+de `03`, que para la empresa sin frames valen "sin IA".
+
+## Scripts
+
+| script | produce | lo lee |
+|---|---|---|
+| `ai_intensity.py` | tabla de documentos con párrafos y conteos de frames; `firm_intensity()` por empresa o empresa-año | todo lo de abajo |
+| `build_firm_clusters.py` | `firm_year_archetype_behaviors`, `voice_x_behavior` (tasas de texto por empresa-año, sólo con frames) | `build_firm_panels.py` |
+| `build_firm_financials.py`, `build_market_factors.py`, `build_roic_wacc.py` | `firm_year_financials*`, `firm_year_market_factors`, `firm_year_filing_returns`, `firm_year_roic_wacc` | `build_firm_panels.py` |
+| `build_firm_panels.py` | **`firm_year_master_v2`**: todas las empresas-año con filings, intensidades con ceros, financieros, etiquetas de texto donde existen | `04`, `05`, `01` |
+| `build_segments.py` | `firm_segments`, `firm_year_segments` (k=3 + sin IA, 510 empresas) | `02`, `04`, `05`, `07` |
+| `build_voice_behavior_grid.py` | `firm_voice_behavior_grid`, `firm_year_voice_behavior_grid` | `03` |
+| `economic_profiles.py` | `economic_profiles.json` (paneles A y B) | `04` |
+| `incremental_signal.py` | `incremental_signal.json` (M0-M3, R² ajustado, ΔR², bootstrap, Wald conjunto, permutación sector×año, robustez) | `05` |
+| `channel_gap_analysis.py` | `channel_gap_cells`, `channel_gap_firm`, `channel_gap_analysis.json` | `06` |
+| `shock_analysis.py`, `shock_did_simple.py` | `shock_analysis.json`, `shock_did_simple.json`, `shock_did_*.png` | `07` |
+| `washing_score.py`, `validate_washing_score.py` | `firm_washing_score`, `firm_washing_score_all`, validación | `08` |
+| `evolution_figures.py` | `fig_evolucion_*.png`, `fig_sec_event_study.png` | `01`, `07` |
+| `scripts/bronze/ai_activities_from_frames.py` (LLM) → `activity_profiles.py` | `data/interim/ai_activities/` (27.583 actividades) → `firm_activities`, `firm_activity_profiles`, `firm_year_activities`, `channel_activity_cells`, `activity_profiles.json` | `09`, `02`, `05` |
+| `activity_grounding.py` | `activity_grounding.json`, `fig_brecha_actividades.png` (concreción por esquina, respaldo del exceso, brecha de actividades por canal) | `03`, `06`, `08` |
+| `build_geo_provenance.py` | `geo_provenance_summary.json`: orientación regional de la divulgación de IA. Escaneo léxico (no basado en rol) con límites de palabra sobre párrafos que ya tienen un frame de IA (`gold_ai_frames.has_frame`), contra los términos por región de `configs/geo_provenance.yaml` (entidades nombradas + literales de país/gentilicio, salvo Estados Unidos, que sólo usa entidades nombradas para no saturarse a ~100%) | `04` |
+| `report_crosscheck_stats.py` | `crosscheck_stats.json` (correlaciones, FDR, perfiles por nivel de IA) | `apendice/` |
+
+Ninguno llama a un LLM salvo `ai_activities_from_frames.py` (segunda pasada sobre los frames conductuales, una vez; se reanuda por `text_hash`). Todo corre en CPU con `uv run --frozen --no-sync
+python scripts/analytics/<script>.py` o, para el bloque financiero,
+`make analytics`.
+
+## Decisiones de construcción que afectan cifras
+
+1. **Cadenas de fallback de conceptos XBRL**, sobre inline-XBRL por filing
+   (`data/raw/xbrl_facts/us_by_filing/`, no el bulk de Company Facts, que
+   colapsa reexpresiones), con dos correcciones de fondo (2026-09-08,
+   `docs/sources/accounting_data.md` tiene el detalle completo): (a)
+   excluir hechos dimensionales (`has_dimensions`) — sin esto un desglose
+   por segmento puede compartir concepto y período con el consolidado y
+   corromperlo (Amazon FY2021 `us-gaap:Revenues` sólo existía como un
+   segmento de ~$55M); (b) resolver reexpresiones por FECHA de filing más
+   temprana, no por mediana ni por "el filing más reciente" — este panel
+   alimenta joins as-of, así que el valor de un período tiene que ser el
+   que ese filing efectivamente reveló, nunca uno corregido después.
+   Validado sumando ingresos trimestrales contra el ingreso anual
+   independiente: 99.0% dentro de 1% para empresas de año fiscal
+   calendario (n=1.665, ver `docs/sources/accounting_data.md` para el
+   historial completo de esta cifra). (c) fallback de "singleton
+   dimensional", con un requisito de corroboración añadido después de que
+   este mismo check bajara: un emisor que taggea una métrica con UN solo
+   miembro dimensional cada período Y ese valor está corroborado por >=2
+   observaciones (no basta con que sea el único valor — el R&D de GM tiene
+   3+ observaciones por año; el `RevenueFromContractWithCustomer...` de
+   APA FY2022 tenía exactamente 1, un renglón de producto/geografía de
+   $18M, no el total de ~$11B, y pasaba trivialmente "valor único" por no
+   tener con qué discrepar) se recupera; una celda con 2+ valores
+   DISTINTOS (desglose real) se deja NULL en vez de adivinar — verificado
+   también contra el `cost_of_revenue` de AEP/AMT/APA/ATVI (4-17 valores
+   dimensionales distintos por período, desgloses reales, correctamente no
+   rellenados).
+
+   (d) cadenas de `capex`/`eps_diluted` ampliadas con
+   `PaymentsToAcquireOtherPropertyPlantAndEquipment`/`PaymentsForCapitalImprovements`
+   (nombre propio de REITs para capex) y `EarningsPerShareBasicAndDiluted`.
+   (e) `revenue` de bancos: FITB/ZION/CMA/SIVB/HBAN/RF/PBCT nunca taggean
+   `Revenues` combinado, sólo un concepto acotado a ingreso por comisiones
+   (ASC 606) que excluye el ingreso neto por intereses — el negocio
+   principal de un banco (FITB leía ~$580M contra varios miles de millones
+   reales). `InterestIncomeExpenseNet + NoninterestIncome = Revenues` es
+   una identidad contable verificada (0.0% de diferencia contra
+   BAC/COF/JPM/C/PNC, que sí taggean el combinado), aplicada como
+   REEMPLAZO (no relleno) porque el valor previo no estaba vacío, estaba
+   mal. Esta corrección sola movió la validación de 97.0%→99.0%.
+
+   Cobertura resultante (504 tickers, 2.868 filas 10-K alineadas): revenue
+   99.1%, net_income 99.7%, total_assets/equity 100%, shares_out 99.9%,
+   eps_diluted 97.6%, capex 91.2%, SG&A 80.7%, operating_income 80.0%,
+   long_term_debt 89.6% (subió de 84% al agregar
+   `LongTermDebtAndCapitalLeaseObligations`/`NotesPayable` a la cadena y
+   el fallback dimensional), current_assets/current_liabilities 85%,
+   debt_to_equity 83.7%, cost_of_revenue 61.4%, rd_expense 46.0%.
+   `shares_out` llegó a 99.9% sumando los hechos dimensionales por clase de
+   acción para emisores de doble clase (GOOGL, META, BRK.B, ...) que sólo
+   taggean `EntityCommonStockSharesOutstanding` por clase, no como total
+   consolidado (`docs/sources/accounting_data.md`). `rd_expense` y
+   `cost_of_revenue` quedan bajos genuinamente por sector (utilities,
+   aseguradoras, aerolíneas, REITs no taggean una línea de I+D o de costo
+   de ventas), no por una cadena de fallback incompleta. `debt_to_equity`
+   y `current_assets`/`current_liabilities` tampoco son cadenas
+   incompletas: ~18% de empresas-año tiene equity contable negativo
+   (recompras agresivas — McDonald's, Booking, Philip Morris) donde el
+   ratio queda NULL a propósito, y ~15% del universo (bancos, aseguradoras,
+   REITs) presenta balance no clasificado sin corte corriente/no corriente.
+2. **`next_*_yoy` se anula cuando el gap fiscal sale de [340, 380] días.**
+3. **Denominadores ≤ 0 producen NULL**, no un ratio absurdo (ROE con equity
+   negativo, P/E con EPS negativo).
+4. **ERP geométrico (6,48%)** en el WACC, no aritmético (8,20%). Como
+   `coe = rf + β·ERP`, un ERP inflado infla las diferencias de WACC en
+   proporción a las de beta.
+5. **`build_firm_panels.py` agrega por empresa con `.median()`.**
+6. **Año = año de presentación** en el panel empresa-año (igual que los
+   financieros); la brecha entre canales alinea por ejercicio fiscal cubierto
+   (`06`).
+7. **Winsorización 1/99** de todo lo financiero en `04` y `05`.
+
+## Regenerar todo desde cero
+
+```bash
+uv run --frozen --no-sync python scripts/bronze/ai_prefilter_deploy.py --threshold 0.17
+uv run --frozen --no-sync python scripts/bronze/ai_classify.py --concurrency 20   # repetir hasta "Pendientes en total: 0"
+uv run --frozen --no-sync python scripts/common/build_duckdb.py --with-text-tables
+make analytics
+for s in build_segments build_voice_behavior_grid economic_profiles incremental_signal \
+         channel_gap_analysis shock_analysis shock_did_simple washing_score validate_washing_score \
+         evolution_figures report_crosscheck_stats; do
+  uv run --frozen --no-sync python scripts/analytics/$s.py; done
+uv run --frozen --no-sync python scripts/bronze/ai_activities_from_frames.py --concurrency 20   # LLM, ~85 min
+uv run --frozen --no-sync python scripts/gold/posture/activity_profiles.py
+uv run --frozen --no-sync python scripts/analytics/washing/activity_grounding.py
+uv run --frozen --no-sync python scripts/analytics/shock/incremental_signal.py   # de nuevo: usa firm_year_activities
+scripts/common/sync_data_b2.sh push
+```
+
+`gold_ai_frames` toma la población del ÚLTIMO despliegue del prefiltro; el
+umbral vigente y las versiones congeladas están en `docs/FREEZE.md`.
+
+## Pendiente
+
+- `statsmodels` y `matplotlib` no están declarados en `pyproject.toml`
+  (`uv pip install --python .venv/bin/python statsmodels matplotlib`).
+- Los descriptivos SQL del apéndice no tienen script.
