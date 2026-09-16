@@ -2322,6 +2322,9 @@ _dsj = results_json("posture", "deepseek_calls_its.json")
 _break = pd.Timestamp("2025-01-01")
 
 fig, ax = plt.subplots()
+_RATE = 1e2  # per 1,000 words -> per 100,000 words, so the series reads in units, not zeros
+for _c in ["rate_per_1k", "trend", "trend_low", "trend_high", "counterfactual"]:
+    _ds[_c] = _ds[_c] * _RATE
 ax.plot(_ds["x"], _ds["rate_per_1k"], "o", ms=3.6, color=MIB["ink_light"],
         alpha=0.85, label="Monthly rate")
 # Trend without the month dummies: the fitted values carry seasonality, which
@@ -2342,7 +2345,7 @@ ax.annotate("DeepSeek-R1\n20 Jan 2025", xy=(_ev_row["x"], _ev_row["rate_per_1k"]
             color=MIB["ink_800"], ha="left",
             arrowprops=dict(arrowstyle="->", color=MIB["ink_800"], lw=0.9,
                             shrinkA=0, shrinkB=6))
-ax.set_ylabel("Open-source mentions per 1,000 words\n(earnings calls)", fontsize=8.6, fontweight="bold")
+ax.set_ylabel("Open-source mentions per 100,000 words\n(earnings calls)", fontsize=8.6, fontweight="bold")
 ax.xaxis.set_major_locator(mdates.YearLocator())
 ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=(1, 4, 7, 10)))
@@ -2359,11 +2362,11 @@ plt.show()
 :::
 
 
-Open-source vocabulary in earnings calls rises sharply at the turn of 2025 and then turns down (@fig-deepseek-break). The level shift is large but imprecisely estimated, and the change in direction is the firmer result. Over `{python} str(_dsj["months"])` months of calls, the estimated step is `{python} f"{_dsj['step']:+.4f}"` mentions per 1,000 words (95% CI `{python} f"[{_dsj['step_ci_low']:+.4f}, {_dsj['step_ci_high']:+.4f}]"`, $p$ `{python} pstr(_dsj["p_step"])`), against a monthly mean of `{python} f"{_dsj['mean_before']:.4f}"` before and `{python} f"{_dsj['mean_after']:.4f}"` after. January itself reaches `{python} f"{float(_ds.loc[_ds['month'] == '2025-01', 'rate_per_1k'].iloc[0]):.4f}"`, roughly ten times the earlier mean, and the level is back near it within two quarters.
+Open-source vocabulary in earnings calls rises sharply at the turn of 2025 and then turns down (@fig-deepseek-break). Over `{python} str(_dsj["months"])` months of calls, the estimated step is `{python} f"{_dsj['step'] * 1e2:+.2f}"` mentions per 100,000 words (95% CI `{python} f"[{_dsj['step_ci_low'] * 1e2:+.2f}, {_dsj['step_ci_high'] * 1e2:+.2f}]"`, $p$ `{python} pstr(_dsj["p_step"])`), against a monthly mean of `{python} f"{_dsj['mean_before'] * 1e2:.2f}"` before and `{python} f"{_dsj['mean_after'] * 1e2:.2f}"` after. January itself reaches `{python} f"{float(_ds.loc[_ds['month'] == '2025-01', 'rate_per_1k'].iloc[0]):.2f}"`, roughly ten times the earlier mean, and the level is back near it within two quarters.
 
-What follows is a reversal rather than a decay, and this part the data do support. The series had been rising at `{python} f"{_dsj['pre_trend']:+.5f}"` per month ($p$ `{python} pstr(_dsj["p_pre_trend"])`); afterwards the slope itself is negative, `{python} f"{_dsj['post_slope']:+.5f}"` (95% CI `{python} f"[{_dsj['post_slope_ci_low']:+.5f}, {_dsj['post_slope_ci_high']:+.5f}]"`, $p$ `{python} pstr(_dsj["p_post_slope"])`), and the later path ends below a simple continuation of the earlier one. A conversation that had grown for four years turns down after the episode that made it salient. Whether it falls faster than it rose is a separate question and the data do not settle it: the restriction comparing the two slopes gives $p$ `{python} pstr(_dsj["p_steeper_than_rise"])`. The mechanism is outside what this series can show -- geopolitical framing of a Chinese model is one hypothesis the texts could be read for.
+The firmer result is the change in direction. The series had been rising at `{python} f"{_dsj['pre_trend'] * 1e2:+.3f}"` per month ($p$ `{python} pstr(_dsj["p_pre_trend"])`); afterwards the slope is negative, `{python} f"{_dsj['post_slope'] * 1e2:+.3f}"` (95% CI `{python} f"[{_dsj['post_slope_ci_low'] * 1e2:+.3f}, {_dsj['post_slope_ci_high'] * 1e2:+.3f}]"`, $p$ `{python} pstr(_dsj["p_post_slope"])`), and the later path ends below a simple continuation of the earlier one. A conversation that had grown for four years turns down after the episode that made it salient; whether it falls faster than it rose the data do not settle ($p$ `{python} pstr(_dsj["p_steeper_than_rise"])`).
 
-What ties the series to the event is the text rather than the timing: analysts name the model in those calls, AT&T's on `{python} _dsj["quotes"][0]["date"]` opening "you've seen DeepSeek has created a much lower cost, large language model", and Corning's two days later on "market dislocation over the last week from DeepSeek". The series is earnings calls alone, since a call can respond within weeks while a 10-K published in a given month was written earlier and describes an earlier period; the pooled series shows no break, which is consistent with that dilution without establishing it. The break is dated to a month and January is not entirely after the 20th, so this locates a change around the turn of the year, not on a day.
+What ties the series to the event is the text rather than the timing: analysts name the model, AT&T's call on `{python} _dsj["quotes"][0]["date"]` opening "you've seen DeepSeek has created a much lower cost, large language model" and Corning's two days later on "market dislocation over the last week from DeepSeek". The series is earnings calls alone, since a call can respond within weeks while a 10-K published in a given month was written earlier; the pooled series shows no break, consistent with that dilution without establishing it. January is not entirely after the 20th, so this locates a change around the turn of the year, not on a day.
 
 ## What disclosed AI activity adds to disclosure posture
 
