@@ -1,4 +1,4 @@
-<svg width="1740" height="510" viewBox="0 0 1740 510" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">
+<svg width="1750" height="510" viewBox="0 0 1750 510" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M1 1L8 5L1 9Z" fill="#5F5E5A"/>
@@ -8,7 +8,7 @@
     </marker>
   </defs>
 
-  <rect x="0" y="0" width="1740" height="510" fill="#FFFFFF"/>
+  <rect x="0" y="0" width="1750" height="510" fill="#FFFFFF"/>
 
   <!-- CONNECTORS -->
   <g stroke="#5F5E5A" stroke-width="1.5" fill="none">
@@ -110,7 +110,7 @@
   <g>
     <rect x="440" y="298" width="170" height="48" rx="8" fill="#FAECE7" stroke="#D85A30" stroke-width="0.75"/>
     <text x="525" y="318" text-anchor="middle" font-size="12" font-weight="bold" fill="#4A1B0C">Golden Sets &amp; Benchmarks</text>
-    <text x="525" y="335" text-anchor="middle" font-size="10.5" fill="#993C1D">n=9,900 train; κ=0.81–0.87 audit</text>
+    <text x="525" y="335" text-anchor="middle" font-size="10.5" fill="#993C1D">n=9,900 train; held-out audits</text>
   </g>
 
   <!-- 6. LLM EXTRACTION PASSES (Green) -->
@@ -169,9 +169,9 @@
   <g>
     <rect x="1510" y="190" width="195" height="120" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.75"/>
     <text x="1607" y="217" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#26215C">Empirical Analyses</text>
-    <text x="1607" y="238" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 3: AI Archetypes (D, P)</text>
-    <text x="1607" y="255" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 4: Operations &amp; Grounding (A, G, S)</text>
-    <text x="1607" y="272" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 5: Credibility &amp; Decoupling (W)</text>
-    <text x="1607" y="289" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 6–7: Markets &amp; Diligence</text>
+    <text x="1607" y="238" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 2: AI Archetypes (D, P)</text>
+    <text x="1607" y="255" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 3: Operations &amp; Grounding (A, G, S)</text>
+    <text x="1607" y="272" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 4: Credibility &amp; Decoupling (W)</text>
+    <text x="1607" y="289" text-anchor="middle" font-size="10.5" fill="#26215C">Ch 5–6: Markets &amp; Diligence</text>
   </g>
 </svg>
