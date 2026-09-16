@@ -328,18 +328,19 @@ def fix_prose_math_font_size(document: Document, half_points: int = 22) -> None:
         set_math_run_size(math_zone, half_points)
 
 
-HEADING_STYLE_NAMES = {"heading 1", "heading 2", "heading 3"}
+HEADING_STYLE_NAME = "heading 1"
 _WORD_RE = re.compile(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ'\u2019]*")
 
 
 def titlecase_headings(document: Document) -> None:
-    """Capitalize the first letter of every word in H1-H3 headings.
+    """Capitalize the first letter of every word in Heading 1 paragraphs.
 
-    template/reference.docx renders those three heading levels in small caps
+    template/reference.docx renders that heading level in small caps
     (`w:smallCaps`), which draws a lowercase letter as a reduced capital and
     leaves a real capital at full height -- so the intended look (a full-size
     initial on each word, the rest as small capitals) only appears if the
-    heading text is actually title-cased. The .qmd keeps headings in ordinary
+    heading text is actually title-cased. Heading 2 and 3 stay in full
+    capitals and are left alone. The .qmd keeps headings in ordinary
     sentence case, which is what a heading should look like in the source, so
     the casing is applied here instead.
 
@@ -352,7 +353,7 @@ def titlecase_headings(document: Document) -> None:
     heading_ids = set()
     for style in document.styles:
         name = style.element.find(qn("w:name"))
-        if name is not None and name.get(qn("w:val")) in HEADING_STYLE_NAMES:
+        if name is not None and name.get(qn("w:val")) == HEADING_STYLE_NAME:
             heading_ids.add(style.style_id)
 
     for paragraph in document.paragraphs:
