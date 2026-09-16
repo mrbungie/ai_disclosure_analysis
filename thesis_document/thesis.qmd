@@ -37,16 +37,22 @@ for _f in _font_dir.glob("*.ttf"):
     fm.fontManager.addfont(str(_f))
 _HAS_CALIBRI = any(_font_dir.glob("Calibri*.ttf"))
 
-# "Petrol & Rust" -- an editorial system, not a categorical dashboard palette.
-# MIB teal (#008B7B, the template's own heading accent) is a brand reference,
-# not the default data color: it appears only as one member of the
-# qualitative sets below. The chart workhorse is a narrow, related cool
-# family (deep blue-gray -> petrol -> teal -> sage-gray, all within ~35deg of
-# hue) plus exactly one warm contrast (rust) pulled from that family's true
-# complement (~180deg). Each of the 5 anchors has one lighter companion tone
-# (same hue, lifted L, tempered S) for the 6-10 category charts (sectors) --
-# nothing enters the set that isn't a tint of one of these five hues.
+# Two palettes, because they answer different questions. A DIVERGING scale
+# reads deviation from a centre and needs one cool pole, one warm pole and a
+# near-white middle. A QUALITATIVE set separates categories and needs hues far
+# enough apart to be told apart at a glance -- the earlier rule of keeping
+# every colour within ~35 degrees of one hue plus a single complement gave the
+# charts unity and cost them legibility, since three archetypes or ten sectors
+# then differ only in lightness. The sets share anchors so the document still
+# reads as one system, and MIB teal stays a heading accent rather than the
+# default data colour.
 MIB = {
+    "ink": "#446582", "ink_light": "#7D97AC",
+    "terracotta": "#C9826B", "terracotta_light": "#E2B4A4",
+    "eucalyptus": "#67958A", "eucalyptus_light": "#9DBDB5",
+    "violet_grey": "#9385A6", "violet_grey_light": "#BCB2C9",
+    "ochre": "#B69A59", "ochre_light": "#D5C398",
+    "ivory": "#FAF8F4",
     "deep": "#263B4A", "deep_light": "#6A89A0",
     "petrol_dark": "#18323A", "petrol": "#355F6B", "petrol_light": "#7AA2AE",
     "teal": "#008B7B", "teal_light": "#69B5AC",
@@ -55,13 +61,16 @@ MIB = {
     "ink_950": "#1C1F22", "ink_800": "#454E54", "ink_600": "#73828C",
     "ink_400": "#A5AFB6", "ink_200": "#D5D9DD", "ink_100": "#F1F2F4",
 }
-# Extended qualitative set for >5 categories: 5 families x 2 tones, grouped.
-MIB_QUAL10 = [MIB["deep"], MIB["deep_light"], MIB["petrol"], MIB["petrol_light"],
-              MIB["teal"], MIB["teal_light"], MIB["sage"], MIB["sage_light"],
-              MIB["rust"], MIB["rust_light"]]
-# Diverging colormap for heatmaps (replaces RdBu_r): rust -> cream -> deep
-# blue-gray, i.e. the system's one warm contrast against its darkest cool.
-MIB_DIV = LinearSegmentedColormap.from_list("mib_div", [MIB["rust"], "#F3EEE6", MIB["deep"]], N=256)
+# Qualitative: five hues that separate, each with a lighter companion for the
+# 6-10 category charts.
+MIB_QUAL5 = [MIB["ink"], MIB["terracotta"], MIB["eucalyptus"], MIB["violet_grey"], MIB["ochre"]]
+MIB_QUAL10 = [MIB["ink"], MIB["ink_light"], MIB["terracotta"], MIB["terracotta_light"],
+              MIB["eucalyptus"], MIB["eucalyptus_light"], MIB["violet_grey"],
+              MIB["violet_grey_light"], MIB["ochre"], MIB["ochre_light"]]
+# Diverging: terracotta -> ivory -> ink, warm pole to cool pole through a
+# near-white centre, so zero reads as zero.
+MIB_DIV = LinearSegmentedColormap.from_list("ink_terracotta",
+                                            [MIB["terracotta"], MIB["ivory"], MIB["ink"]], N=256)
 
 plt.rcParams.update({
     "font.family": ["Calibri", "Carlito", "DejaVu Sans"] if _HAS_CALIBRI else ["Carlito", "DejaVu Sans"],
@@ -908,6 +917,8 @@ import matplotlib.pyplot as plt
 
 df = pd.read_parquet(gold("covariates", "firm", "posture_archetype_static"))
 
+# Seven: the vertices are fitted on posture alone, so there is no intensity
+# coordinate to show. Asking for one produced a column of nan.
 FEATURES = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
             "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
 LABELS = ["Promotional posture", "Hedging posture", "Risk orientation", "Governance orientation",
@@ -1071,9 +1082,11 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+# Seven: the vertices are fitted on posture alone, so there is no intensity
+# coordinate to show. Asking for one produced a column of nan.
 FEATURES = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
-           "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
-LABELS = ["Promotional", "Hedging", "Risk", "Governance", "Claim\nrealization", "Customer-\nfacing", "Claim\nspecificity", "Intensity"]
+           "temporal_posture", "ai_positioning", "specificity"]
+LABELS = ["Promotional", "Hedging", "Risk", "Governance", "Claim\nrealization", "Customer-\nfacing", "Claim\nspecificity"]
 ARCHETYPES = ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]
 
 # Standardized vertex coordinates (matrix A) of the frozen model bundle
@@ -1083,7 +1096,10 @@ _vert = pd.read_parquet(results("posture", "archetype_vertices.parquet"))
 mat = _vert.pivot(index="archetype", columns="feature", values="value").reindex(index=ARCHETYPES, columns=FEATURES)
 
 fig, ax = plt.subplots(figsize=(8.2, 4.2), dpi=300)
-vmax = float(np.abs(mat.values).max())
+# Fixed at +-3 rather than the figure's own maximum: these are z-scores, so
+# the scale means the same thing in every figure that shows them, and a cell
+# is readable as "two standard deviations" without checking the colour bar.
+vmax = 3.0
 im = ax.imshow(mat.values.T, cmap=MIB_DIV, vmin=-vmax, vmax=vmax, aspect="auto")
 ax.set_xticks(range(len(ARCHETYPES)))
 ax.set_xticklabels(ARCHETYPES, fontsize=9.0, fontweight="bold", rotation=25, ha="right", rotation_mode="anchor")
@@ -2761,19 +2777,7 @@ def _mkt_joint(target):
 comp_p_min = f"{_con[_con['contrast'] == 'Composition (joint)']['p'].min():.3f}"
 ```
 
-The eight regressions share one specification and are reported together in @tbl-market-results. Read down the disclosure columns rather than across the outcomes: the same measure behaves consistently, and it is the measure rather than the outcome that carries the finding.
-
-**Cumulative disclosure intensity is the one measure that works everywhere it should.** A firm that had disclosed more AI before the call is larger afterwards ($\beta =$ `{python} b_of("log_market_cap_post", "intensity_expanding")`, $p$ `{python} p_of("log_market_cap_post", "intensity_expanding")`), grows faster ($\beta =$ `{python} b_of("next_revenue_yoy_post", "intensity_expanding")`, $p$ `{python} p_of("next_revenue_yoy_post", "intensity_expanding")`), carries more systematic risk ($\beta =$ `{python} b_of("beta_post_63", "intensity_expanding")`, $p$ `{python} p_of("beta_post_63", "intensity_expanding")`), and shows *less* downside asymmetry in its returns ($\beta =$ `{python} b_of("duvol_post", "intensity_expanding")`, $p$ `{python} p_of("duvol_post", "intensity_expanding")` for down-to-up volatility, $\beta =$ `{python} b_of("ncskew_post", "intensity_expanding")`, $p$ `{python} p_of("ncskew_post", "intensity_expanding")` for negative skewness). The sign pattern is coherent rather than contradictory: narrative volume prices as thematic exposure, which raises systematic risk, while the firms carrying it are the large, growing ones whose returns crash less often.
-
-**The decoupling of a single call predicts nothing.** $W_{\text{call}}$ is null in all eight outcomes, with coefficients between `{python} f"{_bat[_bat.variable == 'w_call']['beta_std'].min():+.3f}"` and `{python} f"{_bat[_bat.variable == 'w_call']['beta_std'].max():+.3f}"`. What a firm says in one call, relative to what it can show, carries no measurable consequence.
-
-**The habit does.** Historical decoupling predicts systematic risk ($\beta =$ `{python} b_of("beta_post_63", "w_expanding")`, $p$ `{python} p_of("beta_post_63", "w_expanding")`), the strongest disclosure association in the table after intensity. A firm whose narrative has persistently run ahead of its verifiable activity carries more market risk; a single episode of it does not.
-
-**Posture composition separates firms where the outcome is a market price.** The joint test of the composition rejects for market beta ($p$ `{python} f"{_mkt_joint('beta_post_63'):.3f}"`), for size ($p$ `{python} f"{_mkt_joint('log_market_cap_post'):.3f}"`) and for down-to-up volatility ($p$ `{python} f"{_mkt_joint('duvol_post'):.3f}"`), and not for any accounting outcome. The separation runs through the Governance vertex: relative to a Defensive posture, weight in Governance goes with lower systematic risk ($\beta =$ `{python} b_of("beta_post_63", "w_gov")`, $p$ `{python} p_of("beta_post_63", "w_gov")`), larger size ($\beta =$ `{python} b_of("log_market_cap_post", "w_gov")`, $p$ `{python} p_of("log_market_cap_post", "w_gov")`) and less downside volatility ($\beta =$ `{python} b_of("duvol_post", "w_gov")`, $p$ `{python} p_of("duvol_post", "w_gov")`). It also separates from the Vocal vertex on beta (@tbl-market-contrasts), so this is not merely a contrast against the residual posture.
-
-**The extensive margin is the larger effect, and a different one.** Disclosing AI in statutory filings at all, relative to not disclosing, goes with higher crash risk on both measures ($\beta =$ `{python} b_of("ncskew_post", "has_posture")`, $p$ `{python} p_of("ncskew_post", "has_posture")` and $\beta =$ `{python} b_of("duvol_post", "has_posture")`, $p$ `{python} p_of("duvol_post", "has_posture")`), and it is the strongest coefficient in the table. That contrast is not between ways of speaking; it is between speaking and staying silent.
-
-Across the `{python} str(mkt_m)` disclosure coefficients reported here, `{python} str(mkt_n_surv)` survive a Benjamini-Hochberg correction at five percent, against a rank-one threshold of `{python} mkt_crit1`: intensity on size, on down-to-up volatility and on negative skewness, historical decoupling on beta, and the disclosure indicator on both crash-risk measures. Every association involving posture composition or single-call decoupling falls outside.
+The eight regressions share one specification and are reported together in @tbl-market-results, one row per outcome. Read down a column rather than across a row: a disclosure measure behaves consistently across outcomes, and it is the measure rather than any single outcome that carries the finding.
 
 ```{python}
 #| label: tbl-market-results
@@ -2781,56 +2785,50 @@ Across the `{python} str(mkt_m)` disclosure coefficients reported here, `{python
 #| echo: false
 from IPython.display import Markdown
 
-_KEY = [
+# One row per outcome, one column per term, so the eight regressions read as a
+# single table. The joint test of the composition closes it: it is a statement
+# about the block, not another coefficient.
+_COLS = [
     ("v", "w_call",              r"$W_{\text{call}}$"),
     ("v", "w_expanding",         r"$W_{\text{exp}}$"),
-    ("v", "intensity_expanding", "Cumulative intensity"),
-    ("c", "Defensive vs. no posture", r"Defensive vs. none ($\beta_{\text{has}}$)"),
-    ("c", "Vocal vs. Defensive",      r"Vocal vs. Def. ($\beta_{\text{voc}}$)"),
-    ("c", "Governance vs. Defensive", r"Gov. vs. Def. ($\beta_{\text{gov}}$)"),
-    ("c", "Governance vs. Vocal",     r"Gov. vs. Vocal ($\beta_{\text{gov}}-\beta_{\text{voc}}$)"),
+    ("v", "intensity_expanding", "Intensity"),
+    ("c", "Defensive vs. no posture", r"$\beta_{\text{has}}$"),
+    ("c", "Vocal vs. Defensive",      r"$\beta_{\text{voc}}$"),
+    ("c", "Governance vs. Defensive", r"$\beta_{\text{gov}}$"),
+    ("c", "Governance vs. Vocal",     r"$\beta_{\text{gov}}-\beta_{\text{voc}}$"),
 ]
+_OUTCOMES = ["beta_post_63", "log_market_cap_post", "ncskew_post", "duvol_post",
+             "gross_margin_change_pp", "roic_minus_wacc_change_pp",
+             "next_revenue_yoy_post", "ps_ratio_post"]
 
-def _panel(targets, letter):
-    heads = [_bat[_bat["target"] == t]["label_outcome"].iloc[0] for t in targets]
-    lines = [f"| **Panel {letter}** | " + " | ".join(heads) + " |",
-             "|:---|" + "---:|" * len(targets)]
-    for kind, key, label in _KEY:
-        lines.append(f"| {label} | " + " | ".join(_mkt_cell(kind, key, t) for t in targets) + " |")
-    lines.append("| Composition, joint $F$ | " + " | ".join(_joint_mkt_cell(t) for t in targets) + " |")
-    lines.append("| $R^2$ | " + " | ".join(f"{float(_bat[_bat['target'] == t]['r2'].iloc[0]):.3f}" for t in targets) + " |")
-    lines.append("| Calls | " + " | ".join(f"{int(_bat[_bat['target'] == t]['n_calls'].iloc[0]):,}" for t in targets) + " |")
-    return lines + [""]
-
-def _joint_mkt_cell(target):
+def _mkt_joint_cell(target):
     row = _con[(_con["target"] == target) & (_con["contrast"] == "Composition (joint)")].iloc[0]
     f, p = float(row["F"]), float(row["p"])
     body = f"{f:.2f}{_mkt_stars(p)} ({p:.3f})"
     return f"**{body}**" if p < 0.05 else body
 
-Markdown("\n".join(_panel(("beta_post_63", "log_market_cap_post", "ncskew_post", "duvol_post"), "A")
-                  + _panel(("gross_margin_change_pp", "roic_minus_wacc_change_pp",
-                            "next_revenue_yoy_post", "ps_ratio_post"), "B")))
+_head = "| Outcome | " + " | ".join(lab for _, _, lab in _COLS) + " | Calls | $R^2$ | Composition, joint $F$ |"
+_rule = "|:---|" + "---:|" * (len(_COLS) + 3)
+_rows = []
+for t in _OUTCOMES:
+    sub = _bat[_bat["target"] == t]
+    cells = [_mkt_cell(k, key, t) for k, key, _ in _COLS]
+    cells += [f"{int(sub['n_calls'].iloc[0]):,}", f"{float(sub['r2'].iloc[0]):.3f}", _mkt_joint_cell(t)]
+    _rows.append(f"| {sub['label_outcome'].iloc[0]} | " + " | ".join(cells) + " |")
+Markdown("\n".join([_head, _rule] + _rows))
 ```
 
-The weights are reallocations, so their coefficients answer a question of composition. @tbl-market-contrasts reports all four comparisons the three postures support, for the two outcomes where the disclosure block is otherwise informative. Governance against Vocal is the difference of two estimated coefficients and requires the covariance between them; it cannot be read off the two columns above.
+**Cumulative disclosure intensity is the one measure that works everywhere it should.** A firm that had disclosed more AI before the call is larger afterwards ($\beta =$ `{python} b_of("log_market_cap_post", "intensity_expanding")`, $p$ `{python} p_of("log_market_cap_post", "intensity_expanding")`), grows faster ($\beta =$ `{python} b_of("next_revenue_yoy_post", "intensity_expanding")`, $p$ `{python} p_of("next_revenue_yoy_post", "intensity_expanding")`), carries more systematic risk ($\beta =$ `{python} b_of("beta_post_63", "intensity_expanding")`, $p$ `{python} p_of("beta_post_63", "intensity_expanding")`), and shows *less* downside asymmetry in its returns ($\beta =$ `{python} b_of("duvol_post", "intensity_expanding")`, $p$ `{python} p_of("duvol_post", "intensity_expanding")` for down-to-up volatility, $\beta =$ `{python} b_of("ncskew_post", "intensity_expanding")`, $p$ `{python} p_of("ncskew_post", "intensity_expanding")` for negative skewness). The sign pattern is coherent rather than contradictory: narrative volume prices as thematic exposure, which raises systematic risk, while the firms carrying it are the large, growing ones whose returns crash less often.
 
-```{python}
-#| label: tbl-market-contrasts
-#| tbl-cap: "[Posture contrasts for the two crash-risk outcomes. Each is a reallocation of archetype weight holding the remaining vertex constant, with p-values in parentheses.]{custom-style=\"CaptionText\"}"
-#| echo: false
-_CONTRASTS = ["Defensive vs. no posture", "Vocal vs. Defensive",
-              "Governance vs. Defensive", "Governance vs. Vocal", "Composition (joint)"]
-_lines = ["| Contrast | NCSKEW | DUVOL |", "|:---|---:|---:|"]
-for name in _CONTRASTS:
-    cells = []
-    for target in ("ncskew_post", "duvol_post"):
-        b, p = ctr(target, name)
-        cells.append(_mkt_show(b, p))
-    _lines.append(f"| {name} | " + " | ".join(cells) + " |")
-Markdown("\n".join(_lines))
-```
+**The decoupling of a single call predicts nothing.** $W_{\text{call}}$ is null in all eight outcomes, with coefficients between `{python} f"{_bat[_bat.variable == 'w_call']['beta_std'].min():+.3f}"` and `{python} f"{_bat[_bat.variable == 'w_call']['beta_std'].max():+.3f}"`. What a firm says in one call, relative to what it can show, carries no measurable consequence.
 
+**The habit does.** Historical decoupling predicts systematic risk ($\beta =$ `{python} b_of("beta_post_63", "w_expanding")`, $p$ `{python} p_of("beta_post_63", "w_expanding")`), the strongest disclosure association in the table after intensity. A firm whose narrative has persistently run ahead of its verifiable activity carries more market risk; a single episode of it does not.
+
+**Posture composition separates firms where the outcome is a market price.** The joint test of the composition rejects for market beta ($p$ `{python} f"{_mkt_joint('beta_post_63'):.3f}"`), for size ($p$ `{python} f"{_mkt_joint('log_market_cap_post'):.3f}"`) and for down-to-up volatility ($p$ `{python} f"{_mkt_joint('duvol_post'):.3f}"`), and not for any accounting outcome. The separation runs through the Governance vertex: relative to a Defensive posture, weight in Governance goes with lower systematic risk ($\beta =$ `{python} b_of("beta_post_63", "w_gov")`, $p$ `{python} p_of("beta_post_63", "w_gov")`), larger size ($\beta =$ `{python} b_of("log_market_cap_post", "w_gov")`, $p$ `{python} p_of("log_market_cap_post", "w_gov")`) and less downside volatility ($\beta =$ `{python} b_of("duvol_post", "w_gov")`, $p$ `{python} p_of("duvol_post", "w_gov")`). It also separates from the Vocal vertex on beta, so this is not merely a contrast against the residual posture.
+
+**The extensive margin is the larger effect, and a different one.** Disclosing AI in statutory filings at all, relative to not disclosing, goes with higher crash risk on both measures ($\beta =$ `{python} b_of("ncskew_post", "has_posture")`, $p$ `{python} p_of("ncskew_post", "has_posture")` and $\beta =$ `{python} b_of("duvol_post", "has_posture")`, $p$ `{python} p_of("duvol_post", "has_posture")`), and it is the strongest coefficient in the table. That contrast is not between ways of speaking; it is between speaking and staying silent.
+
+Across the `{python} str(mkt_m)` disclosure coefficients reported here, `{python} str(mkt_n_surv)` survive a Benjamini-Hochberg correction at five percent, against a rank-one threshold of `{python} mkt_crit1`: cumulative intensity on size, on down-to-up volatility, on negative skewness; historical decoupling on beta; the disclosure indicator on both crash-risk measures; and the Governance-against-Defensive contrast on beta and on size. Every association involving a single call's decoupling falls outside.
 ## Discussion
 
 Two disclosure properties carry market information, and they carry different kinds of it. **How much** a firm has disclosed about AI is associated with size, growth, systematic risk and lower downside asymmetry, and survives correction on three outcomes. **How** it discloses matters too, but only where the outcome is a market price: the composition separates firms on beta, on size and on downside volatility, and nowhere among the accounting outcomes.
@@ -3934,51 +3932,23 @@ Markdown(tabulate(arch_reg_rows, headers=headers_arch))
 #| echo: false
 from IPython.display import Markdown
 
-# Rows are the regressors and controls as estimated. The posture terms are
-# written as the contrasts they are: three read straight off the fit, the
-# fourth is a difference of two coefficients and carries its own test built
-# from their covariance. Fixed effects are absorbed, so they are marked
-# present rather than enumerated.
-_ROWS = [
-    ("v", "w_call",              r"$W_{\text{call}}$"),
-    ("v", "w_expanding",         r"$W_{\text{exp}}$"),
-    ("v", "intensity_expanding", "Cumulative disclosure intensity"),
-    ("c", "Defensive vs. no posture",    r"Defensive vs. no posture ($\beta_{\text{has}}$)"),
-    ("c", "Vocal vs. Defensive",         r"Vocal vs. Defensive ($\beta_{\text{voc}}$)"),
-    ("c", "Governance vs. Defensive",    r"Governance vs. Defensive ($\beta_{\text{gov}}$)"),
-    ("c", "Governance vs. Vocal",        r"Governance vs. Vocal ($\beta_{\text{gov}} - \beta_{\text{voc}}$)"),
-    ("c", "Composition (joint)",         "Composition, joint test ($p$)"),
-    ("l", None,                  r"$Y_{t-1}$"),
-    ("v", "log_market_cap",      "Log market capitalization"),
-    ("v", "return60",            "Return, 60 days pre-call"),
-    ("v", "roa",                 "Return on assets"),
+_FULL_COLS = _COLS + [
+    ("l", None,             r"$Y_{t-1}$"),
+    ("v", "log_market_cap", "Log mkt. cap."),
+    ("v", "return60",       "Return 60d"),
+    ("v", "roa",            "ROA"),
 ]
-_PANELS = [("beta_post_63", "log_market_cap_post", "ncskew_post", "duvol_post"),
-           ("gross_margin_change_pp", "roic_minus_wacc_change_pp",
-            "next_revenue_yoy_post", "ps_ratio_post")]
-
-
-
-
-def _meta(target, column, fmt):
-    return fmt(_bat[_bat["target"] == target][column].iloc[0])
-
-_lines = []
-for panel, targets in zip("AB", _PANELS):
-    heads = [_bat[_bat["target"] == t]["label_outcome"].iloc[0] for t in targets]
-    _lines += [f"| **Panel {panel}** | " + " | ".join(heads) + " |",
-               "|:---|" + "---:|" * len(targets)]
-    for kind, key, label in _ROWS:
-        _lines.append(f"| {label} | " + " | ".join(_mkt_cell(kind, key, t) for t in targets) + " |")
-    for label, value in [("Sector fixed effects", lambda t: "OK"),
-                         ("Year fixed effects", lambda t: "OK"),
-                         ("SE clustered by firm", lambda t: "OK"),
-                         ("Calls", lambda t: _meta(t, "n_calls", lambda v: f"{int(v):,}")),
-                         ("Firms", lambda t: _meta(t, "n_firms", lambda v: str(int(v)))),
-                         ("$R^2$", lambda t: _meta(t, "r2", lambda v: f"{float(v):.3f}"))]:
-        _lines.append(f"| {label} | " + " | ".join(value(t) for t in targets) + " |")
-    _lines.append("")
-Markdown("\n".join(_lines))
+_head = ("| Outcome | " + " | ".join(lab for _, _, lab in _FULL_COLS)
+         + " | Sector FE | Year FE | Cluster | Calls | Firms | $R^2$ | Composition, joint $F$ |")
+_rule = "|:---|" + "---:|" * (len(_FULL_COLS) + 7)
+_rows = []
+for t in _OUTCOMES:
+    sub = _bat[_bat["target"] == t]
+    cells = [_mkt_cell(k, key, t) for k, key, _ in _FULL_COLS]
+    cells += ["OK", "OK", "firm", f"{int(sub['n_calls'].iloc[0]):,}",
+              str(int(sub['n_firms'].iloc[0])), f"{float(sub['r2'].iloc[0]):.3f}", _mkt_joint_cell(t)]
+    _rows.append(f"| {sub['label_outcome'].iloc[0]} | " + " | ".join(cells) + " |")
+Markdown("\n".join([_head, _rule] + _rows))
 ```
 
 :::
