@@ -315,9 +315,6 @@ hd_loyo_pmax = float(_res_table("call_beta", "call_beta_robustness_leave_one_yea
 cb_base = pick("call_beta", "call_beta_regression_samples.csv", model="baseline")
 
 # Prefilter gate validation (Appendix B evaluation table).
-_pf_cv = results_json("prefilter", "logit_cv_metrics.json")
-pf_golden_n = int(_pf_cv["golden_set_labels"])
-pf_cv = _pf_cv["cv_metrics"]
 _pf_forms = {r["form"]: r for r in results_json("prefilter", "form_validation_metrics.json")["rows"]}
 ```
 
@@ -3623,7 +3620,7 @@ Markdown(tabulate(t5_rows, headers=["Attribute", "Operational Scope", "Schema Cl
 
 **Inference configuration.** The prompt alone does not reproduce the procedure, so the settings are fixed and recorded with every extracted row. Both passes call `openai/gpt-5.6-luna` through OpenRouter, routed to `amazon-bedrock/us-east-1` with reasoning effort set to `none` and provider fallback allowed, so a full-corpus run degrades to another provider rather than stalling. Output is constrained to the Pydantic schema by `pydantic-ai`, which retries twice on its own when the model returns something the schema rejects. On top of that there is one semantic retry the schema cannot perform: `sentence_ids` are checked against the actual sentence count of the paragraph, and an out-of-range citation is sent back to the model with the error quoted. A paragraph that still fails is written as an error row rather than dropped, and the next run picks it up again, so a failure never silently removes a paragraph from the corpus. Every row carries the model name, the prompt version and the session id.
 
-**The Pass 1 prompt.** The classification prompt is reproduced below; the activity prompt of Pass 2 and both output schemas are in the repository at the release cited in the methodology.
+**The Pass 1 prompt.** The classification prompt is reproduced below.
 
 ```
 You extract structured "frames" about AI from one paragraph of a corporate
@@ -3689,6 +3686,68 @@ class AIFrame(BaseModel):
 ```
 
 Two validators run after parsing. One de-duplicates repeated values inside a list, a real failure mode that would otherwise inflate any downstream count of list membership. The other enforces that a valence other than `not_applicable` appears only when an outcome concept is present, so the field cannot drift into a free-floating sentiment score.
+
+**The Pass 2 prompt.** The second pass sees only the sentences the frames point at, plus a one-line description of each frame, and turns them into activities. It never revisits the classification.
+
+```
+You extract the concrete AI activities a firm discloses, for research on AI
+disclosure. You receive: the filing firm (ticker and name); selected numbered
+sentences from one paragraph (indices are the original ones and may be
+non-contiguous); and the frames already identified in that paragraph, each
+with a frame_id and its supporting sentence indices. Cite sentences by index;
+never reproduce sentence text.
+
+An activity is: the firm performs ACTION on OBJECT for FUNCTION. Produce one
+activity per distinct (action, object, function); merge only exact
+repetitions. Every activity sets frame_id to the frame it realizes and cites
+at least one sentence. Zero activities is valid when the frames are too
+generic to name an object ("AI is important to our strategy").
+
+Rules:
+- Report only what the firm itself does, did or plans. Never customers, the
+  market or competitors.
+- The object must be AI/ML or something the text explicitly calls AI-enabled.
+  Generic technology, digital or data investment without AI is not an activity.
+- The filing firm, its subsidiaries and its "our X" products are own_brand
+  with source=own. Only a clearly different company or its product is
+  provider, model or partner.
+- object: 1-3 lowercase generic words ("copilot", "fraud model"). Brand names,
+  companies and model names go in entities with their role, every one of them.
+- function: snake_case verb_noun; "unspecified" if the text gives none. Do not
+  invent an object or function.
+- stage is the maturity of the asset as stated (exploring, piloting, deployed,
+  scaled), not the tense of the sentence. "We plan to deploy" is action=deploy;
+  stage is whatever the text states, otherwise unspecified.
+- metrics: one entry per number the text attaches to the activity. raw is the
+  verbatim span (max 6 words). value is the normalized number: USD as a full
+  float ($10M -> 10000000.0), percentages as decimals (15% -> 0.15), counts
+  and headcounts as integers. Leave value null for vague quantities
+  ("hundreds", "significant"). For a range set value to the minimum and
+  value_max to the maximum. Never invent a number.
+- evidence_type: named if a product or process is named, metric if a figure is
+  given, vendor if a provider is named, generic otherwise. If several apply,
+  pick the strongest in the order metric > named > vendor > generic.
+```
+
+**Pass 2 output schema.** The answer is a `ParagraphActivities`, a list that may again be empty. Each activity is:
+
+```
+class AIActivity(BaseModel):
+    frame_id:     int                 # the Pass 1 frame this realizes
+    action:       Action              # deploy | develop | partner | pilot | ...
+    object:       str                 # 1-3 lowercase generic words
+    function:     str                 # snake_case verb_noun, or "unspecified"
+    target:       Target              # customers | internal_process | ...
+    stage:        Stage               # exploring | piloting | deployed | scaled
+    source:       Source              # own | vendor | partner | acquired
+    entities:     list[Entity]        # {name, role}: own_brand | provider |
+                                      # model | partner
+    metrics:      list[Metric]        # {raw, value, value_max, unit, measures}
+    evidence_type: Evidence           # metric > named > vendor > generic
+    sentence_ids: list[int]           # >= 1, validated against the window
+```
+
+Three validators run after parsing. Entities are de-duplicated on the (name, role) pair, the same failure mode the frame schema guards against. A reversed metric range is normalized rather than rejected, because under `reasoning=none` raising would discard the whole activity, including the action, the object and every other correct metric, over an unambiguous numeric slip. And `frame_id` and `sentence_ids` are checked against the frames and the sentence window the prompt actually offered, so an activity cannot cite something it was never shown.
 
 **A worked extraction.** One paragraph from Accenture's FY2024 Form 10-K carries the whole chain. The source sentence reads: *"With our digital learning platform, we delivered approximately 44 million training hours, an increase of 10% compared with fiscal 2023, predominantly due to generative AI training."*
 
@@ -3794,27 +3853,26 @@ The pipeline, the feature engineering and the statistical analysis are written e
 
 ## Appendix B: Measurement and Validation {.unnumbered #appendix-b}
 
-Every automated stage of the pipeline is checked three ways: against held-out ground truth, against a different foundation model family (Google Gemini against Alibaba Qwen), and against manual human audits. @tbl-evaluation-datasets lists the benchmark datasets, their sample sizes and the performance at each tier.
+Every automated stage of the pipeline is checked against held-out labels and against manual human audits. @tbl-evaluation-datasets lists the benchmark datasets, their sample sizes and the performance at each tier.
 
 | Benchmark dataset | What it validates | Forms | Sample size | Labels from | Metric / performance |
 |---|---|---|---:|---|---|
-| **LLM-labeled reference set (prefilter training and test)** | Machine-learning gate: does a paragraph discuss AI? | 10-K, 10-Q | `{python} f"{pf_golden_n:,}"` texts | Qwen 3.7 Flash, cross-checked by Gemini 3.8 | F1 = `{python} f"{pf_cv['f1_pond']:.2f}"` (Prec. `{python} f"{pf_cv['prec_pond']:.2f}"`, Rec. `{python} f"{pf_cv['recall_pond']:.2f}"`) on held-out texts |
 | **Out-of-domain proxy statements and 8-Ks** | Gate transfer to forms not used in training | DEF 14A, 8-K | `{python} f"{_pf_forms['TODOS']['n']:,}"` texts | Qwen 3.7 Flash | Prec. `{python} f"{_pf_forms['TODOS']['precision']:.2f}"`, Rec. `{python} f"{_pf_forms['TODOS']['recall']:.2f}"`; F1 = `{python} f"{_pf_forms['DEF 14A']['f1']:.2f}"` (14A), `{python} f"{_pf_forms['8-K']['f1']:.2f}"` (8-K) |
 | **Out-of-domain earnings calls** | Gate transfer to transcripts | Transcripts | 800 texts | Qwen 3.7 Flash | Prec. 0.59, Rec. 0.98, F1 = 0.73 (Prec. 0.85 on strong positives) |
 | **Semantic anchors** | Gate inputs: reference sentences describing AI concepts against which paragraph similarity is scored | All forms | 27 anchors | Expert curated | 39 gate signals, including similarity to the anchors |
-| **Prefilter human review** | Gate decisions checked against full-text human review, independent of the LLM-labeled training/test set | 10-K, 10-Q | 300 paragraphs | Human review (stratified random sample) | Prec. 91.2%, Rec. 88.7% |
+| **Prefilter human review** | Gate decisions checked against full-text human reading | 10-K, 10-Q | 300 paragraphs | Human review (stratified random sample) | Prec. 91.2%, Rec. 88.7% |
 | **Activity extraction audit** | Activity fields (function, stage, entity role) that feed $A$, $G$, $S$ and $W$ | Mixed sample | 120 paragraphs, 267 activities | Human audit (purpose-built annotation interface) | Field agreement 92.4% (function), 89.1% (stage), 95.8% (entity role) |
 | **External benchmark: AI patents**| Whether $A$, $G$ and $W$ order firms like an independent, non-textual measure of AI capacity | 10-K, 10-Q, DEF 14A, 8-K, calls | Universe firms with matched patents, 2021–2023 | Google Patents / OECD 2025 AI taxonomy | Spearman ρ ≈ 0.5 between disclosed (and grounded) activity and AI patents; archetypes sort in the predicted order (below) |
 
-: Labeled evaluation datasets, validation benchmarks, and inter-judge agreement. {#tbl-evaluation-datasets}
+: Evaluation datasets and validation benchmarks. {#tbl-evaluation-datasets}
 
 ::: {custom-style="FigureNote"}
-*Notes:* All operational labels used in the empirical chapters come from zero-shot LLM extraction. The reference set used to train the gate is itself LLM-labeled, so it is a consistency benchmark rather than human ground truth. Human ground truth enters through two independent audits: a 300-paragraph prefilter review against full-text human reading, and a 120-paragraph, 267-activity field-agreement audit of the extracted activity fields.
+*Notes:* All operational labels used in the empirical chapters come from zero-shot LLM extraction. Human ground truth enters through two independent audits: a 300-paragraph prefilter review against full-text human reading, and a 120-paragraph, 267-activity field-agreement audit of the extracted activity fields.
 :::
 
 ### Validation protocol and inter-annotator agreement {.unnumbered}
 
-Two of the six benchmarks in @tbl-evaluation-datasets rest on human judgment rather than LLM-to-LLM agreement: the 300-paragraph prefilter review (full-text human reading) and the 120-paragraph, 267-activity field-agreement audit. The remaining benchmarks -- the prefilter training/test set, the two out-of-domain transfer tests, and inter-judge frame agreement -- compare one LLM's output to another's (Gemini vs. Qwen), which is a consistency check, not ground truth.
+Two benchmarks in @tbl-evaluation-datasets rest on human judgment: the 300-paragraph prefilter review, read in full text, and the 120-paragraph, 267-activity field-agreement audit. The two out-of-domain transfer tests measure the gate against labels it was not trained on, which says how far it carries to forms and transcripts outside its training distribution, not whether those labels are themselves correct.
 
 ### External benchmark: disclosed AI activity against AI patents {.unnumbered}
 
@@ -4026,7 +4084,7 @@ A statistically significant difference survives the volume control (@tbl-4-1b-vo
 
 ### External AI technology ecosystem {.unnumbered}
 
-The lexicon behind this measure lives in `configs/ai_vendor_ecosystems.yaml`: one entry per provider family, with the ecosystem it belongs to, its specific country and its role in the AI stack. Three rules govern what counts. Country and demonym words are absent by construction, so a paragraph discussing the Chinese market without naming a Chinese provider contributes nothing. Ambiguous names -- ordinary words, personal names, multi-vendor products -- are admitted only with a corroborating term in the same paragraph, so "copilot" needs Microsoft or GitHub, "arm" needs an Arm-qualified term, and "claude" needs Anthropic or a model name. And a filer naming its own products is excluded, since the measure is the reach of external suppliers rather than the reach of a firm's own brand. Presence is recorded once per document, so repetition cannot inflate a supplier's reach, and ecosystems overlap: a document naming both NVIDIA and DeepSeek counts for the United States and for China.
+The lexicon behind this measure lives in an AI vendor ecosystem configuration file in the repository: one entry per provider family, with the ecosystem it belongs to, its specific country and its role in the AI stack. Three rules govern what counts. Country and demonym words are absent by construction, so a paragraph discussing the Chinese market without naming a Chinese provider contributes nothing. Ambiguous names -- ordinary words, personal names, multi-vendor products -- are admitted only with a corroborating term in the same paragraph, so "copilot" needs Microsoft or GitHub, "arm" needs an Arm-qualified term, and "claude" needs Anthropic or a model name. And a filer naming its own products is excluded, since the measure is the reach of external suppliers rather than the reach of a firm's own brand. Presence is recorded once per document, so repetition cannot inflate a supplier's reach, and ecosystems overlap: a document naming both NVIDIA and DeepSeek counts for the United States and for China.
 
 Every provider family named by at least one S&P 500 firm inside its AI disclosure appears in @tbl-c3-vendor-ecosystem, with the literal names it was matched on. The fifteen most-cited families carry the concentration shown in @fig-vendor-providers; the remainder shows how thin the tail is, and how little of it sits outside the United States.
 
