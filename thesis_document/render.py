@@ -508,13 +508,16 @@ def clear_figure_indentation(document: Document) -> None:
 def tighten_note_spacing(document: Document) -> None:
     """Pull a FigureNote paragraph up against the block it annotates.
 
-    The note inherits the body style's 120-twip space above, which on a table
-    note reads as a gap and detaches the note from the rows it explains. Zero
-    above, a little below, and keepNext so the note never starts a page on its
-    own.
+    Two things push it away. Its own space above, which is zeroed here, and an
+    empty paragraph pandoc leaves between a table and whatever follows it: that
+    one contributes a whole blank line plus the body style's spacing, and is
+    what actually opened the gap under the tables. It is only removed when it
+    is genuinely empty -- no runs, no links, no bookmark and no section break,
+    since a paragraph carrying any of those is holding something.
     """
     body = document.element.body
-    for para in body.iter(qn("w:p")):
+    carries = (qn("w:r"), qn("w:hyperlink"), qn("w:bookmarkStart"), qn("w:sectPr"))
+    for para in list(body.findall(qn("w:p"))):
         pPr = para.find(qn("w:pPr"))
         style = pPr.find(qn("w:pStyle")) if pPr is not None else None
         if style is None or style.get(qn("w:val")) != "FigureNote":
@@ -524,6 +527,12 @@ def tighten_note_spacing(document: Document) -> None:
         pPr.append(parse_xml(
             r'<w:spacing xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
             r'w:before="0" w:after="120"/>'))
+        previous = para.getprevious()
+        if previous is None or previous.tag != qn("w:p"):
+            continue
+        if any(next(previous.iter(tag), None) is not None for tag in carries):
+            continue
+        body.remove(previous)
 
 
 def merge_figure_notes_into_captions(document: Document) -> None:
