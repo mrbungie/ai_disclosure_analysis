@@ -49,3 +49,7 @@ TODO.md
 thesis_document/TODO.md
 CITATION_AUDIT.md
 thesis_document/CITATION_AUDIT.md
+
+# Word lock files
+~$*
+**/~$*

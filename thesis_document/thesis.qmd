@@ -2589,7 +2589,10 @@ The pooled model gives the average gap over the whole panel, which leaves one qu
 import matplotlib.pyplot as plt
 import numpy as np
 
-_gap_year = results_json("washing", "activity_grounding.json")["channel_gap"]["by_year"]
+_channel_gap = results_json("washing", "activity_grounding.json")["channel_gap"]
+_gap_year = _channel_gap["by_year"]
+_ytd = _channel_gap["ytd_correction"]
+_ytd_year = _ytd["open_year"]
 
 GAP_YEAR_PANELS = [
     ("quantified_outcome", "Quantified outcome or metric"),
@@ -2597,12 +2600,20 @@ GAP_YEAR_PANELS = [
     ("governance_or_restriction", "Governance or restriction"),
 ]
 _gy_years = sorted(int(y) for y in _gap_year["quantified_outcome"])
-_gy_main = [y for y in _gy_years if y <= 2025]
-_gy_ytd = [y for y in _gy_years if y >= 2025]
+_gy_closed = [y for y in _gy_years if y < _ytd_year]
+_gy_open = [y for y in _gy_years if y >= _ytd_year - 1]
 
 
 def _gy(family, key, years):
-    return [_gap_year[family][str(y)][key] for y in years]
+    """Closed years as observed; the open year carries its YTD correction."""
+    out = []
+    for y in years:
+        if y == _ytd_year:
+            r = _ytd["families"][family]
+            out.append(r["adjusted_pp"] if key == "gap_pp" else r[key])
+        else:
+            out.append(_gap_year[family][str(y)][key])
+    return out
 
 
 def gy(family, year):
@@ -2611,20 +2622,32 @@ def gy(family, year):
     return f'{r["gap_pp"]:+.1f} pp, 95% CI [{r["ci_low"]:+.1f}, {r["ci_high"]:+.1f}]'
 
 
+def gy_adj(family):
+    """The open year after the seasonal correction, with the observed value."""
+    r = _ytd["families"][family]
+    return (f'{r["adjusted_pp"]:+.1f} pp, 95% CI [{r["ci_low"]:+.1f}, {r["ci_high"]:+.1f}]'
+            f' (observed {r["observed_pp"]:+.1f})')
+
+
 _gap_year_n = ", ".join(f'{y}: {_gap_year["quantified_outcome"][str(y)]["n"]}'
                         for y in _gy_years)
+_ytd_shifts = ", ".join(f'{lab.split()[0].lower()} {_ytd["families"][fam]["shift_pp"]:+.1f}'
+                        for fam, lab in GAP_YEAR_PANELS)
+_ytd_den = (f'{_ytd["den_factor_call"]:.2f}\u00d7 on calls and '
+            f'{_ytd["den_factor_filing"]:.2f}\u00d7 in filings')
 
 fig, axes = plt.subplots(1, 3, figsize=(9.0, 3.8), dpi=300, sharey=True)
 
 # Colour marks the direction of the gap, the same rule the pooled figure uses:
 # petrol where the call carries more, rust where the filing does.
 for ax, (fam, label) in zip(axes, GAP_YEAR_PANELS):
-    gap = _gy(fam, "gap_pp", _gy_years)
-    colour = "#B85F42" if float(np.mean(gap)) < 0 else "#355F6B"
+    colour = "#B85F42" if float(np.mean(_gy(fam, "gap_pp", _gy_years))) < 0 else "#355F6B"
     ax.fill_between(_gy_years, _gy(fam, "ci_low", _gy_years), _gy(fam, "ci_high", _gy_years),
                     color=colour, alpha=0.18, lw=0, label="95% CI")
-    ax.plot(_gy_main, _gy(fam, "gap_pp", _gy_main), "o-", color=colour, lw=2.2, ms=5)
-    ax.plot(_gy_ytd, _gy(fam, "gap_pp", _gy_ytd), "o:", color=colour, lw=1.8, ms=5)
+    ax.plot(_gy_closed, _gy(fam, "gap_pp", _gy_closed), "o-", color=colour, lw=2.2, ms=5)
+    ax.plot(_gy_open, _gy(fam, "gap_pp", _gy_open), "o:", color=colour, lw=1.8, ms=5)
+    ax.plot([_ytd_year], [_ytd["families"][fam]["observed_pp"]], "o", mfc="white",
+            mec=colour, mew=1.4, ms=5.5, label=f"{_ytd_year} before correction")
     ax.axhline(0, color="#1C1F22", lw=1.1, ls="--")
     ax.set_title(label, fontsize=9.2, fontweight="bold")
     ax.set_xticks(_gy_years)
@@ -2634,16 +2657,18 @@ for ax, (fam, label) in zip(axes, GAP_YEAR_PANELS):
     ax.spines[["top", "right"]].set_visible(False)
 
 axes[0].set_ylabel("Call minus filing\n(percentage points)", fontsize=9.0, fontweight="bold")
-axes[0].legend(loc="lower left", fontsize=7.4, framealpha=0.9)
+axes[0].legend(loc="lower left", fontsize=7.0, framealpha=0.9)
 plt.tight_layout()
 plt.show()
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* Each point is the mean call-minus-filing gap across that year's firm × fiscal-year cells, with the 95% confidence interval from a one-sample $t$-test on the same cells. The dotted segment is 2026 year-to-date. Cells per year: `{python} _gap_year_n`.
+*Notes:* Each point is the mean call-minus-filing gap across that year's firm × fiscal-year cells, with the 95% confidence interval from a one-sample $t$-test on the same cells. Closed years are reported as observed. `{python} str(_ytd_year)` is still open at the `{python} _ytd["cutoff"]` cut-off, so its activity counts are seasonally corrected before the shares are formed: the numerator of each family and the denominator of each channel are scaled by how much that same count grows between the matching calendar window of `{python} str(_ytd["reference_year"])` and its full year (denominator `{python} _ytd_den`). The hollow marker is the uncorrected value. Cells per year: `{python} _gap_year_n`.
 :::
 
-The three dimensions do not share a history (@fig-venue-gap-by-year). The call premium on quantified outcomes is already there in 2021 (`{python} gy("quantified_outcome", 2021)`) and stays roughly flat for the rest of the panel (`{python} gy("quantified_outcome", 2025)` in 2025), so putting more figures into the oral discussion than into the filing is an old managerial habit and not something generative AI produced. Naming a product or a process behaves differently: in 2021 and 2022 the interval still covers zero (`{python} gy("named_product_or_process", 2022)` in 2022), and by 2025 it clearly does not (`{python} gy("named_product_or_process", 2025)`). Governance and restriction language moves in the opposite direction and keeps widening, from `{python} gy("governance_or_restriction", 2021)` in 2021 to `{python} gy("governance_or_restriction", 2026)` in 2026, as the filings absorb the caveats the calls do not carry. Each year is estimated on its own cells, so these intervals are wider than the pooled ones and the first two cycles are the thinnest in the panel.
+The three dimensions do not share a history (@fig-venue-gap-by-year). The call premium on quantified outcomes is already there in 2021 (`{python} gy("quantified_outcome", 2021)`) and stays roughly flat for the rest of the panel (`{python} gy("quantified_outcome", 2025)` in 2025), so putting more figures into the oral discussion than into the filing is an old managerial habit and not something generative AI produced. Naming a product or a process behaves differently: in 2021 and 2022 the interval still covers zero (`{python} gy("named_product_or_process", 2022)` in 2022), and by 2025 it clearly does not (`{python} gy("named_product_or_process", 2025)`). Governance and restriction language moves in the opposite direction and keeps widening, from `{python} gy("governance_or_restriction", 2021)` in 2021 to `{python} gy_adj("governance_or_restriction")` in `{python} str(_ytd_year)`, as the filings absorb the caveats the calls do not carry.
+
+Two caveats attach to the last point of each panel. `{python} str(_ytd_year)` is a partial year, and because the two channels report on different calendars, the correction matters in both directions: between the `{python} _ytd["cutoff"]` window and the full year, activity counts grow `{python} _ytd_den`, since most of that year's filings are already in while two call rounds are not. Correcting numerator and denominator before forming the shares moves the three dimensions by `{python} _ytd_shifts` percentage points. Each year is also estimated on its own cells, so these intervals are wider than the pooled ones and the first two cycles are the thinnest in the panel.
 
 An investor should therefore read both venues and not rely on one of them alone, and an issuer should check that the claims are substantively consistent between the oral and the statutory disclosure, without expecting the same wording or the same level of detail in both.
 
