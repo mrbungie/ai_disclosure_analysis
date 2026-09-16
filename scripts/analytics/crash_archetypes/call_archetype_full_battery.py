@@ -45,9 +45,9 @@ OUT_DIR = L.results_path("crash_archetypes", "call_archetype_full_battery_target
 TARGETS = {
     "beta_post_63": ("beta_pre", "Market beta"),
     "log_market_cap_post": ("log_market_cap_pre", "Log market capitalization"),
-    "gross_margin_change_pp": ("gross_margin_pre", "Gross margin expansion (pp)"),
-    "roic_minus_wacc_change_pp": ("roic_minus_wacc_pre", "Change in ROIC-WACC spread (pp)"),
-    "next_revenue_yoy_post": ("revenue_yoy_pre", "Revenue growth (%)"),
+    "gross_margin_ttm_change_pp": ("gross_margin_ttm_pre", "Gross margin expansion (pp, TTM)"),
+    "roic_minus_wacc_ttm_change_pp": ("roic_minus_wacc_ttm_pre", "Change in ROIC-WACC spread (pp, TTM)"),
+    "revenue_growth_ttm_post_pct": ("revenue_growth_ttm_pre_pct", "Revenue growth (%, TTM)"),
     "ps_ratio_post": ("ps_ratio_pre", "Price-to-sales ratio"),
     "ncskew_post": ("ncskew_pre", "Negative return skewness (NCSKEW)"),
     "duvol_post": ("duvol_pre", "Down-to-up volatility (DUVOL)"),

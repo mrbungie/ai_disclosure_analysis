@@ -52,6 +52,8 @@ BETA_MIN_OBS_63 = 60  # same ~95% completeness ratio as BETA_MIN_OBS/126, scaled
 CRASH_GAP, CRASH_PRE, CRASH_POST, CRASH_MIN_OBS = 21, 231, 105, 90
 NCSKEW63_MIN_OBS = 60
 POST_WINDOW_END_OFFSET = 125  # last trading day of beta_post_126's [idx, idx+126) window
+TTM_WINDOW_END_OFFSET = 251   # last trading day of beta_post_252's [idx, idx+252) window
+TTM_QUARTERS = 4
 VALUE_COMPONENTS = ["nopat", "equity", "long_term_debt", "cost_of_equity", "cost_of_debt", "effective_tax_rate"]
 LEVERAGE_CONCEPTS = {
     "assets": ["us-gaap:Assets"],
@@ -69,7 +71,9 @@ COV_FINANCIALS = (["accession_number", "filing_date_pt", "revenue", "operating_i
                    "rd_intensity_pre", "gross_margin_pre", "revenue_yoy_pre", "roic_minus_wacc_pre"]
                   + [f"{c}_pre" for c in VALUE_COMPONENTS])
 TGT_FINANCIALS = (["rd_intensity_post", "gross_margin_post", "next_revenue_yoy_post", "asset_turnover_post",
-                   "roic_minus_wacc_post"] + [f"{c}_post" for c in VALUE_COMPONENTS])
+                   "roic_minus_wacc_post"] + [f"{c}_post" for c in VALUE_COMPONENTS]
+                  + ["gross_margin_ttm_post", "revenue_growth_ttm_post", "roic_minus_wacc_ttm_post"])
+COV_FINANCIALS_TTM = ["gross_margin_ttm_pre", "revenue_growth_ttm_pre", "roic_minus_wacc_ttm_pre"]
 
 
 # ---- price windows -------------------------------------------------------------
@@ -162,6 +166,83 @@ def attach_snapshot(panel: pd.DataFrame, filings: pd.DataFrame, direction: str, 
     merged.index = left.index
     merged = merged.reindex(panel.index).drop(columns=["ticker", "fecha"]).add_suffix(f"_{suffix}")
     return pd.concat([panel, merged], axis=1)
+
+
+def ttm_quarterly() -> pd.DataFrame:
+    """Trailing-twelve-month aggregates per (ticker, fiscal quarter), from the
+    firm-quarter panel.
+
+    The annual family measures an outcome at the first 10-K filed after the
+    call, so the distance between the call and the figure runs from months to
+    more than a year, and `next_revenue_yoy` reaches the fiscal year AFTER that
+    10-K. This family fixes the horizon instead: the four fiscal quarters that
+    FOLLOW the call's own quarter. Matching on fiscal period, not on filing
+    date, is what keeps the window strictly ahead of the call -- the quarter a
+    call discusses is usually reported only after that call, so a filing-date
+    match lands on the period the call itself was about. The quarterly panel
+    carries Q4 (build_financials reconstructs it as FY - YTD_Q3 from the 10-K),
+    so no quarter is skipped by going through 10-Q filings only.
+
+    `_pre` and `_post` are the SAME construction on two windows, q-3..q and
+    q+1..q+4, so a change between them is not a change of definition.
+    """
+    q = L.read_gold("firm_quarter", ("covariates", "financials"))
+    q["pq"] = pd.PeriodIndex(q["quarter"].astype(str), freq="Q")
+    q["ord"] = q["pq"].astype("int64")
+    q = q.sort_values(["ticker", "ord"]).reset_index(drop=True)
+    q["invested_capital"] = q["equity"].fillna(0) + q["debt"].fillna(0)
+    grp = q.groupby("ticker", group_keys=False)
+
+    def window_sum(col):
+        return grp[col].apply(lambda s: s.rolling(TTM_QUARTERS, min_periods=TTM_QUARTERS).sum())
+
+    def window_mean(col):
+        return grp[col].apply(lambda s: s.where(s > 0).rolling(TTM_QUARTERS, min_periods=TTM_QUARTERS).mean())
+
+    for col in ["revenue", "cogs", "operating_income"]:
+        q[f"{col}_ttm"] = window_sum(col)
+    q["invested_capital_ttm"] = window_mean("invested_capital")
+
+    # Rolling sums end at the row's own quarter, so `_pre` reads straight off
+    # them and `_post` is the same aggregate shifted four quarters forward.
+    out = pd.DataFrame({"ticker": q["ticker"], "ord": q["ord"]})
+    gross_profit = q["revenue_ttm"] - q["cogs_ttm"]
+    out["gross_margin_ttm_pre"] = np.where(q["revenue_ttm"] > 0, gross_profit / q["revenue_ttm"], np.nan)
+    prior_revenue = grp["revenue_ttm"].apply(lambda s: s.shift(TTM_QUARTERS))
+    out["revenue_growth_ttm_pre"] = np.where(prior_revenue > 0, q["revenue_ttm"] / prior_revenue - 1, np.nan)
+    out["operating_income_ttm_pre"] = q["operating_income_ttm"]
+    out["invested_capital_ttm_pre"] = q["invested_capital_ttm"]
+    out["equity_ttm_pre"], out["debt_ttm_pre"] = q["equity"], q["debt"]
+    for col in [c for c in out.columns if c.endswith("_pre")]:
+        out[col.replace("_pre", "_post")] = out.groupby(q["ticker"])[col].shift(-TTM_QUARTERS)
+    out["revenue_growth_ttm_post"] = out.groupby(q["ticker"])["revenue_growth_ttm_pre"].shift(-TTM_QUARTERS)
+    return out
+
+
+def ttm_spread(rf: pd.Series, beta_: pd.Series, erp: float, operating_income_ttm: pd.Series,
+               invested_capital_ttm: pd.Series, equity: pd.Series, debt: pd.Series,
+               effective_tax_rate: pd.Series, cost_of_debt: pd.Series) -> pd.Series:
+    """ROIC - WACC on a TTM window: NOPAT over the window's AVERAGE invested
+    capital, minus a book-weighted WACC valued at the window's end.
+
+    This is an ESTIMATED spread, and three of its inputs are approximations the
+    quarterly XBRL cannot supply. The effective tax rate and the cost of debt
+    come from the last 10-K filed before the call (quarterly filings tag no
+    interest expense, pretax income or tax expense), and the WACC is weighted
+    on BOOK equity and debt rather than market values.
+
+    It is also not a purely operational measure: the cost of equity is
+    rf + beta * ERP, so the firm's own market risk enters the outcome by
+    construction and this spread cannot be read as independent of the beta
+    results. The `rf` date must therefore be the end of the same window the
+    `beta_` argument was estimated over."""
+    nopat = operating_income_ttm * (1 - effective_tax_rate)
+    roic = nopat / invested_capital_ttm.where(invested_capital_ttm > 0)
+    cost_of_equity = rf + beta_ * erp
+    total = equity.fillna(0) + debt.fillna(0)
+    weight_equity = equity / total.where(total > 0)
+    wacc = weight_equity * cost_of_equity + (1 - weight_equity) * cost_of_debt * (1 - effective_tax_rate)
+    return roic - wacc
 
 
 def roic_minus_wacc(rf: pd.Series, beta_: pd.Series, erp: float, operating_income: pd.Series,
@@ -257,10 +338,32 @@ def main() -> None:
     for c in ["roic_minus_wacc"] + VALUE_COMPONENTS:
         panel[f"{c}_pre"], panel[f"{c}_post"] = value_pre[c], value_post[c]
 
+    # ---- TTM family: same construction on q-3..q and q+1..q+4 ----------------
+    tag = panel["id"].str.extract(r"_(\d{4}Q[1-4])$")[0]
+    panel["ord"] = pd.Series(pd.PeriodIndex(tag.dropna(), freq="Q").astype("int64"),
+                             index=tag.dropna().index).reindex(panel.index)
+    panel = panel.merge(ttm_quarterly(), on=["ticker", "ord"], how="left", validate="many_to_one")
+    panel["gross_margin_ttm_post"] = panel["gross_margin_ttm_post"]
+    # The WACC of each end is valued at the end of the window its beta was
+    # estimated over: the call date for `_pre`, and beta_post_252's last
+    # trading day for `_post`.
+    rf_ttm_pre = risk_free_at(factors, panel["fecha"])
+    rf_ttm_post = risk_free_at(factors, panel["fecha"] + pd.to_timedelta(TTM_WINDOW_END_OFFSET * 7 / 5, unit="D"))
+    tax_rate = panel["effective_tax_rate_pre"]
+    cost_debt = panel["cost_of_debt_pre"]
+    panel["roic_minus_wacc_ttm_pre"] = ttm_spread(
+        rf_ttm_pre, panel["beta_pre"], erp, panel["operating_income_ttm_pre"],
+        panel["invested_capital_ttm_pre"], panel["equity_ttm_pre"], panel["debt_ttm_pre"],
+        tax_rate, cost_debt)
+    panel["roic_minus_wacc_ttm_post"] = ttm_spread(
+        rf_ttm_post, panel["beta_post_252"], erp, panel["operating_income_ttm_post"],
+        panel["invested_capital_ttm_post"], panel["equity_ttm_post"], panel["debt_ttm_post"],
+        tax_rate, cost_debt)
+
     panel = attach_leverage(panel)
     spine = L.GOLD_SPINE_COLUMNS["call"]
     L.write_gold("covariates", "call", "market", panel[spine + COV_MARKET], builder=BUILDER)
-    L.write_gold("covariates", "call", "financials", panel[spine + COV_FINANCIALS], builder=BUILDER)
+    L.write_gold("covariates", "call", "financials", panel[spine + COV_FINANCIALS + COV_FINANCIALS_TTM], builder=BUILDER)
     L.write_gold("targets", "call", "market", panel[spine + TGT_MARKET], builder=BUILDER)
     L.write_gold("targets", "call", "financials", panel[spine + TGT_FINANCIALS], builder=BUILDER)
     print(f"ERP geométrico usado: {erp:.4f}")

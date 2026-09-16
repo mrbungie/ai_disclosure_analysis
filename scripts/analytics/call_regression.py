@@ -106,6 +106,7 @@ FUNDAMENTAL_TARGETS = ["log_market_cap", "gross_margin", "ps_ratio", "next_reven
 PRE_CONTROL = {**{t: f"{t}_pre" for t in FUNDAMENTAL_TARGETS}, "next_revenue_yoy": "revenue_yoy_pre"}
 # Outcomes reported as a change from the pre-call level, in percentage points.
 CHANGE_TARGETS = ("gross_margin", "roic_minus_wacc")
+TTM_CHANGE_TARGETS = ("gross_margin", "roic_minus_wacc")
 WINSOR = 0.01  # each tail of the change outcomes
 # Where each `{stem}_pre` / `{target}_post` column lives. The pre-call log market
 # cap is covariates/call/market.log_market_cap.
@@ -186,6 +187,31 @@ def attach_fundamentals(panel: pd.DataFrame) -> pd.DataFrame:
         change = 100.0 * (panel[f"{stem}_post"] - panel[f"{stem}_pre"])
         lo, hi = change.quantile([WINSOR, 1 - WINSOR])
         panel[f"{stem}_change_pp"] = change.clip(lo, hi)
+    return attach_ttm_fundamentals(panel)
+
+
+def attach_ttm_fundamentals(panel: pd.DataFrame) -> pd.DataFrame:
+    """The trailing-twelve-month family, built in
+    scripts/gold/call/build_market_financials.py.
+
+    Each call is aligned with the four fiscal quarters that follow its own
+    quarter, so the measurement window stays a year wide and its distance from
+    the call is fixed, instead of running to whenever the next 10-K happens to
+    be filed. `_pre` and `_post` are the same construction on q-3..q and
+    q+1..q+4, so a change between them is a change in the quantity and not in
+    its definition, and the outcome keeps the shape it has in the annual
+    family: a change for the two that revert, a future level with its own
+    prior level as control for revenue growth."""
+    panel = attach(panel, "covariates", "financials",
+                   [f"{s}_ttm_pre" for s in ("gross_margin", "revenue_growth", "roic_minus_wacc")])
+    panel = attach(panel, "targets", "financials",
+                   [f"{s}_ttm_post" for s in ("gross_margin", "revenue_growth", "roic_minus_wacc")])
+    for stem in TTM_CHANGE_TARGETS:
+        change = 100.0 * (panel[f"{stem}_ttm_post"] - panel[f"{stem}_ttm_pre"])
+        lo, hi = change.quantile([WINSOR, 1 - WINSOR])
+        panel[f"{stem}_ttm_change_pp"] = change.clip(lo, hi)
+    panel["revenue_growth_ttm_post_pct"] = 100.0 * panel["revenue_growth_ttm_post"]
+    panel["revenue_growth_ttm_pre_pct"] = 100.0 * panel["revenue_growth_ttm_pre"]
     return panel
 
 
