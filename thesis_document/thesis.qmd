@@ -3780,7 +3780,7 @@ Markdown(tabulate(_rows, headers=["Series", "Break date", "Step", "p", "Slope ch
 
 ### Archetype recovery under a Form 10-K-only refit {.unnumbered}
 
-@tbl-e-10k-refit recomputes the archetypal weights ($w_{\text{Vocal}}, w_{\text{Gov}}, w_{\text{Def}}$) on Form 10-K frames alone and correlates them, per firm, with the full-corpus weights reported in Chapter 2 (Section 2.5). The last two rows report the standardized-unit (SD) location of the Governance-Led and Defensive vertices on the risk-orientation dimension, full corpus vs. 10-K-only, to show where the two disagree.
+@tbl-e-10k-refit recomputes the archetypal weights ($w_{\text{Vocal}}, w_{\text{Gov}}, w_{\text{Def}}$) on Form 10-K frames alone and correlates them firm by firm with the full-corpus weights. The last two rows give the standardized (SD) position of the Governance-Led and Defensive vertices on the risk-orientation dimension, full corpus against 10-K only, which is where the two fits disagree.
 
 ```{python}
 #| label: tbl-e-10k-refit
@@ -3828,17 +3828,17 @@ W_{it} = \text{pctrank}(\text{Disclosure}_{it}) - \text{pctrank}(\text{Substance
 $$
 where $\text{Disclosure}_{it}$ is AI frames per 1,000 words. Both percentile ranks are calculated within the disclosing sample ($\text{Disclosure}_{it} > 0$: `{python} w_n_panel` of `{python} w_n_firmyears_total` firm-years, `{python} w_n_firms` of `{python} w_n_firms_total` firms pooled 2021–2026). $W$ is non-parametric: it requires no regression, fixed effects, or fitted residuals.
 
-**Percentile ranking versus z-score standardization.** Percentile ranks are preferred over z-scores for two structural reasons. First, $\text{Disclosure}_{it}$ exhibits a much heavier right tail than $\text{Substance}_{it}$ (maximum $z$ of 18.5 versus 4.3). With z-scores, firms with the largest volume of grounded activity (e.g., Microsoft, NVIDIA) are placed in the washing tail whenever their narrative volume is an even larger outlier than their substance.
+**Percentile ranking versus z-score standardization.** Percentile ranks are used instead of z-scores. $\text{Disclosure}_{it}$ has a much heavier right tail than $\text{Substance}_{it}$ (a maximum $z$ of 18.5 against 4.3), and under z-scores the firms with the largest volume of grounded activity, Microsoft or NVIDIA for example, end up in the washing tail as soon as their narrative volume is an even bigger outlier than their substance.
 
-Spearman correlation between the z-score and percentile versions is 0.723, sharing only 43 of 102 firm-years in the top-5% tail (Jaccard = 0.267). Percentile ranking ensures the washing tail identifies firms with high narrative disclosure backed by minimal grounded activity.
+The Spearman correlation between the z-score and the percentile version is 0.723, and the two share only 43 of 102 firm-years in the top-5% tail (Jaccard = 0.267). With percentile ranking, the tail contains what it should contain: firms with a lot of narrative and very little grounded activity behind it.
 
 **Substance functional form.** An additive form, $z(\log(1+n_{\text{activities}})) + z(\text{Grounding})$, and a grounded-count form, $\log(1 + n_{\text{activities}} \times \text{Grounding})$, yield near-identical rankings to the multiplicative baseline. Substance under the multiplicative and grounded-count forms correlates at Spearman $\rho = 0.991$ ($n = `{python} w_n_panel`$), producing decoupling indices with $\rho = 0.986$ and 89 of 102 shared top-tail firm-years (Jaccard = 0.774). The multiplicative form is preferred because it penalizes ungrounded volume: a firm with many vague activities does not automatically outscore one with fewer, well-grounded actions.
 
-**Residual decoupling index ($W^*$, Jones-model analogue).** To verify that non-parametric rank subtraction does not introduce artifacts relative to parametric residualization, this thesis estimates an earnings-management style regression [@jones1991] predicting substance ranks from disclosure ranks while controlling for firm scale and two-digit SIC industry fixed effects:
+**Residual decoupling index ($W^*$, a Jones-model analogue).** To check that subtracting ranks does not create an artifact that a parametric residualization would avoid, an earnings-management style regression [@jones1991] predicts the substance rank from the disclosure rank, controlling for firm scale and two-digit SIC industry fixed effects:
 $$
 \text{pctrank}(\text{Substance}_{it}) = \alpha_s + \beta_1 \text{pctrank}(\text{Disclosure}_{it}) + \beta_2 \log(\text{MarketCap}_{it}) + \varepsilon_{it}
 $$
-The residual decoupling measure is defined as $W^*_{it} \equiv -\hat{\varepsilon}_{it}$, such that positive values denote firms whose grounded operational substance falls short of what is expected given their narrative volume, scale, and sector. $W^*$ exhibits a Spearman rank correlation of $\rho = 0.808$ ($p < 0.0001$, $n = 1,664$) with non-parametric $W$, and shares $61.9\%$ of firm-years in the extreme top-5% decoupling tail ($52$ of $84$). This confirms that the primary rank-based measure $W$ captures the same underlying economic decoupling as a fully residualized parametric index, while avoiding distribution assumptions and small-sample estimation instability in sparsely populated industry cells.
+The residual decoupling measure is defined as $W^*_{it} \equiv -\hat{\varepsilon}_{it}$, such that positive values denote firms whose grounded operational substance falls short of what is expected given their narrative volume, scale, and sector. $W^*$ exhibits a Spearman rank correlation of $\rho = 0.808$ ($p < 0.0001$, $n = 1,664$) with non-parametric $W$, and shares $61.9\%$ of firm-years in the extreme top-5% decoupling tail ($52$ of $84$). The rank-based measure $W$ therefore captures the same economic decoupling as a fully residualized parametric index, and it does so without distributional assumptions and without the instability that a small industry cell would bring.
 
 **Persistence and within-year reliability.** Decoupling is a lasting communication posture rather than annual reporting noise. Across `{python} persistence_n_pairs` consecutive firm-year pairs the year-over-year Spearman $\rho =$ `{python} f"{persistence_rho:+.3f}"` (p `{python} persistence_p_str`), and a split-half check within a single year -- $W$ computed on two random halves of each firm-year's documents -- reproduces the same ordering, $\rho =$ `{python} f"{split_half_rho:+.3f}"` (p `{python} split_half_p_str`, $n =$ `{python} f"{split_half_n:,}"`), so the measure is not an artifact of which documents happen to fall in a given year. @tbl-c4-washing-validation summarizes both alongside the rest of the validation battery.
 
@@ -3995,7 +3995,7 @@ This appendix documents the search for SEC staff comment letters that touch corp
 
 The EDGAR full-text index was searched for staff comment letters (form `UPLOAD`) and issuer responses (`CORRESP`) filed between 2022-01-01 and `{python} sec_cases["search_window"].split("..")[1]`. Search terms included "artificial intelligence", "AI", "machine learning", "generative", "large language", and hyphenated compounds ("AI-driven", "AI-powered", "AI-enabled"). Queries were restricted to the `{python} hd_n_universe` universe issuers, and every matching letter was read in full.
 
-As shown in @tbl-g1-sec-letters, correspondence for eight universe issuers matched at least one term, plus Match Group (which joined after the panel date). Full-text review reveals that most matches do not concern AI disclosure. Two responses (Apple, Amazon) matched solely due to confidential-treatment page codes ("AI-001") or incidental references in climate-risk reviews, and are omitted.
+Correspondence for eight universe issuers matched at least one term, plus Match Group, which joined after the panel date (@tbl-g1-sec-letters). Reading the letters in full shows that most of those matches have nothing to do with AI disclosure. Two responses, from Apple and Amazon, matched only because of a confidential-treatment page code ("AI-001") or an incidental reference inside a climate-risk review, and they are omitted.
 
 ```{python}
 #| label: tbl-g1-sec-letters
@@ -4071,7 +4071,7 @@ Markdown(tabulate(rows, headers=["Year", f"Fixed cohort ({y0} filers), $G$", "Ne
 *Notes:* Fixed cohort: firms present since the first panel year. New filers: firms in their first disclosing year.
 :::
 
-Grounding falls within the same fixed cohort of firms, not only because less-grounded firms enter the panel over time: firms disclosing AI activity since the first panel year show grounding declining across the sample period, and each year's new filers disclose at or below that year's incumbent level rather than above it. The AI-disclosure expansion documented earlier in this thesis is accompanied by declining grounding both because existing disclosers dilute their own claims over time and because new entrants join at an already-diluted level.
+Grounding falls inside the same fixed cohort of firms, so the decline is not only a composition effect from less-grounded firms entering the panel. Firms that have been disclosing AI activity since the first panel year show grounding falling over the whole period, and each year's new filers enter at or below that year's incumbent level, never above it. Both mechanisms are at work: existing disclosers dilute their own claims over time, and new entrants arrive already diluted.
 
 ### Do the results depend on the rollup method? {.unnumbered}
 
