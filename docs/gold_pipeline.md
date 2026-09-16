@@ -43,7 +43,7 @@ data/gold/datasets/<grain>/<grain>.parquet  (one dataset per grain)
   `scripts/analytics/fills.py`). Zero counts are real counts over existing
   documents.
 - Written only through `layers.write_gold`, which enforces the column order and
-  key uniqueness and records the manifest. A dataset has the same rules
+  key uniqueness, drops spine attributes from a family, and records the manifest. A dataset has the same rules
   (spine columns and rows) and is named after its grain. `make gold-check`
   (`scripts/gold/check_spine_alignment.py`) validates every table against its
   spine and fails on any other file under `data/gold/`.
@@ -55,9 +55,18 @@ data/gold/datasets/<grain>/<grain>.parquet  (one dataset per grain)
 | document | `id`=accession_number, `ticker`, `accession_number`, `fecha` | `channel`, `form`, `cik`, `period_end`, `call_fy`, `fye_month`, `fy` | every US filing (10-K, 10-Q, 8-K, DEF 14A) and earnings-call transcript of the analysis universe with scorable paragraphs |
 | activity | `id`=`{ticker}_{text_hash}_{activity_id}`, `ticker`, `text_hash`, `activity_id`, `fecha` | `accession_number` (representative document of the judged text) | one disclosed AI activity per firm (unique text x activity index); `fecha` = earliest date of a document of that ticker containing the text |
 | call | `id`=call_accession_number, `ticker`, `call_accession_number`, `fecha` | `fiscal_period`, `call_sequence`, `sic`, `sic2`, `fe` (`{sic2}_{call year}`), `delisted`, `delisting_date` | one results call of the firm per fiscal quarter reported (silver.filing_manifest after bronze.call_transcripts: other companies' calls, non-results events and duplicate transcripts excluded; `fecha` and `fiscal_period` from the transcript where it states them); consecutive calls of a ticker at least 30 days apart with the fiscal period advancing k >= 1 quarters in the date window of k quarters (`call_sequence` gap for k > 1, label_break for a fiscal-year change), checked by `make gold-check` |
-| firm_quarter | `id`=`{ticker}_{quarter}`, `ticker`, `quarter`, `as_of_date` | `delisted`, `delisting_date` | universe ticker x closed calendar quarter in which the firm was listed (quarter start on or before `delisting_date`; the delisting quarter is the last row); `as_of_date` = quarter end + 1 day |
+| firm_quarter | `id`=`{ticker}_{quarter}`, `ticker`, `quarter`, `as_of_date` | `sic2`, `delisted`, `delisting_date` | universe ticker x closed calendar quarter in which the firm was listed (quarter start on or before `delisting_date`; the delisting quarter is the last row); `as_of_date` = quarter end + 1 day |
 | firm_year | `id`=`{ticker}_{year}`, `ticker`, `year`, `as_of_date` | `delisted`, `delisting_date` | ticker x calendar filing year with at least one scorable filing, filed while listed (1 Jan of year on or before `delisting_date`); `as_of_date` = 1 Jan of year + 1 |
 | firm | `id`=ticker, `ticker` | `delisted`, `delisting_date` | firms with at least one scorable filing |
+
+### 8-K coverage
+
+8-K ingestion applies no item-code filter. `scripts/raw_ingestion/us/8k/01_fetch_filings.py`
+fetches every 8-K a universe firm filed in the corpus window, and
+`scripts/raw_processing/us/8k/segmenter_8k.py` keeps the whole document as one
+section (`item_key = "0"`) instead of selecting Items 2.02 / 7.01 / 8.01.
+Topicality is decided downstream by the prefilter, so the 8-K channel's
+document counts are the firm's full 8-K filing volume, not a topical subset.
 
 ### Delisted firms
 
@@ -79,44 +88,47 @@ delisting filing: it is not delisted.
 
 | ticker | delisting_date | source |
 |---|---|---|
-| TIF | 2021-01-07 | EDGAR Form 25-NSE 0000876661-21-000016 (followed by Form 15-12B/15-12G) |
-| CXO | 2021-01-19 | EDGAR Form 25-NSE 0000876661-21-000081 (followed by Form 15-12B/15-12G) |
-| VAR | 2021-04-15 | EDGAR Form 25-NSE 0000876661-21-000554 (followed by Form 15-12B/15-12G) |
-| FLIR | 2021-05-14 | EDGAR Form 25-NSE 0001354457-21-000563 (followed by Form 15-12B/15-12G) |
-| ALXN | 2021-07-21 | EDGAR Form 25-NSE 0001354457-21-000820 (followed by Form 15-12B/15-12G) |
-| MXIM | 2021-08-26 | EDGAR Form 25-NSE 0001354457-21-000970 (followed by Form 15-12B/15-12G) |
-| KSU | 2021-12-14 | EDGAR Form 25-NSE 0000876661-21-001750 (followed by Form 15-12B/15-12G) |
-| XLNX | 2022-02-14 | EDGAR Form 25-NSE 0001354457-22-000131 (followed by Form 15-12B/15-12G) |
-| INFO | 2022-02-28 | EDGAR Form 25-NSE 0000876661-22-000196 (followed by Form 15-12B/15-12G) |
-| HFC | 2022-03-15 | EDGAR Form 25-NSE 0000876661-22-000283 (followed by Form 15-12B/15-12G) |
-| PBCT | 2022-04-04 | EDGAR Form 25-NSE 0001354457-22-000218 (followed by Form 15-12B/15-12G) |
-| CERN | 2022-06-08 | EDGAR Form 25-NSE 0001354457-22-000333 (followed by Form 15-12B/15-12G) |
-| CTXS | 2022-09-30 | EDGAR Form 25-NSE 0001354457-22-000553 (followed by Form 15-12B/15-12G) |
-| DRE | 2022-10-03 | EDGAR Form 25-NSE 0000876661-22-000803 (followed by Form 15-12B/15-12G) |
-| NLSN | 2022-10-12 | EDGAR Form 25-NSE 0000876661-22-000825 (followed by Form 15-12B/15-12G) |
-| TWTR | 2022-10-28 | EDGAR Form 25-NSE 0000876661-22-000890 (followed by Form 15-12B/15-12G) |
-| ABMD | 2022-12-22 | EDGAR Form 25-NSE 0001354457-22-000772 (followed by Form 15-12B/15-12G) |
+| TIF | 2021-01-07 | EDGAR Form 25-NSE 0000876661-21-000016 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| CXO | 2021-01-19 | EDGAR Form 25-NSE 0000876661-21-000081 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| VAR | 2021-04-15 | EDGAR Form 25-NSE 0000876661-21-000554 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| FLIR | 2021-05-14 | EDGAR Form 25-NSE 0001354457-21-000563 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| ALXN | 2021-07-21 | EDGAR Form 25-NSE 0001354457-21-000820 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| MXIM | 2021-08-26 | EDGAR Form 25-NSE 0001354457-21-000970 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| KSU | 2021-12-14 | EDGAR Form 25-NSE 0000876661-21-001750 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| XLNX | 2022-02-14 | EDGAR Form 25-NSE 0001354457-22-000131 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| INFO | 2022-02-28 | EDGAR Form 25-NSE 0000876661-22-000196 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| HFC | 2022-03-15 | EDGAR Form 25-NSE 0000876661-22-000283 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| PBCT | 2022-04-04 | EDGAR Form 25-NSE 0001354457-22-000218 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| CERN | 2022-06-08 | EDGAR Form 25-NSE 0001354457-22-000333 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| CTXS | 2022-09-30 | EDGAR Form 25-NSE 0001354457-22-000553 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| DRE | 2022-10-03 | EDGAR Form 25-NSE 0000876661-22-000803 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| NLSN | 2022-10-12 | EDGAR Form 25-NSE 0000876661-22-000825 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| TWTR | 2022-10-28 | EDGAR Form 25-NSE 0000876661-22-000890 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| ABMD | 2022-12-22 | EDGAR Form 25-NSE 0001354457-22-000772 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
 | FRC | 2023-05-01 | FDIC receivership and sale to JPMorgan Chase completed 2023-05-01 (First Republic Bank filed with the FDIC, not EDGAR) |
 | SIVB | 2023-05-02 | EDGAR Form 25-NSE 0001354457-23-000327 (first after the last 10-K/10-Q) |
-| ATVI | 2023-10-13 | EDGAR Form 25-NSE 0001354457-23-000768 (followed by Form 15-12B/15-12G) |
-| PXD | 2024-05-03 | EDGAR Form 25-NSE 0000876661-24-000321 (followed by Form 15-12B/15-12G) |
-| WRK | 2024-07-08 | EDGAR Form 25-NSE 0000876661-24-000561 (followed by Form 15-12B/15-12G) |
-| MRO | 2024-11-22 | EDGAR Form 25-NSE 0000876661-24-001100 (followed by Form 15-12B/15-12G) |
-| CTLT | 2024-12-18 | EDGAR Form 25-NSE 0000876661-24-001185 (followed by Form 15-12B/15-12G) |
-| DFS | 2025-05-19 | EDGAR Form 25-NSE 0000876661-25-000350 (followed by Form 15-12B/15-12G) |
-| JNPR | 2025-07-02 | EDGAR Form 25-NSE 0000876661-25-000489 (followed by Form 15-12B/15-12G) |
-| ANSS | 2025-07-17 | EDGAR Form 25-NSE 0001354457-25-000689 (followed by Form 15-12B/15-12G) |
-| HES | 2025-07-18 | EDGAR Form 25-NSE 0000876661-25-000523 (followed by Form 15-12B/15-12G) |
-| PARA | 2025-08-07 | EDGAR Form 25-NSE 0001354457-25-000781 (followed by Form 15-12B/15-12G) |
-| WBA | 2025-08-28 | EDGAR Form 25-NSE 0001354457-25-000854 (followed by Form 15-12B/15-12G) |
-| IPG | 2025-11-28 | EDGAR Form 25-NSE 0000876661-25-000918 (followed by Form 15-12B/15-12G) |
-| HBI | 2025-12-01 | EDGAR Form 25-NSE 0000876661-25-000928 (followed by Form 15-12B/15-12G) |
-| K | 2025-12-11 | EDGAR Form 25-NSE 0000876661-25-000958 (followed by Form 15-12B/15-12G) |
-| CMA | 2026-02-02 | EDGAR Form 25-NSE 0000876661-26-000079 (followed by Form 15-12B/15-12G) |
-| HOLX | 2026-04-07 | EDGAR Form 25-NSE 0001354457-26-000329 (followed by Form 15-12B/15-12G) |
-| SEE | 2026-04-09 | EDGAR Form 25-NSE 0000876661-26-000345 (followed by Form 15-12B/15-12G) |
-| CTRA | 2026-05-07 | EDGAR Form 25-NSE 0000876661-26-000399 (followed by Form 15-12B/15-12G) |
-| EA | 2026-08-04 | EDGAR Form 25-NSE 0001354457-26-000757 (followed by Form 15-12B/15-12G) |
+| ATVI | 2023-10-13 | EDGAR Form 25-NSE 0001354457-23-000768 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| DISH | 2023-12-29 | EDGAR CIK 0001001082 Form 25-NSE 0001354457-23-001016 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| PXD | 2024-05-03 | EDGAR Form 25-NSE 0000876661-24-000321 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| WRK | 2024-07-08 | EDGAR Form 25-NSE 0000876661-24-000561 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| MRO | 2024-11-22 | EDGAR Form 25-NSE 0000876661-24-001100 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| CTLT | 2024-12-18 | EDGAR Form 25-NSE 0000876661-24-001185 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| DFS | 2025-05-19 | EDGAR Form 25-NSE 0000876661-25-000350 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| JNPR | 2025-07-02 | EDGAR Form 25-NSE 0000876661-25-000489 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| ANSS | 2025-07-17 | EDGAR Form 25-NSE 0001354457-25-000689 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| HES | 2025-07-18 | EDGAR Form 25-NSE 0000876661-25-000523 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| PARA | 2025-08-07 | EDGAR Form 25-NSE 0001354457-25-000781 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| WBA | 2025-08-28 | EDGAR Form 25-NSE 0001354457-25-000854 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| IPG | 2025-11-28 | EDGAR Form 25-NSE 0000876661-25-000918 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| HBI | 2025-12-01 | EDGAR Form 25-NSE 0000876661-25-000928 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| K | 2025-12-11 | EDGAR Form 25-NSE 0000876661-25-000958 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| CMA | 2026-02-02 | EDGAR Form 25-NSE 0000876661-26-000079 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| HOLX | 2026-04-07 | EDGAR Form 25-NSE 0001354457-26-000329 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| SEE | 2026-04-09 | EDGAR Form 25-NSE 0000876661-26-000345 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| CTRA | 2026-05-07 | EDGAR Form 25-NSE 0000876661-26-000399 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| EA | 2026-08-04 | EDGAR Form 25-NSE 0001354457-26-000757 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| AVB | 2026-08-17 | EDGAR Form 25-NSE 0000876661-26-000689 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
+| LEG | 2026-08-27 | EDGAR Form 25-NSE 0000876661-26-000712 (followed by Form 15-12B/15-12G; no later 10-K/10-Q or an Item 2.01/3.01 8-K) |
 
 ### Families
 
@@ -135,6 +147,9 @@ delisting filing: it is not delisted.
 | covariates/firm_quarter/posture_archetype | posture_ttm_w_voc, posture_ttm_w_gov, posture_ttm_w_def, posture_ttm_archetype | one Archetypal Analysis fit per quarter on that quarter's rows |
 | covariates/firm_quarter/washing_score | `<family>_<window>_<metric>` for filings/calls x quarter/ttm/expanding: grounding_index, substance, pct_disclosure, pct_substance, w, washing, callada | population estimates within each quarter |
 | covariates/firm_quarter/financials | for revenue, cogs, rd_expense, sga_expense, operating_income, net_income, eps_diluted, capex, assets, current_assets, current_liabilities, equity, debt: `<metric>` (latest fiscal quarter filed before as_of_date) and `<metric>_quarter` (calendar quarter of that fiscal period's end) | filing date of the 10-Q/10-K that disclosed the value |
+| covariates/firm_quarter/market | price_pre (close before as_of_date), shares_out (cover page of the latest 10-K/10-Q), log_market_cap, revenue_ttm (latest four fiscal quarters), ps_ratio, beta_pre_252, idio_vol_pre_252 | prices before as_of_date, filings filed before it |
+| targets/firm_quarter/market | beta_post_63, idio_vol_post_63, vol_post_63 (trading days [as_of_date, +63)), ps_ratio_post (ps_ratio at the next quarter's as_of_date) | the next quarter |
+| targets/firm_quarter/financials | next_quarter, next_revenue_yoy (revenue of the fiscal quarter ending in the next calendar quarter over the same quarter a year earlier), next_rd_intensity (its R&D / revenue) | the fiscal quarter ending after as_of_date |
 | covariates/firm_year/disclosure_volume | n_docs, n_paragraphs, n_words, the frame counts, `*_per_1k`, any_ai, `*_rate` (filings) | filings of the year |
 | covariates/firm_year/activities | the document activity families and n_activities, summed over the year's filings, and their `*_per_1k` | filings of the year |
 | covariates/firm_year/posture | promotional_posture, hedging_posture, risk_orientation, governance_orientation, temporal_posture, ai_positioning, specificity, disclosure_intensity | shrinkage prior and intensity rank within the calendar year's firm-years (information of that year only) |
@@ -165,12 +180,12 @@ manifest lists the collisions (`collisions`: column -> names in the dataset);
 
 | dataset | rows x columns | collisions | cross-grain columns |
 |---|---|---|---|
-| datasets/document/document | 59,789 x 39 | none | none |
-| datasets/activity/activity | 47,767 x 50 | none | `firm__*`: datasets/firm/firm on ticker (static posture archetype, descriptive; activity analytics group activities by it) |
-| datasets/call/call | 10,507 x 1,315 | none | `fq__*`: datasets/firm_quarter/firm_quarter as of the call date (`pit.asof_join` of `fecha` on `as_of_date`, backward within ticker; the snapshot only contains information published before `as_of_date`); `fq__quarter`, `fq__as_of_date` name the attached snapshot, null for calls before the ticker's first closed quarter |
-| datasets/firm_quarter/firm_quarter | 12,475 x 1,246 | `<channel>_<window>_n_words` in disclosure_volume and activities: identical, one column | none |
-| datasets/firm_year/firm_year | 2,893 x 158 | `n_activities`: activities (summed over the year's filings) and washing_score (carried from the latest year with a 10-K) differ -> `activities__n_activities`, `washing_score__n_activities` | none (firm-year analytics use covariates/firm_year/posture_archetype_static, not the firm grain) |
-| datasets/firm/firm | 498 x 14 | none | none |
+| datasets/document/document | 59,363 x 39 | none | none |
+| datasets/activity/activity | 46,531 x 52 | none | `firm__*`: datasets/firm/firm on ticker (static posture archetype, descriptive; activity analytics group activities by it) |
+| datasets/call/call | 10,271 x 1,332 | none | `fq__*`: datasets/firm_quarter/firm_quarter as of the call date (`pit.asof_join` of `fecha` on `as_of_date`, backward within ticker; the snapshot only contains information published before `as_of_date`); `fq__quarter`, `fq__as_of_date` name the attached snapshot, null for calls before the ticker's first closed quarter |
+| datasets/firm_quarter/firm_quarter | 12,086 x 1,263 | `<channel>_<window>_n_words` in disclosure_volume and activities: identical, one column | none |
+| datasets/firm_year/firm_year | 2,887 x 159 | `n_activities`: activities (summed over the year's filings) and washing_score (carried from the latest year with a 10-K) differ -> `activities__n_activities`, `washing_score__n_activities` | none (firm-year analytics use covariates/firm_year/posture_archetype_static, not the firm grain) |
+| datasets/firm/firm | 498 x 16 | none | none |
 
 ## Builders
 
@@ -196,6 +211,7 @@ exists (firm before activity, firm_quarter before call).
 | scripts/gold/firm_quarter/build_posture_archetype.py | covariates/firm_quarter/posture_archetype, models/posture_archetype_weights |
 | scripts/gold/firm_quarter/build_washing_score.py | covariates/firm_quarter/washing_score |
 | scripts/gold/firm_quarter/build_financials.py | covariates/firm_quarter/financials |
+| scripts/gold/firm_quarter/build_market.py | covariates/firm_quarter/market, targets/firm_quarter/{market, financials} |
 | scripts/gold/call/build_spine.py | spines/call/call |
 | scripts/gold/call/build_disclosure.py | covariates/call/disclosure |
 | scripts/gold/call/build_market_financials.py | covariates/call/{market, financials}, targets/call/{market, financials} |
@@ -234,6 +250,9 @@ Every table of the previous layout, moved to
 | covariates/firm_quarter/posture_archetype_weights | covariates/firm_quarter/posture_archetype |
 | covariates/firm_quarter/us_10q_financials_raw (long: ticker, year, quarter of the fiscal period end, metric, value, source, source_ref) | covariates/firm_quarter/financials (wide, point in time by filing date) |
 | covariates/firm_quarter/archetype_weights_expanding, predictions/firm_quarter/posture_archetype_expanding, predictions/firm_year/posture_archetype_expanding | removed (legacy expanding archetypes); consumers use covariates/firm_quarter/posture_archetype or covariates/firm_year/posture_archetype_static |
+| covariates/firm_quarter/market | price_pre (close before as_of_date), shares_out (cover page of the latest 10-K/10-Q), log_market_cap, revenue_ttm (latest four fiscal quarters), ps_ratio, beta_pre_252, idio_vol_pre_252 | prices before as_of_date, filings filed before it |
+| targets/firm_quarter/market | beta_post_63, idio_vol_post_63, vol_post_63 (trading days [as_of_date, +63)), ps_ratio_post (ps_ratio at the next quarter's as_of_date) | the next quarter |
+| targets/firm_quarter/financials | next_quarter, next_revenue_yoy (revenue of the fiscal quarter ending in the next calendar quarter over the same quarter a year earlier), next_rd_intensity (its R&D / revenue) | the fiscal quarter ending after as_of_date |
 | covariates/firm_year/disclosure_volume | unchanged |
 | covariates/firm_year/activities | unchanged except n_words (-> covariates/firm_year/disclosure_volume) |
 | covariates/firm_year/activities_by_channel (ticker, fy, channel) | removed: sum covariates/document/activities by the document spine's (ticker, fy, channel) |
@@ -261,6 +280,12 @@ analytics difference-in-differences scripts
 `sec_did_continuous.json`, `fig_sec_event_study.png`, `shock_did_simple.json`,
 `shock_did_*_per_1k.png`) moved to `data/deprecated/results_did_20260915/`
 (POINTER.json).
+
+The incremental-signal analysis is point in time on the firm-quarter grain,
+so the firm-year median-vs-aggregate robustness it was paired with has no
+median left to compare: `scripts/analytics/washing/firm_year_aggregation_robustness.py`
+moved to `scripts/deprecated/` and its result to
+`data/deprecated/results_firm_year_aggregation_20260916/` (POINTER.json).
 
 CAR and SUE are not computed: `scripts/analytics/call_beta/call_car_regressions.py`
 and its test moved to `scripts/deprecated/`, their results

@@ -37,17 +37,19 @@ SEQUENCE_EARLY, SEQUENCE_LATE = 60, 70  # scripts/bronze/call_transcripts.py
 
 
 def sequence_violations(calls: pd.DataFrame) -> pd.DataFrame:
-    """Consecutive calls of a ticker (by fecha) that break the invariant:
-    fewer than MIN_GAP_DAYS apart, or a fiscal period that does not advance
-    k >= 1 quarters within [91k - SEQUENCE_EARLY, 91k + SEQUENCE_LATE] days
-    (a `label_break` call is exempt from the period rule)."""
+    """Consecutive calls of a ticker (by fecha) whose transcripts contradict
+    each other: the same fiscal period reported twice, or a period that runs
+    backwards. A quarter that advances by more than one (`gap`, calls missing
+    from the sources) and an unusually short interval (firms such as
+    Progressive and Allstate report monthly) are recorded by `call_sequence`,
+    not treated as errors -- the pipeline labels what the transcripts say and
+    never rewrites a date or a period to fit a calendar."""
     c = calls.sort_values(["ticker", "fecha"]).reset_index(drop=True)
     quarter = c["fiscal_period"].str[:4].astype(int) * 4 + c["fiscal_period"].str[-1].astype(int)
     same = c["ticker"].eq(c["ticker"].shift())
     days = (pd.to_datetime(c["fecha"]) - pd.to_datetime(c["fecha"]).shift()).dt.days
     k = quarter - quarter.shift()
-    in_window = (k >= 1) & (days >= 91 * k - SEQUENCE_EARLY) & (days <= 91 * k + SEQUENCE_LATE)
-    bad = same & ((days < MIN_GAP_DAYS) | ~in_window & (c["call_sequence"] != "label_break"))
+    bad = same & (k <= 0) & (c["call_sequence"] != "label_break")
     return c.assign(days=days, quarters=k)[bad]
 
 
@@ -65,9 +67,13 @@ def main() -> None:
     calls["fe"] = calls["sic2"] + "_" + pd.to_datetime(calls["fecha"]).dt.year.astype(str)
     calls.insert(0, "id", calls["call_accession_number"])
     calls["fecha"] = pd.to_datetime(calls["fecha"]).astype("datetime64[ns]")
+    # contradictions between vendors (a fiscal period repeated or running
+    # backwards) are carried as `call_sequence == "conflict"`, not resolved
+    # here: the spine reports what the transcripts say
     bad = sequence_violations(calls)
     if len(bad):
-        raise ValueError(f"call-sequence invariant broken by {len(bad)} calls:\n{bad.head(20).to_string()}")
+        print(f"{len(bad)} calls whose fiscal period contradicts the previous call "
+              f"({bad['ticker'].nunique()} tickers); labelled `conflict`")
     L.write_gold("spines", "call", "call",
                  calls[L.GOLD_SPINE_COLUMNS["call"] + ["fiscal_period", "call_sequence", "sic", "sic2", "fe", "delisted", "delisting_date"]],
                  builder="scripts/gold/call/build_spine.py", extra={"grain": "call (earnings-call transcript)"})

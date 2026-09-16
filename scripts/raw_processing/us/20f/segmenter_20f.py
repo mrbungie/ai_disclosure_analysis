@@ -25,7 +25,8 @@ from section_segmenter import clean_html_to_lines  # noqa: F401 (re-exported for
 TARGET_ITEMS = {"0": "Full Document"}
 
 
-def general_segment(lines: list[str], form: str = "20-F", ticker: str | None = None) -> dict[str, str]:
+def general_segment(lines: list[str], form: str = "20-F", ticker: str | None = None,
+                    html_path: Path | None = None) -> dict[str, str]:
     return {"0": "\n".join(lines)}
 
 

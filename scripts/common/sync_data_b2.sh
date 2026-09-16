@@ -44,6 +44,7 @@
 #   scripts/common/sync_data_b2.sh push --dry-run
 #   scripts/common/sync_data_b2.sh pull
 #   scripts/common/sync_data_b2.sh pull --delete   # mirror, asks first
+#   scripts/common/sync_data_b2.sh push --delete --yes  # mirror without asking
 #   scripts/common/sync_data_b2.sh pull --path interim/manifests
 #   scripts/common/sync_data_b2.sh pull --path raw/filings_html --include '*2023*'
 #   scripts/common/sync_data_b2.sh push --path interim/sections --dry-run
@@ -60,6 +61,7 @@ usage() {
 
 DIRECTION="push"
 DRY_RUN=0
+ASSUME_YES=0
 DELETE=0
 PATHS=()
 INCLUDES=()
@@ -87,6 +89,7 @@ while [[ $# -gt 0 ]]; do
     push|pull) DIRECTION="$1" ;;
     --dry-run) DRY_RUN=1 ;;
     --delete)  DELETE=1 ;;
+    -y|--yes)  ASSUME_YES=1 ;;
     --path)    [[ $# -ge 2 ]] || { echo "--path necesita un valor" >&2; exit 1; }
                PATHS+=("$(norm_subpath "$2")"); shift ;;
     --path=*)  PATHS+=("$(norm_subpath "${1#*=}")") ;;
@@ -97,7 +100,7 @@ while [[ $# -gt 0 ]]; do
                EXCLUDES+=("$2"); shift ;;
     --exclude=*) EXCLUDES+=("${1#*=}") ;;
     -h|--help) usage; exit 0 ;;
-    *) echo "Unknown argument: $1 (expected push|pull [--dry-run] [--delete] [--path P] [--include G] [--exclude G])" >&2; exit 1 ;;
+    *) echo "Unknown argument: $1 (expected push|pull [--dry-run] [--delete] [--yes] [--path P] [--include G] [--exclude G])" >&2; exit 1 ;;
   esac
   shift
 done
@@ -223,15 +226,19 @@ if [[ $DELETE -eq 1 ]]; then
   if [[ -n "$DELETIONS" ]]; then
     echo "$DELETIONS"
     echo
-    if [[ ! -t 0 ]]; then
-      echo "Hay borrados pendientes y no hay terminal para confirmar. Cancelado." >&2
-      exit 1
+    if [[ $ASSUME_YES -eq 1 ]]; then
+      echo "--yes: se aplican los borrados listados."
+    else
+      if [[ ! -t 0 ]]; then
+        echo "Hay borrados pendientes y no hay terminal para confirmar (usa --yes). Cancelado." >&2
+        exit 1
+      fi
+      read -r -p "¿Aplicar estos borrados? [y/N] " CONFIRM
+      case "$CONFIRM" in
+        y|Y|yes|si|sí) ;;
+        *) echo "Cancelado, no se aplicó nada."; exit 0 ;;
+      esac
     fi
-    read -r -p "¿Aplicar estos borrados? [y/N] " CONFIRM
-    case "$CONFIRM" in
-      y|Y|yes|si|sí) ;;
-      *) echo "Cancelado, no se aplicó nada."; exit 0 ;;
-    esac
   else
     echo "Sin borrados pendientes."
   fi

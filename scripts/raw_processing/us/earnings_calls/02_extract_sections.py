@@ -148,18 +148,20 @@ def main() -> None:
     manifest_path = manifest_dir / "filing_manifest_earnings_calls.parquet"
     equibles_manifest_path = manifest_dir / "filing_manifest_earnings_calls_equibles.parquet"
     stockanalysis_manifest_path = manifest_dir / "filing_manifest_earnings_calls_stockanalysis.parquet"
-    other_paths = [equibles_manifest_path, stockanalysis_manifest_path]
+    backfill_manifest_path = manifest_dir / "filing_manifest_earnings_calls_equibles_backfill.parquet"
+    other_paths = [equibles_manifest_path, stockanalysis_manifest_path, backfill_manifest_path]
     if not manifest_path.exists() and not any(p.exists() for p in other_paths):
         pipeline_logger.log_event(
             pipeline_step="us_extract_earnings_calls", level="ERROR",
             message="No manifest; run 01_fetch_transcripts.py first", log_dir=manifest_dir)
         return
 
-    # Three independent sources, three independent manifest files (never one
+    # Four independent sources, four independent manifest files (never one
     # mutating another's file): the Hugging Face bulk dataset here,
-    # 03_fill_gaps_equibles.py's per-ticker gap-filling, and
-    # 04_fill_gaps_stockanalysis.py's headless-Chrome gap-filling, each in
-    # its own parquet. 01_fetch_transcripts.py REWRITES
+    # 03_fill_gaps_equibles.py's per-ticker gap-filling,
+    # 04_fill_gaps_stockanalysis.py's headless-Chrome gap-filling and
+    # 05_register_equibles_backfill.py's Equibles backfill, each in its own
+    # parquet. 01_fetch_transcripts.py REWRITES
     # filing_manifest_earnings_calls.parquet wholesale on every run
     # (`manifest.to_parquet(..., index=False)` with a freshly-built
     # DataFrame) — concatenating at read time here, rather than merging the

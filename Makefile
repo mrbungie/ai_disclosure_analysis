@@ -1,4 +1,4 @@
-.PHONY: test install-deps tickers-tui data-views build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market bronze silver layers prefilter gold gold-document gold-firm gold-firm-year gold-firm-quarter gold-call gold-datasets gold-check analytics analytics-corpus analytics-posture analytics-washing analytics-shock analytics-channel-gap analytics-call-beta analytics-crash-archetypes analytics-appendix analytics-stability analytics-prefilter-eval b2-check refresh-stale help
+.PHONY: test install-deps tickers-tui data-views explorer validator validator-sample hf-sync hf-sync-models hf-sync-data hf-sync-interim hf-sync-raw hf-sync-all build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market bronze silver layers prefilter gold gold-document gold-firm gold-firm-year gold-firm-quarter gold-call gold-datasets gold-check analytics analytics-corpus analytics-posture analytics-washing analytics-shock analytics-channel-gap analytics-call-beta analytics-crash-archetypes analytics-appendix analytics-stability analytics-prefilter-eval b2-check refresh-stale help
 
 # Default target
 all: test
@@ -91,12 +91,12 @@ bronze:
 	@echo "Building data/bronze/ (manifests, EDGAR submissions, call-transcript checks, paragraphs/sentences, unique texts, market, prefilter, LLM outputs)..."
 	.venv/bin/python scripts/bronze/manifests.py
 	.venv/bin/python scripts/bronze/sec_submissions.py
-	.venv/bin/python scripts/bronze/call_transcripts.py
 	.venv/bin/python scripts/bronze/paragraphs.py
 	.venv/bin/python scripts/bronze/unique_paragraphs.py
 	.venv/bin/python scripts/bronze/market.py
 	.venv/bin/python scripts/bronze/prefilter.py
 	.venv/bin/python scripts/bronze/llm_outputs.py
+	.venv/bin/python scripts/bronze/call_transcripts.py
 	.venv/bin/python scripts/bronze/patents.py
 	.venv/bin/python scripts/bronze/xbrl_facts.py
 
@@ -135,6 +135,10 @@ GOLD_DOCUMENT := 'data/gold/spines/document/*.parquet' 'data/gold/covariates/doc
 GOLD_ACTIVITY := 'data/gold/spines/activity/*.parquet' 'data/gold/covariates/activity/*.parquet' 'data/gold/targets/activity/*.parquet'
 GOLD_FIRM := 'data/gold/spines/firm/*.parquet' 'data/gold/covariates/firm/*.parquet' 'data/gold/targets/firm/*.parquet'
 GOLD_FIRM_YEAR := 'data/gold/spines/firm_year/*.parquet' 'data/gold/covariates/firm_year/*.parquet' 'data/gold/targets/firm_year/*.parquet'
+# Models gold fits. Analytics blocks watch these, not models/incremental_signal
+# (written by analytics-shock itself, which would re-run every block).
+GOLD_MODELS := 'models/posture_archetype_static/*.pkl' 'models/posture_archetype_weights/**/*.pkl' \
+	'models/washing_grounding_shrinkage/*.pkl'
 GOLD_LIBS := scripts/common/layers.py scripts/common/pit.py scripts/gold/posture/ai_intensity.py \
 	scripts/gold/posture/posture_features.py scripts/gold/posture/warm_start_aa.py scripts/gold/financials/*.py
 
@@ -177,18 +181,20 @@ gold-firm-year: gold-document gold-firm
 			.venv/bin/python scripts/gold/firm_year/build_washing_score.py $(ARGS)'
 
 gold-firm-quarter: gold-document gold-firm-year
-	@echo "Gold: firm-quarter spine and measures by channel family and window, posture archetype, washing score, financials..."
+	@echo "Gold: firm-quarter spine and measures by channel family and window, posture archetype, washing score, financials, market and forward targets..."
 	@$(RUN_CACHED) gold-firm-quarter \
 		scripts/gold/firm_quarter/build_measures.py \
 		scripts/gold/firm_quarter/build_posture_archetype.py \
 		scripts/gold/firm_quarter/build_washing_score.py \
 		scripts/gold/firm_quarter/build_financials.py \
+		scripts/gold/firm_quarter/build_market.py \
 		$(GOLD_DOCUMENT) 'data/raw/xbrl_frames_alt/*.parquet' \
 		$(GOLD_LIBS) $(LAYER_MANIFESTS) \
 		-- bash -c '.venv/bin/python scripts/gold/firm_quarter/build_measures.py $(ARGS) && \
 			.venv/bin/python scripts/gold/firm_quarter/build_posture_archetype.py $(ARGS) && \
 			.venv/bin/python scripts/gold/firm_quarter/build_washing_score.py $(ARGS) && \
-			.venv/bin/python scripts/gold/firm_quarter/build_financials.py $(ARGS)'
+			.venv/bin/python scripts/gold/firm_quarter/build_financials.py $(ARGS) && \
+			.venv/bin/python scripts/gold/firm_quarter/build_market.py $(ARGS)'
 
 gold-call: gold-document gold-firm-year gold-firm-quarter
 	@echo "Gold: call spine, call disclosure, call market and financials (covariates and targets)..."
@@ -234,6 +240,45 @@ data-views:
 	@rm -f data_views.duckdb
 	@uv run --with duckdb python scripts/common/build_data_views.py --out data_views.duckdb
 
+# Gradio dataset explorer (DuckDB in-memory over data/)
+explorer:
+	@echo "Starting Gradio dataset explorer (internal DuckDB)..."
+	@uv run python -m apps.explorer.app
+
+# Atomic validation tool for human verification of AI extractions
+validator:
+	@echo "Starting atomic validator at http://localhost:8765..."
+	@cd apps/validator && python -m http.server 8765
+
+validator-sample:
+	@echo "Building flattened atomic sample for validator..."
+	@uv run --frozen --no-sync python apps/validator/build_sample.py $(ARGS)
+
+# Hugging Face synchronization (Dataset + Models)
+hf-sync:
+	@echo "Syncing data and models to Hugging Face concurrently..."
+	@uv run python scripts/common/hf_sync.py --both $(ARGS)
+
+hf-sync-models:
+	@echo "Syncing models to Hugging Face..."
+	@uv run python scripts/common/hf_sync.py --models $(ARGS)
+
+hf-sync-data:
+	@echo "Syncing data layers to Hugging Face..."
+	@uv run python scripts/common/hf_sync.py --data $(ARGS)
+
+hf-sync-interim:
+	@echo "Syncing interim data layer to Hugging Face..."
+	@uv run python scripts/common/hf_sync.py --interim $(ARGS)
+
+hf-sync-raw:
+	@echo "Packaging and syncing raw data archives (.tar.gz) to Hugging Face..."
+	@uv run python scripts/common/hf_sync.py --raw $(ARGS)
+
+hf-sync-all:
+	@echo "Syncing models, structured data, and raw archives to Hugging Face..."
+	@uv run python scripts/common/hf_sync.py --all $(ARGS)
+
 # Every gold table: <kind>/<grain>/<family>.parquet (datasets: datasets/<grain>/<grain>), one row per spine key with
 # the spine's id and date (nulls, never missing rows); nothing else under data/gold.
 gold-check:
@@ -277,7 +322,7 @@ analytics-posture: gold
 		scripts/analytics/posture/archetype_composition_annual.py \
 		scripts/analytics/posture/entity_mentions_summary.py \
 		scripts/gold/posture/ai_intensity.py scripts/gold/posture/posture_features.py \
-		'data/gold/**/*.parquet' 'models/**/*.pkl' \
+		'data/gold/**/*.parquet' $(GOLD_MODELS) \
 		$(LAYER_MANIFESTS) \
 		-- bash -c '.venv/bin/python scripts/analytics/posture/activity_profiles.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/posture/geo_provenance.py $(ARGS) && \
@@ -303,7 +348,6 @@ analytics-washing: gold
 		scripts/analytics/washing/validate_washing_score.py \
 		scripts/analytics/washing/activity_grounding.py \
 		scripts/analytics/washing/build_strategy_economic_profiles.py \
-		scripts/analytics/washing/firm_year_aggregation_robustness.py \
 		scripts/analytics/washing/ai_diffusion.py \
 		scripts/analytics/washing/volume_vs_grounding.py \
 		scripts/analytics/washing/tech_provenance.py \
@@ -311,12 +355,11 @@ analytics-washing: gold
 		scripts/analytics/washing/firm_comparisons.py \
 		scripts/analytics/washing/appendix_g_cohort_and_rollup.py \
 		scripts/gold/posture/ai_intensity.py scripts/gold/posture/posture_features.py \
-		'data/gold/**/*.parquet' 'models/**/*.pkl' \
+		'data/gold/**/*.parquet' $(GOLD_MODELS) \
 		$(LAYER_MANIFESTS) \
 		-- bash -c '.venv/bin/python scripts/analytics/washing/validate_washing_score.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/washing/activity_grounding.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/washing/build_strategy_economic_profiles.py $(ARGS) && \
-			.venv/bin/python scripts/analytics/washing/firm_year_aggregation_robustness.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/washing/ai_diffusion.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/washing/volume_vs_grounding.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/washing/tech_provenance.py $(ARGS) && \
@@ -330,7 +373,7 @@ analytics-shock: gold
 		scripts/analytics/shock/incremental_signal.py \
 		scripts/analytics/shock/evolution_figures.py \
 		scripts/gold/posture/ai_intensity.py scripts/gold/posture/posture_features.py \
-		'data/gold/**/*.parquet' 'models/**/*.pkl' \
+		'data/gold/**/*.parquet' $(GOLD_MODELS) \
 		$(LAYER_MANIFESTS) \
 		-- bash -c '.venv/bin/python scripts/analytics/shock/incremental_signal.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/shock/evolution_figures.py $(ARGS)'
@@ -339,18 +382,19 @@ analytics-channel-gap: gold
 	@echo "Analytics (channel-gap) -> data/results/..."
 	@$(RUN_CACHED) analytics-channel-gap \
 		scripts/analytics/channel_gap/channel_gap_words_robustness.py \
-		'data/gold/**/*.parquet' 'models/**/*.pkl' \
+		'data/gold/**/*.parquet' $(GOLD_MODELS) \
 		$(LAYER_MANIFESTS) \
 		-- bash -c '.venv/bin/python scripts/analytics/channel_gap/channel_gap_words_robustness.py $(ARGS)'
 
 analytics-call-beta: gold
 	@echo "Analytics (call-beta) -> data/results/..."
 	@$(RUN_CACHED) analytics-call-beta \
+		scripts/analytics/call_regression.py \
 		scripts/analytics/call_beta/call_beta_regressions.py \
 		scripts/analytics/call_beta/call_beta_robustness.py \
 		scripts/analytics/call_beta/call_beta_generalized_targets.py \
 		scripts/analytics/call_beta/sec_comment_letter_cases.py \
-		'data/gold/**/*.parquet' 'models/**/*.pkl' \
+		'data/gold/**/*.parquet' $(GOLD_MODELS) \
 		$(LAYER_MANIFESTS) \
 		-- bash -c '.venv/bin/python scripts/analytics/call_beta/call_beta_regressions.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/call_beta/call_beta_robustness.py $(ARGS) && \
@@ -360,9 +404,10 @@ analytics-call-beta: gold
 analytics-crash-archetypes: gold
 	@echo "Analytics (crash-archetypes) -> data/results/..."
 	@$(RUN_CACHED) analytics-crash-archetypes \
+		scripts/analytics/call_regression.py \
 		scripts/analytics/crash_archetypes/call_crash_regressions.py \
 		scripts/analytics/crash_archetypes/call_archetype_full_battery.py \
-		'data/gold/**/*.parquet' 'models/**/*.pkl' \
+		'data/gold/**/*.parquet' $(GOLD_MODELS) \
 		$(LAYER_MANIFESTS) \
 		-- bash -c '.venv/bin/python scripts/analytics/crash_archetypes/call_crash_regressions.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/crash_archetypes/call_archetype_full_battery.py $(ARGS)'
@@ -373,7 +418,7 @@ analytics-appendix: gold
 		scripts/analytics/appendix/patents_controls.py \
 		scripts/analytics/appendix/report_crosscheck_stats.py \
 		scripts/analytics/appendix/earnings_calls_analysis.py \
-		'data/gold/**/*.parquet' 'models/**/*.pkl' \
+		'data/gold/**/*.parquet' $(GOLD_MODELS) \
 		$(LAYER_MANIFESTS) \
 		-- bash -c '.venv/bin/python scripts/analytics/appendix/patents_controls.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/appendix/report_crosscheck_stats.py $(ARGS) && \

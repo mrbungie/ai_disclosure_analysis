@@ -54,11 +54,12 @@ and the false starts that led here).
 
 import gzip
 import re
+import sys
 from pathlib import Path
 
 import pandas as pd
 import yaml
-from bs4 import XMLParsedAsHTMLWarning
+from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
 from markdownify import markdownify as md
 import warnings
 
@@ -287,6 +288,25 @@ def _part_heading_is_link_wrapped(line: str) -> bool:
     return part_pos == -1 or open_pos < part_pos
 
 
+#: markdownify walks the parsed document with one Python frame per nested
+#: HTML element, so a filing whose markup nests deeply enough exhausts the
+#: default 1,000-frame limit and fails outright with "maximum recursion depth
+#: exceeded" (LIN's 2021-07-30 8-K: 84 lines of text under ~1,500 levels of
+#: nested tags). The document is fine; only the traversal depth is the
+#: problem. Raised around the conversion and restored right after, so nothing
+#: else in the process runs with a relaxed limit.
+_MARKDOWN_RECURSION_LIMIT = 20_000
+
+
+def _to_markdown(html_content: str) -> str:
+    previous = sys.getrecursionlimit()
+    sys.setrecursionlimit(max(previous, _MARKDOWN_RECURSION_LIMIT))
+    try:
+        return md(html_content, heading_style="ATX", strip=["script", "style"])
+    finally:
+        sys.setrecursionlimit(previous)
+
+
 def clean_html_to_lines(html_path: Path) -> list[str]:
     """Filing HTML is stored gzip-compressed (.html.gz — iXBRL-era 10-Ks
     compress ~90%+, see scripts/us/10k/01_fetch_filings.py). Transparently
@@ -295,7 +315,7 @@ def clean_html_to_lines(html_path: Path) -> list[str]:
     opener = gzip.open if html_path.suffix == ".gz" else open
     with opener(html_path, "rt", encoding="utf-8", errors="ignore") as f:
         html_content = f.read()
-    markdown_text = md(html_content, heading_style="ATX", strip=["script", "style"])
+    markdown_text = _to_markdown(html_content)
     lines = [line.strip() for line in markdown_text.split("\n")]
     return [line for line in lines if line]
 
@@ -691,6 +711,7 @@ def _segment_window(
     toc_end_line: int,
     assume_starts_at_item1: bool = False,
     form: str = "10-K",
+    synthetic_keys: set[str] | None = None,
 ) -> dict[str, str]:
     """The original single-sequence segmentation logic, scoped to one
     [window_start, window_end) slice of lines. `toc_end_line` is the
@@ -704,7 +725,12 @@ def _segment_window(
     run that _toc_prefix_end can't distinguish from an actual TOC — it
     stripped Part I's real Item 1/1A/1B/1C/2/3/4 headings outright on
     filings like APD, where the TOC sits at absolute lines 94-124 but the
-    "PART I" marker (and window) only starts at line 187."""
+    "PART I" marker (and window) only starts at line 187.
+
+    `synthetic_keys`, when given, collects the keys this call produced by
+    ELIMINATION rather than from a heading actually found in the text (see
+    `assume_starts_at_item1` below) — the only segments a later, better-
+    informed pass is allowed to replace."""
     window_lines = lines[window_start:window_end]
     raw_local = _raw_candidates(window_lines, form=form)
     body = [(key, window_start + i) for key, i in raw_local if window_start + i > toc_end_line]
@@ -761,6 +787,8 @@ def _segment_window(
     body_start = max(window_start, toc_end_line + 1)
     if assume_starts_at_item1 and "1" not in dict(kept) and body_start < window_end:
         kept.insert(0, ("1", body_start))
+        if synthetic_keys is not None:
+            synthetic_keys.add("1")
 
     segments = {}
     for i, (item_key, start_idx) in enumerate(kept):
@@ -769,7 +797,12 @@ def _segment_window(
     return segments
 
 
-def general_segment(lines: list[str], form: str = "10-K", ticker: str | None = None) -> dict[str, str]:
+def general_segment(
+    lines: list[str],
+    form: str = "10-K",
+    ticker: str | None = None,
+    html_path: Path | None = None,
+) -> dict[str, str]:
     """One segment per recognizable "Item N[A-C]" heading. `form` ("10-K"
     or "10-Q") selects which ITEM_ALIASES apply — see that dict's
     docstring for why the same alias text can mean a different item
@@ -804,7 +837,14 @@ def general_segment(lines: list[str], form: str = "10-K", ticker: str | None = N
     fixed and known ahead of time (Item 1/1A/1B/1C/2/3/4) — reserving it
     for the FIRST window regardless of what that window actually found
     fixes this without reverting to a pure index-based rule (which would
-    wrongly suffix a 10-K's legitimate, non-colliding Part II+ items)."""
+    wrongly suffix a 10-K's legitimate, non-colliding Part II+ items).
+
+    `html_path` (the same file `lines` was read from) additionally enables
+    the TOC-anchor fill — see `_add_toc_anchor_segments` — which recovers
+    items whose body heading the filer never writes at all, from the anchor
+    its TOC row links to. It only ever adds a key nothing else produced, or
+    replaces one produced by elimination rather than by an actual heading,
+    so no segment cut at a heading the filer really wrote is affected."""
     all_raw = _raw_candidates(lines, form=form)
     toc_prefix_len = _toc_prefix_end(all_raw, lines, ticker=ticker)
     toc_end_line = all_raw[toc_prefix_len - 1][1] if toc_prefix_len > 0 else -1
@@ -823,11 +863,12 @@ def general_segment(lines: list[str], form: str = "10-K", ticker: str | None = N
     reservation_active = windows[0][0] == "I"
 
     segments: dict[str, str] = {}
+    synthetic_keys: set[str] = set()
     for label, start_idx, end_idx in windows:
         window_segments = _segment_window(
             lines, start_idx, end_idx, suffix="", toc_end_line=toc_end_line,
             assume_starts_at_item1=reservation_active and label == "I",
-            form=form,
+            form=form, synthetic_keys=synthetic_keys,
         )
         for key, text in window_segments.items():
             reserved_for_first_window = (
@@ -839,6 +880,10 @@ def general_segment(lines: list[str], form: str = "10-K", ticker: str | None = N
                 segments[key] = text
 
     _recover_item_8(lines, segments)
+    if html_path is not None:
+        _add_toc_anchor_segments(
+            segments, lines, all_raw, toc_prefix_len, toc_end_line, html_path,
+            replaceable=synthetic_keys)
     return segments
 
 
@@ -913,6 +958,208 @@ def _recover_item_8(lines: list[str], segments: dict[str, str]) -> None:
     recovered = "\n".join(lines[anchor_idx:])
     if len(recovered) > len(current):
         segments["8"] = recovered
+
+
+# A minority of large iXBRL filers never restate "Item N" as a body
+# heading at all: the ONLY "Item N" text in the whole document is the
+# table of contents, whose rows hyperlink to anchor ids on the real
+# section starts, and the body itself opens each section under its own
+# editorial title instead ("INTRODUCTION", "EXECUTIVE OVERVIEW", ...).
+# Confirmed on JPM's 10-Qs, where the body additionally orders MD&A
+# BEFORE the financial statements — so neither heading text nor item-rank
+# ordering can locate Item 2, and `_segment_window` returns only the late
+# Part I items (3, 4) plus the by-elimination synthetic Item 1 spanning
+# everything before them.
+#
+# The TOC hyperlink target IS the section boundary the body doesn't spell
+# out, and it is a structural fact of the document, not a filer quirk: the
+# anchor id in "[Management's Discussion and Analysis...](#i…_25)" resolves
+# to the element the reader lands on when they click that TOC row. Two
+# details make it usable without touching the primary path:
+#   - Positions are recovered by inserting a unique text MARKER before each
+#     anchored element and converting the document ONCE, then stripping the
+#     markers back out — so an anchor's position is the exact line index in
+#     the same markdown line list the segments are cut from, with no
+#     text-matching heuristic and no second full conversion per anchor.
+#   - The result is applied ADDITIVELY: only item keys the heading-based
+#     segmentation did not produce at all are filled in; no key it did
+#     produce is moved, truncated, or replaced. A filing whose sections
+#     already extract is therefore byte-identical, by construction.
+_ANCHOR_MARK_PREFIX = "ZZTOCANCHORZZ"
+_ANCHOR_MARK_RE = re.compile(rf"{_ANCHOR_MARK_PREFIX}(\d+)ZZ")
+
+#: The href of a markdown link pointing at an in-document anchor. The LAST
+#: link on a TOC row is taken: filers that split the row into two links
+#: ("[Item 1.](#a) ... [Financial Statements](#a)") point both at the same
+#: anchor, and the title link is the one that always exists.
+_TOC_ANCHOR_RE = re.compile(r"\]\(#([^)\s]+)\)")
+
+
+def _toc_link_anchor(line: str) -> str | None:
+    matches = _TOC_ANCHOR_RE.findall(line)
+    return matches[-1] if matches else None
+
+
+def _toc_subrow_anchor(lines: list[str], item_line: int, next_item_line: int) -> str | None:
+    """The anchor of the first SUB-ROW listed under an item whose own TOC
+    row carries no link at all — i.e. that item's first sub-section, which
+    starts where the item itself starts.
+
+    A "cross-reference index"-style TOC (WFC's 10-Qs confirmed) states an
+    item on one row and then lists that item's own sub-sections, one per
+    following row, each with the page link; the item row itself gets no
+    page number and therefore no anchor, so `_toc_link_anchor` finds
+    nothing on it and the item is invisible to the anchor fill:
+        "| Item 2. | | | Management's Discussion and Analysis ... | | |"
+        "|  | | | Summary Financial Data | | | [2](#i7ae…_28) | | |"
+        "|  | | | Overview            | | | [3](#i7ae…_31) | | |"
+    The first sub-row's anchor (`…_28` here) is where the reader lands on
+    the item, so it is the item's start. The scan stops at the next item
+    row and at any PART row, so an item can only ever inherit an anchor
+    from a row listed UNDER it, never from the next item's or the next
+    Part's own row."""
+    for i in range(item_line + 1, next_item_line):
+        if _PART_RE.search(lines[i]):
+            break
+        anchor = _toc_link_anchor(lines[i])
+        if anchor:
+            return anchor
+    return None
+
+
+def _toc_anchor_entries(lines: list[str], toc_rows: list[tuple[str, int]]) -> list[tuple[str, str]]:
+    """[(segment_key, anchor_id), ...] for the TOC rows an anchor can be
+    resolved for — their own link, or, for a row with no link at all, the
+    first anchor among the sub-rows listed under it (`_toc_subrow_anchor`)
+    — in TOC order. Segment keys are assigned exactly as `general_segment`
+    assigns them when merging Part windows (Part I's fixed item keys
+    reserved for the "I" window, a repeated key suffixed "__part{label}"),
+    so an anchor-derived segment lands under the same key the heading-based
+    path would have used had the body spelled the heading out."""
+    by_line = {line_idx: item_key for item_key, line_idx in toc_rows}
+    item_lines = sorted(by_line)
+    label = None
+    raw_entries: list[tuple[str, str, str]] = []
+    for i in range(toc_rows[-1][1] + 1):
+        m = _PART_RE.search(lines[i])
+        if m and not _part_heading_is_narrative_mention(lines[i]):
+            label = m.group(1).upper()
+        if i in by_line:
+            next_item_line = next((j for j in item_lines if j > i), len(lines))
+            anchor = _toc_link_anchor(lines[i]) or _toc_subrow_anchor(lines, i, next_item_line)
+            if anchor:
+                raw_entries.append((by_line[i], label or "I", anchor))
+
+    reservation_active = bool(raw_entries) and raw_entries[0][1] == "I"
+    assigned: set[str] = set()
+    entries: list[tuple[str, str]] = []
+    for item_key, part_label, anchor in raw_entries:
+        reserved_for_first_window = (
+            reservation_active and part_label != "I" and item_key in _PART_I_ITEM_KEYS
+        )
+        key = f"{item_key}__part{part_label}" if (item_key in assigned or reserved_for_first_window) else item_key
+        assigned.add(key)
+        entries.append((key, anchor))
+    return entries
+
+
+def _lines_with_anchor_positions(
+    html_path: Path, anchor_ids: list[str]
+) -> tuple[list[str], dict[str, int]]:
+    """`clean_html_to_lines`' output plus {anchor_id: line index} for each
+    id that exists in the document. A marker paragraph is inserted before
+    every anchored element, the document is converted once, and the markers
+    are stripped back out of the resulting lines — so the returned lines are
+    the document's own lines and the indices point into them directly."""
+    html_path = Path(html_path)
+    opener = gzip.open if html_path.suffix == ".gz" else open
+    with opener(html_path, "rt", encoding="utf-8", errors="ignore") as f:
+        html_content = f.read()
+    soup = BeautifulSoup(html_content, "html.parser")
+    marked: list[str] = []
+    for anchor_id in anchor_ids:
+        element = soup.find(id=anchor_id) or soup.find("a", attrs={"name": anchor_id})
+        if element is None:
+            continue
+        marker = soup.new_tag("p")
+        marker.string = f"{_ANCHOR_MARK_PREFIX}{len(marked)}ZZ"
+        element.insert_before(marker)
+        marked.append(anchor_id)
+
+    markdown_text = _to_markdown(str(soup))
+    positions: dict[str, int] = {}
+    out: list[str] = []
+    for raw_line in markdown_text.split("\n"):
+        line = raw_line.strip()
+        found = _ANCHOR_MARK_RE.findall(line)
+        if found:
+            line = _ANCHOR_MARK_RE.sub("", line).strip()
+        if line:
+            out.append(line)
+        # A marker that survived on a line of its own contributes no line of
+        # its own, so the anchor points at the NEXT line appended; one that
+        # got merged into real content points at that content's own line.
+        for n in found:
+            positions.setdefault(marked[int(n)], len(out) - 1 if line else len(out))
+    return out, positions
+
+
+#: Two resolved anchors are the minimum that can bound a section at all
+#: (one start, one end); a single one carries no boundary information and
+#: would run to the end of the document.
+_MIN_RESOLVED_ANCHORS = 2
+
+
+def _add_toc_anchor_segments(
+    segments: dict[str, str],
+    lines: list[str],
+    all_raw: list[tuple[str, int]],
+    toc_prefix_len: int,
+    toc_end_line: int,
+    html_path: Path,
+    replaceable: set[str] | None = None,
+) -> None:
+    """Fill in item keys the heading-based segmentation never produced,
+    cutting them at their TOC rows' anchor targets (see the block comment
+    above). Additive: a key already carrying real, heading-derived text is
+    left untouched.
+
+    `replaceable` (the by-elimination keys `_segment_window` reported as
+    synthetic) is the one exception. A synthetic Item 1 spans everything
+    from the end of the TOC to the first heading actually found, which is
+    only right when Item 1's content really does come first — on a filing
+    that orders MD&A BEFORE the financial statements (WFC's 10-Qs
+    confirmed) it swallows MD&A whole and mislabels it Item 1. The TOC
+    anchor states where Item 1 actually starts, so it supersedes the guess
+    wherever it resolves; where the two agree (a filer whose statements do
+    open the body) the replacement is the same span anyway."""
+    if toc_prefix_len == 0:
+        return
+    entries = _toc_anchor_entries(lines, all_raw[:toc_prefix_len])
+    entry_keys = {key for key, _ in entries}
+    missing = (entry_keys - set(segments)) | (entry_keys & (replaceable or set()))
+    if not missing:
+        return
+
+    anchor_lines, positions = _lines_with_anchor_positions(
+        html_path, [anchor for _, anchor in entries])
+    # An anchor landing inside the TOC itself is a self-referencing row, not
+    # a section start — it would cut a "section" out of the index.
+    resolved = sorted(
+        ((key, positions[anchor]) for key, anchor in entries
+         if anchor in positions and positions[anchor] > toc_end_line),
+        key=lambda kv: kv[1],
+    )
+    if len(resolved) < _MIN_RESOLVED_ANCHORS:
+        return
+
+    for i, (key, start_idx) in enumerate(resolved):
+        if key not in missing:
+            continue
+        end_idx = resolved[i + 1][1] if i + 1 < len(resolved) else len(anchor_lines)
+        text = "\n".join(anchor_lines[start_idx:end_idx])
+        if text.strip():
+            segments[key] = text
 
 
 def load_extraction_trace(config: dict, output_prefix: str = "filing_sections") -> pd.DataFrame:

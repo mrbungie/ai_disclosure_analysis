@@ -27,26 +27,27 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "analytics"))
 import call_regression as C  # noqa: E402
 
+# Outcome column per target: a level keeps `_post`, a margin and a spread are
+# read as the change they record, in percentage points (call_regression.
+# CHANGE_TARGETS).
 TARGETS = {
-    "log_market_cap": "Log market cap",
-    "rd_intensity": "R&D / sales",
-    "gross_margin": "Gross margin",
-    "ps_ratio": "Price-to-sales",
-    "next_revenue_yoy": "Revenue growth (t+1)",
-    "roic_minus_wacc": "ROIC − WACC",
+    "log_market_cap": ("log_market_cap_post", "Log market capitalization"),
+    "gross_margin": ("gross_margin_change_pp", "Gross margin expansion (pp)"),
+    "ps_ratio": ("ps_ratio_post", "Price-to-sales ratio"),
+    "next_revenue_yoy": ("next_revenue_yoy_post", "Revenue growth (%)"),
+    "roic_minus_wacc": ("roic_minus_wacc_change_pp", "Change in ROIC-WACC spread (pp)"),
 }
 
 
 def main() -> None:
     panel = C.attach_fundamentals(C.load_call_panel())
     tables, samples = [], []
-    for target, label in TARGETS.items():
-        y_col = f"{target}_post"
+    for target, (y_col, label) in TARGETS.items():
         res, d = C.fit(panel, y_col, C.AI_VARS + [C.PRE_CONTROL[target]] + C.controls_for(y_col))
-        tables.append(C.coef_table(res, C.AI_VARS + C.WEIGHTS, target=target))
+        tables.append(C.coef_table(res, C.AI_VARS + C.REPORTED_WEIGHTS, target=target))
         samples.append(C.sample_row(res, d, target=target))
-        print(f"{label:22s} n={len(d):5d} firms={d.ticker.nunique():4d} | "
-              + " | ".join(f"{v}: {res.params[v]:+.3f} (p={res.pvalues[v]:.3f})" for v in C.AI_VARS + C.WEIGHTS))
+        print(f"{label:32s} n={len(d):5d} firms={d.ticker.nunique():4d} | "
+              + " | ".join(f"{v}: {res.params[v]:+.3f} (p={res.pvalues[v]:.3f})" for v in C.AI_VARS + C.REPORTED_WEIGHTS))
     out = C.L.results_path("call_beta", "call_beta_generalized_targets.csv")
     pd.concat(tables, ignore_index=True).to_csv(out, index=False)
     pd.DataFrame(samples).to_csv(out.parent / "call_beta_generalized_targets_samples.csv", index=False)

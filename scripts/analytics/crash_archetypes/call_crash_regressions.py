@@ -35,14 +35,14 @@ def main() -> None:
         for weights in (False, True):
             target = f"{name}_{'weights' if weights else 'base'}"
             res, d = C.fit(panel, y_col, regressors, raw=C.WEIGHTS if weights else [])
-            tables.append(C.coef_table(res, C.AI_VARS + (C.WEIGHTS if weights else []) + [pre_col], target=target))
+            tables.append(C.coef_table(res, C.AI_VARS + (C.REPORTED_WEIGHTS if weights else []) + [pre_col], target=target))
             samples.append(C.sample_row(res, d, target=target))
             print(f"{target}: N={len(d)} firms={d.ticker.nunique()} R2={res.rsquared:.4f}")
 
     export = pd.concat(tables, ignore_index=True)
     export.to_csv(C.L.results_path("crash_archetypes", "call_crash_archetype_regressions.csv"), index=False)
     pd.DataFrame(samples).to_csv(C.L.results_path("crash_archetypes", "call_crash_archetype_regression_samples.csv"), index=False)
-    print(export[export["variable"].isin(C.AI_VARS + C.WEIGHTS)][["target", "variable", "beta_std", "p"]].round(3).to_string(index=False))
+    print(export[export["variable"].isin(C.AI_VARS + C.REPORTED_WEIGHTS)][["target", "variable", "beta_std", "p"]].round(3).to_string(index=False))
 
 
 if __name__ == "__main__":

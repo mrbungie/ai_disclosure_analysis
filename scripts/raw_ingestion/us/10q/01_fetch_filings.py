@@ -42,7 +42,12 @@ def main():
     filing_date = config["corpus"]["filings_10q"]["filing_date"]
     edgar_fetch.fetch_filings(
         universe_df=universe_df,
-        form="10-Q",
+        # The config's form list, not a hardcoded "10-Q": edgartools matches
+        # the form code exactly, so the transition-period variant 10-QT
+        # (same quarterly report, filed when a company changes its fiscal
+        # year end) is only fetched if it is named. fetch_filings already
+        # accepts a list and keeps each filing's own form code.
+        form=config["corpus"]["filings_10q"]["forms"],
         start_date=filing_date["from"],
         end_date=filing_date["to"],
         allow_amendments=config["corpus"]["filings_10q"].get("amendments", False),

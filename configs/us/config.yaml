@@ -11,7 +11,12 @@ corpus:
     amendments: false
   filings_10q:
     forms:
+    # 10-QT is the SAME quarterly report, filed for a TRANSITION period when
+    # a company changes its fiscal year end (UAA, 2022-05-09). Querying only
+    # "10-Q" drops it: edgartools matches the form code exactly, so the
+    # transition-period variant never appears in the manifest at all.
     - 10-Q
+    - 10-QT
     filing_date:
       from: '2021-01-01'
       to: '2026-09-01'

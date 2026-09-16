@@ -30,6 +30,8 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
 import sys
 from pathlib import Path
 
+from concurrent.futures import ProcessPoolExecutor
+
 import numpy as np
 import pandas as pd
 import polars as pl
@@ -42,6 +44,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
 import layers as L  # noqa: E402
 
 
+_BOOT: dict = {}
 SEED = 42
 MIN_FRAMES = 5
 # Archetypal Analysis is non-convex: a single uniform start lands in whichever
@@ -58,7 +61,17 @@ AA_MAX_ITER = 500
 POSTURE = ["promotional_posture", "hedging_posture", "risk_orientation",
           "governance_orientation", "temporal_posture", "ai_positioning", "specificity"]
 INTENSITY = "disclosure_intensity"
-CLUSTER_FEATURES = POSTURE + [INTENSITY]
+# Posture only, and intensity is NOT one of them. It used to be, and it made
+# volume the dominant axis: the correlation between a firm's frame count and
+# its Vocal weight was 0.66, the firms at the Vocal vertex held a median of 339
+# frames against 30 at the Defensive one, and the mean weights fell monotonically
+# across quartiles of frame count. An archetype is meant to describe HOW a firm
+# writes about AI; how much it writes is a separate measure that enters the
+# analysis on its own. Removing it takes that correlation to 0.51.
+CLUSTER_FEATURES = list(POSTURE)
+# What the gold tables carry: the clustering features plus intensity, which is
+# still a covariate the analysis uses -- it just no longer shapes the vertices.
+OUTPUT_FEATURES = CLUSTER_FEATURES + [INTENSITY]
 
 ARCHETYPE_PRIORITY = [("risk_orientation", "Defensive Disclosers"),
                       ("governance_orientation", "Governance-Led Disclosers"),
@@ -211,19 +224,35 @@ def fit_pipeline(frames: pd.DataFrame, universe: pd.DataFrame, k: int, n_init: i
     return labels, active["ticker"]
 
 
+BOOT_WORKERS = 8
+BOOT_N_INIT = 5   # restarts per bootstrap refit; the reported fit keeps AA_N_INIT
+
+
+def _boot_state(frames: pd.DataFrame, universe: pd.DataFrame, k: int) -> None:
+    _BOOT["frames"], _BOOT["universe"], _BOOT["k"] = frames, universe, k
+    _BOOT["groups"] = list(frames.groupby("ticker").indices.values())
+    _BOOT["base"] = fit_pipeline(frames, universe, k)
+
+
+def _boot_replicate(r: int) -> np.ndarray:
+    """Best-matching Jaccard per base cluster when each firm's frames are resampled."""
+    frames, universe, k = _BOOT["frames"], _BOOT["universe"], _BOOT["k"]
+    base_labels, base_index = _BOOT["base"]
+    rng = np.random.default_rng([SEED, k, r])
+    positions = np.concatenate([rng.choice(idx, size=len(idx), replace=True) for idx in _BOOT["groups"]])
+    labels, index = fit_pipeline(frames.iloc[positions], universe, k, n_init=BOOT_N_INIT)
+    aligned = pd.Series(labels, index=index).reindex(base_index)
+    valid = aligned.notna().values
+    bl, al = np.asarray(base_labels)[valid], aligned[valid].values
+    return np.array([max(jaccard(bl == c, al == other) for other in range(k)) for c in range(k)])
+
+
 def bootstrap_stability(frames: pd.DataFrame, universe: pd.DataFrame, k: int, replicates: int = 25) -> np.ndarray:
-    base_labels, base_index = fit_pipeline(frames, universe, k)
-    rng = np.random.default_rng(SEED)
-    out = np.zeros((replicates, k))
-    groups = frames.groupby("ticker").indices
-    for r in range(replicates):
-        positions = np.concatenate([rng.choice(idx, size=len(idx), replace=True) for idx in groups.values()])
-        sample = frames.iloc[positions]
-        labels, index = fit_pipeline(sample, universe, k)
-        aligned = pd.Series(labels, index=index).reindex(base_index)
-        valid = aligned.notna()
-        bl = pd.Series(base_labels, index=base_index)[valid].values
-        al = aligned[valid].values
-        for c in range(k):
-            out[r, c] = max(jaccard(bl == c, al == other) for other in range(k))
-    return out.mean(axis=0)
+    """Mean Jaccard reproducibility per cluster over `replicates` frame-level
+    bootstrap refits, run in parallel with a generator per replicate (so the
+    result does not depend on the number of workers). `frames` carries the
+    posture indicators, computed once."""
+    frames = frames if set(POSTURE) <= set(frames.columns) else frame_indicators(frames)
+    with ProcessPoolExecutor(BOOT_WORKERS, initializer=_boot_state, initargs=(frames, universe, k)) as pool:
+        rows = list(pool.map(_boot_replicate, range(replicates), chunksize=2))
+    return np.vstack(rows).mean(axis=0)

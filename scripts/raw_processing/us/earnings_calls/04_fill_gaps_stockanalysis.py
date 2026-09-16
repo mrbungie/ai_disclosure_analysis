@@ -73,6 +73,7 @@ _equibles = import_module("03_fill_gaps_equibles")
 existing_periods = _equibles.existing_periods
 
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+TICKER_ALIASES = REPO_ROOT / "configs" / "us" / "ticker_aliases.csv"
 BASE_URL = "https://stockanalysis.com"
 FROM_YEAR, TO_YEAR = 2021, 2026
 FORM_TYPE = "Earnings call transcript"
@@ -195,6 +196,23 @@ def fetch_transcript(slug: str, detail_slug: str) -> dict:
     return {"structured_content": turns, "content": content, "company_name": company_name}
 
 
+def with_aliases(universe: pd.DataFrame) -> pd.DataFrame:
+    """One extra row per former vendor symbol (configs/us/ticker_aliases.csv),
+    carrying the firm's CIK. A vendor files a firm's calls under the symbol
+    the firm traded as at the time (Fox Corporation under the Class A symbol
+    FOXA, Healthpeak under PEAK), and that symbol is not in the universe, so
+    without this row the calls are never fetched. `through` is the last fiscal
+    quarter filed under the alias: after it the symbol is another company's
+    (PEAK's successor symbol DOC is Physicians Realty's until the merger) and
+    fetching past it would collect the wrong firm's calls."""
+    aliases = pd.read_csv(TICKER_ALIASES)
+    cik_by_ticker = dict(zip(universe["ticker"], universe["cik"]))
+    rows = [{"ticker": a.alias, "cik": cik_by_ticker[a.ticker], "through": a.through}
+            for a in aliases.itertuples() if a.ticker in cik_by_ticker]
+    universe = universe.assign(through=pd.NA)
+    return pd.concat([universe, pd.DataFrame(rows)], ignore_index=True) if rows else universe
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -217,13 +235,14 @@ def main() -> None:
     equibles_manifest_path = manifest_dir / "filing_manifest_earnings_calls_equibles.parquet"
     own_manifest_path = manifest_dir / "filing_manifest_earnings_calls_stockanalysis.parquet"
 
-    universe = pd.read_csv(REPO_ROOT / "configs" / "us" / "universe.csv")
+    universe = with_aliases(pd.read_csv(REPO_ROOT / "configs" / "us" / "universe.csv"))
     if args.tickers:
         wanted = [t.strip().upper() for t in args.tickers.split(",")]
         universe = universe[universe["ticker"].str.upper().isin(wanted)]
     if args.limit_tickers:
         universe = universe.head(args.limit_tickers)
     cik_by_ticker = dict(zip(universe["ticker"], universe["cik"]))
+    through_by_ticker = dict(zip(universe["ticker"], universe["through"]))
 
     covered = existing_periods([hf_manifest_path, equibles_manifest_path, own_manifest_path])
     pipeline_logger.log_event(pipeline_step="us_fill_gaps_stockanalysis", level="INFO",
@@ -261,8 +280,10 @@ def main() -> None:
             continue
         time.sleep(RATE_LIMIT_SECONDS)
 
+        through = through_by_ticker.get(ticker)
         gaps = [e for e in events
                if FROM_YEAR <= e["fiscal_year"] <= TO_YEAR
+               and (pd.isna(through) or f"{e['fiscal_year']}Q{e['fiscal_quarter']}" <= through)
                and (norm, e["fiscal_year"], e["fiscal_quarter"]) not in covered]
         if not gaps:
             continue

@@ -35,16 +35,22 @@ import call_regression as C  # noqa: E402
 
 L = C.L
 OUT_DIR = L.results_path("crash_archetypes", "call_archetype_full_battery_targets.csv").parent
+# A level a firm carries (beta, size, a multiple, a skewness) is reported as
+# its post-call level with the pre-call level as its own control; a margin and
+# a spread, which move little and revert, are reported as the CHANGE they
+# record, in percentage points. Asset turnover was measured and left out: its
+# post-call level is 97% explained by its pre-call level, so the design has
+# nothing to find there and the outcome would only tighten the correction
+# threshold for the rest.
 TARGETS = {
-    "beta_post_63": ("beta_pre", "Market Beta (post)"),
-    "log_market_cap_post": ("log_market_cap_pre", "Log Market Cap"),
-    "rd_intensity_post": ("rd_intensity_pre", "R&D / Sales"),
-    "gross_margin_post": ("gross_margin_pre", "Gross Margin"),
-    "ps_ratio_post": ("ps_ratio_pre", "Price-to-Sales"),
-    "next_revenue_yoy_post": ("revenue_yoy_pre", "Revenue Growth (t+1)"),
-    "roic_minus_wacc_post": ("roic_minus_wacc_pre", "ROIC - WACC"),
-    "ncskew_post": ("ncskew_pre", "NCSKEW"),
-    "duvol_post": ("duvol_pre", "DUVOL"),
+    "beta_post_63": ("beta_pre", "Market beta"),
+    "log_market_cap_post": ("log_market_cap_pre", "Log market capitalization"),
+    "gross_margin_change_pp": ("gross_margin_pre", "Gross margin expansion (pp)"),
+    "roic_minus_wacc_change_pp": ("roic_minus_wacc_pre", "Change in ROIC-WACC spread (pp)"),
+    "next_revenue_yoy_post": ("revenue_yoy_pre", "Revenue growth (%)"),
+    "ps_ratio_post": ("ps_ratio_pre", "Price-to-sales ratio"),
+    "ncskew_post": ("ncskew_pre", "Negative return skewness (NCSKEW)"),
+    "duvol_post": ("duvol_pre", "Down-to-up volatility (DUVOL)"),
 }
 EXCLUDED_SECTORS = ["Financial Services", "Utilities", "Healthcare & Pharma"]
 
@@ -89,23 +95,86 @@ def fit_target(panel: pd.DataFrame, y_col: str):
     return C.fit(panel, y_col, C.AI_VARS + [TARGETS[y_col][0]] + C.controls_for(y_col))
 
 
+def posture_contrasts(result, target: str, label: str) -> pd.DataFrame:
+    """The four comparisons the composition supports. Each is a REALLOCATION of
+    weight between vertices holding everything else constant, not a comparison
+    between firms labelled by their dominant archetype: a firm that is half
+    Defensive and half Vocal enters both coefficients at half weight, and a
+    coefficient describes moving a whole unit of weight from one vertex to
+    another, which almost no firm does.
+
+    Governance vs Vocal is a difference of two estimated coefficients, so it
+    needs the covariance between them (a linear restriction, not arithmetic on
+    the table): its significance does not follow from the two p-values."""
+    rows = [("Defensive vs. no posture", "has_posture = 0"),
+            ("Vocal vs. Defensive", "w_voc = 0"),
+            ("Governance vs. Defensive", "w_gov = 0"),
+            ("Governance vs. Vocal", "w_gov - w_voc = 0")]
+    out = []
+    for name, restriction in rows:
+        t = result.t_test(restriction)
+        out.append({"target": target, "label_outcome": label, "contrast": name,
+                    "beta": float(np.squeeze(t.effect)), "se": float(np.squeeze(t.sd)),
+                    "p": float(np.squeeze(t.pvalue))})
+    joint = result.f_test("w_voc = 0, w_gov = 0")
+    out.append({"target": target, "label_outcome": label, "contrast": "Composition (joint)",
+                "beta": float("nan"), "se": float("nan"), "p": float(joint.pvalue)})
+    return pd.DataFrame(out)
+
+
+def regression_report(result, d, target: str, label: str, fes=("sic2", "anio")) -> str:
+    """The statsmodels summary an appendix can carry: every estimated term
+    except the fixed effects, which are collapsed into one line each.
+
+    Printing the dummies themselves would add 58 rows per outcome and say
+    nothing -- what a reader needs from an absorbed block is whether it is
+    jointly different from zero, so each block reports its size and its own F
+    test."""
+    keep = [c for c in result.params.index if not any(c.startswith(f"{f}_") for f in fes)]
+    body = pd.DataFrame({"coef": result.params[keep], "std err": result.bse[keep],
+                         "t": result.tvalues[keep], "P>|t|": result.pvalues[keep],
+                         "[0.025": result.conf_int().loc[keep, 0],
+                         "0.975]": result.conf_int().loc[keep, 1]}).round(4)
+    lines = [f"{label}  ({target})",
+             f"  observations {len(d):,} | firms {d['ticker'].nunique()} | "
+             f"R2 {result.rsquared:.4f} | adj. R2 {result.rsquared_adj:.4f} | "
+             f"SE clustered by firm", "", body.to_string(), ""]
+    for f in fes:
+        cols = [c for c in result.params.index if c.startswith(f"{f}_")]
+        if not cols:
+            continue
+        test = result.f_test(" = 0, ".join(cols) + " = 0")
+        lines.append(f"  {f} fixed effects: {len(cols)} dummies absorbed | "
+                     f"F = {float(test.fvalue):.2f}, p = {float(test.pvalue):.2e}")
+    return "\n".join(lines) + "\n" + "=" * 78 + "\n"
+
+
 def main() -> None:
     panel = C.attach_fundamentals(C.attach_crash_risk(C.load_call_panel()))
     panel["sector"] = panel["ticker"].map(sector_map()).fillna("Other / Diversified")
 
-    tables = []
+    tables, contrasts, reports = [], [], []
     for y_col, (pre_col, label) in TARGETS.items():
         res, d = fit_target(panel, y_col)
         regressors = C.AI_VARS + [pre_col] + C.controls_for(y_col)
         pr2 = C.partial_r2(panel, y_col, regressors, C.AI_VARS)
-        tables.append(C.coef_table(res, C.AI_VARS + C.WEIGHTS, target=y_col, label_outcome=label, n_calls=len(d),
-                                   n_firms=d.ticker.nunique(), r2=res.rsquared, partial_r2_ai_arch=pr2))
+        # every estimated term the table reports: the disclosure block, the
+        # outcome's own lag and the controls. Fixed effects are absorbed and
+        # reported as present rather than enumerated.
+        tables.append(C.coef_table(res, C.AI_VARS + C.REPORTED_WEIGHTS + [pre_col] + C.controls_for(y_col),
+                                   target=y_col, label_outcome=label, n_calls=len(d),
+                                   n_firms=d.ticker.nunique(), r2=res.rsquared, partial_r2_ai_arch=pr2,
+                                   pre_control=pre_col))
+        contrasts.append(posture_contrasts(res, y_col, label))
+        reports.append(regression_report(res, d, y_col, label))
         print(f"{label:22s} n={len(d):5d} firms={d.ticker.nunique():4d} r2={res.rsquared:.3f} pR2={pr2:.4f} | "
-              + " | ".join(f"{v} {res.params[v]:+.3f} (p={res.pvalues[v]:.3f})" for v in C.WEIGHTS))
+              + " | ".join(f"{v} {res.params[v]:+.3f} (p={res.pvalues[v]:.3f})" for v in C.REPORTED_WEIGHTS))
     targets = pd.concat(tables, ignore_index=True)
     targets.to_csv(OUT_DIR / "call_archetype_full_battery_targets.csv", index=False)
+    pd.concat(contrasts, ignore_index=True).to_csv(OUT_DIR / "call_archetype_posture_contrasts.csv", index=False)
+    (OUT_DIR / "call_archetype_regression_report.txt").write_text("\n".join(reports))
 
-    fam = targets[targets["variable"].isin(C.WEIGHTS)][["target", "variable", "beta_std", "p"]]
+    fam = targets[targets["variable"].isin(C.REPORTED_WEIGHTS[1:])][["target", "variable", "beta_std", "p"]]
     fam = fam.sort_values("p").reset_index(drop=True)
     m = len(fam)
     fam["rank"] = np.arange(1, m + 1)
@@ -124,10 +193,10 @@ def main() -> None:
     for check, sample in samples.items():
         for y_col in ("ncskew_post", "duvol_post"):
             res, d = fit_target(sample, y_col)
-            robust.append(C.coef_table(res, C.AI_VARS + C.WEIGHTS, check=check, target=y_col,
+            robust.append(C.coef_table(res, C.AI_VARS + C.REPORTED_WEIGHTS, check=check, target=y_col,
                                        n_calls=len(d), n_firms=d.ticker.nunique(), r2=res.rsquared))
             print(f"{check:18s} {y_col:12s} n={len(d)} firms={d.ticker.nunique()} | "
-                  + " | ".join(f"{v} {res.params[v]:+.3f} (p={res.pvalues[v]:.3f})" for v in C.WEIGHTS))
+                  + " | ".join(f"{v} {res.params[v]:+.3f} (p={res.pvalues[v]:.3f})" for v in C.REPORTED_WEIGHTS))
     pd.concat(robust, ignore_index=True).to_csv(OUT_DIR / "call_archetype_full_battery_robustness.csv", index=False)
 
 

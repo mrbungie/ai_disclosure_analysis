@@ -28,7 +28,7 @@ def main() -> None:
     tables = []
     for y_col, pre_col in OUTCOMES:
         res, d = C.fit(panel, y_col, C.AI_VARS + [pre_col] + C.controls_for(y_col))
-        t = C.coef_table(res, C.AI_VARS + C.WEIGHTS + [pre_col], target=y_col)
+        t = C.coef_table(res, C.AI_VARS + C.REPORTED_WEIGHTS + [pre_col], target=y_col)
         t["n_calls"], t["n_firms"], t["r2"] = len(d), d.ticker.nunique(), res.rsquared
         tables.append(t)
         print(f"\n=== {y_col}: N={len(d)}, firms={d.ticker.nunique()}, R2={res.rsquared:.4f}")

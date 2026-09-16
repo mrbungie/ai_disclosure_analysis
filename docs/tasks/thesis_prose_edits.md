@@ -242,47 +242,88 @@ these changed (old -> new):
   MSFT, AAPL, WELL) read the new grounding index and W from gold/results; e.g.
   AAPL 2024 W 0.176 -> 0.140, WELL 2025 0.225 -> 0.140.
 
-## Earnings-call manifest checks, delisted firms, CAR/SUE removal (2026-09-15)
+## Earnings-call manifest checks, delisted firms, CAR/SUE removal, point-in-time incremental signal (2026-09-16)
 
 Silver keeps one results call of the firm per fiscal quarter (other companies'
-calls, non-results events, duplicate transcripts excluded; call date and fiscal
-period from the transcript) and drops every document and price of a delisted
-firm after its delisting date. Inline values that moved (all chunks and 246
-inline expressions evaluate):
+calls, non-results events, duplicate transcripts and calls not yet enriched
+excluded; the call's firm, date and fiscal period read from the transcript)
+and drops every document and price of a delisted firm after its delisting
+date. The incremental-signal decomposition moved to the firm-quarter grain.
+All chunks and 246 inline expressions evaluate; the values that moved:
 
-- **Corpus counts (Data chapter, Appendix A).** Documents 59,818 -> 59,421; AI
-  frames 70,353 -> 69,184; disclosed activities 47,767 -> 46,529; firms with
-  activities 477 -> 471; 2026 call coverage 464 -> 452; firm-years 2,893 ->
-  2,890.
-- **Posture chapter.** Transition shares: No AI -> Vocal max 4.8 -> 4.9%, No AI
-  -> Defensive 2021-2022 2.0 -> 2.1%; 2023-2024 persistence 56.5 -> 56.4%;
-  Industrials deploy deviation -8.3 -> -8.4; sector matrix n 224 -> 222, ratio
-  6.8 -> 7.0, cells 24.8 -> 24.6 and 35.2 -> 33.9; Vocal/Governance ratios 2.26
-  -> 2.16 and 1.59 -> 1.61; volume R^2 0.70 -> 0.72; k = 2 vertex locations
-  -1.90 -> -1.91, -0.02 -> -0.01.
+- **Corpus counts (Data chapter, Appendix A).** Documents 59,818 -> 59,392;
+  AI frames 70,353 -> 69,186; disclosed activities 47,767 -> 46,531; firms
+  with activities 477 -> 471; balanced-panel firms 466 -> 465; 2026 coverage
+  10-K 424 -> 423, 10-Q 464 -> 463, calls 464 -> 451; 2025 10-K 474 -> 473;
+  firm-years 2,893 -> 2,887; washing-score panel 1,885 -> 1,882 firm-years,
+  476 -> 475 firms.
+- **Posture chapter.** Firms in the archetype fit 450 -> 449 (No AI 48 -> 49);
+  governance-promotional correlation 0.12 -> 0.13; Defensive share 2026 51.3
+  -> 51.2%; transitions No AI -> Vocal max 4.8 -> 4.9%, No AI -> Defensive
+  2021-2022 2.0 -> 2.1% and 2025-2026 47.8 -> 47.2%, No AI -> Governance-Led
+  2025-2026 20.0 -> 20.2%; persistence 2023-2024 56.5 -> 56.1%, 2024-2025 59.8
+  -> 59.7%, 2025-2026 63.3 -> 63.4%; Vocal/Defensive ratio 2.26 -> 2.15,
+  Governance ratio 1.59 -> 1.61; volume R^2 0.70 -> 0.72; 10-K refit r Vocal
+  0.926 -> 0.927, Governance-Led 0.273 -> 0.274, common tickers 422 -> 421;
+  k = 2 vertices +2.05 -> +2.04 and -0.02 -> -0.01; PCA variance 42.9/18.1 ->
+  43.0/18.2 (61.1 -> 61.2 total); 2026 out-of-sample firms 417 -> 416, ARI
+  2021-2025 0.552 -> 0.551; intensity estimate 2026 0.196 -> 0.197.
 - **Activity inventory.** Ladder shares 87.7/65.7/44.3 -> 87.8/65.8/44.2;
-  growth ratio 5.2 -> 5.1, projection 7.6 -> 7.5; deployed share 2026 73 -> 72%;
-  named product 46 -> 45%; own-brand 87.2 -> 87.4%, external vendor 5.4 ->
-  5.3%, firms with an external provider 66.9 -> 67.3%; vendor shares OpenAI /
-  Microsoft 27.3 -> 27.0, Google 17.2 -> 16.8, NVIDIA 12.4 -> 12.1, AWS 9.6 ->
-  9.3.
-- **Channel gap.** Cells 796 -> 787, firms 289 -> 284; internal-deployment p
-  0.25 -> 0.23, proprietary p 0.0048 -> 0.0049, customer-facing gap +7.4 ->
-  +7.2 pp; named function on calls +6.7 -> +6.5 pp, quantified outcome +9.2 ->
-  +9.3 pp; promotional per call 0.118 -> 0.119, quantified 0.074 -> 0.076,
-  ratio 19.3 -> 19.5.
+  growth ratio 5.2 -> 5.1, projection 7.6 -> 7.5; deployed share 2026 73 ->
+  72%, named product 46 -> 45%; own-brand 87.2 -> 87.4%, external vendor 5.4
+  -> 5.3%, firms with an external provider 66.9 -> 67.3%; vendor shares OpenAI
+  / Microsoft 27.3 -> 27.0, Google 17.2 -> 16.8, NVIDIA 12.4 -> 12.1, AWS 9.6
+  -> 9.3; sector matrix n 224 -> 222, ratio 6.8 -> 7.0, cells 24.8 -> 24.6 and
+  35.2 -> 33.9; Industrials deploy deviation -8.3 -> -8.4.
+- **Channel gap.** Cells 796 -> 786, firms 289 -> 283; internal-deployment p
+  0.25 -> 0.23, customer-facing gap +7.4 -> +7.2 pp; named function on calls
+  +6.7 -> +6.5 pp, quantified outcome +9.2 -> +9.3 pp, named product +8.8 ->
+  +9.0 pp, governance -10.1 -> -10.2 pp; promotional per call 0.118 -> 0.119,
+  quantified 0.074 -> 0.076, ratio 19.3 -> 19.5.
 - **Call-level beta regression (beta_post_63).** N 8,637 calls / 446 firms ->
-  8,568 / 445; W +0.002 (p 0.801) -> +0.002 (p 0.832); HistW +0.055 -> +0.053
-  (p < 0.001); cumulative intensity +0.030 (p 0.011) -> +0.030 (p 0.009); w_voc
-  +0.042 (p 0.261) -> +0.040 (p 0.272); w_gov -0.023 (p 0.675) -> -0.022
-  (p 0.685); w_def -0.049 (p 0.079) -> -0.048 (p 0.081). No sign or
+  8,583 / 445; W +0.002 (p 0.801) -> (p 0.832); HistW +0.055 -> +0.053
+  (p < 0.001); cumulative intensity p 0.011 -> 0.009; w_voc +0.042 (p 0.261)
+  -> +0.041 (p 0.269); placebo coefficient 0.113 -> 0.127. No sign or
   significance change.
-- **Crash risk (NCSKEW, DUVOL).** N 8,222 -> 8,156 calls, 446 -> 445 firms.
-  NCSKEW: intensity -0.037 (p 0.009) -> -0.038 (p 0.008); w_def +0.166
-  (p 0.001) -> +0.163 (p 0.001). DUVOL: intensity -0.048 (p 0.002) -> -0.049
-  (p 0.002); w_def +0.188 -> +0.186 (p < 0.001). W and HistW stay insignificant.
-- **Operational screens.** Extreme-decoupling tail 20 -> 19; dual-channel
-  firms 452 -> 441.
-- Hard-coded prose that quotes CAR, SUE, `car_m1_p5` or the appendix
-  crosscheck FDR count ("11 correlations") must go: the crosscheck now reports
-  9 pairs (the two CAR pairs are removed).
+- **Crash risk (NCSKEW, DUVOL).** Sample 8,222 -> 8,156 calls; W and HistW
+  stay insignificant, cumulative intensity and the Defensive weight keep their
+  sign and significance (NCSKEW intensity -0.037 -> -0.038, w_def +0.166 ->
+  +0.163; DUVOL intensity -0.048 -> -0.049, w_def +0.188 -> +0.186).
+- **Decoupling validation and screens.** Persistence pairs 1,373 -> 1,371,
+  rho +0.595 -> +0.596; screen counts: validate 37.4 -> 37.5%, deprioritize
+  188 -> 187 (40.3 -> 40.2%), indexed firms 466 -> 465, disclosing 444 -> 443,
+  dual-channel 452 -> 440; comment-letter panel n 1,502 -> 1,501.
+- **Incremental-value decomposition (fig-nlp-horse-race, Chapter 6 and
+  Appendix C).** The decomposition is now point in time on firm-quarters:
+  predictors are the firm-quarter covariates known at `as_of_date` (mention
+  counts, posture rates and archetype weights, disclosed activities, the
+  decoupling index W, all over the last four quarters of 10-K/10-Q/8-K/DEF
+  14A text) and outcomes are measured after it (next-quarter beta and
+  idiosyncratic volatility, price-to-sales at the next quarter end, and the
+  R&D intensity and revenue growth of the fiscal quarter ending after the
+  as-of date). Delta R^2 over fundamentals and sector x quarter fixed effects:
+
+  | outcome | n | mentions | posture | activity | washing |
+  |---|---|---|---|---|---|
+  | next-quarter beta | 4,406 | +0.0565 | +0.0182 | +0.0139 | +0.0008 |
+  | next-quarter idiosyncratic volatility | 4,406 | +0.0347 | +0.0164 | +0.0156 | +0.0014 |
+  | price-to-sales at the next quarter end | 3,670 | +0.0007 | +0.0127 | +0.0234 | +0.0004 |
+  | R&D intensity of the next fiscal quarter | 1,896 | +0.0000 | +0.0284 | +0.0282 | +0.0085 |
+  | revenue growth of the next fiscal quarter | 3,828 | +0.0260 | +0.0035 | +0.0174 | +0.0000 |
+
+  The prose keeps its finding: valuation is explained by how AI is described
+  (posture +1.3 pp and disclosed activity +2.3 pp of R^2, mention counts
+  +0.1 pp), market risk by how much (mentions +5.7 pp on beta, +3.5 pp on
+  idiosyncratic volatility), and W adds almost nothing anywhere (<= 0.0009
+  outside R&D intensity, where it adds 0.0085 on the smaller disclosing
+  subsample). The hard-coded "+4.2 percentage points" for price-to-sales
+  becomes +3.7 pp (posture + activity) and the models are relabelled: M2 is
+  the posture block (seven posture rates and the archetype weights), M3 adds
+  the disclosed activities, M4 the decoupling index. Appendix C's description
+  of Model 0 ("sector-by-year fixed effects") is now sector-by-quarter, and
+  the robustness list (10-K only text, excluding IT/communications, composition
+  shares, permutation test) is replaced by firm fixed effects on the same
+  panel.
+- Hard-coded prose that quotes CAR, SUE or `car_m1_p5` must go, and the
+  appendix crosscheck reports 9 FDR pairs, not 11 (the two CAR pairs are
+  removed).

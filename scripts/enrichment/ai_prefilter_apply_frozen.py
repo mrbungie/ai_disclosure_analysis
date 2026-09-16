@@ -61,12 +61,22 @@ def main() -> None:
 
     proba = model.predict_proba(corpus[columns].astype(float).to_numpy())[:, 1]
     named_entity = corpus["named_entity_match"].astype(bool).to_numpy()
+    # Un término fuerte nombra la IA directamente, así que decide por sí solo:
+    # el modelo puede añadir textos que el léxico no ve, nunca quitar los que sí.
+    # Medido antes de esto: de 1.778 párrafos con "agentic", 197 no llegaban al
+    # juez, y al leerlos la mayoría era divulgación real (workloads agénticos,
+    # sistemas que actúan con autonomía), no boilerplate. La asimetría ya está
+    # escrita en `weighted_f1`: un falso positivo cuesta una llamada al juez y se
+    # descarta, un falso negativo no se recupera nunca.
+    strong_lexical = corpus["strong_ge1"].astype(bool).to_numpy()
     model_positive = proba >= threshold
-    is_positive = model_positive | named_entity
+    is_positive = model_positive | named_entity | strong_lexical
     rescued = int((named_entity & ~model_positive).sum())
+    by_lexicon = int((strong_lexical & ~model_positive & ~named_entity).sum())
     instances = int(corpus.loc[is_positive, "duplicate_count"].sum())
     print(f"Marcados: {int(is_positive.sum()):,} textos únicos ({100 * is_positive.mean():.2f}%), "
-          f"{instances:,} instancias — {rescued:,} sólo por named_entity_match")
+          f"{instances:,} instancias — {rescued:,} sólo por named_entity_match, "
+          f"{by_lexicon:,} sólo por término fuerte")
 
     anchors_run = pc.current_scores_run()
 

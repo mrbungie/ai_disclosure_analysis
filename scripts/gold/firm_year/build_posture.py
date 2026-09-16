@@ -26,7 +26,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "gold" / "posture"))
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "gold" / "firm"))
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
-from posture_features import CLUSTER_FEATURES, INTENSITY, POSTURE, build_posture, load_frames, shrink_to_prior  # noqa: E402
+from posture_features import (CLUSTER_FEATURES, INTENSITY, OUTPUT_FEATURES, POSTURE, build_posture,
+                              load_frames, shrink_to_prior)  # noqa: E402
 
 import joblib  # noqa: E402
 import numpy as np  # noqa: E402
@@ -62,7 +63,7 @@ def main() -> None:
     for col in CLUSTER_FEATURES:
         panel.loc[active, col] = within_year[col]
     spine = L.GOLD_SPINE_COLUMNS["firm_year"]
-    L.write_gold("covariates", "firm_year", "posture", panel[spine + CLUSTER_FEATURES], builder=BUILDER,
+    L.write_gold("covariates", "firm_year", "posture", panel[spine + OUTPUT_FEATURES], builder=BUILDER,
                  extra={"population_fit": "shrinkage prior and intensity rank within each calendar year"})
 
     bundle = joblib.load(MODEL_PATH)

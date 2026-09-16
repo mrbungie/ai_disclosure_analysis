@@ -43,7 +43,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "gold" / "posture"))
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
 from posture_features import (  # noqa: E402  (pins BLAS threads before numpy/archetypes import)
-    ARCHETYPE_PRIORITY, CLUSTER_FEATURES, INTENSITY, MIN_FRAMES, POSTURE, bootstrap_stability,
+    ARCHETYPE_PRIORITY, CLUSTER_FEATURES, INTENSITY, MIN_FRAMES, OUTPUT_FEATURES, POSTURE, bootstrap_stability,
     build_posture, load_frames, pca_diagnostic, shrink_to_prior,
 )
 
@@ -66,7 +66,10 @@ def main() -> None:
 
     shrunk = shrink_to_prior(active[POSTURE], active["n_frames"])
     shrunk[INTENSITY] = active["frames_per_1k"].rank(pct=True).values
-    corr = shrunk[CLUSTER_FEATURES].corr()
+    # Descriptive, so it keeps intensity: how volume relates to each posture
+    # dimension is worth seeing precisely BECAUSE intensity no longer enters the
+    # fit. The PCA below stays on the fitted features.
+    corr = shrunk[OUTPUT_FEATURES].corr()
 
     X = StandardScaler().fit_transform(shrunk[CLUSTER_FEATURES].values)
     pca = pca_diagnostic(X, CLUSTER_FEATURES)

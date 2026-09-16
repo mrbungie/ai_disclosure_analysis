@@ -10,10 +10,9 @@
 Render the thesis into a final, submission-ready .docx.
 
 Pipeline:
-  0. Refresh every deterministic data layer and analytics output the thesis
-     cites (`make layers analytics`) so the render can never bake in stale
-     numbers from a script someone forgot to re-run -- see
-     `refresh_analytics()`.
+  0. Optionally refresh the data layers the thesis cites, chosen with
+     `--refresh=analytics|gold|layers`. The default rebuilds nothing: a render
+     reads what is on disk -- see `refresh_analytics()`.
   1. Render thesis.qmd with Quarto (executing inline Python blocks for all figures).
   2. Post-process all data tables in docx: compact booktabs styling, tight cell
      margins, repeating headers, non-splitting rows, and calibrated typography.
@@ -393,28 +392,36 @@ def fix_hyperlink_style(document: Document) -> None:
     style.font.color.rgb = RGBColor(0, 0, 0)
 
 
-def refresh_analytics() -> None:
-    """Rebuild every deterministic data/gold/ and data/results/ output the
-    thesis cites (`make layers analytics`, see the repo Makefile), before
-    Quarto ever reads them.
+REFRESH_TARGETS = {
+    "none": (),
+    "analytics": ("analytics",),          # results/ only, from the gold already on disk
+    "gold": ("gold", "analytics"),        # gold/ and results/, from silver
+    "layers": ("layers", "analytics"),    # bronze and silver too -- minutes, rarely needed
+}
 
-    Without this, a render is only as fresh as whoever last remembered to
-    re-run the right scripts by hand -- exactly how `call_beta_*`,
-    `strategy_economic_profiles.json`, and `bootstrap_jaccard_results.
-    json` went stale for days after `activity_profiles.py`/
-    `build_strategy_dimensions.py` changed (2026-09-13). No LLM calls, no
-    API spend: `make layers` rebuilds the gold layer from silver/bronze
-    (which DID cost LLM calls upstream and are never touched here), and
-    `make analytics` rebuilds the results layer on top of it.
 
-    Does NOT rebuild silver/bronze from the raw corpus (minutes-long) or run
-    `b2-check` (multi-session B2 sync) -- run `make refresh-stale` by hand
-    first if the underlying corpus or the AI classify/activities runs
-    themselves changed, not just the gold/analytics layers built on top of
-    them.
+def refresh_analytics(targets: tuple[str, ...]) -> None:
+    """Rebuild the layers named by `--refresh` before Quarto reads them.
+
+    The default is to rebuild NOTHING. A render used to run `make layers
+    analytics` every time, and `layers` depends on `bronze`, which carries no
+    cache guard: every render therefore re-derived paragraphs and sentences
+    from the whole raw corpus -- around ten minutes -- whether or not anything
+    upstream had changed. Rendering is not the moment to discover that, and a
+    document is not made fresher by recomputing inputs nobody touched.
+
+    So the caller says what to refresh. `analytics` re-runs the results layer
+    over the gold already on disk, which is what changes when an analysis
+    script changes. `gold` adds the gold rebuild, for when a gold builder
+    changed. `layers` adds bronze and silver, for when the corpus itself did.
+    Nothing here makes LLM calls or spends API budget.
+
+    Stage-level selection still works underneath: SKIP and ONLY filter the
+    cached stages (scripts/common/run_cached.sh), so
+    `--refresh=analytics ONLY=call-beta` re-runs one stage.
     """
     repo_root = ROOT.parent
-    subprocess.run(["make", "layers", "analytics"], check=True, cwd=repo_root)
+    subprocess.run(["make", *targets], check=True, cwd=repo_root)
 
 
 def render_quarto_content(tmp_dir: Path) -> Path:
@@ -624,11 +631,18 @@ def main() -> None:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     final_path = COMPILED_DIR / f"{AUTHOR_SLUG}_FinalThesis_{timestamp}.docx"
 
-    if "--skip-analytics" in sys.argv:
-        print("[0/6] Skipping analytics refresh (--skip-analytics) -- numbers may be stale.")
+    refresh = "none"
+    for arg in sys.argv[1:]:
+        if arg.startswith("--refresh="):
+            refresh = arg.split("=", 1)[1]
+    if refresh not in REFRESH_TARGETS:
+        raise SystemExit(f"--refresh must be one of {', '.join(REFRESH_TARGETS)}")
+    if refresh == "none":
+        print("[0/6] Rendering the data as it stands (--refresh=none, the default).")
     else:
-        print("[0/6] Refreshing analytics outputs (make layers analytics)...")
-        refresh_analytics()
+        targets = REFRESH_TARGETS[refresh]
+        print(f"[0/6] Refreshing: make {' '.join(targets)}...")
+        refresh_analytics(targets)
 
     with tempfile.TemporaryDirectory(prefix="thesis_render_") as tmp:
         tmp_dir = Path(tmp)

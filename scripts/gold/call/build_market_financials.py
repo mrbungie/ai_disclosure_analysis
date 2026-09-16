@@ -68,7 +68,7 @@ COV_FINANCIALS = (["accession_number", "filing_date_pt", "revenue", "operating_i
                    "asset_turnover", "roa", "shares_out", "debt_to_equity", "liabilities_to_assets",
                    "rd_intensity_pre", "gross_margin_pre", "revenue_yoy_pre", "roic_minus_wacc_pre"]
                   + [f"{c}_pre" for c in VALUE_COMPONENTS])
-TGT_FINANCIALS = (["rd_intensity_post", "gross_margin_post", "next_revenue_yoy_post",
+TGT_FINANCIALS = (["rd_intensity_post", "gross_margin_post", "next_revenue_yoy_post", "asset_turnover_post",
                    "roic_minus_wacc_post"] + [f"{c}_post" for c in VALUE_COMPONENTS])
 
 

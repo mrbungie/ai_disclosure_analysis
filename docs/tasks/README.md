@@ -65,7 +65,7 @@ Line numbers there predate the polars migration; re-check before editing.
     already broken (Chile/Italy removal), so those cells fail until then.
     Coordinate: other sessions edit thesis.qmd.
 12. **Retire DuckDB completely** — after 11: move `duckdb/thesis.duckdb` to
-    `data/deprecated/`, migrate `ui-validator/build_sample.py` and
+    `data/deprecated/`, migrate `apps/validator/build_sample.py` and
     `summarize.py`, drop `duckdb` from `pyproject.toml`, update `render.py`
     docstring.
 13. **Cleanup** — orphan/deprecated files in `processed/clusters` →

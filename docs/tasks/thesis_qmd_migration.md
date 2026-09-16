@@ -167,7 +167,7 @@ Path repoints once task step 9 moved the files:
 ## Phase 8 — Retire DuckDB
 
 After a clean render: move `duckdb/thesis.duckdb` to `data/deprecated/duckdb/`,
-migrate `ui-validator/build_sample.py` and `ui-validator/summarize.py` to
+migrate `apps/validator/build_sample.py` and `apps/validator/summarize.py` to
 polars + layers, remove `duckdb` from `pyproject.toml`, and move
 `data/processed/` to `data/deprecated/processed/` (task step 13).
 

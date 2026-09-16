@@ -39,7 +39,7 @@ import layers as L  # noqa: E402
 # dos rellenos de huecos (03/04, scripts/us/earnings_calls/) que sí cubren
 # 2026. Si un mismo document_id apareciera en más de una, gana la primera de
 # esta lista (prefijo de `source`).
-CALL_SOURCE_PRIORITY = ["huggingface:", "equibles:", "stockanalysis.com:"]
+CALL_SOURCE_PRIORITY = ["huggingface:", "equibles:", "stockanalysis.com:", "equibles_backfill:"]
 CALL_FORM_TYPE = "Earnings call transcript"
 FILING_FORMS = ("10-K", "10-Q", "DEF 14A", "8-K")
 

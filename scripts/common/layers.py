@@ -184,13 +184,19 @@ def write_gold(kind: str, grain: str, family: str, df, *, builder: str,
                inputs: list[Path] | tuple = (), extra: dict | None = None) -> Path:
     """Write data/gold/<kind>/<grain>/<family>.parquet and its manifest.
 
-    The frame must carry the grain's spine columns; they are moved first. A
-    spine must have unique keys. A covariate/target family or a dataset must
+    The frame must carry the grain's spine columns; they are moved first; a
+    covariate/target family drops the spine's attribute columns. A spine must
+    have unique keys. A covariate/target family or a dataset must
     have exactly the spine's rows, with the same id, keys and date. Rows are
     sorted by the spine keys."""
     if kind == "datasets" and family != grain:
         raise ValueError(f"datasets/{grain}/{family}: a grain has one dataset, datasets/{grain}/{grain}")
     spine_cols, keys = GOLD_SPINE_COLUMNS[grain], gold_keys(grain)
+    if kind in GOLD_FAMILY_KINDS:
+        import pyarrow.parquet as pq
+        # spine attributes (e.g. delisted, sic2) belong to the spine, not to a family read off it
+        attributes = set(pq.read_schema(GOLD / "spines" / grain / f"{grain}.parquet").names) - set(spine_cols)
+        df = df.drop(columns=[c for c in df.columns if c in attributes])
     missing = [c for c in spine_cols if c not in df.columns]
     if missing:
         raise ValueError(f"{kind}/{grain}/{family}: missing spine columns {missing}")

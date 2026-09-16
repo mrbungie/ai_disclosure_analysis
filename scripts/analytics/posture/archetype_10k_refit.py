@@ -52,12 +52,13 @@ import polars as pl
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "gold" / "posture"))
-from posture_features import fit_aa  # noqa: E402
+from posture_features import CLUSTER_FEATURES, fit_aa  # noqa: E402
 import layers as L  # noqa: E402
 
-FEATS = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
-         "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
-POSTURE_COLS_10K = FEATS[:-1]  # everything but disclosure_intensity
+# fitted features come from the one place that defines them: intensity is a
+# covariate, not a posture, so it does not shape the vertices
+FEATS = list(CLUSTER_FEATURES)
+POSTURE_COLS_10K = list(FEATS)  # the fitted features are posture only
 
 
 def _posture_10k(d: pd.DataFrame) -> pd.DataFrame:

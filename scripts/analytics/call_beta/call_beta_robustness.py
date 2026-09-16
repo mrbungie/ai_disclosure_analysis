@@ -47,7 +47,7 @@ FACTORS = ROOT / "data/raw/market/factors/ff3_daily.parquet"
 OUT = ROOT / "data/results/call_beta"
 
 AI = C.AI_VARS
-REPORTED = C.AI_VARS + C.WEIGHTS
+REPORTED = C.AI_VARS + C.REPORTED_WEIGHTS
 CONTROLS = C.BASE_CTRLS + ["idio_vol_pre_default"]
 TECH_SIC2 = {"35", "36", "73"}
 
@@ -195,13 +195,13 @@ def block_firm_fe(panel: pd.DataFrame) -> pd.DataFrame:
 
 
 def block_ai_subsets(panel: pd.DataFrame) -> pd.DataFrame:
-    history = ["hist_w", "intensity_expanding"]
-    call = ["w"]
+    history = ["w_expanding", "intensity_expanding"]
+    call = ["w_call"]
     rows = []
     for name, ai_vars in [("history_only", history), ("call_only", call), ("both", AI)]:
         variables = ai_vars + ["beta_pre_default", *CONTROLS]
         result, _ = fit_fe(panel, variables, "beta_post_126")
-        for v in ai_vars + C.WEIGHTS:
+        for v in ai_vars + C.REPORTED_WEIGHTS:
             rows.append({"block": name, **coef_row(result, v)})
     return pd.DataFrame(rows)
 
@@ -302,7 +302,7 @@ def block_formal_tests(panel: pd.DataFrame) -> dict:
     reduced, _ = fit_fe(d, [v for v in variables if v not in AI], "beta_post_126")
     return {
         "joint_ai_block": wald_joint(result, AI),
-        "joint_archetype_weights": wald_joint(result, C.WEIGHTS),
+        "joint_archetype_weights": wald_joint(result, C.REPORTED_WEIGHTS[1:]),
         "partial_r2_ai_block": float(result.rsquared - reduced.rsquared),
         "n_calls": int(len(d)),
     }
