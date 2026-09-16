@@ -2474,21 +2474,18 @@ plt.show()
 Most firm-years sit close to that diagonal: talking about AI and disclosing grounded activity rank together. $W$ is not a proxy for how much AI a firm discloses: Vocal Substantives populate both the diagonal and the upper-right, high-$D$, high-$S$ region. Instead, it captures how far a firm-year departs from rank alignment: points below the diagonal have disclosure intensity ahead of disclosed substance ($W > 0$), whereas points above it have substance ahead of disclosure ($W < 0$; @fig-ds-alignment-scatter).
 
 ```{python}
-#| label: fig-washing-distribution
-#| fig-cap: "[Distribution of corporate AI disclosure–substance decoupling (W).]{custom-style=\"CaptionText\"}"
+#| label: fig-ds-dumbbell
+#| fig-cap: "[Disclosure intensity and disclosed substance for selected firms, with the gap between them.]{custom-style=\"CaptionText\"}"
 #| echo: false
-#| fig-width: 7.5
-#| fig-height: 4.0
-import json
-from pathlib import Path
+#| fig-width: 7.6
+#| fig-height: 4.2
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import gaussian_kde
-
 
 df = pd.read_parquet(gold("covariates", "firm_year", "washing_score"))
-w = df['w'].dropna()
+w = df["w"].dropna()
+cutoff = w.quantile(0.95)
 validation = results_json("washing", "washing_score_validation.json")
 n_firm_years = validation["n_panel"]
 n_firms_panel = validation["n_firms"]
@@ -2498,64 +2495,57 @@ split_half_rho = validation["split_half"]["spearman"]
 split_half_p = validation["split_half"]["p"]
 split_half_n = validation["split_half"]["n"]
 
-fig, ax = plt.subplots(figsize=(7.5, 4.0), dpi=300)
+# Selection rule, fixed in advance: the last complete year of the panel, firms
+# in the upper half of disclosure intensity so that every case shown does talk
+# about AI, and from those the three largest, three smallest and three
+# closest-to-zero values of W.
+DUMBBELL_YEAR = 2025
+cand = df[(df["year"] == DUMBBELL_YEAR) & (df["w"].notna()) & (df["pct_disclosure"] >= 0.5)].copy()
+cand["abs_w"] = cand["w"].abs()
+groups = [("Talk ahead of substance", cand.nlargest(3, "w")),
+          ("Aligned", cand.nsmallest(3, "abs_w")),
+          ("Substance ahead of talk", cand.nsmallest(3, "w"))]
 
-# Histogram with bins
-n_bins = 45
-counts, bins, patches = ax.hist(w, bins=n_bins, density=True, alpha=0.45, color='#A5AFB6', edgecolor='white', lw=0.8)
+rows, labels, band_edges = [], [], []
+for name, block in groups:
+    band_edges.append(len(rows))
+    for r in block.sort_values("w", ascending=False).itertuples(index=False):
+        rows.append(r)
+        labels.append(r.ticker)
 
-# Color the top 5% bins in rust
-cutoff = w.quantile(0.95)
-for p, b in zip(patches, bins[:-1]):
-    if b >= cutoff:
-        p.set_facecolor('#B85F42')
-        p.set_alpha(0.85)
-        p.set_edgecolor('#B85F42')
+fig, ax = plt.subplots(figsize=(7.6, 4.2), dpi=300)
+y = np.arange(len(rows))[::-1]
+for yi, r in zip(y, rows):
+    colour = "#B85F42" if r.w > 0.05 else ("#355F6B" if r.w < -0.05 else "#7A8891")
+    ax.plot([r.pct_substance, r.pct_disclosure], [yi, yi], color=colour, lw=2.4, alpha=0.75, zorder=1)
+    ax.scatter([r.pct_substance], [yi], s=58, color="#355F6B", zorder=3)
+    ax.scatter([r.pct_disclosure], [yi], s=58, color="#B85F42", zorder=3)
+    x_text = max(r.pct_disclosure, r.pct_substance) + 0.03
+    ax.text(x_text, yi, f"W = {r.w:+.2f}", va="center", fontsize=7.8, fontweight="bold", color=colour)
 
-# KDE curve
-kde = gaussian_kde(w, bw_method=0.15)
-x_grid = np.linspace(w.min() - 0.05, w.max() + 0.05, 300)
-ax.plot(x_grid, kde(x_grid), color='#1C1F22', lw=2.0, label='Kernel density estimate')
+for name, edge in zip([g[0] for g in groups], band_edges):
+    ax.text(-0.13, y[edge] + 0.45, name, fontsize=8.0, fontweight="bold", color="#334155",
+            ha="left", va="bottom", transform=ax.get_yaxis_transform(which="grid"))
+for edge in band_edges[1:]:
+    ax.axhline(y[edge] + 0.5, color="#CBD5E1", lw=0.8)
 
-# Vertical line at zero
-ax.axvline(0, color='#1C1F22', lw=1.2, ls='--')
+ax.scatter([], [], s=58, color="#B85F42", label="Disclosure intensity (D)")
+ax.scatter([], [], s=58, color="#355F6B", label="Disclosed substance (S)")
+ax.legend(fontsize=8.0, loc="lower right", frameon=False, ncol=2)
 
-# Vertical line at 95th percentile
-ax.axvline(cutoff, color='#B85F42', lw=1.2, ls=':')
-ax.text(cutoff + 0.02, ax.get_ylim()[1] * 0.75, f'Top 5% decoupled tail\n(W \u2265 {cutoff:.2f})',
-        fontsize=8.0, fontweight='bold', color='#B85F42')
-
-# Directional zone headers
-ax.text(-0.35, ax.get_ylim()[1] * 0.90, '\u2190 Substance ahead of talk\n(Quiet substance)',
-        ha='center', va='center', fontsize=8.8, fontweight='bold', color='#18323A',
-        bbox=dict(boxstyle='round,pad=0.3', facecolor='#7AA2AE', edgecolor='#7AA2AE', alpha=0.9))
-
-ax.text(0.40, ax.get_ylim()[1] * 0.90, 'Talk ahead of substance \u2192\n(Decoupling / Washing)',
-        ha='center', va='center', fontsize=8.8, fontweight='bold', color='#B85F42',
-        bbox=dict(boxstyle='round,pad=0.3', facecolor='#D5B1A5', edgecolor='#D5B1A5', alpha=0.9))
-
-# Persistence note inside
-stats_text = (
-    'Distribution & Persistence:\n'
-    f'\u2022 n = {n_firm_years:,} firm-years ({n_firms_panel} firms)\n'
-    f'\u2022 YoY Spearman \u03c1 = {persistence_rho:+.3f} (p {"< 0.001" if persistence_p < 0.001 else f"= {persistence_p:.3g}"})\n'
-    f'\u2022 Split-half \u03c1 = {split_half_rho:+.3f} (p {"< 0.001" if split_half_p < 0.001 else f"= {split_half_p:.3g}"})'
-)
-ax.text(0.04, 0.50, stats_text, transform=ax.transAxes, fontsize=8.0,
-        bbox=dict(boxstyle='round,pad=0.35', facecolor='#F1F2F4', edgecolor='#D5D9DD', alpha=0.92))
-
-ax.set_xlabel('Disclosure\u2013Substance Decoupling Index (W = pct_rank(Disclosure) \u2212 pct_rank(Substance))',
-              fontsize=9.0, fontweight='bold')
-ax.set_ylabel('Density', fontsize=9.0, fontweight='bold')
-ax.set_xlim(-0.75, 0.95)
-ax.grid(True, linestyle=':', alpha=0.45)
-ax.spines[['top', 'right']].set_visible(False)
+ax.set_yticks(y)
+ax.set_yticklabels(labels, fontsize=8.6, fontweight="bold")
+ax.set_xlim(0, 1.16)
+ax.set_xticks(np.arange(0, 1.01, 0.2))
+ax.set_xlabel(f"Percentile rank within the {DUMBBELL_YEAR} disclosing panel", fontsize=9.0, fontweight="bold")
+ax.grid(True, axis="x", linestyle=":", alpha=0.45)
+ax.spines[["top", "right", "left"]].set_visible(False)
 plt.tight_layout()
 plt.show()
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* W > 0: narrative intensity ahead of disclosed substance. W < 0: quiet substance. Top 5% decoupled tail highlighted in rust.
+*Notes:* Each firm contributes two points -- its percentile rank of disclosure intensity ($D$) and of disclosed substance ($S$) within the `{python} str(DUMBBELL_YEAR)` disclosing panel -- and the line joining them is $W$. Cases are selected by a rule fixed in advance: among firms in the upper half of disclosure intensity that year, the three largest, the three smallest and the three closest-to-zero values of $W$. Firms in the upper half of $D$ are used so that every case shown is one that talks about AI, which is the setting where the gap is a governance question rather than an artifact of silence.
 :::
 
 ```{python}
@@ -2568,7 +2558,7 @@ split_half_p_str = "< 0.001" if split_half_p < 0.001 else f"= {split_half_p:.3g}
 persistence_n_pairs = validation["persistence"]["n_pairs"]
 ```
 
-$W$ is widely dispersed across firms (@fig-washing-distribution; $\text{standard deviation} =$ `{python} f"{std_w:.2f}"`), with `{python} n_tail` firm-years flagged in the decoupled tail at the 95th percentile ($W \ge$ `{python} f"{cutoff:.2f}"`) -- not firms with no AI interest, but ones that talk about AI heavily while disclosing almost no verifiable operational substance.
+Firms that talk about AI at comparable intensity end up far apart on substance (@fig-ds-dumbbell). Across the panel $W$ is widely dispersed ($\text{standard deviation} =$ `{python} f"{std_w:.2f}"`), with `{python} n_tail` firm-years in the decoupled tail at the 95th percentile ($W \ge$ `{python} f"{cutoff:.2f}"`) -- not firms with no AI interest, but ones that talk about AI heavily while disclosing almost no verifiable operational substance. The tail is where an analyst looks first: a firm ranking in the top quintile on disclosure and the bottom quintile on substance is making claims its own filings do not support.
 
 > **Persistence of the Decoupling Posture:**
 >
