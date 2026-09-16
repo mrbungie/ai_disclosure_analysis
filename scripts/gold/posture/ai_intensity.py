@@ -59,7 +59,18 @@ def _calls_manifest() -> pl.LazyFrame:
 
 
 COUNT_COLUMNS = ["n_frames", "n_promo", "n_quant", "n_spec", "n_risk", "n_gov", "n_hyp", "n_realized",
-                 "n_deployed", "n_revenue_outcome", "n_cost_outcome", "n_ai_investment", "n_ai_infrastructure"]
+                 "n_deployed", "n_revenue_outcome", "n_cost_outcome", "n_ai_investment", "n_ai_infrastructure",
+                 "n_open_source"]
+
+# Open-weight vocabulary, counted only on paragraphs that already carry an AI
+# frame: in filings "open source" on its own is usually a software-licence risk
+# factor, and the frame is what makes the mention about AI. Bounded on both
+# sides so OSS does not match inside a word and `llama` does not match a
+# company name that contains it.
+OPEN_SOURCE_PATTERN = (r"(?i)(^|[^a-z0-9])("
+                       r"open[- ]source|open[- ]weight|open[- ]model|"
+                       r"oss|hugging ?face|llama|mistral|deepseek|qwen|gemma|falcon"
+                       r")([^a-z0-9]|$)")
 
 
 def _any_concept_like(prefix: str) -> pl.Expr:
@@ -89,6 +100,22 @@ def _frame_counts() -> pd.DataFrame:
                  flag(pl.col("concepts").list.contains("infrastructure")).alias("n_ai_infrastructure"))
             .collect()
             .to_pandas())
+
+
+def _open_source_counts() -> pl.LazyFrame:
+    """Paragraphs per document that carry an AI frame AND name open-weight
+    tooling. One count per document, zero where the document has frames but
+    none of them mention it."""
+    framed = (L.scan("silver.ai_frames").filter(pl.col("has_frame"))
+              .select("text_hash").unique())
+    return (L.scan("bronze.paragraphs")
+            .filter(pl.col("is_scorable"))
+            .select("accession_number", "text_hash", "paragraph_text")
+            .join(framed, on="text_hash", how="inner")
+            .filter(pl.col("paragraph_text").str.contains(OPEN_SOURCE_PATTERN))
+            .unique(["accession_number", "text_hash"])
+            .group_by("accession_number")
+            .agg(pl.len().cast(pl.Int64).alias("n_open_source")))
 
 
 def _paragraph_counts() -> pl.LazyFrame:
@@ -132,6 +159,7 @@ def document_table() -> pd.DataFrame:
             .collect(engine="streaming").to_pandas())
     docs = docs.astype({"fecha": "datetime64[us]", "period_end": "datetime64[us]", "call_fy": "Int32"})
     docs = docs.merge(_frame_counts(), on="accession_number", how="left")
+    docs = docs.merge(_open_source_counts().collect().to_pandas(), on="accession_number", how="left")
     docs[COUNT_COLUMNS] = docs[COUNT_COLUMNS].fillna(0.0)
     docs["fecha"] = pd.to_datetime(docs["fecha"])
     docs["quarter"] = docs["fecha"].dt.to_period("Q")
