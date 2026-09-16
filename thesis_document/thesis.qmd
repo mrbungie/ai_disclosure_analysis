@@ -2232,9 +2232,9 @@ n_firms_panel = _validation["n_firms"]
 year_min, year_max = int(_df_w["year"].min()), int(_df_w["year"].max())
 ```
 
-This chapter asks whether a firm's disclosure volume keeps pace with its concrete operational substance. Volume is Disclosure Intensity ($D$: AI frames per thousand words); substance is Disclosed Substance ($S$: log activity count weighted by AI Activity Grounding). The sample is `{python} f"{n_firm_years:,}"` disclosing firm-years (`{python} n_firms_panel` S&P 500 firms, `{python} year_min`–`{python} year_max`, `{python} year_max` shown as year-to-date).
+Does a firm's disclosure volume keep pace with its concrete operational substance? Volume is Disclosure Intensity ($D$: AI frames per thousand words); substance is Disclosed Substance ($S$: log activity count weighted by AI Activity Grounding). The sample is `{python} f"{n_firm_years:,}"` disclosing firm-years (`{python} n_firms_panel` S&P 500 firms, `{python} year_min`–`{python} year_max`, `{python} year_max` shown as year-to-date).
 
-Decoupling ($W_{it}$, defined as the percentile-rank gap between Disclosure Intensity and Disclosed Substance in Section 2.6) tests that alignment directly: $W = 0$ means talk and substance rank the same, $W > 0$ means narrative runs ahead of grounded substance ("decoupling"), and $W < 0$ means "quiet substance."
+Decoupling ($W_{it}$), the percentile-rank gap between Disclosure Intensity and Disclosed Substance, answers that question directly: $W = 0$ means talk and substance rank the same, $W > 0$ means narrative runs ahead of grounded substance ("decoupling"), and $W < 0$ means "quiet substance."
 
 The construct turns the ideas of organizational decoupling [@meyer1977; @westphal1994; @bromley2012] and symbolic disclosure [@delmas2011; @lyon2015; @elhajjar2025] into something observable inside public filings: how much a firm talks about AI compared with the grounded operational activity it is willing to put on the record.
 
@@ -3569,7 +3569,7 @@ $$x_i \approx \sum_{j=1}^k w_{ij} z_j, \quad \text{subject to} \quad \sum_{j=1}^
 
 where $z_j \in \mathbb{R}^7$ are the archetypal coordinate vectors and $w_{ij}$ are the barycentric weights reflecting firm $i$'s posture portfolio.
 
-The archetype count ($k=3$) used throughout this thesis is chosen by the `{python} hd_boot_reps`-replicate dual bootstrap reported in Chapter 2 (@fig-archetype-stability). The supporting robustness checks -- a principal-components diagnostic, the substantive comparison against $k=2$, a fixed-$N$ check, a K-means discrete-clustering cross-check, and out-of-sample temporal validation -- are reported in full below.
+The archetype count ($k=3$) used throughout this thesis is chosen by the `{python} hd_boot_reps`-replicate dual bootstrap reported in Chapter 2 (@fig-archetype-stability). The supporting robustness checks follow: a principal-components diagnostic, the substantive comparison against $k=2$, a fixed-$N$ check, a K-means cross-check and out-of-sample temporal validation.
 
 ### Archetype count: PCA, $k=2$ comparison, fixed-$N$, and K-means robustness {.unnumbered}
 
@@ -3617,7 +3617,7 @@ Freezing on 2021–2025 and testing on the `{python} oos_n_2026` firm-years obse
 
 ### AI disclosure strategy dimensions: correlation diagnostics {.unnumbered}
 
-The correlation structure across the eight AI disclosure strategy dimensions is reported in @tbl-a3-posture-correlation below:
+@tbl-a3-posture-correlation reports the correlation structure across the eight AI disclosure strategy dimensions.
 
 ```{python}
 #| label: tbl-a3-posture-correlation
@@ -3636,11 +3636,11 @@ rows = [[i] + [f"{v:+.2f}" for v in r] for i, r in corr.iterrows()]
 Markdown(tabulate(rows, headers=[""] + list(LABELS.values())))
 ```
 
-The full 14-variable disclosed AI activity profile by disclosure archetype (of which the 6 headline variables are shown in @fig-archetype-activity-heatmap in Chapter 3) is a superset kept in the supplementary analytics files rather than reproduced here.
+The full 14-variable disclosed AI activity profile by archetype, of which @fig-archetype-activity-heatmap shows the 6 headline variables, is kept in the supplementary analytics files rather than reproduced here.
 
 ### Six-dimensional AI activity taxonomy {.unnumbered}
 
-The full distribution of disclosed AI activities across all six dimensions (`{python} f"{hd_n_activities:,}"` AI activities, @tbl-a2-six-dimensions below) underlies the activity-evolution chart in Chapter 3 ("The disclosed-activity landscape").
+@tbl-a2-six-dimensions gives the full distribution of the `{python} f"{hd_n_activities:,}"` disclosed AI activities across all six dimensions.
 
 ```{python}
 #| label: tbl-a2-six-dimensions
