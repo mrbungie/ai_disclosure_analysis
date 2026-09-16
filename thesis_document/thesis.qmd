@@ -3660,31 +3660,25 @@ Markdown(t1 + "\n\n" + t2)
 *Notes:* Computed from the firm-level activity-profile summary. "Business function" has no single dominant category comparable to `customer_service` for customer-success work specifically. Customer success (retention/expansion) is not coded as a separate family from customer support in the current taxonomy.
 :::
 
-### AI vendor lexicon {.unnumbered}
+### External AI technology ecosystem {.unnumbered}
 
-The commercial names behind @fig-vendor-ecosystems and @tbl-vendor-providers are listed in `configs/ai_vendor_ecosystems.yaml`, one entry per provider family with its ecosystem, its specific country and its role in the AI stack. @tbl-c3-vendor-lexicon summarizes the lexicon's coverage; the matched term, the family and the paragraph it was found in are kept in full in the `ai_vendor_mentions` table, so every presence flag in the figure can be traced back to the sentence that produced it.
+Every provider family named by at least one S&P 500 firm inside its AI disclosure appears in @tbl-c3-vendor-ecosystem, with the literal names it was matched on. The fifteen most-cited families carry the concentration reported in @tbl-vendor-providers; the remainder shows how thin the tail is, and how little of it sits outside the United States.
 
 ```{python}
-#| label: tbl-c3-vendor-lexicon
-#| tbl-cap: "[Coverage of the AI vendor lexicon, by ecosystem and role.]{custom-style=\"CaptionText\"}"
+#| label: tbl-c3-vendor-ecosystem
+#| tbl-cap: "[Full external AI technology ecosystem cited by S&P 500 corporations.]{custom-style=\"CaptionText\"}"
 #| echo: false
-import yaml
 from tabulate import tabulate
 from IPython.display import Markdown
 
-_lex = yaml.safe_load((L.REPO_ROOT / "configs" / "ai_vendor_ecosystems.yaml").read_text())
-_present = {f["family"] for f in ve["families"]}
-_rows = []
-for eco in ["United States", "China", "Europe", "Other"]:
-    fams = [v for v in _lex["vendors"] if v["ecosystem"] == eco]
-    roles = sorted({TYPE_LABEL[v["type"]] for v in fams})
-    _rows.append([eco, len(fams), sum(len(v["terms"]) for v in fams),
-                  sum(1 for v in fams if v["family"] in _present), ", ".join(roles)])
-Markdown(tabulate(_rows, headers=["Ecosystem", "Families", "Terms", "Families found", "Roles covered"]))
+rows = [[f["family"], f["country"], TYPE_LABEL[f["type"]], f"{f['pct_firms']:.1f}%",
+         ", ".join(f["terms"][:6])] for f in ve["families"]]
+Markdown(tabulate(rows, headers=["Provider family", "Country", "Role", "% of firms citing",
+                                 "Literal names matched"]))
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* "Families found" counts the provider families at least one firm names in its AI disclosure; a family nobody mentions scores zero rather than being dropped from the lexicon. Country and demonym terms are not part of the lexicon. `{python} f"{len(_lex['context_required'])}"` terms are ordinary words, personal names or multi-vendor products ("copilot", "gemini", "claude", "foundry", "arm") and are counted only when a corroborating term appears in the same paragraph. Product names are kept in their historical form, so a 2023 paragraph saying "Bard" and a 2025 paragraph saying "Gemini" both resolve to Google.
+*Notes:* Families are ordered by the number of firms citing them. A family appears only when another firm names it: a filer's mentions of its own products are excluded, so Microsoft does not cite Microsoft, while Lowe's citing NVIDIA does count. "Literal names matched" lists up to six of the commercial names actually found, most frequent first, out of the candidate names registered for that family. Country and demonym words are not part of the measure: a paragraph discussing the Chinese market without naming a Chinese provider contributes nothing here.
 :::
 
 The sectoral distribution of frames and disclosed AI activities across 2-digit SIC sectors is disaggregated in Appendix G, which also breaks it down by disclosure posture, role, and grounding component.

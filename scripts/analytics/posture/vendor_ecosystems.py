@@ -100,6 +100,15 @@ def main() -> None:
     with open(REPO_ROOT / "configs" / "ai_vendor_ecosystems.yaml") as f:
         lexicon = {v["family"]: v for v in yaml.safe_load(f)["vendors"]}
     family_columns = {column_name(fam): fam for fam in lexicon if column_name(fam) in docs.columns}
+    # The literal names each family was actually matched on, most frequent first.
+    term_family = {t.lower(): v["family"] for v in lexicon.values() for t in v["terms"]}
+    term_counts: dict[str, dict[str, int]] = {}
+    for terms in docs["vendor_terms"]:
+        for term in terms:
+            family = term_family.get(term)
+            if family:
+                term_counts.setdefault(family, {})
+                term_counts[family][term] = term_counts[family].get(term, 0) + 1
     families = []
     for column, family in family_columns.items():
         firms_naming = docs.loc[docs[column], "ticker"].nunique()
@@ -107,7 +116,8 @@ def main() -> None:
         families.append({"family": family, "ecosystem": meta["ecosystem"], "country": meta["country"],
                          "type": meta["type"], "n_firms": int(firms_naming),
                          "pct_firms": float(firms_naming / n_firms * 100),
-                         "n_documents": int(docs[column].sum())})
+                         "n_documents": int(docs[column].sum()),
+                         "terms": sorted(term_counts.get(family, {}), key=lambda t: -term_counts[family][t])})
     families.sort(key=lambda f: -f["n_firms"])
 
     family_trend = {

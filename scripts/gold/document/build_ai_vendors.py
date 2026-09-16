@@ -9,7 +9,8 @@ earnings calls):
                                            ecosystem a presence flag and a
                                            paragraph count, split between the
                                            AI technology stack and enterprise
-                                           software
+                                           software, plus vendor_terms, the
+                                           commercial names actually matched
   covariates/document/ai_vendor_families   one presence flag per provider
                                            family (`vendor_openai`,
                                            `vendor_deepseek`, ...)
@@ -60,8 +61,9 @@ def column_name(family: str) -> str:
 def mentions(spine: pd.DataFrame) -> pd.DataFrame:
     """One row per (document, AI paragraph, family), external mentions flagged."""
     df = (L.scan("silver.ai_vendor_mentions")
-          .select("accession_number", "paragraph_index", "family", "ecosystem", "vendor_type", "vendor_ticker")
-          .unique(["accession_number", "paragraph_index", "family"])
+          .select("accession_number", "paragraph_index", "term", "family", "ecosystem", "vendor_type",
+                  "vendor_ticker")
+          .unique(["accession_number", "paragraph_index", "term"])
           .collect(engine="streaming").to_pandas())
     df = df.merge(spine[["accession_number", "ticker"]], on="accession_number", how="inner")
     df["is_self_reference"] = df["vendor_ticker"].eq(df["ticker"])
@@ -97,6 +99,10 @@ def main() -> None:
         out[f"vendor_entsw_{key}_paragraphs"] = paragraph_count(in_eco[~in_eco["is_stack"]])
         out[f"vendor_stack_{key}"] = out[f"vendor_stack_{key}_paragraphs"] > 0
         out[f"vendor_entsw_{key}"] = out[f"vendor_entsw_{key}_paragraphs"] > 0
+
+    named = external.groupby("accession_number")["term"].agg(lambda t: sorted(set(t)))
+    out["vendor_terms"] = out["accession_number"].map(named)
+    out["vendor_terms"] = out["vendor_terms"].apply(lambda v: v if isinstance(v, list) else [])
 
     L.write_gold("covariates", "document", "ai_vendors", out, builder=BUILDER)
 
