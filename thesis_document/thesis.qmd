@@ -325,15 +325,15 @@ _pf_forms = {r["form"]: r for r in results_json("prefilter", "form_validation_me
 
 # Executive Summary {.unnumbered}
 
-After ChatGPT was released at the end of 2022, almost every firm in the S&P 500 began to write about artificial intelligence. Once disclosure is that widespread, counting keywords no longer tells a reader whether a firm is executing or only advertising. This thesis builds an open framework for judging the credibility of AI disclosure, which keeps four things apart: narrative volume ($D$), communication posture ($P$), the operational activities a firm reports ($A$), and the documentary evidence behind them ($G$). The framework is applied as a three-step due-diligence routine: **read the communication posture, check the documentary grounding, then compare what the firm says in one corporate channel against what it says in another**.
+After ChatGPT was released at the end of 2022, almost every firm in the S&P 500 began to write about artificial intelligence. Once disclosure is that widespread, counting keywords no longer tells a reader whether a firm is executing or only advertising. This thesis builds an open framework for judging the credibility of AI disclosure, which keeps four things apart: narrative volume, communication posture, the operational activities a firm reports, and the documentary evidence behind them. The framework is applied as a three-step due-diligence routine: read the communication posture, check the documentary grounding, then compare what the firm says in one corporate channel against what it says in another.
 
 The corpus covers `{python} hd_paragraphs_m` million paragraphs from `{python} f"{hd_n_docs:,}"` SEC filings and earnings calls, and from it the study catalogs `{python} f"{hd_n_activities:,}"` operational AI activities in `{python} hd_n_activity_firms` firms. Posture carries information that volume does not: at a comparable disclosure intensity, Vocal Substantives report wider activity portfolios and more customer-facing integration than Governance-Led or Defensive firms. Most of the reported initiatives are applications of external vendor tools rather than proprietary foundation models, and the 2023–2025 surge in narrative added activity volume without improving the average evidence behind it.
 
-The gap between narrative volume and disclosed substance ($W$) looks like a firm characteristic and not like reporting noise: it persists from one reporting cycle to the next. Inside the same firm and fiscal year, voluntary earnings calls are clearly more promotional, and carry more quantified claims, than the statutory 10-K, so the two venues are not interchangeable sources on the same firm. Regulatory attention narrows that distance: after the SEC comment letter to Welltower, the firm restated its AI language in formal terms in the filings that followed.
+The gap between narrative volume and disclosed substance looks like a firm characteristic and not like reporting noise: it persists from one reporting cycle to the next. Inside the same firm and fiscal year, voluntary earnings calls are clearly more promotional, and carry more quantified claims, than the statutory 10-K, so the two venues are not interchangeable sources on the same firm. Regulatory attention narrows that distance: after the SEC comment letter to Welltower, the firm restated its AI language in formal terms in the filings that followed.
 
 The capital-market regressions relate these measures to post-call outcomes. Accumulated decoupling is associated with a higher systematic beta, while the decoupling measured in a single call shows no association across the outcomes tested. Sustained disclosure volume goes with a larger market capitalization and a slightly higher beta; it is the governance-oriented framing, not the volume, that goes with a lower beta.
 
-Those are the empirical results. The same constructs are then assembled into a process that sorts claims by how much they matter, names the verification each one needs, and hands the decision to the economic analysis that follows it. That process is a proposed application and its effectiveness has still to be evaluated. The framework does not label firms as fraudulent or as technologically advanced. An issuer can **compare its own communication** against what it is able to document, and an investor or board can **decide which external claims deserve deeper verification** before committing capital. An adaptation to private companies and early-stage ventures is set out as a proposal; it was not estimated on those firms.
+Those are the empirical results. The same constructs are then assembled into a process that sorts claims by how much they matter, names the verification each one needs, and hands the decision to the economic analysis that follows it. That process is a proposed application and its effectiveness has still to be evaluated. The framework does not label firms as fraudulent or as technologically advanced. An issuer can *compare is own communication against what it is able to document, and an investor or board can decide which external claims deserve deeper verification before committing capital. An adaptation to private companies and early-stage ventures is set out as a proposal; it was not estimated on those firms.
 
 {{< pagebreak >}}
 
@@ -376,7 +376,7 @@ Instead of relying only on external hiring or patent proxies, this study asks wh
 
 ## Hypotheses and research questions
 
-**Main hypothesis.** Beyond raw narrative volume alone, corporate disclosure posture and grounded operational substance carry incremental information about firm operating characteristics (**H-operational**) and market risk (**H-market**).
+**Main hypothesis.** Beyond raw narrative volume alone, corporate disclosure posture and grounded operational substance carry incremental information about firm operating characteristics (H-operational) and market risk (H-market).
 
 Four research questions guide the empirical tests:
 
@@ -562,9 +562,9 @@ Markdown(tabulate([[form, f"{n:,}"] for form, n in rows], headers=["Form", "Docu
 
 ## Core disclosure constructs
 
-To keep rhetoric apart from operational initiative, the framework separates corporate **claims** from **concrete activities**:
+To keep rhetoric apart from operational initiative, the framework separates corporate claims from concrete activities:
 
-- **From text to claims:** a zero-shot language model identifies statements *about* AI along seven communicative dimensions (subject, technology type, temporal stance, functional concepts, specificity signals, promotional tone and sentence anchors). Because every classification carries a sentence-level anchor, an analyst can always go back to the source text.
+- **From text to claims:** a zero-shot language model identifies statements about AI along seven communicative dimensions (subject, technology type, temporal stance, functional concepts, specificity signals, promotional tone and sentence anchors). Because every classification carries a sentence-level anchor, an analyst can always go back to the source text.
 - **From claims to concrete activities:** when a claim describes an operational action by the firm itself, a second pass extracts an action triple (verb, technological object, business function) together with the deployment stage, the origin of the technology and the evidence offered. With this inventory, initiatives can be compared by maturity and evidence instead of by vocabulary.
 
 Claims and activities then aggregate into six analytical constructs (@tbl-six-constructs):
@@ -1921,7 +1921,7 @@ Whether this balance holds over time is a fair question. As external foundation 
 
 ### Technology ecosystems named in AI disclosure
 
-When S&P 500 corporations discuss artificial intelligence, which suppliers do they name? Only commercial names count here: a company, a cloud platform, an accelerator, a model family, read inside paragraphs that already carry an AI disclosure frame, and only when the supplier is somebody else's. Country words are not names: "China" locates a market, not a technology. The **AI technology stack** (model developers, cloud infrastructure, semiconductors) is kept apart from **enterprise software** (applied AI inside business platforms), since a blended number would hide which of the two is moving. [Appendix C](#appendix-c) gives the lexicon and the disambiguation rules.
+When S&P 500 corporations discuss artificial intelligence, which suppliers do they name? Only commercial names count here: a company, a cloud platform, an accelerator, a model family, read inside paragraphs that already carry an AI disclosure frame, and only when the supplier is somebody else's. Country words are not names: "China" locates a market, not a technology. The AI technology stack (model developers, cloud infrastructure, semiconductors) is kept apart from enterprise software (applied AI inside business platforms), since a blended number would hide which of the two is moving. [Appendix C](#appendix-c) gives the lexicon and the disambiguation rules.
 
 ```{python}
 #| label: fig-vendor-ecosystems
@@ -3724,7 +3724,7 @@ $$W_{it} = \text{rank}(D_{it}) - \text{rank}(S_{it}) \in [-1, 1]$$
 
 where $\text{rank}(\cdot) \in [0, 1]$ is the empirical percentile rank computed within a reporting year among AI-disclosing firms. A large positive value is a firm making strong narrative claims with little verifiable backing ("AI washing"); a negative value is a firm with substantial grounded implementation and very little promotion around it.
 
-**Aggregation across documents.** The firm-year indicator is the **median document rate** across everything the firm published in that fiscal period. The median limits the influence of boilerplate legal exhibits, short press releases and outlier filings, which would pull an arithmetic mean around.
+**Aggregation across documents.** The firm-year indicator is the median document rate across everything the firm published in that fiscal period. The median limits the influence of boilerplate legal exhibits, short press releases and outlier filings, which would pull an arithmetic mean around.
 
 **Treatment of zeros and low-volume text.** A firm with no AI claims has $D_{it} = 0$, $A_{it} = 0$, $G_{it} = 0$ and $S_{it} = 0$. Decoupling ($W_{it}$) is defined only over disclosing firms ($D_{it} > 0$), since a rank gap means nothing when there is no narrative at all. For firms with only one or two claims, empirical-Bayes shrinkage toward the sector-year prior is evaluated in [Appendix B](#appendix-b) and the ranking does not depend on low-denominator artifacts.
 
