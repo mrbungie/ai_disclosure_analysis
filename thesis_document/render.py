@@ -62,6 +62,17 @@ if not VENV_PYTHON.exists():
 SOFFICE = shutil.which("soffice") or shutil.which("libreoffice")
 
 
+def iter_runs(paragraph):
+    """Every run of a paragraph, including those wrapped in a w:hyperlink.
+
+    python-docx's `paragraph.runs` walks only direct w:r children, so a link
+    run is invisible to it. With link-citations on every citation is a link,
+    which is exactly the text that then escapes per-run restyling.
+    """
+    from docx.text.run import Run
+    return [Run(node, paragraph) for node in paragraph._p.iter(qn("w:r"))]
+
+
 def is_numeric_content(text: str) -> bool:
     t = text.strip()
     if not t or t in ("—", "-", "N/A", "--", "–"):
@@ -287,7 +298,11 @@ def style_all_tables(document: Document) -> None:
                         else:
                             p.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
-                    for run in p.runs:
+                    # `p.runs` only returns direct w:r children, so every run
+                    # nested inside a w:hyperlink -- which is what a citation
+                    # becomes once link-citations is on -- was skipped and kept the
+                    # body size inside a table set several points smaller.
+                    for run in iter_runs(p):
                         run.font.name = "Calibri"
                         run.font.size = font_size
                         if r_idx == 0:
@@ -511,35 +526,80 @@ def tighten_note_spacing(document: Document) -> None:
             r'w:before="0" w:after="120"/>'))
 
 
-def keep_notes_with_tables(document: Document) -> None:
-    """Keep a table's note on the same page as the table.
+def merge_figure_notes_into_captions(document: Document) -> None:
+    """Run a figure note on from its caption instead of breaking the line.
 
-    A FigureNote sits AFTER the block it annotates, so the caption rule does
-    not reach it: the table can end at the foot of a page and leave its note
-    stranded at the top of the next one, where it reads as a fragment. Setting
-    keepNext on the last row carries the table over with the note instead.
+    `unwrap_captioned_tables` only un-nests a wrapper whose cell holds another
+    table, which is the data-table case. A figure's wrapper holds an image and
+    a caption paragraph, so it survives, and the note that follows it is a
+    sibling of the WRAPPER, not of the caption. The caption has to be found
+    inside it. A note sitting after a real data table finds no ImageCaption
+    there and is left alone, under its table, which is where it belongs.
+
+    The caption is bold and the note is not, so the two cannot share a style;
+    what moves is the runs, and each keeps its own character formatting.
     """
     body = document.element.body
-    for para in body.findall(qn("w:p")):
+    # Read the note colour off the style rather than hardcoding it, so the
+    # merged runs follow the template if it ever changes.
+    note_color = "595959"
+    for style_el in document.styles.element:
+        if style_el.tag == qn("w:style") and style_el.get(qn("w:styleId")) == "FigureNote":
+            style_rPr = style_el.find(qn("w:rPr"))
+            found = style_rPr.find(qn("w:color")) if style_rPr is not None else None
+            if found is not None and found.get(qn("w:val")):
+                note_color = found.get(qn("w:val"))
+    merged = 0
+    for para in list(body.findall(qn("w:p"))):
         pPr = para.find(qn("w:pPr"))
         style = pPr.find(qn("w:pStyle")) if pPr is not None else None
         if style is None or style.get(qn("w:val")) != "FigureNote":
             continue
         previous = para.getprevious()
-        if previous is None or previous.tag != qn("w:tbl"):
+        if previous is None:
             continue
-        rows = previous.findall(qn("w:tr"))
-        if not rows:
+        if previous.tag == qn("w:tbl"):
+            captions = [node for node in previous.iter(qn("w:p"))
+                        if (node.find(qn("w:pPr")) is not None
+                            and node.find(qn("w:pPr")).find(qn("w:pStyle")) is not None
+                            and node.find(qn("w:pPr")).find(qn("w:pStyle")).get(qn("w:val")) == "ImageCaption")]
+            caption = captions[-1] if captions else None
+        elif previous.tag == qn("w:p"):
+            prev_pPr = previous.find(qn("w:pPr"))
+            prev_style = prev_pPr.find(qn("w:pStyle")) if prev_pPr is not None else None
+            caption = previous if (prev_style is not None
+                                   and prev_style.get(qn("w:val")) == "ImageCaption") else None
+        else:
+            caption = None
+        if caption is None:
             continue
-        for row_para in rows[-1].iter(qn("w:p")):
-            row_pPr = row_para.find(qn("w:pPr"))
-            if row_pPr is None:
-                row_pPr = parse_xml(r'<w:pPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>')
-                row_para.insert(0, row_pPr)
-            for existing in row_pPr.findall(qn("w:keepNext")):
-                row_pPr.remove(existing)
-            row_pPr.insert(0, parse_xml(
-                r'<w:keepNext xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>'))
+        caption.append(parse_xml(
+            r'<w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            r'<w:t xml:space="preserve"> </w:t></w:r>'))
+        # The note's look came from the FigureNote PARAGRAPH style, which it
+        # loses on arrival: inside a bold caption paragraph the note would
+        # inherit the bold. Carry the note's own formatting down onto each run
+        # so the caption stays bold and the note keeps its lighter colour.
+        for run in para.iter(qn("w:r")):
+            rPr = run.find(qn("w:rPr"))
+            if rPr is None:
+                rPr = parse_xml(r'<w:rPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>')
+                run.insert(0, rPr)
+            for tag in ("w:b", "w:bCs", "w:color"):
+                for existing in rPr.findall(qn(tag)):
+                    rPr.remove(existing)
+            rPr.append(parse_xml(
+                r'<w:b xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:val="0"/>'))
+            rPr.append(parse_xml(
+                r'<w:bCs xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:val="0"/>'))
+            rPr.append(parse_xml(
+                r'<w:color xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+                r'w:val="%s"/>' % note_color))
+        for node in [child for child in para if child.tag != qn("w:pPr")]:
+            caption.append(node)
+        body.remove(para)
+        merged += 1
+    print(f"      merged {merged} figure notes into their captions")
 
 
 def keep_captions_with_tables(document: Document) -> None:
@@ -642,21 +702,28 @@ def resize_oversized_images(document: Document, max_width_emu: int) -> None:
 
 
 def fix_hyperlink_style(document: Document) -> None:
-    """Force the docx's `Hyperlink` character style to bold black, no
-    underline.
+    """Make a link read exactly like the text around it.
 
-    Pandoc's docx writer always emits its own `Hyperlink` style (blue,
-    single underline) into the output regardless of what `reference-doc`
-    defines for that style name -- editing template/reference.docx alone
-    does not change it, so it has to be patched here, post-render."""
-    try:
-        style = document.styles["Hyperlink"]
-    except KeyError:
-        return
-    style.font.bold = True
-    style.font.italic = False
-    style.font.underline = False
-    style.font.color.rgb = RGBColor(0, 0, 0)
+    Pandoc's docx writer always emits its own link style (blue, underlined)
+    whatever the reference-doc says, so it has to be patched post-render. This
+    used to force bold black, which was fine while the only links were the
+    handful of external URLs; with link-citations on, every citation and every
+    internal reference became bold, and being clickable is not emphasis.
+
+    Emptying the run properties instead leaves the link active while it
+    inherits font, size and colour from wherever it sits, including a table
+    cell set several points smaller than the body. The style is matched on its
+    canonical w:name rather than its id, because this template calls it
+    Hipervnculo and pandoc calls it Hyperlink.
+    """
+    for style in document.styles.element:
+        if style.tag != qn("w:style"):
+            continue
+        name = style.find(qn("w:name"))
+        if name is None or name.get(qn("w:val")) not in {"Hyperlink", "FollowedHyperlink"}:
+            continue
+        for rPr in style.findall(qn("w:rPr")):
+            style.remove(rPr)
 
 
 REFRESH_TARGETS = {
@@ -715,8 +782,8 @@ def render_quarto_content(tmp_dir: Path) -> Path:
     small_caps_headings(doc)
     style_all_tables(doc)
     fix_prose_math_font_size(doc)
+    merge_figure_notes_into_captions(doc)
     tighten_note_spacing(doc)
-    keep_notes_with_tables(doc)
     keep_captions_with_tables(doc)
     style_code_blocks(doc)
     resize_oversized_images(doc, content_width_emu(doc))
