@@ -330,9 +330,9 @@ The corpus covers `{python} hd_paragraphs_m` million paragraphs from `{python} f
 
 The gap between narrative volume and disclosed substance ($W$) looks like a firm characteristic and not like reporting noise: it persists from one reporting cycle to the next. Inside the same firm and fiscal year, voluntary earnings calls are clearly more promotional, and carry more quantified claims, than the statutory 10-K, so the two venues are not interchangeable sources on the same firm. Regulatory attention narrows that distance: after the SEC comment letter to Welltower, the firm restated its AI language in formal terms in the filings that followed.
 
-In the capital-market regressions what gets priced is the firm's disclosure habit, not the operational substance of one particular quarter. Accumulated decoupling predicts a higher systematic beta, while the decoupling measured in a single call adds nothing across the outcomes tested. Sustained disclosure volume goes with a larger market capitalization and a slightly higher beta; it is the governance-oriented framing, not the volume, that goes with a lower beta.
+The capital-market regressions relate these measures to post-call outcomes. Accumulated decoupling is associated with a higher systematic beta, while the decoupling measured in a single call shows no association across the outcomes tested. Sustained disclosure volume goes with a larger market capitalization and a slightly higher beta; it is the governance-oriented framing, not the volume, that goes with a lower beta.
 
-Those are the empirical results. Their practical use is a separate claim, and a weaker one: the same constructs are assembled into a process that sorts claims by how much they matter, names the verification each one needs, and leaves the decision to the economic analysis it cannot perform. The framework does not label firms as fraudulent or as technologically advanced. An issuer can **compare its own communication** against what it is able to document, and an investor or board can **decide which external claims deserve deeper verification** before committing capital. An adaptation to private companies and early-stage ventures is set out as a proposal; it was not estimated on those firms.
+Those are the empirical results. The same constructs are then assembled into a process that sorts claims by how much they matter, names the verification each one needs, and hands the decision to the economic analysis that follows it. That process is a proposed application and its effectiveness has still to be evaluated. The framework does not label firms as fraudulent or as technologically advanced. An issuer can **compare its own communication** against what it is able to document, and an investor or board can **decide which external claims deserve deeper verification** before committing capital. An adaptation to private companies and early-stage ventures is set out as a proposal; it was not estimated on those firms.
 
 {{< pagebreak >}}
 
@@ -356,12 +356,11 @@ These tensions lead to one central question:
 
 This thesis asks whether corporate AI disclosures carry enough grounded operational evidence for a reader to judge the claims made in them. It develops an open measurement framework and applies it to `{python} f"{hd_n_docs:,}"` SEC filings and earnings-call transcripts, testing credibility in four places: the text itself, the choice of disclosure channel, regulatory comment letters, and market prices.
 
-The thesis makes four contributions:
+The thesis makes three contributions:
 
 1. **A credibility framework that issuers and investors can actually use:** diagnostic tools with which an issuer can review its own disclosure against documented execution, and with which an investor can benchmark and screen external claims during due diligence.
 2. **Empirical evidence from both the corporate and the market side:** how narrative disclosure relates to operational activities, how credibility differs between earnings calls and statutory filings, and how the market prices systematic risk.
-3. **A process that turns the diagnosis into priorities:** it ranks claims by materiality, states which verification each kind of gap requires, and stops at the point where economic and technical judgement takes over. This is offered as an application of the measured constructs, not as an estimated result.
-4. **A textual measurement architecture with several dimensions:** instead of counting words, it combines a gradient-boosted filter with zero-shot LLM frame extraction to build six constructs ($D, P, A, G, S, W$) that put informal earnings calls and statutory filings on the same scale.
+3. **A textual measurement architecture with several dimensions:** instead of counting words, it combines a gradient-boosted filter with zero-shot LLM frame extraction to build six constructs ($D, P, A, G, S, W$) that put informal earnings calls and statutory filings on the same scale.
 
 ## Theoretical foundations and state of the art
 
@@ -2975,13 +2974,13 @@ The rest of the chapter follows one order: diagnose the gap between what a firm 
 
 ## Diagnose the communication-evidence gap
 
-The market evidence is asymmetric. Outcomes line up with how much a firm discloses ($D$) and, when the outcome is a price, with whether the firm frames AI through governance, while verifiable operational substance ($S$) and the decoupling of any single call add almost nothing. In this setting, then, market prices do not separate narrative intensity from disclosed execution, and an allocator or a board cannot use market multiples alone to discipline AI disclosure. The measurement architecture is turned here into a credibility framework that can be used in due diligence and in disclosure governance.
+The six constructs were built to be read together, and read together they answer a diagnostic question: where does what a firm says stop matching what it can show? Narrative volume ($D$) locates the claims, posture ($P$) says in which register they are made, disclosed activity ($A$) and grounding ($G$) say what the firm puts on the record behind them, and the gap between volume and substance ($W$) ranks where that distance is widest. None of this settles whether a claim is true. It orders where to look first, which is the scarce decision in both disclosure review and due diligence.
 
 The framework asks three questions in order, and answers each with the same six constructs used throughout: narrative volume ($D$), communication posture ($P$), claimed operational activities ($A$), evidentiary grounding ($G$), substance ($S$) and decoupling ($W$). **Step 1, Posture:** which communication archetype does the firm's register resemble? **Step 2, Execution:** does that posture correspond to grounded operational substance, or only to narrative volume? **Step 3, Venue:** does the execution hold between the voluntary earnings call and the statutory Form 10-K?
 
 ### Screening the S&P 500 at portfolio scale
 
-#### The disclosure intensity and substance heuristic
+**The disclosure intensity and substance heuristic.**
 
 Once the posture is known from Step 1, Step 2 asks whether grounded execution stands behind it. The tool is a 2×2 heuristic built on Disclosure Intensity ($D$) and Disclosed Substance ($S$) (@tbl-screening-matrix). $D$ and $S$ fix the quadrant, and $W$ only orders priority inside it; $W$ is not a fraud classifier. The matrix is a first screen on public disclosure and does not replace technical due diligence [@simonian2025].
 
@@ -3005,9 +3004,14 @@ scr = {
     "explore": int((~_hiD & _hiS).sum()),
     "deprior": int((~_hiD & ~_hiS).sum()),
 }
-scr_pct = {k: v / scr_n_disc * 100 for k, v in scr.items()}
 scr_deprior_total = scr["deprior"] + scr_n_nondisc
-scr_deprior_total_pct = scr_deprior_total / scr_n_index * 100
+# Every cell of the matrix is a share of the SAME denominator, the full index,
+# so the four percentages add to 100 and can be compared to each other. The
+# median cut-offs that define the cells are still taken among disclosers; that
+# is a property of the cut, not of the base the shares are read against.
+_scr_cells = {**scr, "deprior": scr_deprior_total}
+scr_pct = {k: v / scr_n_index * 100 for k, v in _scr_cells.items()}
+scr_deprior_total_pct = scr_pct["deprior"]
 _q95 = _wall.loc[_wall["any_ai"] == 1.0, "w"].quantile(0.95)
 scr_tail = int((_d26["w"] >= _q95).sum())
 scr_neg = int((_d26["w"] < 0).sum())
@@ -3021,15 +3025,15 @@ scr_n_gap = _reconcile["n_gap_z_above_1_5"]
 | **High Disclosure Intensity ($D$)** | **INVESTIGATE** (`{python} scr["investigate"]` firms, `{python} f"{scr_pct['investigate']:.1f}"`%)<br>Audit claims and verify whether oral conference-call claims are reflected in statutory Form 10-Ks; within this quadrant, prioritize by $W$, highest first (Step 3). | **VALIDATE** (`{python} scr["validate"]` firms, `{python} f"{scr_pct['validate']:.1f}"`%)<br>Confirm documented evidence remains cross-venue consistent and operational grounding is sustained. |
 | **Low Disclosure Intensity ($D$)** | **DEPRIORITIZE** (`{python} scr_deprior_total` firms, `{python} f"{scr_deprior_total_pct:.1f}"`% of index)<br>Low narrative exposure with minimal reported activity; lowers priority for dedicated AI disclosure review (not general corporate diligence) unless posture shifts. | **EXPLORE** (`{python} scr["explore"]` firms, `{python} f"{scr_pct['explore']:.1f}"`%)<br>Investigate quiet execution: concrete, grounded operational capability deployed under minimal promotional fanfare; within this quadrant, prioritize by $W$, lowest first. |
 
-: AI Disclosure Decision Heuristic: portfolio screening by disclosure intensity ($D$) and substance ($S$) across the S&P 500 in the 2026 reporting season The denominators differ by cell and are not interchangeable: Investigate, Validate and Explore are percentages of the `{python} scr_n_disc` disclosing issuers, while Deprioritize is a percentage of all `{python} scr_n_index` index firms, because it also absorbs the `{python} scr_n_nondisc` that disclose no AI at all. The Reconcile screen has a third base again, the issuers with both a call and a filing that year. $D$ and $S$ set the quadrant; $W = \text{rank}(D) - \text{rank}(S)$ only ranks priority within it. {#tbl-screening-matrix}
+: AI Disclosure Decision Heuristic: portfolio screening by disclosure intensity ($D$) and substance ($S$) across the S&P 500 in the 2026 reporting season All four cells are shares of the same `{python} scr_n_index` index firms, so they add to the whole index; Deprioritize also absorbs the `{python} scr_n_nondisc` firms that disclose no AI at all. The median cut-offs that place a firm in a cell are taken among the `{python} scr_n_disc` disclosing issuers, which is a property of the cut and not of the base these shares are read against. The Reconcile screen further down has its own base, the issuers with both a call and a filing that year. $D$ and $S$ set the quadrant; $W = \text{rank}(D) - \text{rank}(S)$ only ranks priority within it. {#tbl-screening-matrix}
 
-#### Ordering the triage
+**Ordering the triage.**
 
 Two further cuts order the triage inside the quadrants of @tbl-screening-matrix, using $W$ as a relative ranking and not as an absolute diagnosis. In the Investigate quadrant, `{python} scr_tail` FY2026 firm-years sit above the 95th percentile of $W$ in the full 2021–2026 panel. For those firms the immediate task is to read the ungrounded claims that drive the narrative volume and to look for factual backing in technical documentation or product releases. At the other end, `{python} scr_neg` disclosers have a negative $W$, with the substance rank above the volume rank. A negative $W$ is a ranking, not a cell: these firms sit across the matrix and only those that are also above the median on $S$ and below it on $D$ fall in Explore. What the rank flags is activity that the firm documents more than it advertises, and the work is to catalogue it. Why it is not advertised the measure cannot say: competitive reasons, an editorial choice and simple omission all look the same from outside.
 
 **Step 3, Venue.** A cross-cutting screen, Reconcile, orders the cross-venue verification among the `{python} scr_n_dual` issuers that have both a 2026 earnings call and a 2026 filing. Of these, `{python} scr_n_gap` show an oral-minus-filing promotional gap more than 1.5 standard deviations above the 2026 mean ($Z_{\text{gap}} > 1.5$). Those are the claims to audit across channels first: the analyst compares what was said on the call with the signed Form 10-K and sees whether management pulled back or simply left out the unsubstantiated commercial claims once statutory liability applied.
 
-#### Archetype composition within the quadrants
+**Archetype composition within the quadrants.**
 
 ```{python}
 #| echo: false
@@ -3089,9 +3093,9 @@ The second is what kind of gap it is, which only becomes visible after the verif
 
 : What the diagnosis implies once the claim has been verified. {#tbl-gap-response}
 
-The contribution here is narrow and worth stating plainly: the framework identifies which uncertainty has to be resolved before a decision can be made. It does not pick the initiative to fund, and it does not need to in order to be useful.
+What this buys is specific: before committing capital or approving a claim, a reader knows which uncertainty has to be resolved and what would resolve it. The framework does not choose the initiative to fund, and it does not have to. Deciding what to verify first is the step that was missing.
 
-Materiality and this sorting of responses are a proposed extension of how the framework is applied. Neither is an estimated result, and neither changes the six constructs.
+Materiality and this sorting of responses extend how the framework is applied. Neither is an estimated result, and neither changes the six constructs.
 
 ## Worked decisions: corporate examples
 
@@ -3126,7 +3130,7 @@ rows = {k: [] for k in ["arch", "D", "A", "G", "S", "W", "diag"]}
 diagnoses = {
     "JPM": "Examine whether modest narrative visibility reflects deliberate IP protection or uncommunicated internal deployment.",
     "GS": "Verify whether deep technical grounding in risk factors translates into deployed production systems across business units.",
-    "MSFT": "Validate ongoing cross-venue alignment and monitor scaling milestones without requiring additional grounding follow-up.",
+    "MSFT": "Validate cross-venue alignment, then verify the material initiatives against adoption and contribution evidence.",
     "AAPL": "Review whether governance-framed privacy claims are anchored by concrete system architecture before treating as execution.",
     "WELL": "Reconcile oral conference-call claims against statutory 10-K disclosures to resolve cross-venue divergence.",
 }
@@ -3163,7 +3167,7 @@ Markdown(tabulate(table, headers=["Dimension"] + cols))
 *Notes:* 2024 filing year (Welltower: 2025, covering its FY2024 10-K and the cited call). Percentiles: within-year ranks across S&P 500 constituents. Activity counts include both statutory 10-K filings and voluntary earnings conference calls.
 :::
 
-**Microsoft (MSFT).** *Observation:* the highest narrative volume in the sample sits with one of the largest disclosed activity inventories and the densest documentary grounding in the corpus (@tbl-firm-comparisons). Talk and substance rank almost together. *Diagnosis:* volume here is not promotional excess, and an analyst screening on volume alone would flag this firm and be wrong. The screen has to run on the gap, not on the level. *The question it opens:* dense grounding confirms documentary detail, not audited implementation, and it says nothing about economic return. So the question is not whether the firm talks too much; it is which of these initiatives carry the expectations already in the price. *Conditional decision:* if the material initiatives come with adoption and contribution evidence, the economic case can proceed on them; if the detail turns out to be descriptive only, the growth attributed to them has to be reconsidered even though nothing here looks inflated.
+**Microsoft (MSFT).** *Observation:* the highest narrative volume in the sample sits with one of the largest disclosed activity inventories and the densest documentary grounding in the corpus (@tbl-firm-comparisons). Talk and substance rank almost together. *Diagnosis:* the high volume arrives with documentary substance that is just as high, so the two rank together and the gap is close to zero. An analyst screening on volume alone would flag this firm; the screen has to run on the gap, not on the level. *The question it opens:* dense grounding confirms documentary detail, not audited implementation, and it says nothing about economic return. So the question is not whether the firm talks too much; it is which of these initiatives carry the expectations already in the price. *Conditional decision:* if the material initiatives come with adoption and contribution evidence, the economic case can proceed on them; if the detail turns out to be descriptive only, the growth attributed to them has to be reconsidered even though nothing here looks inflated.
 
 **JPMorgan Chase (JPM) and Goldman Sachs (GS).** *Observation:* both rank higher on grounded activity than on narrative volume, so their $W$ is negative, and both frame AI through controls rather than through products. *Diagnosis:* a negative $W$ is a position relative to peers, nothing more. It does not establish that either firm holds capability it is hiding. *The question it opens:* is the low visibility a competitive choice, a regulatory habit in their sector, or simply an unmanaged one? The measure cannot tell these apart. *Conditional decision:* for an investor comparing them against a louder peer, ask what is being built that the disclosure does not describe, and treat the answer, not the rank, as the evidence; for a board, the question is whether the silence is deliberate, and if it is not, whether it costs anything.
 
@@ -3188,7 +3192,7 @@ For an issuer, disclosure governance means keeping the external communication in
 
 : The AI Disclosure Credibility Checklist: operational guidance for corporate issuers and investment due diligence. {#tbl-checklist}
 
-Each line of the checklist puts a diagnostic question next to the action it implies. A checklist on its own, however, is reviewed once and forgotten, so it needs one artefact behind it: a register of the material claims, holding for each one the claim, its source and date, the initiative it refers to, the maturity of that initiative, the evidence available, the limitations of that evidence, an accountable owner and the date of the next review. That is the deliverable the process produces, and it is what makes the review repeatable rather than annual.
+Each line of the checklist puts a diagnostic question next to the action it implies. Behind it sits the artefact that makes the review repeatable: a register of the material claims, holding for each one the claim, its source and date, the initiative it refers to, the maturity of that initiative, the evidence available, the limitations of that evidence, an accountable owner and the date of the next review. That is the deliverable the process produces, and it is what makes the review repeatable rather than annual.
 
 The two sides run the same register differently (@tbl-process-roles).
 
@@ -3198,6 +3202,8 @@ The two sides run the same register differently (@tbl-process-roles).
 | **Investor and analyst** | Public filings and calls, plus whatever access the relationship allows. | Rank the claims by materiality, put the questions, verify the answers. | Assumptions confirmed, still open, or dropped from the thesis. |
 
 : The same register, from either side of the market. {#tbl-process-roles}
+
+The register needs owners, or it is written once. In a listed issuer, communications or investor relations coordinates it, the owner of each initiative confirms the facts, and finance validates any economic metric that appears in a claim; it is reviewed before a significant publication and whenever something material changes. In a startup those roles collapse onto the founders, which is workable as long as the confirming step stays separate from the drafting one.
 
 Two rules keep the register honest. First, $W$ is a relative position and not a performance target: a firm can improve its rank because peers got noisier, so internal progress has to be tracked against evidence and stated commitments rather than against the ranking. Second, the framework organises documentary uncertainty and stops there. The decision itself still needs the economic, technical and strategic analysis that this framework does not perform.
 
@@ -3219,7 +3225,7 @@ Everything estimated here comes from the S&P 500, where filings are mandatory, s
 
 Four things are worth stating for this setting, because the public-market intuitions mislead here. A startup can communicate credibly without profitability or deployment at scale, and holding it to a large-cap evidence standard is a category error. A demo is not production and a pilot is not sustained adoption. Building on someone else's model does not remove a competitive advantage, so the question is what the firm itself contributes on top. And confidential evidence that has actually been verified belongs in a separate record from public grounding, because the two are not interchangeable when the assessment is later revisited.
 
-A short hypothetical shows the shape of it. A seed-stage company says its product "uses AI to automate claims processing end to end". The register asks what is deployed: one pilot with one insurer, covering the intake step, with a human reviewing every output. The claim is then narrowed to what the evidence supports, an intake automation in pilot with a named partner, and the next milestone is set as the thing that would widen it, a second insurer running without per-output review. The promise did not have to be abandoned. It had to be scoped, and a verifiable next step had to be attached to it.
+A short hypothetical shows the shape of it. A seed-stage company says its product "uses AI to automate claims processing end to end". The register asks what is deployed: one pilot with one insurer, covering the intake step, with a human reviewing every output. The claim is then narrowed to what the evidence supports, an intake automation in pilot with a named partner. The next milestone is a second pilot with the criteria stated in advance: what quality threshold the output has to meet, what it costs to run, and how much human review it still takes. Whether the review then comes out is a product decision and may well be the right one to keep; it is a separate question from whether the capability works in a second setting. The promise did not have to be abandoned. It had to be scoped, and a verifiable next step had to be attached to it.
 
 # Conclusions
 
@@ -3227,13 +3233,13 @@ A short hypothetical shows the shape of it. A seed-stage company says its produc
 
 There is strategic heterogeneity, and separating volume from posture from evidence is what makes it visible. Corporate AI disclosure spread across almost the whole market, from one third of S&P 500 firms in 2021 to more than nine in ten by 2025–2026, while the concrete evidence behind each disclosed activity thinned over the same years: companies talk about AI more than before, and each mention carries less proof. Firms sort into three stable ways of communicating, shaped by their industry, and the style tracks what they report doing rather than only how much they say, since at equal disclosure volume some styles report several times as many concrete activities as others. Promotional claims run further ahead of the evidence on earnings calls than in statutory filings, the gap between talk and evidence is a stable trait of the firm rather than an accident of one year, and the one company observed under direct SEC scrutiny narrowed the gap instead of disputing it.
 
-On the market side the answer is narrower and has to be stated with its correction attached. The associations that survive multiple-testing control are with narrative volume and with posture: cumulative volume goes with a larger firm, a slightly higher beta and a less left-skewed return distribution, and a posture weighted toward Governance goes with a lower beta and a larger size. None of the accounting associations clears the same correction. Disclosed substance separates firms that differ operationally, but that separation is not what these market measures pick up, which is a statement about these specifications and this sample rather than a finding that substance does not matter to value.
+On the market side the answer is narrower and has to be stated with its correction attached. Four associations survive multiple-testing control. Cumulative disclosure volume goes with a larger firm and with a less left-skewed return distribution; accumulated decoupling goes with a higher beta; a posture weighted toward Governance goes with a lower beta and a larger size. The positive association between cumulative volume and beta is nominal and does not survive, and neither does any of the accounting associations. Disclosed substance separates firms that differ operationally, but that separation is not what these market measures pick up, which is a statement about these specifications and this sample rather than a finding that substance does not matter to value.
 
 ## Contributions to knowledge and practice
 
 Three contributions, and they were not established in the same way. The first is a measurement architecture: six constructs that hold narrative volume, communication posture, disclosed activity and documentary grounding apart, extracted at a scale no manual reading reaches and validated against held-out human audits and an external patent benchmark. The second is empirical: the diffusion and thinning of grounding, the three postures and their sectoral sorting, the cross-venue asymmetry in evidence, and the market associations with the correction applied. Both of these were estimated.
 
-The third was not. The process in the preceding chapter, which turns a documentary diagnosis into an order of verification and a conditional decision, is a proposed application. Its components rest on estimated results, but the process itself has not been tested against decisions that people actually took, and the adaptation to private companies and early-stage ventures is a further step out from the evidence again. That distinction is worth keeping in view: a reader can rely on the first two contributions in the ordinary way, and should treat the third as a structure to try rather than a finding to apply.
+The third is a proposed application. The process in the preceding chapter turns a documentary diagnosis into an order of verification and a conditional decision, and its components rest on the estimated results, but it has not yet been tested against decisions people actually took. What it offers is a way to make the review repeatable and to state, for any claim, what would settle it. That is what a reader can take from it, and evaluating whether it improves decisions is the natural next study.
 
 ## Implications for investors and managers
 
@@ -3264,7 +3270,7 @@ The second is to find data where there is currently none. Private companies and 
 
 The third is whether the process changes decisions at all: whether analysts working with the register of claims reach different and better-founded conclusions than analysts reading the same filings without it. The fourth is methodological. A wider panel of company-specific event studies, with a way of isolating one firm's own news from market-wide moves, would replace the single Welltower case with a general design.
 
-Corporate AI disclosure is a structured communication system: the vocabulary spreads quickly, the activity behind it is disclosed unevenly, and the discipline of the evidence depends on the venue. It is neither a reliable proxy for capability nor empty rhetoric. What a decision-maker can do now that was harder before is put the claims of a firm in order of how much they matter, see which of them the firm's own documents support and which it only asserts, and know which question to ask next. That is a smaller thing than a verdict on whether a company is washing. It is also the thing that was missing.
+Corporate AI disclosure is a structured communication system: the vocabulary spreads quickly, the activity behind it is disclosed unevenly, and the discipline of the evidence depends on the venue. It is neither a reliable proxy for capability nor empty rhetoric. What a decision-maker can do now that was harder before is put the claims of a firm in order of how much they matter, see which of them the firm's own documents support and which it only asserts, and know which question to ask next. That is not a verdict on whether a company is washing, and it does not need to be. It is the step that decides where the next hour of work goes.
 
 {{< pagebreak >}}
 
@@ -4083,6 +4089,8 @@ This spread is an estimate. The quarterly filings tag no interest expense, no pr
 
 @tbl-call-beta-paper evaluates the baseline post-call beta model (window $[+21,+63]$) against accounting controls (ROA and leverage) on the same window, and against four further checks estimated directly from raw daily prices over the $[+21,+126]$ window: the Fama–French 3-factor benchmark, a full-year post-call window (+252 days), within-firm fixed effects, and first differences (Delta Beta).
 
+One column does not reproduce the headline result. Comparing a firm against itself rather than against other firms, the positive association between accumulated decoupling and beta disappears, and cumulative intensity reverses to a negative coefficient that is significant. That specification also runs on a longer window than the baseline, so the two changes cannot be separated here. What the rest of the chapter claims for the historical measure holds in the cross-section, which is the comparison the design was built for, and not within a firm over time.
+
 ```{python}
 #| label: tbl-call-beta-paper
 #| tbl-cap: "[Robustness specifications for earnings-call beta regressions.]{custom-style=\"CaptionText\"}"
@@ -4151,7 +4159,7 @@ Markdown(tabulate(rows, headers=headers))
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* Baseline and accounting-control columns use the $[+21,+63]$ headline window; the remaining four columns are estimated over $[+21,+126]$ (or $[+21,+252]$) and their R² is omitted as not directly comparable to the baseline's. HistDisclosure remains positive across every specification; only its statistical significance varies.
+*Notes:* Baseline and accounting-control columns use the $[+21,+63]$ headline window; the remaining four columns are estimated over $[+21,+126]$ (or $[+21,+252]$) and their R² is omitted as not directly comparable to the baseline's. The sign of the disclosure terms is not stable across the whole row. Under firm fixed effects both Cumulative intensity and W historical turn negative, and Cumulative intensity is significantly so. That column changes two things at once relative to the baseline, the within-firm comparison and the estimation window, so the reversal cannot be read as the effect of the fixed effects alone.
 :::
 
 ### The market-relevance battery in full {.unnumbered}

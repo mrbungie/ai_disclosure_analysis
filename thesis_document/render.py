@@ -54,6 +54,7 @@ QMD = ROOT / "thesis.qmd"
 COVER = ROOT / "cover.docx"
 COMPILED_DIR = ROOT / "compiled"
 COMPILED_PDF_DIR = ROOT / "compiled_pdf"
+SHORT_TABLE_ROWS = 9  # header + 8 body rows still fits a page with its caption
 AUTHOR_SLUG = "GermanOviedo"
 VENV_PYTHON = ROOT / ".venv" / "bin" / "python"
 if not VENV_PYTHON.exists():
@@ -241,6 +242,12 @@ def style_all_tables(document: Document) -> None:
             for c in range(num_cols)
         ]
 
+        # A short table that straddles a page break reads as two fragments, and
+        # the orphaned last row looks like an error rather than a layout. Keeping
+        # every row with the next one pushes the whole block to the next page
+        # instead. Only for tables short enough to fit on one page at all: on a
+        # long table, keepNext would chase it to the end of the document.
+        keep_together = len(table.rows) <= SHORT_TABLE_ROWS
         for r_idx, row in enumerate(table.rows):
             trPr = row._tr.get_or_add_trPr()
             trPr.append(parse_xml(r'<w:cantSplit xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>'))
@@ -254,6 +261,8 @@ def style_all_tables(document: Document) -> None:
                     tcPr.append(parse_xml(r'<w:tcBorders xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:bottom w:val="single" w:sz="8" w:space="0" w:color="475569"/></w:tcBorders>'))
 
                 for p in cell.paragraphs:
+                    if keep_together and r_idx < len(table.rows) - 1:
+                        p.paragraph_format.keep_with_next = True
                     p.paragraph_format.space_before = Pt(0.4)
                     p.paragraph_format.space_after = Pt(0.4)
                     p.paragraph_format.line_spacing = 1.0
