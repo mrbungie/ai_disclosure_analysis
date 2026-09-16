@@ -2593,6 +2593,36 @@ def _ad(m, who="treated"):
 
 When regulators question corporate AI claims directly, do issuers fix specific evidentiary gaps or alter their broader disclosure posture? SEC comment letters provide a documented mechanism through which staff prompts more concrete disclosures [@bozanic2017], even as AI materiality standards remain an evolving area [@strauss2025].
 
+Before the case evidence, a panel test asks whether disclosure posture moved at all around the SEC's 2024 warning. Every firm-quarter is scored on the AI disclosure it carried through 2022, before the generative-AI boom, and the design asks whether firms with more of that prior exposure recomposed their posture differently from firms with less after 2024Q1 (@tbl-sec-composition).
+
+```{python}
+#| label: tbl-sec-composition
+#| tbl-cap: "[Differential recomposition of posture after 2024Q1 by pre-2023 AI exposure. Coefficients are the change per standard deviation of exposure, in weight; the three sum to zero because they describe one compositional movement.]{custom-style=\"CaptionText\"}"
+#| echo: false
+from IPython.display import Markdown
+
+_sec = _res_table("posture", "sec_2024_composition_shift.csv")
+_ev = _sec[_sec["event"] == "2024Q1"].set_index("weight")
+
+def _sec_cell(weight, col_beta, col_p):
+    b, p = float(_ev.loc[weight, col_beta]), float(_ev.loc[weight, col_p])
+    body = f"{b:+.3f} ({p:.3f})"
+    return f"**{body}**" if p < 0.05 else body
+
+_lines = ["| Posture weight | Firm and quarter FE | Firm and sector-quarter FE | Pre-event trend |",
+          "|:---|---:|---:|---:|"]
+for w in ("Vocal", "Governance", "Defensive"):
+    _lines.append(f"| {w} | {_sec_cell(w, 'beta_firm+quarter', 'p_firm+quarter')} "
+                  f"| {_sec_cell(w, 'beta_firm+sector-quarter', 'p_firm+sector-quarter')} "
+                  f"| {_sec_cell(w, 'beta_pretrend', 'p_pretrend')} |")
+_lines.append(f"| Firm-quarters | {int(_ev.loc['Vocal', 'n']):,} | {int(_ev.loc['Vocal', 'n']):,} | |")
+Markdown("\n".join(_lines))
+```
+
+More exposed firms shifted weight out of Defensive and into Vocal: `{python} f"{float(_ev.loc['Vocal','beta_firm+sector-quarter']):+.3f}"` and `{python} f"{float(_ev.loc['Defensive','beta_firm+sector-quarter']):+.3f}"` of weight per standard deviation of prior exposure, both with $p$ `{python} pstr(float(_ev.loc['Vocal','p_firm+sector-quarter']))`, while Governance does not move. The three coefficients sum to zero by construction: this is one reallocation reported three ways. It holds with sector-by-quarter fixed effects, which absorb whatever is common to an industry in a quarter, and no differential pre-event trend is detected ($p$ `{python} pstr(float(_ev.loc['Vocal','p_pretrend']))` for Vocal) -- a test that fails to reject, which is not a demonstration that trends were parallel [@roth2022].
+
+What this does not establish is that the SEC caused it. Sector-by-quarter fixed effects remove the *sectoral* component of the generative-AI boom, not the boom itself: within a sector, firms that were already more exposed to AI may respond more strongly to the technology than their own industry's average, and that differential response is observationally identical to a response to scrutiny. A placebo at 2023Q1 reproduces none of the pattern, while one at 2022Q3 produces a smaller Defensive movement of the opposite sign, so the timing is specific but not cleanly so. The defensible statement is that posture recomposed toward Vocal among more exposed firms after 2024Q1, and that this design cannot attribute the recomposition to regulatory scrutiny alone. Nor does the direction contradict a scrutiny response: the Vocal vertex combines promotional language with specificity and claim realization, so moving toward it is not the same as becoming less careful.
+
 The primary empirical finding is how rare direct regulatory scrutiny of corporate AI claims has been. Across all SEC staff comment letters from 2022 to mid-2026, this thesis identifies `{python} sec_n_matched` correspondence threads matching AI terms within the S&P 500 panel. Manual review reveals that only `{python} sec_n_direct` letter directly questioned a firm's operational AI claims: the Welltower inquiry (2025-04-28), which challenged the contrast between a single boilerplate sentence in its 10-K and an "industry-leading" platform claimed on its earnings call. A second letter was adjacent (Arista Networks, regarding customer segment reporting), while all remaining matches represent incidental mentions of business segments or proxy proposals (@tbl-g1-sec-letters in Appendix F). Through mid-2026, regulatory enforcement on AI washing represents a targeted, singular intervention rather than a systematic market-wide sweep.
 
 ```{python}
@@ -3921,6 +3951,33 @@ Markdown(tabulate(arch_reg_rows, headers=headers_arch))
 ::: {custom-style="FigureNote"}
 *Notes:* Standardized coefficients with $p$-values in parentheses, standard errors clustered by firm, additive sector and year fixed effects. Continuous controls include the outcome's own pre-call level, 60-day return momentum, and return on assets (and log market capitalisation where it is not the outcome). The posture weights are reallocations away from the Defensive vertex, so `Discloses AI` carries the extensive margin -- a firm with a wholly Defensive posture against a firm with none -- and the two weight columns carry composition alone. Partial R² measures the variance the disclosure block adds over controls and fixed effects. Benjamini--Hochberg [@benjamini1995] correction is applied in the main text across every disclosure coefficient of every outcome rather than within this table.
 :::
+
+### Posture recomposition around 2024Q1, in full {.unnumbered}
+
+@tbl-e-sec-composition reports the design of @tbl-sec-composition at the event date and at two placebo dates. Exposure is the firm's mean posture intensity over 2022, standardized; the coefficient is the interaction of that exposure with the post-event indicator, over a window of five quarters either side.
+
+```{python}
+#| label: tbl-e-sec-composition
+#| tbl-cap: "[Differential posture recomposition at the event date and at two placebo dates, under two fixed-effect schemes, with the pre-event trend test.]{custom-style=\"CaptionText\"}"
+#| echo: false
+from IPython.display import Markdown
+
+_secf = _res_table("posture", "sec_2024_composition_shift.csv")
+
+def _c(row, b, p):
+    body = f"{float(row[b]):+.3f} ({float(row[p]):.3f})"
+    return f"**{body}**" if float(row[p]) < 0.05 else body
+
+_lines = ["| Event | Weight | Firm and quarter FE | Firm and sector-quarter FE | Pre-event trend | Firm-quarters | Firms |",
+          "|:---|:---|---:|---:|---:|---:|---:|"]
+for _, r in _secf.iterrows():
+    _lines.append(f"| {r['event']} | {r['weight']} | {_c(r, 'beta_firm+quarter', 'p_firm+quarter')} "
+                  f"| {_c(r, 'beta_firm+sector-quarter', 'p_firm+sector-quarter')} "
+                  f"| {_c(r, 'beta_pretrend', 'p_pretrend')} | {int(r['n']):,} | {int(r['firms'])} |")
+Markdown("\n".join(_lines))
+```
+
+Two things are worth reading off the table. The 2023Q1 placebo carries differential pre-trends of its own, so its null is weak evidence rather than a clean placebo; the 2024Q1 event does not, which is what makes its estimate readable. And the fixed effects are absorbed by alternating projections rather than entered as dummies: with firm and sector-quarter indicators the design reaches roughly 920 parameters against 458 firm clusters, and while the model is estimable, the cluster-robust covariance has rank at most $G-1 = 457$, so standard errors computed that way are undefined. Absorbing the fixed effects estimates the same coefficient with one parameter, where clustered inference is well behaved.
 
 ### The market-relevance battery in full {.unnumbered}
 
