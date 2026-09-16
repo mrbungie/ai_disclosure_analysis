@@ -1769,8 +1769,6 @@ plt.show()
 *Notes:* 100% stacked horizontal bars. Vocal Substantives dedicate `{python} f"{_dom_voc_sell:.0f}"`% of AI activities to client products (Sell); Governance-Led prioritize internal operations (Operate) and governance control (Control).
 :::
 
-The stacked mix in @fig-archetype-activity-mix shows where AI enters each type of firm:
-
 ```{python}
 #| echo: false
 #| output: false
@@ -1779,11 +1777,7 @@ def _mix(a, role):
 _SELL, _OPER, _CTRL, _SERVE = "Sell (Customer products)", "Operate (Internal operations)", "Control (Risk & security)", "Serve (Sales & service)"
 ```
 
-Vocal Substantives concentrate most heavily in Sell. Governance-Led Disclosers split more evenly between Sell and Operate, with Control activities representing a small share even here: governance defines how this group communicates, not what it implements.
-
-Defensive Disclosers describe the same commercial and operational mix as peers, but disclose far fewer activities. Across all three groups, Sell dominates: the archetypes differ in narrative intensity and volume rather than the core operational purpose of enterprise AI.
-
-Three filings illustrate what that split looks like in practice (@tbl-archetype-activity-examples).
+Where AI enters the business barely changes from one archetype to the next (@fig-archetype-activity-mix). Selling -- AI inside the products and services customers buy -- dominates all three groups, with Vocal Substantives leaning on it hardest and Governance-Led Disclosers splitting more evenly between selling and internal operations. Even among the Governance-Led, risk and security work is a small share of what they report doing: governance describes how that group talks, not what it builds. Defensive Disclosers name the same commercial and operational mix as everyone else, only far less of it. What separates the archetypes is how much they say and how loudly, not what enterprise AI is for. Three filings show what that looks like on the page (@tbl-archetype-activity-examples).
 
 ```{python}
 #| label: tbl-archetype-activity-examples
@@ -2107,7 +2101,7 @@ Disclosing issuers consistently prioritize proprietary branding over external at
 
 ### Technology Ecosystems Named in AI Disclosure
 
-When S&P 500 corporations discuss artificial intelligence, which suppliers do they name? Commercial names alone answer it -- companies, cloud platforms, accelerators, model families and enterprise AI products, read inside paragraphs that already carry an extracted AI disclosure frame (`configs/ai_vendor_ecosystems.yaml`, Appendix C). Country words are excluded, since "China" locates a market rather than a technology; ambiguous names need corroboration in the same paragraph, so "copilot" requires Microsoft or GitHub; and a firm naming its own products does not count, since the measure is the reach of external suppliers. Presence is binary per document and ecosystems overlap. The **AI technology stack** (model developers, cloud infrastructure, semiconductors) and **enterprise software** (applied AI inside business platforms) are reported apart, since a blended number would hide which of the two is moving.
+When S&P 500 corporations discuss artificial intelligence, which suppliers do they name? Only commercial names count here -- a company, a cloud platform, an accelerator, a model family -- read inside paragraphs that already carry an AI disclosure frame, and only when the supplier is somebody else's. Country words are not names: "China" locates a market, not a technology. The **AI technology stack** (model developers, cloud infrastructure, semiconductors) is kept apart from **enterprise software** (applied AI inside business platforms), since a blended number would hide which of the two is moving. Appendix C gives the lexicon and the disambiguation rules.
 
 ```{python}
 #| label: fig-vendor-ecosystems
@@ -2309,8 +2303,8 @@ The response was not defensive retreat (@fig-sec-welltower). In the first annual
 #| label: fig-deepseek-break
 #| fig-cap: "[Open-source vocabulary in earnings calls, monthly, with the trend component before and after January 2025 and the pre-event trend extended as a counterfactual.]{custom-style=\"CaptionText\"}"
 #| echo: false
-#| fig-width: 6.8
-#| fig-height: 3.4
+#| fig-width: 7.6
+#| fig-height: 2.6
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -2594,7 +2588,7 @@ Firms that talk about AI at comparable intensity end up far apart on substance (
 
 ## What changes from filing to call
 
-If decoupling is a lasting posture, what happens when the same firm discusses AI in two venues with very different legal liability?
+If decoupling is a lasting posture, the next question is what happens when the same firm discusses AI in two venues carrying very different legal liability.
 
 ```{python}
 #| echo: false
@@ -2608,7 +2602,7 @@ gap = grounding["channel_gap"]
 gap_n_cells, gap_n_firms = gap["n_cells"], gap["n_firms"]
 ```
 
-This is tested with a firm × fiscal-year fixed effects design ($\alpha_{i,t}$) across `{python} gap_n_cells` balanced firm-year cells (`{python} gap_n_firms` firms) with $\ge 3$ disclosed AI activities in both channels:
+Holding the firm and the year fixed isolates that comparison. The design is a firm × fiscal-year fixed effect ($\alpha_{i,t}$) over `{python} gap_n_cells` balanced cells (`{python} gap_n_firms` firms) with at least three disclosed AI activities in each channel:
 
 $$
 Y_{i,t,\text{venue}} = \alpha_{i,t} + \beta \, \mathbf{1}[\text{venue} = \text{Call}] + \varepsilon_{i,t,\text{venue}}
@@ -3724,6 +3718,8 @@ Markdown(tabulate(rows, headers=[f"Archetype vs. {reg['reference']}", "Raw ratio
 A statistically significant difference survives the volume control (@tbl-4-1b-volume-adjusted). At identical narrative volume, Vocal Substantives still report `{python} f"{hd_vs_ratio:.2f}"` times as many operational AI activities as Defensive Disclosers ($p$ `{python} pstr(_var["volume_adjusted"]["Vocal Substantives"]["p"])`), while Governance-Led Disclosers report `{python} f"{hd_gl_ratio:.2f}"` times as many ($p$ `{python} pstr(_var["volume_adjusted"]["Governance-Led Disclosers"]["p"])`). Although total disclosure volume accounts for a substantial share of the raw variation (log frame count yields a pseudo-$R^2$ of `{python} f"{hd_vol_r2:.2f}"`), disclosure posture is not mere verbosity: it reflects distinct rates of disclosed technological deployment.
 
 ### External AI technology ecosystem {.unnumbered}
+
+The lexicon behind this measure lives in `configs/ai_vendor_ecosystems.yaml`: one entry per provider family, with the ecosystem it belongs to, its specific country and its role in the AI stack. Three rules govern what counts. Country and demonym words are absent by construction, so a paragraph discussing the Chinese market without naming a Chinese provider contributes nothing. Ambiguous names -- ordinary words, personal names, multi-vendor products -- are admitted only with a corroborating term in the same paragraph, so "copilot" needs Microsoft or GitHub, "arm" needs an Arm-qualified term, and "claude" needs Anthropic or a model name. And a filer naming its own products is excluded, since the measure is the reach of external suppliers rather than the reach of a firm's own brand. Presence is recorded once per document, so repetition cannot inflate a supplier's reach, and ecosystems overlap: a document naming both NVIDIA and DeepSeek counts for the United States and for China.
 
 Every provider family named by at least one S&P 500 firm inside its AI disclosure appears in @tbl-c3-vendor-ecosystem, with the literal names it was matched on. The fifteen most-cited families carry the concentration shown in @fig-vendor-providers; the remainder shows how thin the tail is, and how little of it sits outside the United States.
 
