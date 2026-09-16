@@ -92,11 +92,43 @@ def quotes(limit: int = 3) -> list[dict]:
              "text": r.paragraph_text.strip()} for r in pick.itertuples()]
 
 
+def components(r, d: pd.DataFrame) -> pd.DataFrame:
+    """Trend without seasonality, its confidence band, and the counterfactual.
+
+    The fitted values carry the month dummies, which is why a plot of them
+    zig-zags and hides the very slope the design is about. Holding seasonality
+    and reporting composition at their sample means isolates the trend; the
+    counterfactual extends the pre-event trend past the break, so the figure
+    shows how far the later path departs from simply continuing."""
+    X = pd.DataFrame(r.model.exog, columns=r.model.exog_names)
+    flat = X.copy()
+    for c in flat.columns:
+        if c.startswith("M_") or c == "log_firms":
+            flat[c] = X[c].mean()
+    pred = r.get_prediction(flat).summary_frame(alpha=0.05)
+    counter = flat.copy()
+    counter["post"] = 0.0
+    counter["slope"] = 0.0
+    out = d.copy()
+    out["trend"] = pred["mean"].values
+    out["trend_low"] = pred["mean_ci_lower"].values
+    out["trend_high"] = pred["mean_ci_upper"].values
+    out["counterfactual"] = r.get_prediction(counter).summary_frame()["mean"].values
+    return out
+
+
 def main() -> None:
     warnings.filterwarnings("ignore")
     s = series()
     r, d = fit(s)
     ci = r.conf_int().loc["post"]
+    # The slope AFTER the break is the pre-trend plus the change, and that is
+    # what says whether the series turned down -- the change coefficient alone
+    # does not. Whether it falls faster than it rose is a separate restriction
+    # (2*beta + delta < 0), tested rather than asserted.
+    post_slope = r.t_test("t + slope = 0")
+    steeper = r.t_test("2*t + slope = 0")
+    ci_post = post_slope.conf_int()[0]
     out = {"event": EVENT, "months": len(d), "min_calls": MIN_CALLS,
            "step": float(r.params["post"]), "step_ci_low": float(ci[0]), "step_ci_high": float(ci[1]),
            "p_step": float(r.pvalues["post"]),
@@ -104,8 +136,14 @@ def main() -> None:
            "pre_trend": float(r.params["t"]), "p_pre_trend": float(r.pvalues["t"]),
            "mean_before": float(s.loc[s["month"] < pd.Period(EVENT, freq="M"), "rate_per_1k"].mean()),
            "mean_after": float(s.loc[s["month"] >= pd.Period(EVENT, freq="M"), "rate_per_1k"].mean()),
+           "post_slope": float(np.squeeze(post_slope.effect)),
+           "post_slope_ci_low": float(ci_post[0]), "post_slope_ci_high": float(ci_post[1]),
+           "p_post_slope": float(np.squeeze(post_slope.pvalue)),
+           "steeper_than_rise": float(np.squeeze(steeper.effect)),
+           "p_steeper_than_rise": float(np.squeeze(steeper.pvalue)),
            "r2": float(r.rsquared), "quotes": quotes()}
-    d.assign(fitted=r.fittedvalues).to_csv(L.results_path("posture", "deepseek_calls_series.csv"), index=False)
+    components(r, d.assign(fitted=r.fittedvalues)).to_csv(
+        L.results_path("posture", "deepseek_calls_series.csv"), index=False)
     L.results_path("posture", "deepseek_calls_its.json").write_text(json.dumps(out, indent=2))
     print(f"meses {out['months']} | salto {out['step']:+.5f} "
           f"[{out['step_ci_low']:+.5f}, {out['step_ci_high']:+.5f}] p={out['p_step']:.3f}")

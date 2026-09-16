@@ -2124,36 +2124,60 @@ Two dated events fall inside the sample: the SEC's December 2023 warning on AI c
 
 ```{python}
 #| label: fig-deepseek-break
-#| fig-cap: "[Open-weight vocabulary in earnings calls, monthly, with the fitted trend before and after January 2025.]{custom-style=\"CaptionText\"}"
+#| fig-cap: "[Open-source vocabulary in earnings calls, monthly, with the trend component before and after January 2025 and the pre-event trend extended as a counterfactual.]{custom-style=\"CaptionText\"}"
 #| echo: false
-#| fig-width: 6.6
-#| fig-height: 3.2
+#| fig-width: 6.8
+#| fig-height: 3.4
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 _ds = pd.read_csv(results("posture", "deepseek_calls_series.csv"))
 _ds["x"] = pd.PeriodIndex(_ds["month"], freq="M").to_timestamp()
 _dsj = results_json("posture", "deepseek_calls_its.json")
+_break = pd.Timestamp("2025-01-01")
 
 fig, ax = plt.subplots()
-ax.plot(_ds["x"], _ds["rate_per_1k"], "o", ms=3.4, color=MIB["ink_light"], label="Monthly rate")
-for side in (0, 1):
+ax.plot(_ds["x"], _ds["rate_per_1k"], "o", ms=3.6, color=MIB["ink_light"],
+        alpha=0.85, label="Monthly rate")
+# Trend without the month dummies: the fitted values carry seasonality, which
+# hides the slope the design is about.
+for side, colour, lab in [(0, MIB["ink"], "Trend, before"), (1, MIB["terracotta"], "Trend, after")]:
     seg = _ds[_ds["post"] == side]
-    ax.plot(seg["x"], seg["fitted"], "-", lw=2.0, color=MIB["ink"] if side == 0 else MIB["terracotta"],
-            label="Fitted trend, before" if side == 0 else "Fitted trend, after")
-_break = pd.Timestamp("2025-01-01")
+    ax.plot(seg["x"], seg["trend"], "-", lw=2.2, color=colour, label=lab)
+    ax.fill_between(seg["x"], seg["trend_low"], seg["trend_high"], color=colour, alpha=0.12, lw=0)
+_post = _ds[_ds["post"] == 1]
+ax.plot(_post["x"], _post["counterfactual"], "--", lw=1.6, color=MIB["ink"], alpha=0.75,
+        label="Pre-event trend, extended")
 ax.axvline(_break, color=MIB["ink_800"], ls=":", lw=1.2)
-ax.annotate("DeepSeek-R1", xy=(_break, ax.get_ylim()[1] * 0.94), xytext=(6, 0),
-            textcoords="offset points", fontsize=8, color=MIB["ink_800"])
-ax.set_ylabel("Open-weight terms per 1,000 words")
-ax.set_xlabel("")
-ax.legend(frameon=False, fontsize=8, loc="upper left")
+_ev_row = _ds[_ds["month"] == "2025-01"].iloc[0]
+ax.plot([_ev_row["x"]], [_ev_row["rate_per_1k"]], "o", ms=7, mfc="none",
+        mec=MIB["terracotta"], mew=1.6, zorder=5)
+ax.annotate("DeepSeek-R1\n20 Jan 2025", xy=(_ev_row["x"], _ev_row["rate_per_1k"]),
+            xytext=(26, -14), textcoords="offset points", fontsize=7.6,
+            color=MIB["ink_800"], ha="left",
+            arrowprops=dict(arrowstyle="->", color=MIB["ink_800"], lw=0.9,
+                            shrinkA=0, shrinkB=6))
+ax.set_ylabel("Open-source mentions per 1,000 words\n(earnings calls)", fontsize=8.6, fontweight="bold")
+ax.xaxis.set_major_locator(mdates.YearLocator())
+ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=(1, 4, 7, 10)))
+ax.tick_params(axis="both", labelsize=8, colors=MIB["ink_800"])
+ax.legend(frameon=False, fontsize=7.6, loc="upper left", ncol=2)
 ax.spines[["top", "right"]].set_visible(False)
+ax.margins(x=0.02)
 plt.tight_layout()
 plt.show()
 ```
 
-Open-weight vocabulary in earnings calls steps up at the turn of 2025 and decays afterwards (@fig-deepseek-break). Over `{python} str(_dsj["months"])` months of calls, the estimated step is `{python} f"{_dsj['step']:+.4f}"` terms per 1,000 words (95% CI `{python} f"[{_dsj['step_ci_low']:+.4f}, {_dsj['step_ci_high']:+.4f}]"`, $p$ `{python} pstr(_dsj["p_step"])`), against a monthly mean of `{python} f"{_dsj['mean_before']:.4f}"` before and `{python} f"{_dsj['mean_after']:.4f}"` after, with the post-event slope turning negative (`{python} f"{_dsj['slope_change']:+.5f}"`, $p$ `{python} pstr(_dsj["p_slope_change"])`) -- a spike that fades rather than a new level.
+::: {custom-style="FigureNote"}
+*Notes:* Monthly series over earnings calls only, from January 2021. Months carrying fewer than `{python} str(_dsj["min_calls"])` calls are excluded, so that a light reporting month cannot pull the estimated break toward itself; the horizontal axis keeps calendar distance, so those months appear as gaps rather than being closed up. The break is set at January 2025, the first reporting-active month after DeepSeek-R1 (20 January 2025). The plotted trend holds month-of-year seasonality and the number of reporting firms at their sample means, with the shaded band its 95% confidence interval; the dashed line extends the pre-event trend past the break.
+:::
+
+
+Open-source vocabulary in earnings calls steps up at the turn of 2025 and then turns down (@fig-deepseek-break). Over `{python} str(_dsj["months"])` months of calls, the estimated step is `{python} f"{_dsj['step']:+.4f}"` mentions per 1,000 words (95% CI `{python} f"[{_dsj['step_ci_low']:+.4f}, {_dsj['step_ci_high']:+.4f}]"`, $p$ `{python} pstr(_dsj["p_step"])`), against a monthly mean of `{python} f"{_dsj['mean_before']:.4f}"` before and `{python} f"{_dsj['mean_after']:.4f}"` after. January itself reaches `{python} f"{float(_ds.loc[_ds['month'] == '2025-01', 'rate_per_1k'].iloc[0]):.4f}"`, roughly ten times the earlier mean, and the level is back near it within two quarters.
+
+What follows is a reversal rather than a decay. The series had been rising at `{python} f"{_dsj['pre_trend']:+.5f}"` per month ($p$ `{python} pstr(_dsj["p_pre_trend"])`); afterwards the slope itself is negative, `{python} f"{_dsj['post_slope']:+.5f}"` (95% CI `{python} f"[{_dsj['post_slope_ci_low']:+.5f}, {_dsj['post_slope_ci_high']:+.5f}]"`, $p$ `{python} pstr(_dsj["p_post_slope"])`), and the later path ends below a simple continuation of the earlier one. A conversation that had grown for four years turns down after the episode that made it salient. Whether it falls faster than it rose is a separate question and the data do not settle it: the restriction comparing the two slopes gives $p$ `{python} pstr(_dsj["p_steeper_than_rise"])`. The mechanism is outside what this series can show -- geopolitical framing of a Chinese model is one hypothesis the texts could be read for.
 
 What ties the series to the event is the text rather than the timing. Analysts name the model in those calls: AT&T's on `{python} _dsj["quotes"][0]["date"]` opens "you've seen DeepSeek has created a much lower cost, large language model", and Corning's two days later refers to "market dislocation over the last week from DeepSeek". The break is dated to a month and January is not entirely after the 20th, so the design locates a change around the turn of the year, not on a day.
 
