@@ -2578,27 +2578,72 @@ b_governance = _gap_bullet("governance_or_restriction")
 >
 > The share of activities with a quantified outcome, a named product or process, or a named provider is significantly lower in the filings. Since the design compares composition at venue level, this looks like filtering under higher statutory exposure rather than an explicit retraction of any individual claim made on a call.
 
-The pooled model gives the average gap over the whole panel, which leaves one question open: did this divergence already exist before generative AI, or did it appear together with it? Taking the same within-firm-year gap ($\text{Call}_{i,t} - \text{Filing}_{i,t}$) year by year separates the two cases.
+The pooled model gives the average gap over the whole panel, which leaves one question open: did this divergence already exist before generative AI, or did it appear together with it? Estimating the same within-firm-year gap ($\text{Call}_{i,t} - \text{Filing}_{i,t}$) year by year, on the three dimensions that carry the evidence, separates the two cases (@fig-venue-gap-by-year).
 
 ```{python}
+#| label: fig-venue-gap-by-year
+#| fig-cap: "[Call-minus-filing gap by fiscal year on three evidentiary dimensions, estimated within the same firm and fiscal year.]{custom-style=\"CaptionText\"}"
 #| echo: false
-#| output: false
+#| fig-width: 9.0
+#| fig-height: 3.8
+import matplotlib.pyplot as plt
+import numpy as np
+
 _gap_year = results_json("washing", "activity_grounding.json")["channel_gap"]["by_year"]
 
+GAP_YEAR_PANELS = [
+    ("quantified_outcome", "Quantified outcome or metric"),
+    ("named_product_or_process", "Named product or process"),
+    ("governance_or_restriction", "Governance or restriction"),
+]
+_gy_years = sorted(int(y) for y in _gap_year["quantified_outcome"])
+_gy_main = [y for y in _gy_years if y <= 2025]
+_gy_ytd = [y for y in _gy_years if y >= 2025]
+
+
+def _gy(family, key, years):
+    return [_gap_year[family][str(y)][key] for y in years]
+
+
 def gy(family, year):
-    """Year's call-minus-filing gap with its 95% CI, both from the same cells."""
+    """The year's gap with its 95% CI, both estimated on that year's own cells."""
     r = _gap_year[family][str(year)]
-    return f'{r["gap_pp"]:+.1f} pp in {year}, 95% CI [{r["ci_low"]:+.1f}, {r["ci_high"]:+.1f}]'
+    return f'{r["gap_pp"]:+.1f} pp, 95% CI [{r["ci_low"]:+.1f}, {r["ci_high"]:+.1f}]'
+
 
 _gap_year_n = ", ".join(f'{y}: {_gap_year["quantified_outcome"][str(y)]["n"]}'
-                        for y in range(2021, 2027))
+                        for y in _gy_years)
+
+fig, axes = plt.subplots(1, 3, figsize=(9.0, 3.8), dpi=300, sharey=True)
+
+# Colour marks the direction of the gap, the same rule the pooled figure uses:
+# petrol where the call carries more, rust where the filing does.
+for ax, (fam, label) in zip(axes, GAP_YEAR_PANELS):
+    gap = _gy(fam, "gap_pp", _gy_years)
+    colour = "#B85F42" if float(np.mean(gap)) < 0 else "#355F6B"
+    ax.fill_between(_gy_years, _gy(fam, "ci_low", _gy_years), _gy(fam, "ci_high", _gy_years),
+                    color=colour, alpha=0.18, lw=0, label="95% CI")
+    ax.plot(_gy_main, _gy(fam, "gap_pp", _gy_main), "o-", color=colour, lw=2.2, ms=5)
+    ax.plot(_gy_ytd, _gy(fam, "gap_pp", _gy_ytd), "o:", color=colour, lw=1.8, ms=5)
+    ax.axhline(0, color="#1C1F22", lw=1.1, ls="--")
+    ax.set_title(label, fontsize=9.2, fontweight="bold")
+    ax.set_xticks(_gy_years)
+    ax.set_xticklabels([str(y) for y in _gy_years], fontsize=8.0, rotation=45)
+    ax.set_xlabel("Fiscal year", fontsize=9.0, fontweight="bold")
+    ax.grid(True, axis="y", linestyle="--", alpha=0.3)
+    ax.spines[["top", "right"]].set_visible(False)
+
+axes[0].set_ylabel("Call minus filing\n(percentage points)", fontsize=9.0, fontweight="bold")
+axes[0].legend(loc="lower left", fontsize=7.4, framealpha=0.9)
+plt.tight_layout()
+plt.show()
 ```
 
-- **Quantified outcomes:** the call premium on numbers is already there before ChatGPT and stays there (`{python} gy("quantified_outcome", 2021)`; `{python} gy("quantified_outcome", 2023)`; `{python} gy("quantified_outcome", 2025)`). Managers have always put more figures into the oral discussion than into the filing.
-- **Named products and processes:** this gap instead widens with generative AI. In the early cycles it cannot be separated from zero (`{python} gy("named_product_or_process", 2021)`; `{python} gy("named_product_or_process", 2022)`), and by the end of the panel it is a clear call premium (`{python} gy("named_product_or_process", 2024)`; `{python} gy("named_product_or_process", 2025)`).
-- **Governance and restrictions:** the filings absorb almost all of the growth in governance and risk caveats after 2023. The gap is modest at the start (`{python} gy("governance_or_restriction", 2021)`) and widens once the regulatory warnings arrive (`{python} gy("governance_or_restriction", 2024)`; `{python} gy("governance_or_restriction", 2025)`; `{python} gy("governance_or_restriction", 2026)`).
+::: {custom-style="FigureNote"}
+*Notes:* Each point is the mean call-minus-filing gap across that year's firm × fiscal-year cells, with the 95% confidence interval from a one-sample $t$-test on the same cells. The dotted segment is 2026 year-to-date. Cells per year: `{python} _gap_year_n`.
+:::
 
-The quantification premium on calls is therefore an old habit, while the split on product-level claims and on governance language opens specifically as generative AI spreads and regulatory attention grows. Each year is tested on its own cells, so the yearly intervals are wider than the pooled ones and the early cycles are the thinnest (`{python} _gap_year_n` firm-year cells).
+The three dimensions do not share a history (@fig-venue-gap-by-year). The call premium on quantified outcomes is already there in 2021 (`{python} gy("quantified_outcome", 2021)`) and stays roughly flat for the rest of the panel (`{python} gy("quantified_outcome", 2025)` in 2025), so putting more figures into the oral discussion than into the filing is an old managerial habit and not something generative AI produced. Naming a product or a process behaves differently: in 2021 and 2022 the interval still covers zero (`{python} gy("named_product_or_process", 2022)` in 2022), and by 2025 it clearly does not (`{python} gy("named_product_or_process", 2025)`). Governance and restriction language moves in the opposite direction and keeps widening, from `{python} gy("governance_or_restriction", 2021)` in 2021 to `{python} gy("governance_or_restriction", 2026)` in 2026, as the filings absorb the caveats the calls do not carry. Each year is estimated on its own cells, so these intervals are wider than the pooled ones and the first two cycles are the thinnest in the panel.
 
 An investor should therefore read both venues and not rely on one of them alone, and an issuer should check that the claims are substantively consistent between the oral and the statutory disclosure, without expecting the same wording or the same level of detail in both.
 
