@@ -1916,6 +1916,8 @@ plt.show()
 
 Issuers consistently put their own brand ahead of external attribution. An internal brand name, however, says nothing about who built the underlying model. A reporting company gains credibility by making clear what is built in-house and what is integrated from an external platform, and an investor reading such a disclosure has to ask directly about model provenance, vendor reliance and architectural dependency.
 
+Whether this balance holds over time is a fair question. As external foundation models and commercial APIs spread through enterprise workflows, firms could well change how often they put their own brand on an application instead of crediting the supplier behind it. That movement shows up in which vendor ecosystems get named across 2021–2026, and it is tracked there. What @fig-tech-provenance measures is the imbalance itself, statement by statement.
+
 ### Technology ecosystems named in AI disclosure
 
 When S&P 500 corporations discuss artificial intelligence, which suppliers do they name? Only commercial names count here: a company, a cloud platform, an accelerator, a model family, read inside paragraphs that already carry an AI disclosure frame, and only when the supplier is somebody else's. Country words are not names: "China" locates a market, not a technology. The **AI technology stack** (model developers, cloud infrastructure, semiconductors) is kept apart from **enterprise software** (applied AI inside business platforms), since a blended number would hide which of the two is moving. Appendix C gives the lexicon and the disambiguation rules.
@@ -2294,6 +2296,8 @@ plt.show()
 
 Most firms land close to the diagonal (@fig-ds-alignment-scatter): they rank about as high on talk as on grounded activity, which is what you would hope to see. The firms that talk most are not the ones the measure flags: Vocal Substantives crowd the top-right corner, high on both, and sit near the line. What $W$ reads is the distance from it. Below the line, the narrative has run ahead of anything the filings can show; above it, the activity is there and the firm has barely mentioned it.
 
+One caution about how $W$ should be read. It is built from percentile ranks taken within a year, so the distribution is renormalized in every cycle and the cross-sectional mean sits near zero by construction. Averaging $W$ over the years therefore cannot say whether the market as a whole became more decoupled or less, and comparing relative percentiles across years does not answer that question either. @fig-ds-alignment-scatter is about sorting: which firms sit where against their peers inside one reporting cycle. The market-wide question is answered by the widening distance between expanding activity volume and diluted grounding over the 2021–2026 panel (@fig-volume-vs-grounding).
+
 ```{python}
 #| label: fig-ds-dumbbell
 #| fig-cap: "[Disclosure intensity and disclosed substance for selected firms, with the gap between them.]{custom-style=\"CaptionText\"}"
@@ -2573,6 +2577,23 @@ b_governance = _gap_bullet("governance_or_restriction")
 > Inside the same firm and fiscal year, the composition of activity is broadly similar in earnings calls and statutory filings, with somewhat more customer-facing deployment on the calls. The sharper and more systematic gap is in the evidence, not in the categories of AI activity.
 >
 > The share of activities with a quantified outcome, a named product or process, or a named provider is significantly lower in the filings. Since the design compares composition at venue level, this looks like filtering under higher statutory exposure rather than an explicit retraction of any individual claim made on a call.
+
+The pooled model gives the average gap over the whole panel, which leaves one question open: did this divergence already exist before generative AI, or did it appear together with it? Taking the same within-firm-year gap ($\text{Call}_{i,t} - \text{Filing}_{i,t}$) year by year separates the two cases.
+
+```{python}
+#| echo: false
+#| output: false
+_gap_year = results_json("washing", "activity_grounding.json")["channel_gap"]["by_year"]
+
+def gy(family, year):
+    return f'{_gap_year[family][str(year)]:+.1f}'
+```
+
+- **Quantified outcomes:** the call premium on numbers is already there before ChatGPT and stays there (`{python} gy("quantified_outcome", 2021)` pp in 2021, `{python} gy("quantified_outcome", 2023)` pp in 2023, `{python} gy("quantified_outcome", 2025)` pp in 2025). Managers have always put more figures into the oral discussion than into the filing.
+- **Named products and processes:** this gap instead widens with generative AI. It is small in the early cycles (`{python} gy("named_product_or_process", 2021)` pp in 2021, `{python} gy("named_product_or_process", 2022)` pp in 2022) and much larger by the end of the panel (`{python} gy("named_product_or_process", 2024)` pp in 2024, `{python} gy("named_product_or_process", 2025)` pp in 2025).
+- **Governance and restrictions:** the filings absorb almost all of the growth in governance and risk caveats after 2023. The gap is modest at the start (`{python} gy("governance_or_restriction", 2021)` pp in 2021) and widens once the regulatory warnings arrive (`{python} gy("governance_or_restriction", 2024)` pp in 2024, `{python} gy("governance_or_restriction", 2025)` pp in 2025, `{python} gy("governance_or_restriction", 2026)` pp in 2026).
+
+The quantification premium on calls is therefore an old habit, while the split on product-level claims and on governance language opens specifically as generative AI spreads and regulatory attention grows. These are yearly means of the same within-firm-year gap and carry no inference of their own, so they describe the direction of the movement rather than test it.
 
 An investor should therefore read both venues and not rely on one of them alone, and an issuer should check that the claims are substantively consistent between the oral and the statutory disclosure, without expecting the same wording or the same level of detail in both.
 
