@@ -4,14 +4,29 @@ earnings calls around DeepSeek.
 
 One specification, chosen before looking at its p-value and stated here.
 Monthly series of open-weight vocabulary per 1,000 words over earnings calls
-only; months carrying fewer than MIN_CALLS calls are dropped, because a month
-with thirty calls has a noisy rate that pulls the estimated break toward
-whichever light month sits next to the event; the break is January 2025, the
-first reporting-active month after DeepSeek-R1 (20 January 2025); seasonality
-enters as month-of-year dummies, reporting composition as the log number of
-firms, and standard errors are Newey-West.
+only, every month in the window, with the break at January 2025, the first
+reporting-active month after DeepSeek-R1 (20 January 2025):
 
-    Y_t = alpha + beta*t + tau*Post_t + delta*(t - T0)*Post_t + season + e_t
+    Y_t = alpha + beta*t + delta*Post_t + gamma*(t - T0)*Post_t
+          + theta_0*1(t = T0) + theta_1*1(t = T0 + 1) + active_t + log firms + e_t
+
+The two theta terms hold the event months themselves. Without them the spike
+decays into the post-event slope, and a transient episode is read as a
+persistent change in direction -- a pulse alongside the step and the slope is
+standard in interrupted time series for exactly this reason. `delta` is then
+the level change that outlasts the episode and `beta + gamma` the trend that
+follows it, which is the quantity that says whether the series turned down;
+`gamma` alone only says the slope moved relative to before.
+
+Monthly call volume is bimodal -- roughly 20 to 35 calls in the months between
+reporting seasons against 130 or more inside them -- so `active_t` marks the
+reporting-active months and the regression is weighted by the words each month
+actually contributes. Unweighted, the twenty-odd thin months carry the same
+leverage as months with ten times the text, and their noise alone moves the
+estimated step and post-event slope; weighting keeps every month in the series
+without letting the thinnest ones set the answer. Standard errors are
+Newey-West. A full set of month-of-year dummies in place of `active_t` leaves
+every coefficient here materially unchanged.
 
 Calls rather than the pooled corpus. A call can respond within weeks, while a
 10-K published in a given month was written earlier and describes an earlier
@@ -45,8 +60,11 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
 import layers as L  # noqa: E402
 
 START = "2021-01"
-MIN_CALLS = 50
+MIN_CALLS = 10       # every real month clears this; it drops the final month,
+                     # which the corpus cutoff truncates to a handful of calls
 EVENT = "2025-01"
+PULSES = (0, 1)      # months since the event that carry the transient episode
+OFF_SEASON = (3, 6, 9, 12)
 HAC_LAGS = 6
 QUOTE_PATTERN = r"(?i)(^|[^a-z0-9])(deepseek)([^a-z0-9]|$)"
 
@@ -63,6 +81,9 @@ def series() -> pd.DataFrame:
     return agg[(agg.index >= pd.Period(START, freq="M")) & (agg["calls"] >= MIN_CALLS)].reset_index()
 
 
+PULSE_COLS = [f"pulse_{k}" for k in PULSES]
+
+
 def fit(s: pd.DataFrame):
     ev = pd.Period(EVENT, freq="M")
     d = s.copy()
@@ -70,11 +91,15 @@ def fit(s: pd.DataFrame):
     d["since"] = (d["month"] - ev).apply(lambda p: p.n)
     d["post"] = (d["since"] >= 0).astype(float)
     d["slope"] = d["since"] * d["post"]
+    d["active"] = (~d["month"].dt.month.isin(OFF_SEASON)).astype(float)
+    for k, col in zip(PULSES, PULSE_COLS):
+        d[col] = (d["since"] == k).astype(float)
     X = sm.add_constant(pd.concat(
-        [d[["t", "post", "slope"]],
-         pd.get_dummies(d["month"].dt.month, prefix="M", drop_first=True, dtype=float),
+        [d[["t", "post", "slope"] + PULSE_COLS + ["active"]],
          np.log(d[["firms"]]).rename(columns={"firms": "log_firms"})], axis=1))
-    return sm.OLS(d["rate_per_1k"], X).fit(cov_type="HAC", cov_kwds={"maxlags": HAC_LAGS}), d
+    r = sm.WLS(d["rate_per_1k"], X, weights=d["words"]).fit(
+        cov_type="HAC", cov_kwds={"maxlags": HAC_LAGS})
+    return r, d
 
 
 def quotes(limit: int = 3) -> list[dict]:
@@ -93,18 +118,25 @@ def quotes(limit: int = 3) -> list[dict]:
 
 
 def components(r, d: pd.DataFrame) -> pd.DataFrame:
-    """Trend without seasonality, its confidence band, and the counterfactual.
+    """Trend without the transient or seasonality, its confidence band, and
+    the counterfactual.
 
-    The fitted values carry the month dummies, which is why a plot of them
-    zig-zags and hides the very slope the design is about. Holding seasonality
-    and reporting composition at their sample means isolates the trend; the
-    counterfactual extends the pre-event trend past the break, so the figure
-    shows how far the later path departs from simply continuing."""
+    The fitted values carry the reporting-season term, which is why a plot of
+    them zig-zags and hides the very slope the design is about. Holding
+    seasonality and reporting composition at their sample means isolates the
+    trend, and zeroing the pulse terms draws that trend through the event
+    months rather than up over the spike: the observed January and February
+    points stay on the figure as data, while the line shows the path the
+    series is on once the episode is set aside. The counterfactual extends the
+    pre-event trend past the break, so the figure also shows how far the later
+    path departs from simply continuing."""
     X = pd.DataFrame(r.model.exog, columns=r.model.exog_names)
     flat = X.copy()
     for c in flat.columns:
-        if c.startswith("M_") or c == "log_firms":
+        if c == "active" or c == "log_firms":
             flat[c] = X[c].mean()
+        elif c in PULSE_COLS:
+            flat[c] = 0.0
     pred = r.get_prediction(flat).summary_frame(alpha=0.05)
     counter = flat.copy()
     counter["post"] = 0.0
@@ -133,6 +165,12 @@ def main() -> None:
            "step": float(r.params["post"]), "step_ci_low": float(ci[0]), "step_ci_high": float(ci[1]),
            "p_step": float(r.pvalues["post"]),
            "slope_change": float(r.params["slope"]), "p_slope_change": float(r.pvalues["slope"]),
+           "pulse_event": float(r.params["pulse_0"]), "p_pulse_event": float(r.pvalues["pulse_0"]),
+           "pulse_event_ci_low": float(r.conf_int().loc["pulse_0"][0]),
+           "pulse_event_ci_high": float(r.conf_int().loc["pulse_0"][1]),
+           "pulse_next": float(r.params["pulse_1"]), "p_pulse_next": float(r.pvalues["pulse_1"]),
+           "pulse_next_ci_low": float(r.conf_int().loc["pulse_1"][0]),
+           "pulse_next_ci_high": float(r.conf_int().loc["pulse_1"][1]),
            "pre_trend": float(r.params["t"]), "p_pre_trend": float(r.pvalues["t"]),
            "mean_before": float(s.loc[s["month"] < pd.Period(EVENT, freq="M"), "rate_per_1k"].mean()),
            "mean_after": float(s.loc[s["month"] >= pd.Period(EVENT, freq="M"), "rate_per_1k"].mean()),
@@ -147,8 +185,13 @@ def main() -> None:
     L.results_path("posture", "deepseek_calls_its.json").write_text(json.dumps(out, indent=2))
     print(f"meses {out['months']} | salto {out['step']:+.5f} "
           f"[{out['step_ci_low']:+.5f}, {out['step_ci_high']:+.5f}] p={out['p_step']:.3f}")
-    print(f"pendiente posterior {out['slope_change']:+.5f} (p={out['p_slope_change']:.3f}) | "
-          f"media antes {out['mean_before']:.5f} despues {out['mean_after']:.5f}")
+    print(f"pulso evento {out['pulse_event']:+.5f} (p={out['p_pulse_event']:.3f}) | "
+          f"pulso mes siguiente {out['pulse_next']:+.5f} (p={out['p_pulse_next']:.3f})")
+    print(f"cambio de pendiente {out['slope_change']:+.5f} (p={out['p_slope_change']:.3f}) | "
+          f"pendiente posterior {out['post_slope']:+.5f} "
+          f"[{out['post_slope_ci_low']:+.5f}, {out['post_slope_ci_high']:+.5f}] "
+          f"p={out['p_post_slope']:.3f}")
+    print(f"media antes {out['mean_before']:.5f} despues {out['mean_after']:.5f}")
     for q in out["quotes"]:
         print(f"\n[{q['ticker']} {q['date']}] {q['text'][:200]}")
 
