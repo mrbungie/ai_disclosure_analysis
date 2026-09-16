@@ -1402,7 +1402,7 @@ axA.set_yticklabels(sector_row_labels4, fontsize=8.3)
 axA.invert_yaxis()
 axA.set_xlim(0, 100)
 axA.set_xlabel("% of sector's disclosed AI activities", fontsize=8.3, fontweight="bold")
-axA.set_title("A. Where firms apply AI\n(business purpose)", fontsize=9.5, fontweight="bold", pad=8)
+axA.set_title("Panel A: Business Purpose", fontsize=9.5, fontweight="bold", pad=8)
 axA.legend(fontsize=7.2, loc="upper center", bbox_to_anchor=(0.5, -0.14), ncol=3, frameon=False)
 axA.spines[["top", "right"]].set_visible(False)
 
@@ -1419,9 +1419,9 @@ for i in range(len(ACTIONS_SEC4)):
         if abs(v) >= 3:
             axB.text(j, i, f"{v:+.0f}", ha="center", va="center", fontsize=7.4,
                       color="white" if abs(v) >= vmax_dev * 0.6 else "#1C1F22")
-axB.set_title("B. How firms operationalize AI\n(deviation from the pooled mix)", fontsize=9.5, fontweight="bold", pad=8)
+axB.set_title("Panel B: Operational Action", fontsize=9.5, fontweight="bold", pad=8)
 cbar = fig.colorbar(im, ax=axB, fraction=0.035, pad=0.03)
-cbar.set_label("Deviation from pooled activity mix (percentage points)", fontsize=7.8, fontweight="bold")
+cbar.set_label("Deviation from pooled mix (pp)", fontsize=7.8, fontweight="bold")
 cbar.ax.tick_params(labelsize=7.2)
 
 plt.tight_layout()
@@ -1516,7 +1516,7 @@ plt.show()
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* Top panel: median disclosed AI activities per firm, as a ratio to the pooled median across the full firm universe. Bottom panel: cell values are raw rates; shading is the deviation from the pooled rate across the full disclosed AI activity inventory (white = at the pooled benchmark, shown in the gray "Pooled" column). The `{python} f"{hd_n_activities:,}"`-activity, `{python} hd_n_activity_firms`-firm inventory is joined to the archetype assignment after the fact. The full 14-variable activity profile (of which this figure shows the 6 headline variables) is kept in the project's supplementary analytics files.
+*Notes:* Top panel: median disclosed AI activities per firm relative to the full universe. Bottom panel: raw rates by archetype, with shading indicating percentage-point deviation from the pooled benchmark.
 :::
 
 Against the pooled benchmark, three of the five rate metrics are largely invariant across archetypes, so the color in those rows is almost entirely pale: proprietary technology is near-universal at every archetype, while deployed/scaled stage and quantified outcomes stay within a few points of their (much lower) pooled rate for every archetype -- quantified outcomes are rare across the board, not universal. Where archetypes actually diverge is volume and customer orientation. Vocal Substantives report a median of `{python} f"{n_vals[0]:.0f}"` AI activities per firm, `{python} f"{ratios[0]:.1f}"` times the pooled median, and their customer-facing share (`{python} f"{mat_raw[2, 0]:.1f}"`%) runs `{python} f"{mat_dev[2, 0]:.0f}"` points above the pooled rate. Governance-Led and Defensive Disclosers move the other way, both well below the pooled customer-facing rate (`{python} f"{mat_raw[2, 1]:.1f}"`% and `{python} f"{mat_raw[2, 2]:.1f}"`% respectively) and below it on own-brand naming, consistent with communication anchored in internal process and oversight rather than products aimed at customers.
@@ -2788,7 +2788,7 @@ The eight regressions share one specification and are reported together in @tbl-
 
 ```{python}
 #| label: tbl-market-results
-#| tbl-cap: "[The disclosure coefficients, standardized, with p-values in parentheses; stars at *** p<0.01, ** p<0.05, * p<0.10 and bold below 5%. Posture terms are reallocations away from the Defensive vertex. Controls, the lagged outcome and the fixed effects are estimated but omitted here; @tbl-e-market-full reports every term.]{custom-style=\"CaptionText\"}"
+#| tbl-cap: "[The disclosure coefficients, standardized, with p-values in parentheses; stars at *** p<0.01, ** p<0.05, * p<0.10 and bold below 5%. Posture terms are reallocations away from the Defensive vertex. Controls, the lagged outcome and the fixed effects are estimated but omitted here; @tbl-e-market-posture and @tbl-e-market-controls report every term.]{custom-style=\"CaptionText\"}"
 #| echo: false
 from IPython.display import Markdown
 
@@ -3946,34 +3946,46 @@ Markdown(tabulate(rows, headers=headers))
 
 ### The market-relevance battery in full {.unnumbered}
 
-::: {.landscape}
-
 ```{python}
-#| label: tbl-e-market-full
-#| tbl-cap: "[Every estimated term of the eight market-relevance regressions, controls and lagged outcome included. Standardized coefficients with p-values in parentheses, starred at *** p<0.01, ** p<0.05, * p<0.10 and bold below 5%; posture weights stay on their 0-1 scale.]{custom-style=\"CaptionText\"}"
+#| label: tbl-e-market-posture
+#| tbl-cap: "[The market-relevance battery, posture terms: every disclosure coefficient of the eight regressions. Standardized coefficients with p-values in parentheses, starred at *** p<0.01, ** p<0.05, * p<0.10 and bold below 5%; posture weights stay on their 0-1 scale.]{custom-style=\"CaptionText\"}"
 #| echo: false
 from IPython.display import Markdown
 
-_FULL_COLS = _COLS + [
+_head = "| Outcome | " + " | ".join(lab for _, _, lab in _COLS) + " |"
+_rule = "|:---|" + "---:|" * len(_COLS)
+_rows = []
+for t in _OUTCOMES:
+    sub = _bat[_bat["target"] == t]
+    cells = [_mkt_cell(k, key, t) for k, key, _ in _COLS]
+    _rows.append(f"| {sub['label_outcome'].iloc[0]} | " + " | ".join(cells) + " |")
+Markdown(chr(10).join([_head, _rule] + _rows))
+```
+
+```{python}
+#| label: tbl-e-market-controls
+#| tbl-cap: "[The same eight regressions: controls, lagged outcome, fixed effects and fit. Standardized coefficients with p-values in parentheses, starred at *** p<0.01, ** p<0.05, * p<0.10 and bold below 5%.]{custom-style=\"CaptionText\"}"
+#| echo: false
+from IPython.display import Markdown
+
+_CTRL_COLS = [
     ("l", None,             r"$Y_{t-1}$"),
     ("v", "log_market_cap", "Log mkt. cap."),
     ("v", "return60",       "Return 60d"),
     ("v", "roa",            "ROA"),
 ]
-_head = ("| Outcome | " + " | ".join(lab for _, _, lab in _FULL_COLS)
+_head = ("| Outcome | " + " | ".join(lab for _, _, lab in _CTRL_COLS)
          + " | Sector FE | Year FE | Cluster | Calls | Firms | $R^2$ | Composition, joint $F$ |")
-_rule = "|:---|" + "---:|" * (len(_FULL_COLS) + 7)
+_rule = "|:---|" + "---:|" * (len(_CTRL_COLS) + 7)
 _rows = []
 for t in _OUTCOMES:
     sub = _bat[_bat["target"] == t]
-    cells = [_mkt_cell(k, key, t) for k, key, _ in _FULL_COLS]
+    cells = [_mkt_cell(k, key, t) for k, key, _ in _CTRL_COLS]
     cells += ["OK", "OK", "firm", f"{int(sub['n_calls'].iloc[0]):,}",
               str(int(sub['n_firms'].iloc[0])), f"{float(sub['r2'].iloc[0]):.3f}", _mkt_joint_cell(t)]
     _rows.append(f"| {sub['label_outcome'].iloc[0]} | " + " | ".join(cells) + " |")
-Markdown("\n".join([_head, _rule] + _rows))
+Markdown(chr(10).join([_head, _rule] + _rows))
 ```
-
-:::
 
 ## Appendix E: SEC Comment-Letter Inventory and Case Comparisons {.unnumbered}
 
