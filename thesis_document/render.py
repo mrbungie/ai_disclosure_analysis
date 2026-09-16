@@ -557,8 +557,36 @@ def merge_cover_and_content(content_docx: Path, tmp_dir: Path) -> Path:
     return merged_path
 
 
+def use_small_caps_headings(document: Document) -> None:
+    """Force the Heading 1 style to small caps on the FINAL document.
+
+    template/reference.docx already defines that style with `w:smallCaps`, and
+    Quarto honors it -- but the cover is the master of the docxcompose merge,
+    so the merged file keeps cover.docx's `styles.xml`, where the same style
+    still carries `w:caps` (every letter drawn as a full capital). Patching the
+    style here, after the merge, is what the rendered document actually reads,
+    and it is the same reason `fix_hyperlink_style` has to run at this point
+    rather than in the template.
+
+    `w:caps` and `w:smallCaps` occupy the same slot in the run-properties
+    sequence, so replacing the element in place keeps the XML schema-valid.
+    """
+    for style in document.styles:
+        name = style.element.find(qn("w:name"))
+        if name is None or name.get(qn("w:val")) != HEADING_STYLE_NAME:
+            continue
+        r_pr = style.element.get_or_add_rPr()
+        small_caps = r_pr.makeelement(qn("w:smallCaps"), {})
+        caps = r_pr.find(qn("w:caps"))
+        if caps is not None:
+            r_pr.replace(caps, small_caps)
+        elif r_pr.find(qn("w:smallCaps")) is None:
+            r_pr.append(small_caps)
+
+
 def mark_fields_dirty_and_save(document: Document, out_path: Path) -> None:
     fix_hyperlink_style(document)
+    use_small_caps_headings(document)
     for fld_char in document.element.body.iter(qn("w:fldChar")):
         if fld_char.get(qn("w:fldCharType")) == "begin":
             fld_char.set(qn("w:dirty"), "true")
