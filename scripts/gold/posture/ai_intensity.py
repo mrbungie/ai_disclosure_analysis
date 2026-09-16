@@ -64,13 +64,18 @@ COUNT_COLUMNS = ["n_frames", "n_promo", "n_quant", "n_spec", "n_risk", "n_gov", 
 
 # Open-weight vocabulary, counted only on paragraphs that already carry an AI
 # frame: in filings "open source" on its own is usually a software-licence risk
-# factor, and the frame is what makes the mention about AI. Bounded on both
-# sides so OSS does not match inside a word and `llama` does not match a
-# company name that contains it.
-OPEN_SOURCE_PATTERN = (r"(?i)(^|[^a-z0-9])("
-                       r"open[- ]source|open[- ]weight|open[- ]model|"
-                       r"oss|hugging ?face|llama|mistral|deepseek|qwen|gemma|falcon"
-                       r")([^a-z0-9]|$)")
+# factor, and the frame is what makes the mention about AI.
+#
+# Bounded on both sides, so a term cannot match inside a word. OSS is the one
+# case-sensitive term -- lowercased it matches "OSs", the plural of operating
+# system. `falcon` was in an earlier version of this list and is not a model
+# here: every occurrence read was CrowdStrike's Falcon platform, 118 paragraphs
+# of it.
+OPEN_SOURCE_PATTERN = (
+    r"(^|[^A-Za-z0-9])("
+    r"(?i:open[- ]source|open[- ]weights?|open[- ]models?|hugging ?face|"
+    r"llama|mistral|deepseek|qwen|kimi|zhipu|minimax|baichuan|glm|gemma|vllm|ollama)"
+    r"|OSS)([^A-Za-z0-9]|$)")
 
 
 def _any_concept_like(prefix: str) -> pl.Expr:
