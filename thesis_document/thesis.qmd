@@ -3493,7 +3493,7 @@ The pipeline, the feature engineering and the statistical analysis are written e
 
 ## Appendix B: Measurement and Validation {.unnumbered}
 
-Every automated stage of the pipeline is checked against held-out ground truth, independent foundation model families (Google Gemini vs. Alibaba Qwen), and manual human audits. @tbl-evaluation-datasets summarizes the benchmark datasets, sample sizes, and performance metrics across each processing tier.
+Every automated stage of the pipeline is checked three ways: against held-out ground truth, against a different foundation model family (Google Gemini against Alibaba Qwen), and against manual human audits. @tbl-evaluation-datasets lists the benchmark datasets, their sample sizes and the performance at each tier.
 
 | Benchmark dataset | What it validates | Forms | Sample size | Labels from | Metric / performance |
 |---|---|---|---:|---|---|
@@ -3547,17 +3547,17 @@ tbl_rows_b1 = [
 Markdown(tabulate(tbl_rows_b1, headers=["Regressor (each in a separate model with log market cap + SIC FE)", "Coefficient", "p"]))
 ```
 
-Disclosed AI activity predicts AI patenting even after controlling for firm size and sector: with `{python} n_b1` firms across `{python} n_sic_b1` SIC groups, a one-log-point increase in disclosed AI activities is associated with `{python} f"{_coef_act_b1:.2f}"` additional log-patents (p `{python} pstr(_p_act_b1)`), and the same holds for grounded activities alone (`{python} f"{_coef_grd_b1:.2f}"`, p `{python} pstr(_p_grd_b1)`). These relationships confirm that LLM-derived disclosure constructs align with an independent, objective measure of technological development.
+Disclosed AI activity predicts AI patenting even after controlling for firm size and sector: with `{python} n_b1` firms across `{python} n_sic_b1` SIC groups, a one-log-point increase in disclosed AI activities is associated with `{python} f"{_coef_act_b1:.2f}"` additional log-patents (p `{python} pstr(_p_act_b1)`), and the same holds for grounded activities alone (`{python} f"{_coef_grd_b1:.2f}"`, p `{python} pstr(_p_grd_b1)`). The constructs extracted by the LLM therefore order firms in the same way as an independent measure of technological development that has nothing to do with the text.
 
 ### Error taxonomy and classification robustness {.unnumbered}
 
 Frame extraction is deliberately non-discarding: only the prefilter gate rejects a passage outright, and it is calibrated to keep the false-negative rate low (recall $\ge 0.92$) at the cost of passing some borderline material forward. Passages that reach the extractor but yield no semantic frame are the visible trace of that trade-off -- most commonly passages containing only incidental keywords, macro commentary, or generic disclaimers that the gate's high-recall calibration cannot rule out on lexical features alone. Because the extractor, not the gate, makes the final call on these cases, no relevant disclosure is dropped silently before an LLM has read it in context.
 
-Systematic error analysis of the frames that are extracted reveals that extraction discrepancies are heavily concentrated at the margin between forward-looking promotional claims and early-stage exploratory research descriptions. Importantly, these borderline cases exhibit zero systematic correlation with firm size, leverage, or sector classification. Collapsing or adjusting the weighting of borderline categories leaves the resulting firm-level posture scores and archetype assignments virtually identical (Spearman $\rho > 0.96$ across all specifications), demonstrating that downstream empirical findings are robust to residual measurement noise.
+Among the frames that are extracted, the discrepancies concentrate at one margin: between a forward-looking promotional claim and a description of early exploratory research. These borderline cases show no systematic correlation with firm size, leverage or sector. Collapsing the borderline categories, or reweighting them, leaves the firm-level posture scores and the archetype assignments essentially unchanged (Spearman $\rho > 0.96$ in every specification tried), so the empirical findings do not depend on the residual measurement noise.
 
 ### Aggregation reliability and empirical-Bayes shrinkage {.unnumbered}
 
-Firm-year document rates aggregate from document-level frame counts via the median (main text). Two further checks probe the sensitivity of that choice. First, log-transforming concept counts before aggregation yields higher year-over-year reliability than aggregating raw shares directly ($\rho = 0.845$ vs. $0.528$), indicating that the log transform contributes to aggregation stability beyond the robustness the median itself provides. Second, for firms with sparse AI-related text -- where a firm-year rate rests on very few documents -- rates are shrunk toward the sample mean using empirical-Bayes estimation [@efron1973], which reduces the variance of estimates built on thin evidence without discarding the underlying documents.
+Firm-year rates aggregate from document-level frame counts through the median. Two checks test how much that choice matters. First, log-transforming the concept counts before aggregation gives higher year-over-year reliability than aggregating raw shares ($\rho = 0.845$ against $0.528$), so the log transform adds stability on top of what the median already provides. Second, when a firm has very little AI-related text, and a firm-year rate therefore rests on a handful of documents, the rate is shrunk toward the sample mean by empirical-Bayes estimation [@efron1973], which lowers the variance of an estimate built on thin evidence without throwing any document away.
 
 ## Appendix C: Supplementary Disclosure and AI Activity Results {.unnumbered}
 
@@ -3589,7 +3589,7 @@ k2_gov = _k2["k2_gov"]
 k2_spec = _k2["k2_spec"]
 ```
 
-**Rejection of $k = 2$ on substantive grounds:** Although mathematically stable under both bootstrap regimes, collapsing to two poles eliminates governance orientation entirely, erasing the institutional distinction between board oversight and statutory risk warnings. In $k = 2$, Archetype 0 exhibits promotional $=$ `{python} f"{k2_promo[0]:+.2f}"`, risk $=$ `{python} f"{k2_risk[0]:+.2f}"`, governance $=$ `{python} f"{k2_gov[0]:+.2f}"`, specificity $=$ `{python} f"{k2_spec[0]:+.2f}"`; Archetype 1 exhibits promotional $=$ `{python} f"{k2_promo[1]:+.2f}"`, risk $=$ `{python} f"{k2_risk[1]:+.2f}"`, governance $=$ `{python} f"{k2_gov[1]:+.2f}"`, specificity $=$ `{python} f"{k2_spec[1]:+.2f}"`. A discrete K-means benchmark on the same standardized posture matrix reproduces the same three-archetype partition.
+**Why $k = 2$ is rejected on substantive grounds.** Two poles are mathematically stable under both bootstrap regimes, but they remove governance orientation altogether and with it the institutional difference between board oversight and a statutory risk warning. At $k = 2$, Archetype 0 has promotional $=$ `{python} f"{k2_promo[0]:+.2f}"`, risk $=$ `{python} f"{k2_risk[0]:+.2f}"`, governance $=$ `{python} f"{k2_gov[0]:+.2f}"`, specificity $=$ `{python} f"{k2_spec[0]:+.2f}"`; Archetype 1 has promotional $=$ `{python} f"{k2_promo[1]:+.2f}"`, risk $=$ `{python} f"{k2_risk[1]:+.2f}"`, governance $=$ `{python} f"{k2_gov[1]:+.2f}"`, specificity $=$ `{python} f"{k2_spec[1]:+.2f}"`. A discrete K-means benchmark on the same standardized posture matrix reproduces the same three-archetype partition.
 
 A principal components diagnostic confirms that the space cannot be collapsed into one score without heavy information loss: the first two components capture `{python} f"{hd_pca_ev[0] + hd_pca_ev[1]:.1f}"`% of the variance (PC1: `{python} f"{hd_pca_ev[0]:.1f}"`%, PC2: `{python} f"{hd_pca_ev[1]:.1f}"`%).
 
@@ -3613,7 +3613,7 @@ oos_vs_2123 = _oosv["oos_vs_2123"]
 
 A model frozen on the 2021–2024 firm-years is applied to the `{python} oos_n_2025` firm-years of 2025, reaching ARI = `{python} f"{oos_ari_2124:.3f}"` against an unconstrained 2025 refit with Jaccard recovery of `{python} f"{oos_jac_min:.1f}"`–`{python} f"{oos_jac_max:.1f}"`% across archetypes. Even the stricter pre-GenAI 2021–2023 training window keeps meaningful post-2023 recovery (ARI = `{python} f"{oos_ari_2123:.3f}"`; Vocal Substantives recovered at `{python} f"{oos_vs_2123:.1f}"`%).
 
-Freezing on 2021–2025 and testing on the `{python} oos_n_2026` firm-years observed so far in 2026 gives ARI = `{python} f"{oos_ari_2125:.3f}"`. Posture rates do not depend on calendar progress, confirming that the taxonomy is not an artifact of the initial commercialization wave.
+Freezing on 2021–2025 and testing on the `{python} oos_n_2026` firm-years observed so far in 2026 gives ARI = `{python} f"{oos_ari_2125:.3f}"`. The posture rates do not depend on how far the calendar has advanced, so the taxonomy is not an artifact of the first commercialization wave.
 
 ### AI disclosure strategy dimensions: correlation diagnostics {.unnumbered}
 
@@ -3721,7 +3721,7 @@ Markdown(tabulate(rows, headers=[f"Archetype vs. {reg['reference']}", "Raw ratio
 *Notes:* Volume control is log frame count. Reference category: Defensive Disclosers.
 :::
 
-A statistically significant difference survives the volume control (@tbl-4-1b-volume-adjusted). At identical narrative volume, Vocal Substantives still report `{python} f"{hd_vs_ratio:.2f}"` times as many operational AI activities as Defensive Disclosers ($p$ `{python} pstr(_var["volume_adjusted"]["Vocal Substantives"]["p"])`), while Governance-Led Disclosers report `{python} f"{hd_gl_ratio:.2f}"` times as many ($p$ `{python} pstr(_var["volume_adjusted"]["Governance-Led Disclosers"]["p"])`). Although total disclosure volume accounts for a substantial share of the raw variation (log frame count yields a pseudo-$R^2$ of `{python} f"{hd_vol_r2:.2f}"`), disclosure posture is not mere verbosity: it reflects distinct rates of disclosed technological deployment.
+A statistically significant difference survives the volume control (@tbl-4-1b-volume-adjusted). At identical narrative volume, Vocal Substantives still report `{python} f"{hd_vs_ratio:.2f}"` times as many operational AI activities as Defensive Disclosers ($p$ `{python} pstr(_var["volume_adjusted"]["Vocal Substantives"]["p"])`), while Governance-Led Disclosers report `{python} f"{hd_gl_ratio:.2f}"` times as many ($p$ `{python} pstr(_var["volume_adjusted"]["Governance-Led Disclosers"]["p"])`). Total disclosure volume does explain a large share of the raw variation, since the log frame count alone gives a pseudo-$R^2$ of `{python} f"{hd_vol_r2:.2f}"`, but posture is still not the same thing as verbosity: it corresponds to different rates of disclosed technological deployment.
 
 ### External AI technology ecosystem {.unnumbered}
 
