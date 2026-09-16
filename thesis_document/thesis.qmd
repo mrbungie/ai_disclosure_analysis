@@ -2116,6 +2116,147 @@ plt.show()
 
 When firms do disclose external technology stacks, four hyperscalers dominate citations (@tbl-vendor-ecosystem, Appendix C): OpenAI / Microsoft (`{python} f"{vendor_pcts['OpenAI / Microsoft Ecosystem']:.1f}"`% of firms), Alphabet / Google (`{python} f"{vendor_pcts['Alphabet / Google']:.1f}"`%), NVIDIA (`{python} f"{vendor_pcts['NVIDIA']:.1f}"`%), and Amazon Web Services (`{python} f"{vendor_pcts['Amazon Web Services']:.1f}"`%). Disclosing issuers consistently prioritize proprietary branding over external attribution.
 
+## Events
+
+Two dated events fall inside the sample: the SEC's December 2023 warning on AI claims, and DeepSeek's release in January 2025. Each is examined as an interrupted time series on the aggregate -- a break in the level and in the slope of a monthly series, with reporting seasonality and the composition of firms filing that month held constant -- rather than as a difference between exposed and unexposed firms. A shock that moves every firm alike leaves no differential to detect, which is what a difference design would look for and miss.
+
+### DeepSeek, January 2025
+
+```{python}
+#| label: fig-deepseek-break
+#| fig-cap: "[Open-weight vocabulary in earnings calls, monthly, with the fitted trend before and after January 2025.]{custom-style=\"CaptionText\"}"
+#| echo: false
+#| fig-width: 6.6
+#| fig-height: 3.2
+import pandas as pd
+import matplotlib.pyplot as plt
+
+_ds = pd.read_csv(results("posture", "deepseek_calls_series.csv"))
+_ds["x"] = pd.PeriodIndex(_ds["month"], freq="M").to_timestamp()
+_dsj = results_json("posture", "deepseek_calls_its.json")
+
+fig, ax = plt.subplots()
+ax.plot(_ds["x"], _ds["rate_per_1k"], "o", ms=3.4, color=MIB["ink_light"], label="Monthly rate")
+for side in (0, 1):
+    seg = _ds[_ds["post"] == side]
+    ax.plot(seg["x"], seg["fitted"], "-", lw=2.0, color=MIB["ink"] if side == 0 else MIB["terracotta"],
+            label="Fitted trend, before" if side == 0 else "Fitted trend, after")
+_break = pd.Timestamp("2025-01-01")
+ax.axvline(_break, color=MIB["ink_800"], ls=":", lw=1.2)
+ax.annotate("DeepSeek-R1", xy=(_break, ax.get_ylim()[1] * 0.94), xytext=(6, 0),
+            textcoords="offset points", fontsize=8, color=MIB["ink_800"])
+ax.set_ylabel("Open-weight terms per 1,000 words")
+ax.set_xlabel("")
+ax.legend(frameon=False, fontsize=8, loc="upper left")
+ax.spines[["top", "right"]].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+Open-weight vocabulary in earnings calls steps up at the turn of 2025 and decays afterwards (@fig-deepseek-break). Over `{python} str(_dsj["months"])` months of calls, the estimated step is `{python} f"{_dsj['step']:+.4f}"` terms per 1,000 words (95% CI `{python} f"[{_dsj['step_ci_low']:+.4f}, {_dsj['step_ci_high']:+.4f}]"`, $p$ `{python} pstr(_dsj["p_step"])`), against a monthly mean of `{python} f"{_dsj['mean_before']:.4f}"` before and `{python} f"{_dsj['mean_after']:.4f}"` after, with the post-event slope turning negative (`{python} f"{_dsj['slope_change']:+.5f}"`, $p$ `{python} pstr(_dsj["p_slope_change"])`) -- a spike that fades rather than a new level.
+
+What ties the series to the event is the text rather than the timing. Analysts name the model in those calls: AT&T's on `{python} _dsj["quotes"][0]["date"]` opens "you've seen DeepSeek has created a much lower cost, large language model", and Corning's two days later refers to "market dislocation over the last week from DeepSeek". The break is dated to a month and January is not entirely after the 20th, so the design locates a change around the turn of the year, not on a day.
+
+The series is earnings calls alone. A call can respond within weeks, while a 10-K published in a given month was written earlier and describes an earlier period, so pooling document types mixes responses with different timing relative to any event. The pooled series shows no break, which is consistent with that dilution without establishing it.
+
+### SEC scrutiny, December 2023
+
+Risk and governance framing accelerate over the sample, but the acceleration cannot be dated to the regulatory event. Re-estimating the same specification at every monthly break from 2023 through mid-2025 fits the data best at breaks early in 2023, well before the December warning, with the estimated slope change declining monotonically as the break is moved later. Neither series shows a step at the event itself. The defensible reading is that risk and governance language was already accelerating and that this design does not isolate a break of its own at the SEC's intervention (@tbl-e-break-dates, Appendix E).
+
+```{python}
+#| echo: false
+#| output: false
+sec_cases = results_json("call_beta", "sec_comment_letter_cases.json")
+sec_n_matched = sum(1 for d in sec_cases["letters"] if d["relevance"] != "outside universe")
+sec_n_direct = sec_cases["relevance_counts"].get("direct", 0)
+sec_n_adjacent = sec_cases["relevance_counts"].get("adjacent", 0)
+_w = sec_cases["cases"]["WELL"]
+_wk = {k: i for i, k in enumerate(_w["k"])}
+def _wv(m, k, who="treated"):
+    v = _w[who][m][_wk[k]] if k in _wk else None
+    return "n/a" if v is None else f"{v:.3f}"
+def _wd(m, who="treated"):
+    a, b = _w[who][m][_wk[-1]], _w[who][m][_wk[0]]
+    return "n/a" if a is None or b is None else f"{b - a:+.3f}"
+def _trend(m, who="treated"):
+    a, b = _w[who][m][_wk[-1]], _w[who][m][_wk[0]]
+    return "fell" if b < a else ("rose" if b > a else "stayed flat")
+_well_same_direction = (_w["treated"]["claim_density"][_wk[0]] - _w["treated"]["claim_density"][_wk[-1]] > 0) == \
+                       (_w["controls_mean"]["claim_density"][_wk[0]] - _w["controls_mean"]["claim_density"][_wk[-1]] > 0)
+_a = sec_cases["cases"]["ANET"]
+_ak = {k: i for i, k in enumerate(_a["k"])}
+def _ad(m, who="treated"):
+    a, b = _a[who][m][_ak[-1]], _a[who][m][_ak[0]]
+    return "n/a" if a is None or b is None else f"{b - a:+.3f}"
+```
+
+When regulators question corporate AI claims directly, do issuers fix specific evidentiary gaps or alter their broader disclosure posture? SEC comment letters provide a documented mechanism through which staff prompts more concrete disclosures [@bozanic2017], even as AI materiality standards remain an evolving area [@strauss2025].
+
+Before the case evidence, a panel test asks whether disclosure posture moved at all around the SEC's 2024 warning. Every firm-quarter is scored on the AI disclosure it carried through 2022, before the generative-AI boom, and the design asks whether firms with more of that prior exposure recomposed their posture differently from firms with less after 2024Q1 (@tbl-sec-composition).
+
+```{python}
+#| label: tbl-sec-composition
+#| tbl-cap: "[Differential recomposition of posture after 2024Q1 by pre-2023 AI exposure. Coefficients are the change per standard deviation of exposure, in weight; the three sum to zero because they describe one compositional movement.]{custom-style=\"CaptionText\"}"
+#| echo: false
+from IPython.display import Markdown
+
+_sec = _res_table("posture", "sec_2024_composition_shift.csv")
+_ev = _sec[_sec["event"] == "2024Q1"].set_index("weight")
+
+def _sec_cell(weight, col_beta, col_p):
+    b, p = float(_ev.loc[weight, col_beta]), float(_ev.loc[weight, col_p])
+    body = f"{b:+.3f} ({p:.3f})"
+    return f"**{body}**" if p < 0.05 else body
+
+_lines = ["| Posture weight | Firm and quarter FE | Firm and sector-quarter FE | Pre-event trend |",
+          "|:---|---:|---:|---:|"]
+for w in ("Vocal", "Governance", "Defensive"):
+    _lines.append(f"| {w} | {_sec_cell(w, 'beta_firm+quarter', 'p_firm+quarter')} "
+                  f"| {_sec_cell(w, 'beta_firm+sector-quarter', 'p_firm+sector-quarter')} "
+                  f"| {_sec_cell(w, 'beta_pretrend', 'p_pretrend')} |")
+_lines.append(f"| Firm-quarters | {int(_ev.loc['Vocal', 'n']):,} | {int(_ev.loc['Vocal', 'n']):,} | |")
+Markdown("\n".join(_lines))
+```
+
+More exposed firms shifted weight out of Defensive and into Vocal: `{python} f"{float(_ev.loc['Vocal','beta_firm+sector-quarter']):+.3f}"` and `{python} f"{float(_ev.loc['Defensive','beta_firm+sector-quarter']):+.3f}"` of weight per standard deviation of prior exposure, both with $p$ `{python} pstr(float(_ev.loc['Vocal','p_firm+sector-quarter']))`, while Governance does not move. The three coefficients sum to zero by construction: this is one reallocation reported three ways. It holds with sector-by-quarter fixed effects, which absorb whatever is common to an industry in a quarter, and no differential pre-event trend is detected ($p$ `{python} pstr(float(_ev.loc['Vocal','p_pretrend']))` for Vocal) -- a test that fails to reject, which is not a demonstration that trends were parallel [@roth2022].
+
+What this does not establish is that the SEC caused it. Sector-by-quarter fixed effects remove the *sectoral* component of the generative-AI boom, not the boom itself: within a sector, firms that were already more exposed to AI may respond more strongly to the technology than their own industry's average, and that differential response is observationally identical to a response to scrutiny. A placebo at 2023Q1 reproduces none of the pattern, while one at 2022Q3 produces a smaller Defensive movement of the opposite sign, so the timing is specific but not cleanly so. The defensible statement is that posture recomposed toward Vocal among more exposed firms after 2024Q1, and that this design cannot attribute the recomposition to regulatory scrutiny alone. Nor does the direction contradict a scrutiny response: the Vocal vertex combines promotional language with specificity and claim realization, so moving toward it is not the same as becoming less careful.
+
+The primary empirical finding is how rare direct regulatory scrutiny of corporate AI claims has been. Across all SEC staff comment letters from 2022 to mid-2026, this thesis identifies `{python} sec_n_matched` correspondence threads matching AI terms within the S&P 500 panel. Manual review reveals that only `{python} sec_n_direct` letter directly questioned a firm's operational AI claims: the Welltower inquiry (2025-04-28), which challenged the contrast between a single boilerplate sentence in its 10-K and an "industry-leading" platform claimed on its earnings call. A second letter was adjacent (Arista Networks, regarding customer segment reporting), while all remaining matches represent incidental mentions of business segments or proxy proposals (@tbl-g1-sec-letters in Appendix F). Through mid-2026, regulatory enforcement on AI washing represents a targeted, singular intervention rather than a systematic market-wide sweep.
+
+```{python}
+#| label: fig-sec-welltower
+#| fig-cap: "[Welltower's annual-report AI disclosure around the SEC comment letter of 2025-04-28, against the mean of three matched real-estate peers.]{custom-style=\"CaptionText\"}"
+#| echo: false
+#| fig-width: 8.5
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8.5, 3.4), dpi=300)
+_ks = _w["k"]
+for ax, m, title, ylab in [(ax1, "claim_density", "Panel A: AI claim density", "AI claims / 1k words"),
+                           (ax2, "realized_density", "Panel B: Realized-integration claims (targeted)", "Realized claims / 1k words")]:
+    t = [np.nan if v is None else v for v in _w["treated"][m]]
+    c = [np.nan if v is None else v for v in _w["controls_mean"][m]]
+    ax.plot(_ks, t, "s-", color="#B85F42", lw=2.0, ms=6, label="Welltower")
+    ax.plot(_ks, c, "o--", color="#355F6B", lw=1.6, ms=5, label="Matched peers (mean)")
+    ax.axvline(-0.5, color="#454E54", ls=":", lw=1.2, label="SEC letter")
+    ax.set_xticks(_ks); ax.set_xticklabels([f"k = {k}\n({y})" for k, y in zip(_ks, _w["year"])], fontsize=8)
+    ax.set_title(title, fontsize=9.2, fontweight="bold"); ax.set_ylabel(ylab, fontsize=8.5, fontweight="bold")
+    ax.grid(True, linestyle="--", alpha=0.3); ax.spines[["top", "right"]].set_visible(False)
+ax1.legend(loc="upper left", fontsize=7.5)
+plt.tight_layout()
+plt.show()
+```
+
+::: {custom-style="FigureNote"}
+*Notes:* k = −1 is the FY2024 10-K the letter reviewed; k = 0 is the first 10-K filed after the letter. Panel A: AI claim density; Panel B: realized-integration claims, the dimension the staff asked about.
+:::
+
+In the one case where the SEC questioned a firm's AI claims directly, the response was not defensive retreat (@fig-sec-welltower). In the first annual report Welltower filed after the inquiry, AI claim density `{python} _trend("claim_density")` from `{python} _wv("claim_density", -1)` to `{python} _wv("claim_density", 0)` claims per thousand words, moving `{python} "with" if _well_same_direction else "against"` its matched peers, and in the dimension the letter targeted -- realized integration -- density `{python} _trend("realized_density")` to `{python} _wv("realized_density", 0)`. Decoupling narrowed from `{python} _wv("w", -1)` to `{python} _wv("w", 0)`. The adjacent Arista inquiry, which concerned segment reporting rather than AI capability, shows no comparable narrative movement.
+
+One firm cannot establish a regulatory effect, and the direction is what makes the case worth reporting rather than its size: scrutiny here coincided with more grounded disclosure, not less disclosure. Read alongside the aggregate series, where no break dates to the SEC's intervention, the evidence supports a narrow claim -- direct scrutiny is rare, and where it occurred the firm added evidence rather than withdrawing claims -- and not a market-wide disciplining effect. Case details are in @tbl-g2-sec-cases, Appendix F.
+
 ## What disclosed AI activity adds to disclosure posture
 
 Disclosed activity carries information that posture alone does not: at equal disclosure volume, Vocal Substantives report `{python} f"{hd_vs_ratio:.2f}"` times as many AI activities as Defensive Disclosers, so archetypes do not simply proxy for verbosity. What firms report doing is nonetheless functionally similar across groups, with enterprises primarily selling and operating with AI, which leaves the business role of an activity as a separate question from its volume or grounding -- one that prior research suggests matters, since @barrios2025 find that AI disclosures provide stronger signals when they concern the use of AI in firms' products and services rather than internal applications. Firms retain wide discretion over what they emphasize within any single document, however, which raises the question of whether these operational claims survive as legal and regulatory commitment escalates.
@@ -2561,102 +2702,6 @@ plt.show()
 :::
 
 This co-movement is consistent with @jia2025, who find that post-ChatGPT discussions of generative AI frequently combine positive tone with action initiatives; their initiative measure includes plans, whereas this thesis separately examines activity grounding and reported outcomes. Together, these findings support evaluating tone and disclosed evidence as distinct dimensions of corporate communication, not as opposite ends of the same one.
-
-## Regulatory scrutiny as an external stress test
-
-```{python}
-#| echo: false
-#| output: false
-sec_cases = results_json("call_beta", "sec_comment_letter_cases.json")
-sec_n_matched = sum(1 for d in sec_cases["letters"] if d["relevance"] != "outside universe")
-sec_n_direct = sec_cases["relevance_counts"].get("direct", 0)
-sec_n_adjacent = sec_cases["relevance_counts"].get("adjacent", 0)
-_w = sec_cases["cases"]["WELL"]
-_wk = {k: i for i, k in enumerate(_w["k"])}
-def _wv(m, k, who="treated"):
-    v = _w[who][m][_wk[k]] if k in _wk else None
-    return "n/a" if v is None else f"{v:.3f}"
-def _wd(m, who="treated"):
-    a, b = _w[who][m][_wk[-1]], _w[who][m][_wk[0]]
-    return "n/a" if a is None or b is None else f"{b - a:+.3f}"
-def _trend(m, who="treated"):
-    a, b = _w[who][m][_wk[-1]], _w[who][m][_wk[0]]
-    return "fell" if b < a else ("rose" if b > a else "stayed flat")
-_well_same_direction = (_w["treated"]["claim_density"][_wk[0]] - _w["treated"]["claim_density"][_wk[-1]] > 0) == \
-                       (_w["controls_mean"]["claim_density"][_wk[0]] - _w["controls_mean"]["claim_density"][_wk[-1]] > 0)
-_a = sec_cases["cases"]["ANET"]
-_ak = {k: i for i, k in enumerate(_a["k"])}
-def _ad(m, who="treated"):
-    a, b = _a[who][m][_ak[-1]], _a[who][m][_ak[0]]
-    return "n/a" if a is None or b is None else f"{b - a:+.3f}"
-```
-
-When regulators question corporate AI claims directly, do issuers fix specific evidentiary gaps or alter their broader disclosure posture? SEC comment letters provide a documented mechanism through which staff prompts more concrete disclosures [@bozanic2017], even as AI materiality standards remain an evolving area [@strauss2025].
-
-Before the case evidence, a panel test asks whether disclosure posture moved at all around the SEC's 2024 warning. Every firm-quarter is scored on the AI disclosure it carried through 2022, before the generative-AI boom, and the design asks whether firms with more of that prior exposure recomposed their posture differently from firms with less after 2024Q1 (@tbl-sec-composition).
-
-```{python}
-#| label: tbl-sec-composition
-#| tbl-cap: "[Differential recomposition of posture after 2024Q1 by pre-2023 AI exposure. Coefficients are the change per standard deviation of exposure, in weight; the three sum to zero because they describe one compositional movement.]{custom-style=\"CaptionText\"}"
-#| echo: false
-from IPython.display import Markdown
-
-_sec = _res_table("posture", "sec_2024_composition_shift.csv")
-_ev = _sec[_sec["event"] == "2024Q1"].set_index("weight")
-
-def _sec_cell(weight, col_beta, col_p):
-    b, p = float(_ev.loc[weight, col_beta]), float(_ev.loc[weight, col_p])
-    body = f"{b:+.3f} ({p:.3f})"
-    return f"**{body}**" if p < 0.05 else body
-
-_lines = ["| Posture weight | Firm and quarter FE | Firm and sector-quarter FE | Pre-event trend |",
-          "|:---|---:|---:|---:|"]
-for w in ("Vocal", "Governance", "Defensive"):
-    _lines.append(f"| {w} | {_sec_cell(w, 'beta_firm+quarter', 'p_firm+quarter')} "
-                  f"| {_sec_cell(w, 'beta_firm+sector-quarter', 'p_firm+sector-quarter')} "
-                  f"| {_sec_cell(w, 'beta_pretrend', 'p_pretrend')} |")
-_lines.append(f"| Firm-quarters | {int(_ev.loc['Vocal', 'n']):,} | {int(_ev.loc['Vocal', 'n']):,} | |")
-Markdown("\n".join(_lines))
-```
-
-More exposed firms shifted weight out of Defensive and into Vocal: `{python} f"{float(_ev.loc['Vocal','beta_firm+sector-quarter']):+.3f}"` and `{python} f"{float(_ev.loc['Defensive','beta_firm+sector-quarter']):+.3f}"` of weight per standard deviation of prior exposure, both with $p$ `{python} pstr(float(_ev.loc['Vocal','p_firm+sector-quarter']))`, while Governance does not move. The three coefficients sum to zero by construction: this is one reallocation reported three ways. It holds with sector-by-quarter fixed effects, which absorb whatever is common to an industry in a quarter, and no differential pre-event trend is detected ($p$ `{python} pstr(float(_ev.loc['Vocal','p_pretrend']))` for Vocal) -- a test that fails to reject, which is not a demonstration that trends were parallel [@roth2022].
-
-What this does not establish is that the SEC caused it. Sector-by-quarter fixed effects remove the *sectoral* component of the generative-AI boom, not the boom itself: within a sector, firms that were already more exposed to AI may respond more strongly to the technology than their own industry's average, and that differential response is observationally identical to a response to scrutiny. A placebo at 2023Q1 reproduces none of the pattern, while one at 2022Q3 produces a smaller Defensive movement of the opposite sign, so the timing is specific but not cleanly so. The defensible statement is that posture recomposed toward Vocal among more exposed firms after 2024Q1, and that this design cannot attribute the recomposition to regulatory scrutiny alone. Nor does the direction contradict a scrutiny response: the Vocal vertex combines promotional language with specificity and claim realization, so moving toward it is not the same as becoming less careful.
-
-The primary empirical finding is how rare direct regulatory scrutiny of corporate AI claims has been. Across all SEC staff comment letters from 2022 to mid-2026, this thesis identifies `{python} sec_n_matched` correspondence threads matching AI terms within the S&P 500 panel. Manual review reveals that only `{python} sec_n_direct` letter directly questioned a firm's operational AI claims: the Welltower inquiry (2025-04-28), which challenged the contrast between a single boilerplate sentence in its 10-K and an "industry-leading" platform claimed on its earnings call. A second letter was adjacent (Arista Networks, regarding customer segment reporting), while all remaining matches represent incidental mentions of business segments or proxy proposals (@tbl-g1-sec-letters in Appendix F). Through mid-2026, regulatory enforcement on AI washing represents a targeted, singular intervention rather than a systematic market-wide sweep.
-
-```{python}
-#| label: fig-sec-welltower
-#| fig-cap: "[Welltower's annual-report AI disclosure around the SEC comment letter of 2025-04-28, against the mean of three matched real-estate peers.]{custom-style=\"CaptionText\"}"
-#| echo: false
-#| fig-width: 8.5
-#| fig-height: 3.4
-import numpy as np
-import matplotlib.pyplot as plt
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8.5, 3.4), dpi=300)
-_ks = _w["k"]
-for ax, m, title, ylab in [(ax1, "claim_density", "Panel A: AI claim density", "AI claims / 1k words"),
-                           (ax2, "realized_density", "Panel B: Realized-integration claims (targeted)", "Realized claims / 1k words")]:
-    t = [np.nan if v is None else v for v in _w["treated"][m]]
-    c = [np.nan if v is None else v for v in _w["controls_mean"][m]]
-    ax.plot(_ks, t, "s-", color="#B85F42", lw=2.0, ms=6, label="Welltower")
-    ax.plot(_ks, c, "o--", color="#355F6B", lw=1.6, ms=5, label="Matched peers (mean)")
-    ax.axvline(-0.5, color="#454E54", ls=":", lw=1.2, label="SEC letter")
-    ax.set_xticks(_ks); ax.set_xticklabels([f"k = {k}\n({y})" for k, y in zip(_ks, _w["year"])], fontsize=8)
-    ax.set_title(title, fontsize=9.2, fontweight="bold"); ax.set_ylabel(ylab, fontsize=8.5, fontweight="bold")
-    ax.grid(True, linestyle="--", alpha=0.3); ax.spines[["top", "right"]].set_visible(False)
-ax1.legend(loc="upper left", fontsize=7.5)
-plt.tight_layout()
-plt.show()
-```
-
-::: {custom-style="FigureNote"}
-*Notes:* k = −1 is the FY2024 10-K the letter reviewed; k = 0 is the first 10-K filed after the letter. Panel A: AI claim density; Panel B: realized-integration claims, the dimension the staff asked about.
-:::
-
-The single direct case contradicts the assumption that regulatory scrutiny simply triggers defensive boilerplate (@fig-sec-welltower; case details in @tbl-g2-sec-cases, Appendix F). In its first annual report filed post-inquiry, Welltower's AI claim density `{python} _trend("claim_density")` from `{python} _wv("claim_density", -1)` to `{python} _wv("claim_density", 0)` claims per thousand words (`{python} _wd("claim_density")`), moving `{python} "with" if _well_same_direction else "against"` matched peers whose claim density `{python} _trend("claim_density", "controls_mean")` (`{python} _wd("claim_density", "controls_mean")`). In the dimension specifically targeted by the SEC—realized integration—density `{python} _trend("realized_density")` from `{python} _wv("realized_density", -1)` to `{python} _wv("realized_density", 0)` (`{python} _wd("realized_density")`), while peers `{python} _trend("realized_density", "controls_mean")`. Decoupling narrowed sharply from `{python} _wv("w", -1)` to `{python} _wv("w", 0)`, as management pruned ungrounded rhetoric.
-
-By contrast, the adjacent Arista inquiry—which focused on segment reporting rather than AI capabilities—showed no narrative contraction: claim density rose by `{python} _ad("claim_density")`, tracking peer trends (`{python} _ad("claim_density", "controls_mean")`). This is descriptive case evidence, not causal identification, but the contrast is consistent with the hypothesis that a direct request for evidence on technical capabilities can narrow the gap between narrative and substance: asked to substantiate its claims under statutory liability, Welltower contracted narrative volume and closed its decoupling gap.
 
 ## What credibility means in this thesis
 
