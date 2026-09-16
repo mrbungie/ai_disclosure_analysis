@@ -392,11 +392,9 @@ Four research questions guide the empirical tests:
 
 ![End-to-end data acquisition, inference, and multi-source fusion pipeline.](svgs/pipeline_diagrama.svg){#fig-pipeline-architecture width="100%"}
 
-The empirical pipeline turns raw corporate disclosure into structured indicators in several stages (@fig-pipeline-architecture). Candidate paragraphs from SEC filings and earnings calls are deduplicated and screened by a supervised GBDT prefilter ($\tau = 0.17$), and a zero-shot LLM then extracts structured claims and concrete operational activities from what survives. These outputs build the six core constructs ($D, P, A, G, S, W$), which are joined with SEC XBRL fundamentals and market returns and used in four designs: disclosure archetypes, cross-channel comparisons, event studies and risk regressions. Appendix A gives the full acquisition, schemas and aggregation procedures.
+The empirical pipeline converts corporate disclosures into six constructs ($D, P, A, G, S, W$) through deduplication, supervised paragraph screening and zero-shot LLM extraction (@fig-pipeline-architecture). These measures support four complementary analyses: identifying recurring disclosure strategies and their associated activity portfolios; measuring narrative–substance gaps and comparing communication channels within firms; examining disclosure changes around regulatory and technological events; and testing whether disclosure measures are associated with subsequent market and accounting outcomes, conditional on prior outcomes, firm characteristics, and sector and year fixed effects. Appendix A documents acquisition, extraction and aggregation.
 
 *Code and data availability.* Code and extraction prompts are available on GitHub [@oviedo2026code]; derived datasets and fitted models are on Hugging Face Datasets [@oviedo2026data] and Models [@oviedo2026models], respectively. Releases and revisions are pinned to this thesis version; licensed transcripts are excluded. Appendix A.3 documents extraction, and the README provides reproduction instructions.
-
-*Scope note on SEC scrutiny and DeepSeek.* The observation window contains two external events, the DeepSeek release of late January 2025 and the SEC comment letters on AI disclosure. The empirical tests estimate whether either of them moved disclosure posture, promotional language or the divergence between channels.
 
 The next four chapters present the empirical findings, the chapter after them turns those findings into a due-diligence framework, and the last chapter concludes.
 
@@ -3372,26 +3370,22 @@ Markdown(tabulate(app_rows, headers=headers_app))
 
 | Origin | What it supplies | Access |
 |:---|:---|:---|
-| SEC EDGAR | Forms 10-K, 10-Q, DEF 14A, 8-K, 20-F, and the staff comment letters of Appendix E | Public, via `edgartools` under SEC fair-access limits |
+| SEC EDGAR | Forms 10-K, 10-Q, DEF 14A, 8-K, 20-F, and the staff comment letters of Appendix E, parsed into item sections on the SEC's own taxonomy | Public, via `edgartools`, under 10 requests per second with a declared institutional user-agent |
 | SEC XBRL company facts and frames | Standardized accounting fundamentals, annual and quarterly | Public API |
 | Hugging Face, `kurry/sp500_earnings_transcripts` [@kurry2024transcripts] | Earnings-call transcripts, first source in the union | Third-party dataset |
 | Equibles [@equibles] | Earnings-call transcripts, gap fill | Commercial provider |
 | StockAnalysis [@stockanalysis] | Earnings-call transcripts, residual gap fill | Commercial provider |
 | Yahoo Finance, with Stooq and Tiingo as fallback | Daily prices, returns and volumes, including delisted tickers | Public and freemium APIs |
 | Ken French data library | Fama-French factors and the risk-free series | Public |
-| Google Patents via BigQuery | Patent publications 2021-2023, classified with the OECD (2025) AI taxonomy | Public dataset, paid query |
+| Google Patents via BigQuery | Patent publications 2021-2023, matched to issuers on curated assignee aliases and classified with the OECD (2025) AI taxonomy | Public dataset, paid query |
 | Hugging Face, `BAAI/bge-m3` [@chen2024bge] | Embedding model behind the prefilter's semantic anchors | Open weights |
 | OpenRouter, `openai/gpt-5.6-luna` | Zero-shot extraction in both passes | Paid API |
 
 : External data origins and what each supplies. {#tbl-a0-external-sources}
 
-**Statutory filings and rate limits.** Mandatory disclosures are pulled from SEC EDGAR by automated routines built on `edgartools`, covering annual reports (Form 10-K), quarterly reports (Form 10-Q), proxy statements (DEF 14A), current reports (Form 8-K) and foreign issuer annual reports (Form 20-F). The queries follow SEC fair-access rules, staying under 10 queries per second with a declared institutional user-agent header. Forms are parsed into item sections following the SEC's own item taxonomy. A 10-Q is treated as its own reporting instrument and is never pooled with a 10-K.
-
 **Earnings call union and coverage audit.** Voluntary disclosure is followed through quarterly earnings-call transcripts taken from a deduplicated union of three providers: a Hugging Face community dataset [@kurry2024transcripts], Equibles [@equibles] and StockAnalysis [@stockanalysis], taken in that order of priority. Vendor feeds omit transcripts in ways that are not random, so every transcript is cross-verified automatically against the SEC filing dates, matching the ticker, the company name and the fiscal period marker. A firm-quarter with no vendor coverage at all (`{python} cov_call_gap_pct` of all panel firm-quarters) is marked as unmonitored (`cov_call_gap = 1`) and stored as null, not as zero. The distinction matters: otherwise an unobserved call would be analyzed as a quarter with no disclosure.
 
 **Observation window and 2026 adjustment.** Filing and call dates run from January 1, 2021 through `{python} cov_last_date`. The 2026 observations are year-to-date up to the cut-off (`{python} cov_10k_2026` firms with Form 10-Ks, `{python} cov_10q_2026` with Form 10-Qs and `{python} cov_calls_2026` with earnings calls). For multi-year comparisons and projected annual volumes, the 2026 measures are scaled by a same-calendar-window seasonal factor (`hd_act_factor`), the ratio of full-year 2025 activity to the activity recorded in 2025 over the same calendar span.
-
-**External patent retrieval.** As a non-textual check on technological capability, patent records published between 2021 and 2023 are retrieved from Google Patents through BigQuery. Patents are assigned to issuers in the universe using curated assignee aliases, which cover operating subsidiaries and IP holding entities, and classified with the OECD (2025) AI taxonomy: five core CPC groups taken unconditionally, plus application groups filtered on AI keywords in the title or the abstract.
 
 @tbl-a0-derived-inventory counts, for every year of the panel, the derived artifacts the pipeline produces from the source filings and calls (analysis universe, S&P 500 as of 2021-01-01), and the number of firms with at least one such artifact.
 
