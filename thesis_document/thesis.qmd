@@ -1315,7 +1315,7 @@ _purpose_defs = [
 Markdown(tabulate(_purpose_defs, headers=["Business purpose", "Definition"]))
 ```
 
-To make the activities readable for managers, each one is classified along two independent dimensions: the business purpose it serves (@tbl-4-purpose-defs) and the operational action taken (@tbl-4-action-defs). A single activity has exactly one purpose and one action -- a firm can, for instance, *develop* (action) a feature that it *sells* (purpose), or *deploy* (action) a system it uses to *control* (purpose) fraud risk.
+So that a manager can read the inventory, every activity is classified on two independent dimensions: the business purpose it serves (@tbl-4-purpose-defs) and the operational action taken (@tbl-4-action-defs). Each activity has exactly one purpose and one action. A firm can, for example, *develop* (action) a feature that it then *sells* (purpose), or *deploy* (action) a system that it uses to *control* (purpose) fraud risk.
 
 ```{python}
 #| label: tbl-4-action-defs
@@ -1333,7 +1333,7 @@ _action_defs = [
 Markdown(tabulate(_action_defs, headers=["Operational action", "Definition"]))
 ```
 
-Separating business purpose from operational action distinguishes where AI is intended to add value from what the firm is concretely doing to implement it.
+Keeping business purpose apart from operational action separates where AI is supposed to add value from what the firm is actually doing to put it in place.
 
 ```{python}
 #| echo: false
@@ -1372,7 +1372,7 @@ action_dev4 = action_dev_all4
 
 ## How AI applications differ across industries
 
-The purpose and action taxonomies above pool every sector together. Crossing them with the 10 aggregated economic sectors (@tbl-a0-sic-sector-mapping, Appendix A) asks which sectors concentrate AI activity in a particular purpose or action, and which look like the pooled average.
+The purpose and action taxonomies pool every sector together. Crossing them with the 10 aggregated economic sectors (@tbl-a0-sic-sector-mapping, Appendix A) shows which sectors concentrate their AI activity in one purpose or one action and which simply look like the pooled average.
 
 ```{python}
 #| label: fig-sector-purpose-action
@@ -1432,11 +1432,11 @@ plt.show()
 *Notes:* Panel A: each sector's row sums to 100%, ordered by *Sell* share descending. Panel B: each cell is one sector's share of that action type minus the pooled share across all sectors (red = above the pooled mix, blue = below, white = at it); cells labeled only where $|\Delta| \ge 3$ percentage points. Sectors are the 10 aggregated economic sectors used throughout this study (@tbl-a0-sic-sector-mapping, Appendix A); "Other / Diversified" is excluded.
 :::
 
-In business purpose (Panel A), Technology and Business Services skew most toward *Sell*, while Utilities and Financial Services skew most toward *Operate*; *Control* is highest in Utilities, Communications, and Financial Services, though still well below their own *Operate* share. Panel B shows operational action is largely sector-invariant -- *Partner / Buy*, *Analyze / Measure*, and *Automate* barely deviate anywhere -- except for a few specific pockets: *Deploy / Integrate* pulls opposite ways in Energy & Mining (`{python} f"{action_dev4.loc['Energy & Mining', 'Deploy / Integrate']:+.1f}"`) and Industrials & Mfg (`{python} f"{action_dev4.loc['Industrials & Mfg', 'Deploy / Integrate']:+.1f}"`); *Develop / Build* runs low wherever it deviates, most in Energy & Mining and Communications (both around `{python} f"{action_dev4.loc['Energy & Mining', 'Develop / Build']:+.0f}"` points); and *Pilot / Explore* and *Govern / Control* both peak in Utilities (`{python} f"{action_dev4.loc['Utilities', 'Pilot / Explore']:+.1f}"` and `{python} f"{action_dev4.loc['Utilities', 'Govern / Control']:+.1f}"`), where AI still reads as experimental and closely governed rather than settled infrastructure. A firm's initiative portfolio should therefore be evaluated against its underlying operating model and industry peers, rather than using technology-sector disclosures as a universal benchmark.
+On business purpose (Panel A), Technology and Business Services lean most toward *Sell* and Utilities and Financial Services most toward *Operate*. *Control* is highest in Utilities, Communications and Financial Services, but even there it stays well under the same sector's *Operate* share. Panel B shows that operational action hardly varies by sector at all: *Partner / Buy*, *Analyze / Measure* and *Automate* barely deviate anywhere. Only a few pockets stand out. *Deploy / Integrate* pulls in opposite directions in Energy & Mining (`{python} f"{action_dev4.loc['Energy & Mining', 'Deploy / Integrate']:+.1f}"`) and Industrials & Mfg (`{python} f"{action_dev4.loc['Industrials & Mfg', 'Deploy / Integrate']:+.1f}"`). *Develop / Build* runs low wherever it deviates at all, most of all in Energy & Mining and Communications (both near `{python} f"{action_dev4.loc['Energy & Mining', 'Develop / Build']:+.0f}"` points). *Pilot / Explore* and *Govern / Control* both peak in Utilities (`{python} f"{action_dev4.loc['Utilities', 'Pilot / Explore']:+.1f}"` and `{python} f"{action_dev4.loc['Utilities', 'Govern / Control']:+.1f}"`), where AI still reads as experimental and tightly governed rather than as settled infrastructure. A firm's portfolio of initiatives should therefore be judged against its own operating model and its industry peers. Technology-sector disclosure is not a universal benchmark.
 
 ## Disclosure strategy meets disclosed AI activity
 
-The central test links communication posture to disclosed AI activity. The activity inventory was never an input to the clustering. The archetypes come only from frame-level communication posture. Crossing the archetypes with activity features shows that posture maps directly onto operational disclosure (@fig-archetype-activity-heatmap):
+The central test connects communication posture with disclosed AI activity. The activity inventory was never an input to the fit; the archetypes come from frame-level posture only. Crossing the archetypes with the activity features shows that posture does map onto operational disclosure (@fig-archetype-activity-heatmap):
 
 ```{python}
 #| label: fig-archetype-activity-heatmap
@@ -1519,13 +1519,13 @@ plt.show()
 *Notes:* Top panel: median disclosed AI activities per firm relative to the full universe. Bottom panel: raw rates by archetype, with shading indicating percentage-point deviation from the pooled benchmark.
 :::
 
-Against the pooled benchmark, three of the five rate metrics are largely invariant across archetypes, so the color in those rows is almost entirely pale: proprietary technology is near-universal at every archetype, while deployed/scaled stage and quantified outcomes stay within a few points of their (much lower) pooled rate for every archetype -- quantified outcomes are rare across the board, not universal. Where archetypes actually diverge is volume and customer orientation. Vocal Substantives report a median of `{python} f"{n_vals[0]:.0f}"` AI activities per firm, `{python} f"{ratios[0]:.1f}"` times the pooled median, and their customer-facing share (`{python} f"{mat_raw[2, 0]:.1f}"`%) runs `{python} f"{mat_dev[2, 0]:.0f}"` points above the pooled rate. Governance-Led and Defensive Disclosers move the other way, both well below the pooled customer-facing rate (`{python} f"{mat_raw[2, 1]:.1f}"`% and `{python} f"{mat_raw[2, 2]:.1f}"`% respectively) and below it on own-brand naming, consistent with communication anchored in internal process and oversight rather than products aimed at customers.
+Where the archetypes really differ is in volume and in customer orientation. Three of the five rate metrics barely move between archetypes, which is why those rows are almost colorless: proprietary technology is close to universal everywhere, and both the deployed or scaled stage and the quantified outcomes stay within a few points of their pooled rate, which is a much lower rate to begin with. Quantified outcomes are rare in every group, not common in any of them. Vocal Substantives report a median of `{python} f"{n_vals[0]:.0f}"` AI activities per firm, `{python} f"{ratios[0]:.1f}"` times the pooled median, and their customer-facing share (`{python} f"{mat_raw[2, 0]:.1f}"`%) sits `{python} f"{mat_dev[2, 0]:.0f}"` points above the pooled rate. Governance-Led and Defensive Disclosers go the other way: both are well under the pooled customer-facing rate (`{python} f"{mat_raw[2, 1]:.1f}"`% and `{python} f"{mat_raw[2, 2]:.1f}"`%) and also under it on own-brand naming, which fits communication built around internal process and oversight rather than around products sold to customers.
 
-The gap is not verbosity: at identical narrative volume, Vocal Substantives still report `{python} f"{hd_vs_ratio:.2f}"` times as many operational AI activities as Defensive Disclosers and Governance-Led Disclosers `{python} f"{hd_gl_ratio:.2f}"` times as many (both $p < 0.001$; the negative binomial conditioning on total AI disclosure volume is in Appendix C). Posture thus helps focus the initial review, but because outcome metrics remain scarce across all groups, an analyst must verify the specific factual backing of each individual initiative.
+The difference is not simply that some firms write more. At identical narrative volume, Vocal Substantives still report `{python} f"{hd_vs_ratio:.2f}"` times as many operational AI activities as Defensive Disclosers and Governance-Led Disclosers `{python} f"{hd_gl_ratio:.2f}"` times as many (both $p < 0.001$; the negative binomial conditioning on total AI disclosure volume is in Appendix C). Posture is therefore useful for deciding where to start a review, but since outcome metrics are scarce in every group, an analyst still has to check the factual backing of each initiative one by one.
 
 ## What firms disclose doing differently
 
-The archetypes differ not only in how many activities they disclose but in what those activities are for (@fig-archetype-activity-mix):
+The archetypes differ in how many activities they disclose, and also in what those activities are for (@fig-archetype-activity-mix):
 
 ```{python}
 #| label: fig-archetype-activity-mix
@@ -1595,7 +1595,7 @@ def _mix(a, role):
 _SELL, _OPER, _CTRL, _SERVE = "Sell (Customer products)", "Operate (Internal operations)", "Control (Risk & security)", "Serve (Sales & service)"
 ```
 
-Where AI enters the business barely changes from one archetype to the next (@fig-archetype-activity-mix). Selling -- AI inside the products and services customers buy -- dominates all three groups, with Vocal Substantives leaning on it hardest and Governance-Led Disclosers splitting more evenly between selling and internal operations. Even among Governance-Led firms, risk and compliance work forms a minor fraction of reported deployments: a firm can communicate extensive supervisory oversight while directing its actual AI use to commercial and operational tools. The actual portfolio of initiatives cannot simply be deduced from the posture label. Three filings show what that looks like on the page (@tbl-archetype-activity-examples).
+Where AI enters the business changes very little from one archetype to the next (@fig-archetype-activity-mix). Selling, meaning AI placed inside the products and services that customers buy, dominates all three groups; Vocal Substantives lean on it hardest and Governance-Led Disclosers split more evenly between selling and internal operations. Even inside the Governance-Led group, risk and compliance work is only a small part of the reported deployments. A firm can write at length about supervisory oversight and still put its actual AI into commercial and operational tools. The portfolio of initiatives cannot be deduced from the posture label. Three filings show how this looks on the page (@tbl-archetype-activity-examples).
 
 ```{python}
 #| label: tbl-archetype-activity-examples
@@ -1643,7 +1643,7 @@ Markdown(tabulate(_rows_ex, headers=["Archetype", "Firm", "Primary Focus", "Fili
 
 ## Decomposing AI activity grounding
 
-Firms disclose thousands of AI activities, but the question that matters is how concretely each one is grounded in the text. To measure AI activity grounding ($G$), every disclosed activity is passed through a ladder of ever stricter requirements:
+Firms disclose thousands of AI activities, and the question that matters is how concretely each one is grounded in the text. To measure AI activity grounding ($G$), every disclosed activity is put through a ladder of requirements that become stricter at each step:
 
 $$\text{AI Activity Claim} \;\longrightarrow\; \text{Specific Business Function} \;\longrightarrow\; \text{Deployed Stage} \;\longrightarrow\; \text{Named Product/Process} \;\longrightarrow\; \text{Quantified Outcome Metric}$$
 
