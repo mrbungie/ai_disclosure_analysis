@@ -340,8 +340,16 @@ def content_width_emu(document: Document) -> int:
     properties (not a hardcoded constant) means this keeps working if the
     template's page size or margins ever change.
     """
-    section = document.sections[0]
-    return section.page_width - section.left_margin - section.right_margin - section.gutter
+    # A `::: {.landscape}` block makes Quarto split the document into sections,
+    # and a section that inherits its page setup reports None for these
+    # properties, so the first section is not always the one that knows how
+    # wide the page is. Take the first section that states a width, and read a
+    # missing gutter as zero.
+    for section in document.sections:
+        if section.page_width is None or section.left_margin is None or section.right_margin is None:
+            continue
+        return section.page_width - section.left_margin - section.right_margin - (section.gutter or 0)
+    raise ValueError("no section declares a page width and margins")
 
 
 def resize_oversized_images(document: Document, max_width_emu: int) -> None:

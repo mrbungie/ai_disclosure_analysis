@@ -2729,7 +2729,32 @@ mkt_n_surv = len(mkt_survivors)
 mkt_crit1 = f"{_grid['bh_crit'].iloc[0]:.4f}"
 n_calls_main = f"{int(_bat[_bat['target'] == 'duvol_post']['n_calls'].iloc[0]):,}"
 n_firms_main = int(_bat[_bat["target"] == "duvol_post"]["n_firms"].iloc[0])
-def _joint(target):
+def _mkt_stars(p):
+    # escaped, so the significance marks survive next to the bold markers
+    # instead of being eaten as emphasis
+    n = 3 if p < 0.01 else 2 if p < 0.05 else 1 if p < 0.10 else 0
+    return r"\*" * n
+def _mkt_show(b, p):
+    """A coefficient with its p-value, starred at the conventional levels and
+    set bold when it clears 5% -- so a reader finds what the table supports
+    before reading any of it."""
+    if pd.isna(b):
+        return f"**{p:.3f}**{_mkt_stars(p)}" if p < 0.05 else f"{p:.3f}{_mkt_stars(p)}"
+    body = f"{b:+.3f}{_mkt_stars(p)} ({p:.3f})"
+    return f"**{body}**" if p < 0.05 else body
+def _mkt_cell(kind, key, target):
+    if kind == "c":
+        row = _con[(_con["target"] == target) & (_con["contrast"] == key)]
+        if not len(row):
+            return "--"
+        return _mkt_show(float(row["beta"].iloc[0]), float(row["p"].iloc[0]))
+    sub = _bat[_bat["target"] == target]
+    name = sub["pre_control"].iloc[0] if kind == "l" else key
+    row = sub[sub["variable"] == name]
+    return "--" if not len(row) else _mkt_show(float(row["beta_std"].iloc[0]), float(row["p"].iloc[0]))
+
+
+def _mkt_joint(target):
     """p of the joint test that the composition adds nothing for one outcome."""
     return float(_con[(_con["target"] == target) & (_con["contrast"] == "Composition (joint)")]["p"].iloc[0])
 
@@ -2744,7 +2769,7 @@ The eight regressions share one specification and are reported together in @tbl-
 
 **The habit does.** Historical decoupling predicts systematic risk ($\beta =$ `{python} b_of("beta_post_63", "w_expanding")`, $p$ `{python} p_of("beta_post_63", "w_expanding")`), the strongest disclosure association in the table after intensity. A firm whose narrative has persistently run ahead of its verifiable activity carries more market risk; a single episode of it does not.
 
-**Posture composition separates firms where the outcome is a market price.** The joint test of the composition rejects for market beta ($p$ `{python} f"{_joint('beta_post_63'):.3f}"`), for size ($p$ `{python} f"{_joint('log_market_cap_post'):.3f}"`) and for down-to-up volatility ($p$ `{python} f"{_joint('duvol_post'):.3f}"`), and not for any accounting outcome. The separation runs through the Governance vertex: relative to a Defensive posture, weight in Governance goes with lower systematic risk ($\beta =$ `{python} b_of("beta_post_63", "w_gov")`, $p$ `{python} p_of("beta_post_63", "w_gov")`), larger size ($\beta =$ `{python} b_of("log_market_cap_post", "w_gov")`, $p$ `{python} p_of("log_market_cap_post", "w_gov")`) and less downside volatility ($\beta =$ `{python} b_of("duvol_post", "w_gov")`, $p$ `{python} p_of("duvol_post", "w_gov")`). It also separates from the Vocal vertex on beta (@tbl-market-contrasts), so this is not merely a contrast against the residual posture.
+**Posture composition separates firms where the outcome is a market price.** The joint test of the composition rejects for market beta ($p$ `{python} f"{_mkt_joint('beta_post_63'):.3f}"`), for size ($p$ `{python} f"{_mkt_joint('log_market_cap_post'):.3f}"`) and for down-to-up volatility ($p$ `{python} f"{_mkt_joint('duvol_post'):.3f}"`), and not for any accounting outcome. The separation runs through the Governance vertex: relative to a Defensive posture, weight in Governance goes with lower systematic risk ($\beta =$ `{python} b_of("beta_post_63", "w_gov")`, $p$ `{python} p_of("beta_post_63", "w_gov")`), larger size ($\beta =$ `{python} b_of("log_market_cap_post", "w_gov")`, $p$ `{python} p_of("log_market_cap_post", "w_gov")`) and less downside volatility ($\beta =$ `{python} b_of("duvol_post", "w_gov")`, $p$ `{python} p_of("duvol_post", "w_gov")`). It also separates from the Vocal vertex on beta (@tbl-market-contrasts), so this is not merely a contrast against the residual posture.
 
 **The extensive margin is the larger effect, and a different one.** Disclosing AI in statutory filings at all, relative to not disclosing, goes with higher crash risk on both measures ($\beta =$ `{python} b_of("ncskew_post", "has_posture")`, $p$ `{python} p_of("ncskew_post", "has_posture")` and $\beta =$ `{python} b_of("duvol_post", "has_posture")`, $p$ `{python} p_of("duvol_post", "has_posture")`), and it is the strongest coefficient in the table. That contrast is not between ways of speaking; it is between speaking and staying silent.
 
@@ -2752,78 +2777,40 @@ Across the `{python} str(mkt_m)` disclosure coefficients reported here, `{python
 
 ```{python}
 #| label: tbl-market-results
-#| tbl-cap: "[Every estimated term of the eight regressions. Standardized coefficients with p-values in parentheses, starred at *** p<0.01, ** p<0.05, * p<0.10 and set bold below 5%; posture weights stay on their 0-1 scale, so ten points of reallocated weight is a tenth of the coefficient.]{custom-style=\"CaptionText\"}"
+#| tbl-cap: "[The disclosure coefficients, standardized, with p-values in parentheses; stars at *** p<0.01, ** p<0.05, * p<0.10 and bold below 5%. Posture terms are reallocations away from the Defensive vertex. Controls, the lagged outcome and the fixed effects are estimated but omitted here; @tbl-e-market-full reports every term.]{custom-style=\"CaptionText\"}"
 #| echo: false
 from IPython.display import Markdown
 
-# Rows are the regressors and controls as estimated. The posture terms are
-# written as the contrasts they are: three read straight off the fit, the
-# fourth is a difference of two coefficients and carries its own test built
-# from their covariance. Fixed effects are absorbed, so they are marked
-# present rather than enumerated.
-_ROWS = [
+_KEY = [
     ("v", "w_call",              r"$W_{\text{call}}$"),
     ("v", "w_expanding",         r"$W_{\text{exp}}$"),
-    ("v", "intensity_expanding", "Cumulative disclosure intensity"),
-    ("c", "Defensive vs. no posture",    r"Defensive vs. no posture ($\beta_{\text{has}}$)"),
-    ("c", "Vocal vs. Defensive",         r"Vocal vs. Defensive ($\beta_{\text{voc}}$)"),
-    ("c", "Governance vs. Defensive",    r"Governance vs. Defensive ($\beta_{\text{gov}}$)"),
-    ("c", "Governance vs. Vocal",        r"Governance vs. Vocal ($\beta_{\text{gov}} - \beta_{\text{voc}}$)"),
-    ("c", "Composition (joint)",         "Composition, joint test ($p$)"),
-    ("l", None,                  r"$Y_{t-1}$"),
-    ("v", "log_market_cap",      "Log market capitalization"),
-    ("v", "return60",            "Return, 60 days pre-call"),
-    ("v", "roa",                 "Return on assets"),
+    ("v", "intensity_expanding", "Cumulative intensity"),
+    ("c", "Defensive vs. no posture", r"Defensive vs. none ($\beta_{\text{has}}$)"),
+    ("c", "Vocal vs. Defensive",      r"Vocal vs. Def. ($\beta_{\text{voc}}$)"),
+    ("c", "Governance vs. Defensive", r"Gov. vs. Def. ($\beta_{\text{gov}}$)"),
+    ("c", "Governance vs. Vocal",     r"Gov. vs. Vocal ($\beta_{\text{gov}}-\beta_{\text{voc}}$)"),
 ]
-_PANELS = [("beta_post_63", "log_market_cap_post", "ncskew_post", "duvol_post"),
-           ("gross_margin_change_pp", "roic_minus_wacc_change_pp",
-            "next_revenue_yoy_post", "ps_ratio_post")]
 
-def _stars(p):
-    # escaped, so the significance marks survive next to the bold markers
-    # instead of being eaten as emphasis
-    n = 3 if p < 0.01 else 2 if p < 0.05 else 1 if p < 0.10 else 0
-    return r"\*" * n
+def _panel(targets, letter):
+    heads = [_bat[_bat["target"] == t]["label_outcome"].iloc[0] for t in targets]
+    lines = [f"| **Panel {letter}** | " + " | ".join(heads) + " |",
+             "|:---|" + "---:|" * len(targets)]
+    for kind, key, label in _KEY:
+        lines.append(f"| {label} | " + " | ".join(_mkt_cell(kind, key, t) for t in targets) + " |")
+    lines.append("| Composition, joint $F$ | " + " | ".join(_joint_mkt_cell(t) for t in targets) + " |")
+    lines.append("| $R^2$ | " + " | ".join(f"{float(_bat[_bat['target'] == t]['r2'].iloc[0]):.3f}" for t in targets) + " |")
+    lines.append("| Calls | " + " | ".join(f"{int(_bat[_bat['target'] == t]['n_calls'].iloc[0]):,}" for t in targets) + " |")
+    return lines + [""]
 
-def _show(b, p):
-    """A coefficient with its p-value, starred at the conventional levels and
-    set bold when it clears 5% -- so a reader finds what the table supports
-    before reading any of it."""
-    if pd.isna(b):
-        return f"**{p:.3f}**{_stars(p)}" if p < 0.05 else f"{p:.3f}{_stars(p)}"
-    body = f"{b:+.3f}{_stars(p)} ({p:.3f})"
+def _joint_mkt_cell(target):
+    row = _con[(_con["target"] == target) & (_con["contrast"] == "Composition (joint)")].iloc[0]
+    f, p = float(row["F"]), float(row["p"])
+    body = f"{f:.2f}{_mkt_stars(p)} ({p:.3f})"
     return f"**{body}**" if p < 0.05 else body
 
-def _cell(kind, key, target):
-    if kind == "c":
-        row = _con[(_con["target"] == target) & (_con["contrast"] == key)]
-        if not len(row):
-            return "--"
-        return _show(float(row["beta"].iloc[0]), float(row["p"].iloc[0]))
-    sub = _bat[_bat["target"] == target]
-    name = sub["pre_control"].iloc[0] if kind == "l" else key
-    row = sub[sub["variable"] == name]
-    return "--" if not len(row) else _show(float(row["beta_std"].iloc[0]), float(row["p"].iloc[0]))
-
-def _meta(target, column, fmt):
-    return fmt(_bat[_bat["target"] == target][column].iloc[0])
-
-_lines = []
-for panel, targets in zip("AB", _PANELS):
-    heads = [_bat[_bat["target"] == t]["label_outcome"].iloc[0] for t in targets]
-    _lines += [f"| **Panel {panel}** | " + " | ".join(heads) + " |",
-               "|:---|" + "---:|" * len(targets)]
-    for kind, key, label in _ROWS:
-        _lines.append(f"| {label} | " + " | ".join(_cell(kind, key, t) for t in targets) + " |")
-    for label, value in [("Sector fixed effects", lambda t: "OK"),
-                         ("Year fixed effects", lambda t: "OK"),
-                         ("SE clustered by firm", lambda t: "OK"),
-                         ("Calls", lambda t: _meta(t, "n_calls", lambda v: f"{int(v):,}")),
-                         ("Firms", lambda t: _meta(t, "n_firms", lambda v: str(int(v)))),
-                         ("$R^2$", lambda t: _meta(t, "r2", lambda v: f"{float(v):.3f}"))]:
-        _lines.append(f"| {label} | " + " | ".join(value(t) for t in targets) + " |")
-    _lines.append("")
-Markdown("\n".join(_lines))
+Markdown("\n".join(_panel(("beta_post_63", "log_market_cap_post", "ncskew_post", "duvol_post"), "A")
+                  + _panel(("gross_margin_change_pp", "roic_minus_wacc_change_pp",
+                            "next_revenue_yoy_post", "ps_ratio_post"), "B")))
 ```
 
 The weights are reallocations, so their coefficients answer a question of composition. @tbl-market-contrasts reports all four comparisons the three postures support, for the two outcomes where the disclosure block is otherwise informative. Governance against Vocal is the difference of two estimated coefficients and requires the covariance between them; it cannot be read off the two columns above.
@@ -2839,7 +2826,7 @@ for name in _CONTRASTS:
     cells = []
     for target in ("ncskew_post", "duvol_post"):
         b, p = ctr(target, name)
-        cells.append(_show(b, p))
+        cells.append(_mkt_show(b, p))
     _lines.append(f"| {name} | " + " | ".join(cells) + " |")
 Markdown("\n".join(_lines))
 ```
@@ -3935,6 +3922,65 @@ Markdown(tabulate(arch_reg_rows, headers=headers_arch))
 
 ::: {custom-style="FigureNote"}
 *Notes:* Standardized coefficients with $p$-values in parentheses, standard errors clustered by firm, additive sector and year fixed effects. Continuous controls include the outcome's own pre-call level, 60-day return momentum, and return on assets (and log market capitalisation where it is not the outcome). The posture weights are reallocations away from the Defensive vertex, so `Discloses AI` carries the extensive margin -- a firm with a wholly Defensive posture against a firm with none -- and the two weight columns carry composition alone. Partial R² measures the variance the disclosure block adds over controls and fixed effects. Benjamini--Hochberg [@benjamini1995] correction is applied in the main text across every disclosure coefficient of every outcome rather than within this table.
+:::
+
+### The market-relevance battery in full {.unnumbered}
+
+::: {.landscape}
+
+```{python}
+#| label: tbl-e-market-full
+#| tbl-cap: "[Every estimated term of the eight market-relevance regressions, controls and lagged outcome included. Standardized coefficients with p-values in parentheses, starred at *** p<0.01, ** p<0.05, * p<0.10 and bold below 5%; posture weights stay on their 0-1 scale.]{custom-style=\"CaptionText\"}"
+#| echo: false
+from IPython.display import Markdown
+
+# Rows are the regressors and controls as estimated. The posture terms are
+# written as the contrasts they are: three read straight off the fit, the
+# fourth is a difference of two coefficients and carries its own test built
+# from their covariance. Fixed effects are absorbed, so they are marked
+# present rather than enumerated.
+_ROWS = [
+    ("v", "w_call",              r"$W_{\text{call}}$"),
+    ("v", "w_expanding",         r"$W_{\text{exp}}$"),
+    ("v", "intensity_expanding", "Cumulative disclosure intensity"),
+    ("c", "Defensive vs. no posture",    r"Defensive vs. no posture ($\beta_{\text{has}}$)"),
+    ("c", "Vocal vs. Defensive",         r"Vocal vs. Defensive ($\beta_{\text{voc}}$)"),
+    ("c", "Governance vs. Defensive",    r"Governance vs. Defensive ($\beta_{\text{gov}}$)"),
+    ("c", "Governance vs. Vocal",        r"Governance vs. Vocal ($\beta_{\text{gov}} - \beta_{\text{voc}}$)"),
+    ("c", "Composition (joint)",         "Composition, joint test ($p$)"),
+    ("l", None,                  r"$Y_{t-1}$"),
+    ("v", "log_market_cap",      "Log market capitalization"),
+    ("v", "return60",            "Return, 60 days pre-call"),
+    ("v", "roa",                 "Return on assets"),
+]
+_PANELS = [("beta_post_63", "log_market_cap_post", "ncskew_post", "duvol_post"),
+           ("gross_margin_change_pp", "roic_minus_wacc_change_pp",
+            "next_revenue_yoy_post", "ps_ratio_post")]
+
+
+
+
+def _meta(target, column, fmt):
+    return fmt(_bat[_bat["target"] == target][column].iloc[0])
+
+_lines = []
+for panel, targets in zip("AB", _PANELS):
+    heads = [_bat[_bat["target"] == t]["label_outcome"].iloc[0] for t in targets]
+    _lines += [f"| **Panel {panel}** | " + " | ".join(heads) + " |",
+               "|:---|" + "---:|" * len(targets)]
+    for kind, key, label in _ROWS:
+        _lines.append(f"| {label} | " + " | ".join(_mkt_cell(kind, key, t) for t in targets) + " |")
+    for label, value in [("Sector fixed effects", lambda t: "OK"),
+                         ("Year fixed effects", lambda t: "OK"),
+                         ("SE clustered by firm", lambda t: "OK"),
+                         ("Calls", lambda t: _meta(t, "n_calls", lambda v: f"{int(v):,}")),
+                         ("Firms", lambda t: _meta(t, "n_firms", lambda v: str(int(v)))),
+                         ("$R^2$", lambda t: _meta(t, "r2", lambda v: f"{float(v):.3f}"))]:
+        _lines.append(f"| {label} | " + " | ".join(value(t) for t in targets) + " |")
+    _lines.append("")
+Markdown("\n".join(_lines))
+```
+
 :::
 
 ### Full regression output {.unnumbered}

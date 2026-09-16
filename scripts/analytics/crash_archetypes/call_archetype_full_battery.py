@@ -118,7 +118,9 @@ def posture_contrasts(result, target: str, label: str) -> pd.DataFrame:
                     "p": float(np.squeeze(t.pvalue))})
     joint = result.f_test("w_voc = 0, w_gov = 0")
     out.append({"target": target, "label_outcome": label, "contrast": "Composition (joint)",
-                "beta": float("nan"), "se": float("nan"), "p": float(joint.pvalue)})
+                "beta": float("nan"), "se": float("nan"), "p": float(joint.pvalue),
+                "F": float(np.squeeze(joint.fvalue)), "df_num": int(joint.df_num),
+                "df_den": int(joint.df_denom)})
     return pd.DataFrame(out)
 
 
