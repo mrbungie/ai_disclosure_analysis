@@ -2424,18 +2424,23 @@ Decoupling ($W_{it}$, defined as the percentile-rank gap between Disclosure Inte
 
 ```{python}
 #| label: fig-ds-alignment-scatter
-#| fig-cap: "[Disclosure Intensity (D) against Disclosed Substance (S): most firm-years align; the tails are where talk and disclosed substance diverge.]{custom-style=\"CaptionText\"}"
+#| fig-cap: "[Talk against substance: where firms rank on each, and where the two come apart.]{custom-style=\"CaptionText\"}"
 #| echo: false
 #| fig-width: 6.5
 #| fig-height: 5.0
 import pandas as pd
 import matplotlib.pyplot as plt
 
+# One year, and the ranks the construct itself uses: D and S are percentile
+# ranked WITHIN a year, so pooling six years on one pair of axes would compare
+# a 2021 firm-year against the 2026 cross-section it never ranked against.
+SCATTER_YEAR = 2025
 _ds = L.read_dataset("firm_year", ("covariates", "washing_score"), ("covariates", "disclosure_volume", ["frames_per_1k"])).dropna(subset=["frames_per_1k", "substance", "w"])
+_ds = _ds[_ds["year"] == SCATTER_YEAR]
 _arch_ds = pd.read_parquet(gold("covariates", "firm_year", "posture_archetype_static"))[["ticker", "year", "archetype"]]
 _ds = _ds.merge(_arch_ds, on=["ticker", "year"], how="left")
-_ds["pct_d"] = _ds["frames_per_1k"].rank(pct=True)
-_ds["pct_s"] = _ds["substance"].rank(pct=True)
+_ds["pct_d"] = _ds["pct_disclosure"]
+_ds["pct_s"] = _ds["pct_substance"]
 
 ARCH_COLORS = {"Vocal Substantives": "#355F6B", "Governance-Led Disclosers": "#B85F42",
                "Defensive Disclosers": "#A5AFB6", "No AI": "#D5D9DD"}
@@ -2457,8 +2462,8 @@ ax.scatter(_ds.loc[_tail_lo, "pct_d"], _ds.loc[_tail_lo, "pct_s"], s=22, facecol
            label=f"Bottom 5% quiet substance (W ≤ {_q_lo:.2f})", zorder=5)
 
 ax.plot([0, 1], [0, 1], color="#1C1F22", lw=1.2, ls="--")
-ax.set_xlabel("Disclosure Intensity (D), percentile rank", fontsize=9.0, fontweight="bold")
-ax.set_ylabel("Disclosed Substance (S), percentile rank", fontsize=9.0, fontweight="bold")
+ax.set_xlabel(f"Disclosure Intensity (D), percentile rank within {SCATTER_YEAR}", fontsize=9.0, fontweight="bold")
+ax.set_ylabel(f"Disclosed Substance (S), percentile rank within {SCATTER_YEAR}", fontsize=9.0, fontweight="bold")
 ax.set_xlim(-0.02, 1.02)
 ax.set_ylim(-0.02, 1.02)
 ax.legend(fontsize=7.2, loc="upper left", framealpha=0.9, markerscale=1.3)
@@ -2468,17 +2473,17 @@ plt.show()
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* Each point is a disclosing firm-year, plotted by percentile rank of Disclosure Intensity ($D$) and Disclosed Substance ($S$); colors show communication archetype. The dashed diagonal is perfect rank alignment ($W = 0$).
+*Notes:* One point per firm in `{python} str(SCATTER_YEAR)`, placed by where it ranks that year on talk ($D$) and on grounded activity ($S$). These are the ranks $W$ is built from, so the dashed diagonal is exactly $W = 0$. Only one year is plotted because the ranking happens within a year; pooling the panel would judge a 2021 firm against a 2026 cross-section it never faced. A firm-year holds what the firm published during that calendar year -- for `{python} str(SCATTER_YEAR)`, the annual report covering fiscal `{python} str(SCATTER_YEAR - 1)` together with the quarterlies, proxy and current reports filed alongside it. It is what a reader could have had in hand that year, not the accounting period the documents describe. Colors mark communication archetype. The flat band along the bottom is a tie: every firm with no extracted AI activity scores zero substance and lands on the same rank.
 :::
 
-Most firm-years sit close to that diagonal: talking about AI and disclosing grounded activity rank together. $W$ is not a proxy for how much AI a firm discloses: Vocal Substantives populate both the diagonal and the upper-right, high-$D$, high-$S$ region. Instead, it captures how far a firm-year departs from rank alignment: points below the diagonal have disclosure intensity ahead of disclosed substance ($W > 0$), whereas points above it have substance ahead of disclosure ($W < 0$; @fig-ds-alignment-scatter).
+Most firms land close to the diagonal (@fig-ds-alignment-scatter): they rank about as high on talk as on grounded activity, which is what you would hope to see. The firms that talk most are not the ones the measure flags -- Vocal Substantives crowd the top-right corner, high on both, and sit near the line. What $W$ reads is the distance from it. Below the line, the narrative has run ahead of anything the filings can show; above it, the activity is there and the firm has barely mentioned it.
 
 ```{python}
 #| label: fig-ds-dumbbell
 #| fig-cap: "[Disclosure intensity and disclosed substance for selected firms, with the gap between them.]{custom-style=\"CaptionText\"}"
 #| echo: false
 #| fig-width: 7.6
-#| fig-height: 4.2
+#| fig-height: 4.4
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -2524,14 +2529,16 @@ for yi, r in zip(y, rows):
     ax.text(x_text, yi, f"W = {r.w:+.2f}", va="center", fontsize=7.8, fontweight="bold", color=colour)
 
 for name, edge in zip([g[0] for g in groups], band_edges):
-    ax.text(-0.13, y[edge] + 0.45, name, fontsize=8.0, fontweight="bold", color="#334155",
-            ha="left", va="bottom", transform=ax.get_yaxis_transform(which="grid"))
+    ax.text(0.005, y[edge] + 0.42, name, fontsize=8.0, fontweight="bold", color="#334155",
+            ha="left", va="bottom")
 for edge in band_edges[1:]:
     ax.axhline(y[edge] + 0.5, color="#CBD5E1", lw=0.8)
 
 ax.scatter([], [], s=58, color="#B85F42", label="Disclosure intensity (D)")
 ax.scatter([], [], s=58, color="#355F6B", label="Disclosed substance (S)")
-ax.legend(fontsize=8.0, loc="lower right", frameon=False, ncol=2)
+# Above the axes: inside, it lands on the bottom row of dumbbells.
+ax.legend(fontsize=8.0, frameon=False, ncol=2, loc="lower right",
+          bbox_to_anchor=(1.0, 1.01), borderaxespad=0)
 
 ax.set_yticks(y)
 ax.set_yticklabels(labels, fontsize=8.6, fontweight="bold")
@@ -2549,6 +2556,31 @@ plt.show()
 :::
 
 ```{python}
+#| label: tbl-decoupling-excerpts
+#| tbl-cap: "[What the two extremes read like: one firm from each end of the gap.]{custom-style=\"CaptionText\"}"
+#| echo: false
+from tabulate import tabulate
+from IPython.display import Markdown
+
+_ex = [
+    ["Talk ahead of substance", "NWL", "10-K, 2025",
+     "\u201cThe Company may use artificial intelligence in its business, and challenges with properly managing its use could result in reputational harm, competitive harm, and legal liability.\u201d",
+     "No activity: a stated possibility, no system, stage or result"],
+    ["Aligned", "CNC", "DEF 14A, 2025",
+     "\u201cWe are deploying AI within our provider contracting operations to reduce the manual labor associated with configuring and maintaining contracts.\u201d",
+     "Activity in a named operation, deployed, no result reported"],
+    ["Substance ahead of talk", "AON", "DEF 14A, 2026",
+     "\u201cDeploy AI and advanced analytics to transform data into real-time, actionable insights and provide clients with digitally-enabled, consistently excellent service through our global Aon Business Services platform.\u201d",
+     "Named platform, deployed stage, customer-facing"],
+]
+Markdown(tabulate(_ex, headers=["Pole", "Firm", "Source", "Excerpt", "What the extraction reads"]))
+```
+
+::: {custom-style="FigureNote"}
+*Notes:* One firm per pole, taken from @fig-ds-dumbbell: the largest, the closest to zero and the smallest $W$ among firms in the upper half of disclosure intensity. Each excerpt is representative of that firm's AI paragraphs, not the single most extreme sentence in the corpus. Both firms rank high on disclosure intensity; what separates them is whether the text names a system, a stage and a result the extraction can record as an activity.
+:::
+
+```{python}
 #| echo: false
 #| output: false
 n_tail = int((w >= cutoff).sum())
@@ -2558,11 +2590,7 @@ split_half_p_str = "< 0.001" if split_half_p < 0.001 else f"= {split_half_p:.3g}
 persistence_n_pairs = validation["persistence"]["n_pairs"]
 ```
 
-Firms that talk about AI at comparable intensity end up far apart on substance (@fig-ds-dumbbell). Across the panel $W$ is widely dispersed ($\text{standard deviation} =$ `{python} f"{std_w:.2f}"`), with `{python} n_tail` firm-years in the decoupled tail at the 95th percentile ($W \ge$ `{python} f"{cutoff:.2f}"`) -- not firms with no AI interest, but ones that talk about AI heavily while disclosing almost no verifiable operational substance. The tail is where an analyst looks first: a firm ranking in the top quintile on disclosure and the bottom quintile on substance is making claims its own filings do not support.
-
-> **Persistence of the Decoupling Posture:**
->
-> Decoupling persists from one year to the next: across `{python} persistence_n_pairs` consecutive firm-year pairs, the year-over-year Spearman $\rho =$ `{python} f"{persistence_rho:+.3f}"` (p `{python} persistence_p_str`). This looks like a lasting communication posture, not annual reporting noise; a split-half reliability check (Appendix E, @tbl-c4-washing-validation) confirms the same persistence within a single year.
+Firms that talk about AI at comparable intensity end up far apart on substance (@fig-ds-dumbbell). Across the panel $W$ is widely dispersed ($\text{standard deviation} =$ `{python} f"{std_w:.2f}"`), with `{python} n_tail` firm-years in the decoupled tail at the 95th percentile ($W \ge$ `{python} f"{cutoff:.2f}"`) -- not firms with no AI interest, but ones that talk about AI heavily while disclosing almost no verifiable operational substance. The tail is where an analyst looks first: a firm ranking in the top quintile on disclosure and the bottom quintile on substance is making claims its own filings do not support. The gap is also a posture rather than a reporting accident: it persists from one year to the next at a year-over-year Spearman $\rho =$ `{python} f"{persistence_rho:+.3f}"` (Appendix E).
 
 ## What changes from filing to call
 
@@ -4002,6 +4030,8 @@ $$
 \text{pctrank}(\text{Substance}_{it}) = \alpha_s + \beta_1 \text{pctrank}(\text{Disclosure}_{it}) + \beta_2 \log(\text{MarketCap}_{it}) + \varepsilon_{it}
 $$
 The residual decoupling measure is defined as $W^*_{it} \equiv -\hat{\varepsilon}_{it}$, such that positive values denote firms whose grounded operational substance falls short of what is expected given their narrative volume, scale, and sector. $W^*$ exhibits a Spearman rank correlation of $\rho = 0.808$ ($p < 0.0001$, $n = 1,664$) with non-parametric $W$, and shares $61.9\%$ of firm-years in the extreme top-5% decoupling tail ($52$ of $84$). This confirms that the primary rank-based measure $W$ captures the same underlying economic decoupling as a fully residualized parametric index, while avoiding distribution assumptions and small-sample estimation instability in sparsely populated industry cells.
+
+**Persistence and within-year reliability.** Decoupling is a lasting communication posture rather than annual reporting noise. Across `{python} persistence_n_pairs` consecutive firm-year pairs the year-over-year Spearman $\rho =$ `{python} f"{persistence_rho:+.3f}"` (p `{python} persistence_p_str`), and a split-half check within a single year -- $W$ computed on two random halves of each firm-year's documents -- reproduces the same ordering, $\rho =$ `{python} f"{split_half_rho:+.3f}"` (p `{python} split_half_p_str`, $n =$ `{python} f"{split_half_n:,}"`), so the measure is not an artifact of which documents happen to fall in a given year. @tbl-c4-washing-validation summarizes both alongside the rest of the validation battery.
 
 ```{python}
 #| label: tbl-c4-washing-validation
