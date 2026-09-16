@@ -135,6 +135,8 @@ delisting filing: it is not delisted.
 | table | columns | point in time |
 |---|---|---|
 | covariates/document/disclosure_volume | n_paragraphs, n_words, n_frames, n_promo, n_quant, n_spec, n_risk, n_gov, n_hyp, n_realized, n_deployed, n_revenue_outcome, n_cost_outcome, n_ai_investment, n_ai_infrastructure | the document itself |
+| covariates/document/ai_vendors | n_ai_paragraphs, n_vendor_paragraphs, n_vendor_self_paragraphs, and per ecosystem (us, cn, eu, other) vendor_stack_*, vendor_entsw_* presence flags and paragraph counts | the document itself |
+| covariates/document/ai_vendor_families | one presence flag per provider family (vendor_openai, vendor_deepseek, ...), from silver.ai_vendor_mentions | the document itself |
 | covariates/document/activities | activity-instance counts by family: customer_facing_deployment, internal_deployment, proprietary_ai, third_party_named_provider, infrastructure_investment, quantified_outcome, talent_or_training, governance_or_restriction, piloting_or_exploring, named_product_or_process, named_function, deployed_or_scaled, n_activities | the document itself |
 | covariates/activity/extraction | the extracted fields: country_code, form, item_key, paragraph_index, frame_id, has_activity, action, object, function, target, stage, source, entities, metrics, evidence_type, sentence_ids, firm, judge_model, prompt_version, session_id, classified_at | |
 | covariates/activity/taxonomy | channel (filing when the text appears in both), function_family, providers_or_models, own_brands, is_own_ai, provider_or_model, provider_families, provider_family, object_family, activity, activity_function | |
@@ -200,6 +202,7 @@ exists (firm before activity, firm_quarter before call).
 | scripts/gold/document/build_document.py | spines/document/document, covariates/document/disclosure_volume |
 | scripts/gold/activity/build_activity.py | spines/activity/activity, covariates/activity/{extraction, taxonomy} |
 | scripts/gold/document/build_activities.py | covariates/document/activities |
+| scripts/gold/document/build_ai_vendors.py | covariates/document/{ai_vendors, ai_vendor_families} |
 | scripts/gold/firm/build_posture_archetype_static.py | spines/firm/firm, covariates/firm/posture_archetype_static, models/posture_archetype_static |
 | scripts/gold/firm_year/build_spine.py | spines/firm_year/firm_year |
 | scripts/gold/firm_year/build_disclosure.py | covariates/firm_year/{disclosure_volume, activities} |

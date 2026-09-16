@@ -148,6 +148,7 @@ TABLES: dict[str, tuple[Path, list[str]]] = {
     "silver.ai_frames": (SILVER / "ai_frames.parquet", []),
     "silver.ai_activities": (SILVER / "ai_activities.parquet", []),
     "silver.ai_entity_mentions": (SILVER / "ai_entity_mentions.parquet", []),
+    "silver.ai_vendor_mentions": (SILVER / "ai_vendor_mentions.parquet", []),
     "silver.patents_firm_year": (SILVER / "patents_firm_year.parquet", []),
     "silver.patents_preshock": (SILVER / "patents_preshock.parquet", []),
 }

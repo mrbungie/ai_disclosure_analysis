@@ -101,9 +101,10 @@ bronze:
 	.venv/bin/python scripts/bronze/xbrl_facts.py
 
 silver:
-	@echo "Building data/silver/ (analysis universe + LLM outputs per paragraph instance)..."
+	@echo "Building data/silver/ (analysis universe + LLM outputs and vendor mentions per paragraph instance)..."
 	.venv/bin/python scripts/silver/universe.py
 	.venv/bin/python scripts/silver/ai_outputs.py
+	.venv/bin/python scripts/silver/ai_vendors.py
 	.venv/bin/python scripts/silver/patents.py
 
 layers: bronze silver
@@ -143,15 +144,17 @@ GOLD_LIBS := scripts/common/layers.py scripts/common/pit.py scripts/gold/posture
 	scripts/gold/posture/posture_features.py scripts/gold/posture/warm_start_aa.py scripts/gold/financials/*.py
 
 gold-document:
-	@echo "Gold: document spine and disclosure volume, activity spine and families, document activities..."
+	@echo "Gold: document spine and disclosure volume, activity spine and families, document activities, AI vendor ecosystems..."
 	@$(RUN_CACHED) gold-document \
 		scripts/gold/document/build_document.py \
 		scripts/gold/activity/build_activity.py \
 		scripts/gold/document/build_activities.py \
+		scripts/gold/document/build_ai_vendors.py \
 		$(GOLD_LIBS) $(LAYER_MANIFESTS) \
 		-- bash -c '.venv/bin/python scripts/gold/document/build_document.py $(ARGS) && \
 			.venv/bin/python scripts/gold/activity/build_activity.py $(ARGS) && \
-			.venv/bin/python scripts/gold/document/build_activities.py $(ARGS)'
+			.venv/bin/python scripts/gold/document/build_activities.py $(ARGS) && \
+			.venv/bin/python scripts/gold/document/build_ai_vendors.py $(ARGS)'
 
 gold-firm: gold-document
 	@echo "Gold: firm spine and static posture archetype (full-sample fit, bootstrap k selection)..."
@@ -305,7 +308,7 @@ analytics-posture: gold
 	@echo "Analytics (posture) -> data/results/..."
 	@$(RUN_CACHED) analytics-posture \
 		scripts/analytics/posture/activity_profiles.py \
-		scripts/analytics/posture/geo_provenance.py \
+		scripts/analytics/posture/vendor_ecosystems.py \
 		scripts/analytics/posture/check_archetype_document_channels.py \
 		scripts/analytics/posture/archetype_10k_refit.py \
 		scripts/analytics/posture/plot_archetypal_simplex.py \
@@ -325,7 +328,7 @@ analytics-posture: gold
 		'data/gold/**/*.parquet' $(GOLD_MODELS) \
 		$(LAYER_MANIFESTS) \
 		-- bash -c '.venv/bin/python scripts/analytics/posture/activity_profiles.py $(ARGS) && \
-			.venv/bin/python scripts/analytics/posture/geo_provenance.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/posture/vendor_ecosystems.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/posture/check_archetype_document_channels.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/posture/archetype_10k_refit.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/posture/plot_archetypal_simplex.py $(ARGS) && \
