@@ -2793,12 +2793,12 @@ The archetype weights sum to one, so the Defensive posture is kept as the refere
 | Log market capitalization | Trading days $[+2, +63]$ after the call | Post-call level |
 | Negative return skewness (NCSKEW) | Trading days $[+2, +63]$ after the call | Post-call level |
 | Down-to-up volatility (DUVOL) | Trading days $[+2, +63]$ after the call | Post-call level |
-| Gross margin expansion | First annual report filed post-call | Change from pre-call, pp, winsorized at 1% |
-| Change in ROIC-WACC spread | First annual report filed post-call | Change from pre-call, pp, winsorized at 1% |
-| Revenue growth | First annual report filed post-call | Annual growth rate |
+| Gross margin expansion | Four fiscal quarters after the call's own quarter | Change from the trailing four quarters, pp, winsorized at 1% |
+| Change in ROIC-WACC spread | Four fiscal quarters after the call's own quarter | Change from the trailing four quarters, pp, winsorized at 1% |
+| Revenue growth | Four fiscal quarters after the call's own quarter | Growth over the trailing four quarters |
 | Price-to-sales ratio | Trading days $[+2, +63]$ after the call | Post-call level |
 
-: Outcomes and their measurement windows. Post-call trading windows span days $[+21, +63]$ for beta and $[+2, +63]$ for valuation and return distribution metrics; accounting changes are measured at the first post-call annual report with ratio changes winsorized at 1% to limit denominator distortion. {#tbl-market-outcomes}
+: Outcomes and their measurement windows. Post-call trading windows span days $[+21, +63]$ for beta and $[+2, +63]$ for valuation and return distribution metrics. The three accounting outcomes are measured over the four fiscal quarters that follow the call's own quarter, against the four that precede it, with ratio changes winsorized at 1% to limit denominator distortion. {#tbl-market-outcomes}
 
 Eight outcomes are estimated over six disclosure variables, so the hypothesis tests use a Benjamini-Hochberg false discovery rate correction over the whole family of 48 coefficients, not outcome by outcome.
 
@@ -2901,8 +2901,8 @@ _COLS = [
     ("c", "Governance vs. Vocal",     r"$\beta_{\text{gov}}-\beta_{\text{voc}}$"),
 ]
 _OUTCOMES = ["beta_post_63", "log_market_cap_post", "ncskew_post", "duvol_post",
-             "gross_margin_change_pp", "roic_minus_wacc_change_pp",
-             "next_revenue_yoy_post", "ps_ratio_post"]
+             "gross_margin_ttm_change_pp", "roic_minus_wacc_ttm_change_pp",
+             "revenue_growth_ttm_post_pct", "ps_ratio_post"]
 
 def _mkt_joint_cell(target):
     row = _con[(_con["target"] == target) & (_con["contrast"] == "Composition (joint)")].iloc[0]
@@ -2921,7 +2921,7 @@ for t in _OUTCOMES:
 Markdown("\n".join([_head, _rule] + _rows))
 ```
 
-**Cumulative disclosure intensity ($D$) is the most consistent predictor of post-call market outcomes.** Trailing disclosure intensity associates with larger market capitalization (MCap: $\beta =$ `{python} b_of("log_market_cap_post", "intensity_expanding")`, $p$ `{python} p_of("log_market_cap_post", "intensity_expanding")`), higher revenue growth ($\beta =$ `{python} b_of("next_revenue_yoy_post", "intensity_expanding")`, $p$ `{python} p_of("next_revenue_yoy_post", "intensity_expanding")`), higher beta ($\beta =$ `{python} b_of("beta_post_63", "intensity_expanding")`, $p$ `{python} p_of("beta_post_63", "intensity_expanding")`), and reduced downside asymmetry (DUVOL: $\beta =$ `{python} b_of("duvol_post", "intensity_expanding")`, $p$ `{python} p_of("duvol_post", "intensity_expanding")`; NCSKEW: $\beta =$ `{python} b_of("ncskew_post", "intensity_expanding")`, $p$ `{python} p_of("ncskew_post", "intensity_expanding")`). MCap, DUVOL, and NCSKEW survive 5% Benjamini-Hochberg false discovery rate (BH-FDR) control across all `{python} str(mkt_m)` tests (threshold `{python} mkt_crit1`). This fits exposure to a market theme [@eisfeldt2023] among established, growing issuers whose returns crash less often.
+**Cumulative disclosure intensity ($D$) is the most consistent predictor of post-call market outcomes.** Trailing disclosure intensity associates with larger market capitalization (MCap: $\beta =$ `{python} b_of("log_market_cap_post", "intensity_expanding")`, $p$ `{python} p_of("log_market_cap_post", "intensity_expanding")`), higher revenue growth over the following four quarters ($\beta =$ `{python} b_of("revenue_growth_ttm_post_pct", "intensity_expanding")`, $p$ `{python} p_of("revenue_growth_ttm_post_pct", "intensity_expanding")`), higher beta ($\beta =$ `{python} b_of("beta_post_63", "intensity_expanding")`, $p$ `{python} p_of("beta_post_63", "intensity_expanding")`), and reduced downside asymmetry (DUVOL: $\beta =$ `{python} b_of("duvol_post", "intensity_expanding")`, $p$ `{python} p_of("duvol_post", "intensity_expanding")`; NCSKEW: $\beta =$ `{python} b_of("ncskew_post", "intensity_expanding")`, $p$ `{python} p_of("ncskew_post", "intensity_expanding")`). MCap, DUVOL, and NCSKEW survive 5% Benjamini-Hochberg false discovery rate (BH-FDR) control across all `{python} str(mkt_m)` tests (threshold `{python} mkt_crit1`); the revenue-growth and beta coefficients are nominal and do not. This fits exposure to a market theme [@eisfeldt2023] among established, growing issuers whose returns crash less often.
 
 **Decoupling matters as a habit, and not as a single-call episode.** The decoupling of an individual call ($W_{\text{call}}$) provides zero incremental explanatory power across all eight outcomes ($\beta \in [$ `{python} f"{_bat[_bat.variable == 'w_call']['beta_std'].min():+.3f}"`, `{python} f"{_bat[_bat.variable == 'w_call']['beta_std'].max():+.3f}"` $]$). Accumulated historical decoupling ($W_{\text{exp}}$), on the other hand, predicts a higher systematic beta ($\beta =$ `{python} b_of("beta_post_63", "w_expanding")`, $p$ `{python} p_of("beta_post_63", "w_expanding")`) and survives full BH-FDR control. Persistent decoupling is a firm characteristic, and the accumulated opacity is what gets priced into systematic risk [@jin2006; @fu2021].
 
@@ -3964,6 +3964,10 @@ Markdown(tabulate(rows, headers=["Check", "Sample", "Spearman", "p"]))
 ::: {custom-style="FigureNote"}
 *Notes:* Construct consistency against Grounding is restricted to firm-years with at least one disclosed AI activity ($n = `{python} mc['n']`$). Because Grounding is an internal component of Substance, this confirms mechanical consistency rather than independent validity. The economic-coherence tests show that $W$ tracks R&D intensity negatively without tracking firm size, valuation, or risk.
 :::
+
+### What the ROIC-WACC spread rests on {.unnumbered}
+
+The spread is estimated, not reported. Quarterly filings tag no interest expense, pretax income or tax expense, so its effective tax rate and cost of debt are carried from the last annual report filed before the call, and the two costs are combined on book weights rather than market ones. Its cost of equity is the risk-free rate plus the firm's own post-call beta times the equity premium, so market risk sits inside the outcome by construction: the spread is not an operational measure and not independent of the beta results.
 
 ### Robustness of post-call beta regressions across specifications {.unnumbered}
 
