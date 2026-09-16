@@ -324,6 +324,7 @@ analytics-posture: gold
 		scripts/analytics/posture/sector_purpose_action.py \
 		scripts/analytics/posture/archetype_composition_annual.py \
 		scripts/analytics/posture/entity_mentions_summary.py \
+		scripts/analytics/posture/interrupted_series.py \
 		scripts/gold/posture/ai_intensity.py scripts/gold/posture/posture_features.py \
 		'data/gold/**/*.parquet' $(GOLD_MODELS) \
 		$(LAYER_MANIFESTS) \
@@ -343,7 +344,8 @@ analytics-posture: gold
 			.venv/bin/python scripts/analytics/posture/activity_examples.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/posture/sector_purpose_action.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/posture/archetype_composition_annual.py $(ARGS) && \
-			.venv/bin/python scripts/analytics/posture/entity_mentions_summary.py $(ARGS)'
+			.venv/bin/python scripts/analytics/posture/entity_mentions_summary.py $(ARGS) && \
+			.venv/bin/python scripts/analytics/posture/interrupted_series.py $(ARGS)'
 
 analytics-washing: gold
 	@echo "Analytics (washing) -> data/results/..."

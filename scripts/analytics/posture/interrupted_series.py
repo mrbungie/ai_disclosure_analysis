@@ -25,7 +25,14 @@ What it cannot do: a break at one date cannot be separated from anything else
 happening at that date. It discounts trend and seasonality; it does not
 identify a cause.
 
-Output: results/posture/interrupted_series.csv
+A break the design did not choose is the sharper test: refitting the same
+specification at every candidate month says whether December 2023 is where the
+series actually turns, or whether some earlier month fits better. The sweep
+runs over the risk and governance series, the two that accelerate over the
+sample.
+
+Output: results/posture/interrupted_series.csv,
+        results/posture/interrupted_series_break_sweep.csv
 """
 from __future__ import annotations
 
@@ -49,6 +56,8 @@ HAC_LAGS = 6          # roughly two reporting quarters
 START = "2021-01"     # the corpus before this is the panel ramping up -- 2020
                       # months carry 3 to 30 documents against a median of 833
 MIN_DOCS = 50         # and the final month is truncated by the cutoff
+SWEEP_RATES = ("risk", "gov")
+SWEEP_FROM, SWEEP_TO = "2023-01", "2025-06"
 
 
 def monthly() -> pd.DataFrame:
@@ -88,6 +97,15 @@ def fit(series: pd.DataFrame, rate: str, event: str) -> dict:
             "r2": float(r.rsquared)}
 
 
+def break_sweep(series: pd.DataFrame) -> pd.DataFrame:
+    """The same specification refitted at every candidate break month."""
+    months = pd.period_range(SWEEP_FROM, SWEEP_TO, freq="M")
+    rows = [fit(series, rate, str(m)) for rate in SWEEP_RATES for m in months]
+    out = pd.DataFrame(rows)
+    out["best_fit"] = out["r2"] == out.groupby("outcome")["r2"].transform("max")
+    return out
+
+
 def main() -> None:
     warnings.filterwarnings("ignore")
     s = monthly()
@@ -99,6 +117,13 @@ def main() -> None:
     with pd.option_context("display.width", 200):
         print(out.round(4).to_string(index=False))
     print(f"\n-> {path}")
+
+    sweep = break_sweep(s)
+    sweep_path = L.results_path("posture", "interrupted_series_break_sweep.csv")
+    sweep.to_csv(sweep_path, index=False)
+    with pd.option_context("display.width", 200):
+        print("\n" + sweep[sweep["best_fit"]].round(4).to_string(index=False))
+    print(f"-> {sweep_path}")
 
 
 if __name__ == "__main__":

@@ -1703,45 +1703,7 @@ plt.show()
 
 Against the pooled benchmark, three of the five rate metrics are largely invariant across archetypes, so the color in those rows is almost entirely pale: proprietary technology is near-universal at every archetype, while deployed/scaled stage and quantified outcomes stay within a few points of their (much lower) pooled rate for every archetype -- quantified outcomes are rare across the board, not universal. Where archetypes actually diverge is volume and customer orientation. Vocal Substantives report a median of `{python} f"{n_vals[0]:.0f}"` AI activities per firm, `{python} f"{ratios[0]:.1f}"` times the pooled median, and their customer-facing share (`{python} f"{mat_raw[2, 0]:.1f}"`%) runs `{python} f"{mat_dev[2, 0]:.0f}"` points above the pooled rate. Governance-Led and Defensive Disclosers move the other way, both well below the pooled customer-facing rate (`{python} f"{mat_raw[2, 1]:.1f}"`% and `{python} f"{mat_raw[2, 2]:.1f}"`% respectively) and below it on own-brand naming, consistent with communication anchored in internal process and oversight rather than products aimed at customers.
 
-Frames and activities come from the same corporate text, so the activity gap could simply reflect that some firms write more. To rule this out, disclosed AI activity counts are regressed on the archetypes, controlling for total AI disclosure volume ($\log(1 + \text{AI frames})$). The model is a negative binomial regression:
-
-$$
-\log \mathbb{E}[\text{AI Activities}_i] = \alpha + \beta_1 \text{VocalSubstantives}_i + \beta_2 \text{GovernanceLed}_i + \gamma \log(1 + \text{Frames}_i)
-$$
-
-```{python}
-#| label: tbl-4-1b-volume-adjusted
-#| tbl-cap: "[Disclosed AI activity count by archetype, before and after conditioning on total AI disclosure volume.]{custom-style=\"CaptionText\"}"
-#| echo: false
-import json
-from pathlib import Path
-from tabulate import tabulate
-from IPython.display import Markdown
-
-
-reg = _var  # results/posture/strategy_dimensions_diagnostics.json["activity_volume_regression"], loaded above
-OTHERS = ["Governance-Led Disclosers", "Vocal Substantives"]
-
-def fmt_p(p):
-    return "<0.001" if p < 0.001 else f"{p:.3f}"
-
-def fmt_ci(spec, a):
-    lo, hi = reg[spec][a]["ratio_ci95"]
-    return f"[{lo:.2f}, {hi:.2f}]"
-
-rows = [[a, f"{reg['raw'][a]['ratio']:.2f}x", fmt_ci("raw", a), fmt_p(reg['raw'][a]['p']),
-        f"{reg['volume_adjusted'][a]['ratio']:.2f}x", fmt_ci("volume_adjusted", a), fmt_p(reg['volume_adjusted'][a]['p'])]
-        for a in OTHERS]
-rows.append(["log(1 + AI frames)", "-", "-", "-", f"{reg['log_frames_coef']:+.2f} (coef.)", "-", fmt_p(reg['log_frames_p'])])
-Markdown(tabulate(rows, headers=[f"Archetype vs. {reg['reference']}", "Raw ratio", "95% CI", "p",
-                                  "Volume-adj. ratio", "95% CI", "p"]))
-```
-
-::: {custom-style="FigureNote"}
-*Notes:* Volume control is log frame count. Reference category: Defensive Disclosers.
-:::
-
-A statistically significant difference survives the volume control (@tbl-4-1b-volume-adjusted). At identical narrative volume, Vocal Substantives still report `{python} f"{hd_vs_ratio:.2f}"` times as many operational AI activities as Defensive Disclosers ($p$ `{python} pstr(_var["volume_adjusted"]["Vocal Substantives"]["p"])`), while Governance-Led Disclosers report `{python} f"{hd_gl_ratio:.2f}"` times as many ($p$ `{python} pstr(_var["volume_adjusted"]["Governance-Led Disclosers"]["p"])`). Although total disclosure volume accounts for a substantial share of the raw variation (log frame count yields a pseudo-$R^2$ of `{python} f"{hd_vol_r2:.2f}"`), disclosure posture is not mere verbosity: it reflects distinct rates of disclosed technological deployment.
+The gap is not verbosity: at identical narrative volume, Vocal Substantives still report `{python} f"{hd_vs_ratio:.2f}"` times as many operational AI activities as Defensive Disclosers and Governance-Led Disclosers `{python} f"{hd_gl_ratio:.2f}"` times as many (both $p < 0.001$; the negative binomial conditioning on total AI disclosure volume is in Appendix C).
 
 ## What firms disclose doing differently
 
@@ -2057,70 +2019,6 @@ This is a fact about information rather than capability: corporate reporting dil
 ```{python}
 #| echo: false
 #| output: false
-# Corporate branding vs. external-vendor attribution, precomputed by
-# scripts/analytics/washing/tech_provenance.py from
-# the gold activity tables.
-_tp = pd.read_parquet(results("washing", "tech_provenance.parquet")).iloc[0]
-n_activities_total = int(_tp["n_activities_total"])
-own_brand_pct = _tp["own_brand_pct"]
-ext_vendor_pct = _tp["ext_vendor_pct"]
-partner_pct = _tp["partner_pct"]
-third_party_src = _tp["third_party_pct"]
-ext_provider_firm_pct = _tp["ext_provider_firm_pct"]
-
-```
-
-Investors and regulators reading AI claims also want to know where the technology comes from. Do public firms build it themselves, or buy foundation models from outside hyperscalers? Named entity roles across the `{python} f"{n_activities_total:,}"` disclosed AI activity statements show a clear imbalance in where the technology is said to come from (@fig-tech-provenance):
-
-- `{python} f"{own_brand_pct:.1f}"`% of all disclosed AI activity statements attach the firm's own brand or in-house product name to the deployment.
-- `{python} f"{ext_vendor_pct:.1f}"`% cite an external technology vendor or foundation model (and `{python} f"{partner_pct:.1f}"`% name a commercial partner).
-- This is despite `{python} f"{ext_provider_firm_pct:.1f}"`% of S&P 500 firms naming at least one external technology provider, model family, or hyperscaler somewhere in their disclosures.
-
-```{python}
-#| label: fig-tech-provenance
-#| fig-cap: "[Corporate branding versus external-vendor attribution in disclosed AI activities.]{custom-style=\"CaptionText\"}"
-#| echo: false
-#| fig-width: 7.8
-#| fig-height: 3.2
-import matplotlib.pyplot as plt
-
-categories = [
-    "Proprietary corporate brand or product named",
-    "Third-party external source declared",
-    "External foundation model or vendor named",
-    "Commercial strategic partner named"
-]
-values = [own_brand_pct, third_party_src, ext_vendor_pct, partner_pct]
-colors = ["#355F6B", "#73828C", "#B85F42", "#D5B1A5"]
-
-fig, ax = plt.subplots(figsize=(7.8, 3.2), dpi=300)
-bars = ax.barh(categories[::-1], values[::-1], color=colors[::-1], height=0.55)
-
-for b, v in zip(bars, values[::-1]):
-    ax.text(v + 0.8, b.get_y() + b.get_height() / 2, f"{v:.1f}%", va="center", fontsize=8.8, fontweight="bold", color="#1C1F22")
-
-ax.set_xlim(0, max(values) * 1.15)
-ax.set_xlabel(f"% of all disclosed AI activity statements (n = {n_activities_total:,})", fontsize=9.0, fontweight="bold")
-ax.grid(True, axis="x", linestyle="--", alpha=0.3)
-ax.spines[["top", "right"]].set_visible(False)
-
-plt.tight_layout()
-plt.show()
-```
-
-Disclosing issuers consistently prioritize proprietary branding over external attribution.
-
-### Technology Ecosystems Named in AI Disclosure
-
-When S&P 500 corporations discuss artificial intelligence, which suppliers do they name? The question is answered with commercial names alone -- companies, cloud platforms, accelerators, model families and enterprise AI products -- read inside paragraphs that already carry an extracted AI disclosure frame. A document names an ecosystem when at least one of its AI paragraphs mentions a term belonging to a provider of that ecosystem (`configs/ai_vendor_ecosystems.yaml`; the full lexicon is in Appendix C). Presence is binary per document: a call naming Azure twenty times counts once for Microsoft and once for the United States. The denominator is every document with AI disclosure, the four ecosystems overlap, and the rates are therefore independent indicators rather than shares of a partition.
-
-Three construction rules matter for reading the numbers. Country and demonym words are absent from the lexicon: "China," "European" or "American" locate a market or a regulator, not a technology, and counting them would let a tariff sentence stand in for a supply relationship. Ambiguous names are admitted only with corroboration in the same paragraph -- "copilot" needs Microsoft or GitHub, "arm" needs an Arm-qualified term, "claude" needs Anthropic or a model name -- so ordinary English does not become a vendor. And a firm naming its own products is not counted: the measure is the reach of external ecosystems, not the reach of a firm's own brand.
-
-Two coverages are kept apart rather than pooled. The **AI technology stack** is model developers, cloud infrastructure and semiconductors; **enterprise software** is applied AI inside business platforms. The two answer different questions -- where the capability comes from, and which business software carries it -- and a single blended number would hide which is moving.
-
-```{python}
-#| echo: false
-#| output: false
 ve = results_json("posture", "vendor_ecosystems_summary.json")
 ve_pa, ve_pb, ve_reach = ve["panel_a"], ve["panel_b"], ve["reach"]
 ve_fam = {f["family"]: f for f in ve["families"]}
@@ -2142,18 +2040,86 @@ _trend = ve["family_trend"]
 _ty = {y: i for i, y in enumerate(_trend["years"])}
 def ve_rate(family, year):
     return _trend["rate"][family][_ty[year]]
+
+ECOSYSTEM_COLORS = {"United States": "#1D4ED8", "Europe": "#10B981", "China": "#DC2626", "Other": "#64748B"}
 ```
 
 ```{python}
+#| echo: false
+#| output: false
+# Corporate branding vs. external-vendor attribution, precomputed by
+# scripts/analytics/washing/tech_provenance.py from
+# the gold activity tables.
+_tp = pd.read_parquet(results("washing", "tech_provenance.parquet")).iloc[0]
+n_activities_total = int(_tp["n_activities_total"])
+own_brand_pct = _tp["own_brand_pct"]
+ext_vendor_pct = _tp["ext_vendor_pct"]
+partner_pct = _tp["partner_pct"]
+third_party_src = _tp["third_party_pct"]
+ext_tagged_pct = _tp["ext_vendor_tagged_pct"]
+ext_lexicon_pct = _tp["ext_vendor_lexicon_pct"]
+eco_us_activity_pct = _tp["eco_us_pct"]
+external_pct = _tp["external_pct"]
+both_pct = _tp["both_pct"]
+external_only_pct = _tp["external_only_pct"]
+
+```
+
+Investors and regulators reading AI claims also want to know where the technology comes from. Do public firms build it themselves, or buy foundation models from outside hyperscalers? Named entity roles across the `{python} f"{n_activities_total:,}"` disclosed AI activity statements show a clear imbalance in where the technology is said to come from (@fig-tech-provenance):
+
+- `{python} f"{own_brand_pct:.1f}"`% of all disclosed AI activity statements attach the firm's own brand or in-house product name to the deployment.
+- `{python} f"{external_pct:.1f}"`% name or declare an external source -- a foundation model or vendor, a commercial partner, or the technology itself described as externally sourced -- and `{python} f"{eco_us_activity_pct:.1f}"`% of all statements name a U.S. provider.
+- External credit almost never travels alone: `{python} f"{both_pct:.1f}"`% of statements carry an external source alongside the firm's own brand, against `{python} f"{external_only_pct:.1f}"`% that credit a source without claiming a brand of their own.
+
+```{python}
+#| label: fig-tech-provenance
+#| fig-cap: "[Corporate branding versus external-vendor attribution in disclosed AI activities.]{custom-style=\"CaptionText\"}"
+#| echo: false
+#| fig-width: 7.8
+#| fig-height: 3.2
+import matplotlib.pyplot as plt
+
+categories = ["Proprietary corporate brand or product named", "External source named or declared",
+              "Both, in the same statement", "External source without an own brand"]
+values = [own_brand_pct, external_pct, both_pct, external_only_pct]
+
+fig, ax = plt.subplots(figsize=(7.8, 3.2), dpi=300)
+bars = ax.barh(categories[::-1], values[::-1], color=["#D5B1A5", "#73828C", "#B85F42", "#355F6B"], height=0.55)
+for b, v in zip(bars, values[::-1]):
+    ax.text(v + 0.9, b.get_y() + b.get_height() / 2, f"{v:.1f}%", va="center", fontsize=8.8,
+            fontweight="bold", color="#1C1F22")
+
+ax.set_xlim(0, max(values) * 1.15)
+ax.set_xlabel(f"% of all disclosed AI activity statements (n = {n_activities_total:,})", fontsize=9.0, fontweight="bold")
+ax.tick_params(axis="y", labelsize=8.4)
+ax.grid(True, axis="x", linestyle="--", alpha=0.3)
+ax.spines[["top", "right"]].set_visible(False)
+
+plt.tight_layout()
+plt.show()
+```
+
+::: {custom-style="FigureNote"}
+*Notes:* The bars are indicators over the same statements, not a partition: the first two overlap, the last two decompose the second, and a statement naming nothing counts in none, so the shares do not sum to 100. An external source is a named foundation model or technology vendor (`{python} f"{ext_vendor_pct:.1f}"`% of statements), a named commercial partner (`{python} f"{partner_pct:.1f}"`%), or the statement declaring the technology itself as externally sourced (`{python} f"{third_party_src:.1f}"`%). Two detectors read the same statement and it counts as naming a source when either finds one. The extraction tags each named entity with a role, catching in-house product names no list can enumerate; the vendor lexicon matches commercial names in the statement's text and resolves them to a provider family, catching suppliers the extraction left untagged. External attribution is `{python} f"{ext_tagged_pct:.1f}"`% on the tagged roles alone and `{python} f"{ext_lexicon_pct:.1f}"`% on the commercial names alone.
+:::
+
+Disclosing issuers consistently prioritize proprietary branding over external attribution.
+
+### Technology Ecosystems Named in AI Disclosure
+
+When S&P 500 corporations discuss artificial intelligence, which suppliers do they name? Commercial names alone answer it -- companies, cloud platforms, accelerators, model families and enterprise AI products, read inside paragraphs that already carry an extracted AI disclosure frame (`configs/ai_vendor_ecosystems.yaml`, Appendix C). Country and demonym words are excluded: "China" or "American" locate a market, not a technology. Ambiguous names need corroboration in the same paragraph, so "copilot" requires Microsoft or GitHub and "arm" an Arm-qualified term; and a firm naming its own products is not counted, since the measure is the reach of external suppliers. Presence is binary per document -- a call naming Azure twenty times counts once for Microsoft and once for the United States -- over a denominator of every document with AI disclosure, so the four ecosystems overlap and their rates are independent indicators rather than shares of a partition. The **AI technology stack** (model developers, cloud infrastructure, semiconductors) and **enterprise software** (applied AI inside business platforms) are reported apart: a blended number would hide which of the two is moving.
+
+
+```{python}
 #| label: fig-vendor-ecosystems
-#| fig-cap: "[Named technology ecosystems in AI disclosure across S&P 500 firms (2021–2025, with 2026 year-to-date). Panel A tracks the share of AI-disclosing documents naming each ecosystem's AI technology stack; Panel B breaks the same rate down by disclosure archetype. Rates are independent presence indicators over a common denominator and do not sum to 100.]{custom-style=\"CaptionText\"}"
+#| fig-cap: "[Named technology ecosystems in AI disclosure across S&P 500 firms.]{custom-style=\"CaptionText\"}"
 #| echo: false
 #| fig-width: 9.6
 #| fig-height: 3.8
 import numpy as np
 import matplotlib.pyplot as plt
 
-colors = {"United States": "#1D4ED8", "Europe": "#10B981", "China": "#DC2626", "Other": "#64748B"}
+colors = ECOSYSTEM_COLORS
 markers = {"United States": "o", "Europe": "s", "China": "^", "Other": "d"}
 
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9.6, 3.8), dpi=300)
@@ -2208,29 +2174,55 @@ plt.tight_layout()
 plt.show()
 ```
 
-Four findings stand out (@fig-vendor-ecosystems, @tbl-vendor-providers).
+::: {custom-style="FigureNote"}
+*Notes:* Panel A tracks the share of AI-disclosing documents naming each ecosystem's AI technology stack over 2021–2025, with 2026 shown year-to-date as a dotted segment; Panel B breaks the same rate down by disclosure archetype. The denominator is the `{python} f"{ve_n_docs:,}"` documents with at least one AI-frame paragraph. Rates are independent presence indicators over that common denominator: a document naming both NVIDIA and DeepSeek counts for the United States and for China, so the four series do not sum to 100.
+:::
 
-1. **Named suppliers are a minority practice, and when they appear they are American.** `{python} f"{ve_firms_named_pct:.1f}"`% of the `{python} f"{ve_n_firms:,}"` firms with AI disclosure name at least one external provider anywhere in the sample. Within that disclosure, `{python} f"{ve_us:.1f}"`% of firms name a U.S. AI technology stack, against `{python} f"{ve_cn:.1f}"`% for China, `{python} f"{ve_ot:.1f}"`% for the rest of the world and `{python} f"{ve_eu:.1f}"`% for Europe. Naming a supplier is the exception; naming an American one is what the exception looks like.
-2. **The concentration runs through four providers.** Google (`{python} f"{ve_fam['Google']['pct_firms']:.1f}"`% of firms), Microsoft (`{python} f"{ve_fam['Microsoft']['pct_firms']:.1f}"`%), Amazon (`{python} f"{ve_fam['Amazon']['pct_firms']:.1f}"`%) and OpenAI (`{python} f"{ve_fam['OpenAI']['pct_firms']:.1f}"`%) are named by between a quarter and a third of disclosing firms each, with NVIDIA (`{python} f"{ve_fam['NVIDIA']['pct_firms']:.1f}"`%) behind them. No non-U.S. provider reaches a tenth: the highest are DeepSeek (`{python} f"{ve_fam['DeepSeek']['pct_firms']:.1f}"`%) and Samsung (`{python} f"{ve_fam['Samsung']['pct_firms']:.1f}"`%).
-3. **Chinese providers appear in one year and then recede.** Chinese stack mentions sit below 2% of documents in every year except `{python} ve_cn_peak_year`, when they reach `{python} f"{ve_cn_peak:.1f}"`%, and fall back to `{python} f"{ve_cn_2026:.1f}"`% in the 2026 year-to-date sample. DeepSeek alone accounts for that movement, going from no mentions before 2025 to `{python} f"{ve_rate('DeepSeek', 2025):.1f}"`% of documents in 2025 and `{python} f"{ve_rate('DeepSeek', 2026):.1f}"`% afterwards. The episode is visible in who gets named; it does not establish a durable Chinese presence in the disclosed stack.
-4. **Vocal Substantives name suppliers; the other two archetypes mostly do not.** `{python} f"{ve_pb['stack_rate']['United States'][0]:.1f}"`% of Vocal Substantive documents name a U.S. stack provider, roughly twice the rate of Governance-Led (`{python} f"{ve_pb['stack_rate']['United States'][1]:.1f}"`%) and Defensive (`{python} f"{ve_pb['stack_rate']['United States'][2]:.1f}"`%) documents, and the gap widens proportionally for every other ecosystem. Concrete supplier attribution travels with substantive disclosure rather than with disclosure volume.
+Three findings stand out (@fig-vendor-ecosystems, @fig-vendor-providers).
+
+1. **Naming a supplier is a minority practice, and the supplier is American.** `{python} f"{ve_firms_named_pct:.1f}"`% of the `{python} f"{ve_n_firms:,}"` firms with AI disclosure name any external provider; `{python} f"{ve_us:.1f}"`% name a U.S. technology stack, against `{python} f"{ve_cn:.1f}"`% for China, `{python} f"{ve_ot:.1f}"`% for the rest of the world and `{python} f"{ve_eu:.1f}"`% for Europe. The concentration runs through four providers -- Google (`{python} f"{ve_fam['Google']['pct_firms']:.1f}"`% of firms), Microsoft (`{python} f"{ve_fam['Microsoft']['pct_firms']:.1f}"`%), Amazon (`{python} f"{ve_fam['Amazon']['pct_firms']:.1f}"`%) and OpenAI (`{python} f"{ve_fam['OpenAI']['pct_firms']:.1f}"`%) -- with NVIDIA (`{python} f"{ve_fam['NVIDIA']['pct_firms']:.1f}"`%) behind them. No non-U.S. provider reaches a tenth of firms; the highest are DeepSeek (`{python} f"{ve_fam['DeepSeek']['pct_firms']:.1f}"`%) and Samsung (`{python} f"{ve_fam['Samsung']['pct_firms']:.1f}"`%).
+2. **Chinese providers appear in one year and then recede.** Chinese stack mentions stay below 2% of documents in every year except `{python} ve_cn_peak_year`, when they reach `{python} f"{ve_cn_peak:.1f}"`%, and fall to `{python} f"{ve_cn_2026:.1f}"`% in the 2026 year-to-date sample. DeepSeek alone accounts for the movement, from no mentions before 2025 to `{python} f"{ve_rate('DeepSeek', 2025):.1f}"`% of documents in 2025 and `{python} f"{ve_rate('DeepSeek', 2026):.1f}"`% afterwards -- an episode in who gets named, not a durable Chinese presence in the disclosed stack.
+3. **Supplier attribution travels with substantive disclosure.** `{python} f"{ve_pb['stack_rate']['United States'][0]:.1f}"`% of Vocal Substantive documents name a U.S. stack provider, roughly twice the rate of Governance-Led (`{python} f"{ve_pb['stack_rate']['United States'][1]:.1f}"`%) and Defensive (`{python} f"{ve_pb['stack_rate']['United States'][2]:.1f}"`%) documents, with the gap widening proportionally for every other ecosystem.
 
 ```{python}
-#| label: tbl-vendor-providers
-#| tbl-cap: "[Providers named in AI disclosure, by ecosystem and role in the AI stack.]{custom-style=\"CaptionText\"}"
+#| label: fig-vendor-providers
+#| fig-cap: "[Provider families most cited in AI disclosure, by ecosystem and role in the AI stack.]{custom-style=\"CaptionText\"}"
 #| echo: false
-from tabulate import tabulate
-from IPython.display import Markdown
+#| fig-width: 8.6
+#| fig-height: 3.0
 
 TYPE_LABEL = {"model_developer": "Model developer", "cloud_infrastructure": "Cloud infrastructure",
               "semiconductor": "Semiconductor", "enterprise_software": "Enterprise software"}
-rows = [[f["family"], f["ecosystem"], TYPE_LABEL[f["type"]], f"{f['pct_firms']:.1f}%", f"{f['n_documents']:,}"]
-        for f in ve["families"][:15]]
-Markdown(tabulate(rows, headers=["Provider family", "Ecosystem", "Role", "% of firms naming", "Documents"]))
+ROLE_MARK = {"model_developer": "M", "cloud_infrastructure": "C", "semiconductor": "S",
+             "enterprise_software": "E"}
+
+top = ve["families"][:15]
+labels = [f"{f['family']} [{ROLE_MARK[f['type']]}]" for f in top]
+values = [f["pct_firms"] for f in top]
+
+fig, ax = plt.subplots(figsize=(8.6, 3.0), dpi=300)
+bars = ax.bar(labels, values, color=[colors[f["ecosystem"]] for f in top], width=0.66)
+for b, v in zip(bars, values):
+    ax.text(b.get_x() + b.get_width() / 2, v + 0.6, f"{v:.1f}%", ha="center", fontsize=7.4,
+            fontweight="bold", color="#1C1F22")
+
+ax.set_ylim(0, max(values) * 1.16)
+ax.set_ylabel(f"% of the {ve_n_firms:,} firms\nwith AI disclosure", fontsize=8.4, fontweight="bold")
+ax.set_xticks(range(len(labels)))
+ax.set_xticklabels(labels, rotation=35, ha="right", fontsize=7.6)
+ax.grid(True, axis="y", linestyle="--", alpha=0.3)
+ax.spines[["top", "right"]].set_visible(False)
+
+handles = [plt.Rectangle((0, 0), 1, 1, color=colors[e]) for e in ["United States", "China", "Europe", "Other"]]
+ax.legend(handles, ["United States", "China", "Europe", "Other"], loc="upper right", fontsize=7.6,
+          title="Ecosystem", title_fontsize=7.6, frameon=False, ncol=2)
+
+plt.tight_layout()
+plt.show()
 ```
 
 ::: {custom-style="FigureNote"}
-*Notes:* The fifteen most-named provider families of the `{python} f"{len(ve['families'])}"` present in the corpus. "% of firms naming" is the share of the `{python} f"{ve_n_firms:,}"` firms with AI disclosure whose AI paragraphs name that family at least once; "Documents" counts AI-disclosing documents doing so, out of `{python} f"{ve_n_docs:,}"`. Mentions of a firm's own products are excluded.
+*Notes:* Bars are the share of AI-disclosing firms naming each family, colored by ecosystem, with the family's role in the AI stack marked beside its name. The fifteen most-named of the `{python} f"{len(ve['families'])}"` provider families present in the corpus; the full list is in Appendix C. Role marks: M model developer, C cloud infrastructure, S semiconductor, E enterprise software. Mentions of a firm's own products are excluded, so a provider appears only when another firm names it.
 :::
 
 Enterprise software reverses part of the picture without changing its center. `{python} f"{ve_us_entsw:.1f}"`% of disclosing firms name a U.S. enterprise platform, but Europe reaches `{python} f"{ve_eu_entsw:.1f}"`% here -- through SAP and Siemens -- against `{python} f"{ve_eu:.1f}"`% in the technology stack, and Chinese enterprise software is named by no firm in the sample. Europe enters these disclosures as a software vendor, not as a source of models or compute.
@@ -2245,6 +2237,15 @@ Two dated events fall inside the sample: the SEC's December 2023 warning on AI c
 #| echo: false
 #| output: false
 sec_cases = results_json("call_beta", "sec_comment_letter_cases.json")
+_sweep = pd.read_csv(results("posture", "interrupted_series_break_sweep.csv"))
+_its = pd.read_csv(results("posture", "interrupted_series.csv"))
+def _best_break(outcome):
+    x = _sweep[_sweep["outcome"] == outcome]
+    return x.loc[x["r2"].idxmax(), "event"]
+def _at(outcome, event, col, table=None):
+    t = _sweep if table is None else table
+    return float(t[(t["outcome"] == outcome) & (t["event"] == event)][col].iloc[0])
+_sec_break = "2023-12"
 sec_n_matched = sum(1 for d in sec_cases["letters"] if d["relevance"] != "outside universe")
 sec_n_direct = sec_cases["relevance_counts"].get("direct", 0)
 sec_n_adjacent = sec_cases["relevance_counts"].get("adjacent", 0)
@@ -2268,9 +2269,9 @@ def _ad(m, who="treated"):
     return "n/a" if a is None or b is None else f"{b - a:+.3f}"
 ```
 
-Risk and governance framing accelerate over the sample, but the acceleration cannot be dated to the regulatory event. Re-estimating the same specification at every monthly break from 2023 through mid-2025 fits best early in 2023, well before the December warning, with the estimated slope change getting smaller the later the break is placed, and neither series shows a step at the event itself (@tbl-e-break-dates, Appendix E).
+In December 2023 the SEC warned public companies against overstating what their AI can do: risk and governance framing accelerate over the sample, but neither turns at that date, and both fit a break in early 2023 better than the warning itself (Appendix E).
 
-Direct scrutiny has also been rare. Across SEC staff comment letters from 2022 to mid-2026, `{python} sec_n_matched` threads match AI terms within the panel and `{python} sec_n_direct` questioned a firm's operational AI claims: the Welltower inquiry of 2025-04-28, which contrasted a boilerplate sentence in the 10-K with an "industry-leading" platform claimed on the earnings call.
+Direct scrutiny is also rare. Across SEC staff comment letters from 2022 to mid-2026, `{python} sec_n_matched` threads match AI terms within the panel and `{python} sec_n_direct` questioned a firm's operational AI claims: the Welltower inquiry of 2025-04-28, which contrasted a boilerplate sentence in the 10-K with an "industry-leading" platform claimed on the earnings call.
 
 ```{python}
 #| label: fig-sec-welltower
@@ -3660,9 +3661,51 @@ Markdown(t1 + "\n\n" + t2)
 *Notes:* Computed from the firm-level activity-profile summary. "Business function" has no single dominant category comparable to `customer_service` for customer-success work specifically. Customer success (retention/expansion) is not coded as a separate family from customer support in the current taxonomy.
 :::
 
+### Disclosed activity counts conditioned on disclosure volume {.unnumbered}
+
+Frames and activities come from the same corporate text, so the difference in disclosed activity across archetypes could simply reflect that some firms write more. Disclosed AI activity counts are therefore regressed on the archetypes, controlling for total AI disclosure volume ($\log(1 + \text{AI frames})$), in a negative binomial regression:
+
+$$
+\log \mathbb{E}[\text{AI Activities}_i] = \alpha + \beta_1 \text{VocalSubstantives}_i + \beta_2 \text{GovernanceLed}_i + \gamma \log(1 + \text{Frames}_i)
+$$
+
+```{python}
+#| label: tbl-4-1b-volume-adjusted
+#| tbl-cap: "[Disclosed AI activity count by archetype, before and after conditioning on total AI disclosure volume.]{custom-style=\"CaptionText\"}"
+#| echo: false
+import json
+from pathlib import Path
+from tabulate import tabulate
+from IPython.display import Markdown
+
+
+reg = _var  # results/posture/strategy_dimensions_diagnostics.json["activity_volume_regression"], loaded above
+OTHERS = ["Governance-Led Disclosers", "Vocal Substantives"]
+
+def fmt_p(p):
+    return "<0.001" if p < 0.001 else f"{p:.3f}"
+
+def fmt_ci(spec, a):
+    lo, hi = reg[spec][a]["ratio_ci95"]
+    return f"[{lo:.2f}, {hi:.2f}]"
+
+rows = [[a, f"{reg['raw'][a]['ratio']:.2f}x", fmt_ci("raw", a), fmt_p(reg['raw'][a]['p']),
+        f"{reg['volume_adjusted'][a]['ratio']:.2f}x", fmt_ci("volume_adjusted", a), fmt_p(reg['volume_adjusted'][a]['p'])]
+        for a in OTHERS]
+rows.append(["log(1 + AI frames)", "-", "-", "-", f"{reg['log_frames_coef']:+.2f} (coef.)", "-", fmt_p(reg['log_frames_p'])])
+Markdown(tabulate(rows, headers=[f"Archetype vs. {reg['reference']}", "Raw ratio", "95% CI", "p",
+                                  "Volume-adj. ratio", "95% CI", "p"]))
+```
+
+::: {custom-style="FigureNote"}
+*Notes:* Volume control is log frame count. Reference category: Defensive Disclosers.
+:::
+
+A statistically significant difference survives the volume control (@tbl-4-1b-volume-adjusted). At identical narrative volume, Vocal Substantives still report `{python} f"{hd_vs_ratio:.2f}"` times as many operational AI activities as Defensive Disclosers ($p$ `{python} pstr(_var["volume_adjusted"]["Vocal Substantives"]["p"])`), while Governance-Led Disclosers report `{python} f"{hd_gl_ratio:.2f}"` times as many ($p$ `{python} pstr(_var["volume_adjusted"]["Governance-Led Disclosers"]["p"])`). Although total disclosure volume accounts for a substantial share of the raw variation (log frame count yields a pseudo-$R^2$ of `{python} f"{hd_vol_r2:.2f}"`), disclosure posture is not mere verbosity: it reflects distinct rates of disclosed technological deployment.
+
 ### External AI technology ecosystem {.unnumbered}
 
-Every provider family named by at least one S&P 500 firm inside its AI disclosure appears in @tbl-c3-vendor-ecosystem, with the literal names it was matched on. The fifteen most-cited families carry the concentration reported in @tbl-vendor-providers; the remainder shows how thin the tail is, and how little of it sits outside the United States.
+Every provider family named by at least one S&P 500 firm inside its AI disclosure appears in @tbl-c3-vendor-ecosystem, with the literal names it was matched on. The fifteen most-cited families carry the concentration shown in @fig-vendor-providers; the remainder shows how thin the tail is, and how little of it sits outside the United States.
 
 ```{python}
 #| label: tbl-c3-vendor-ecosystem
@@ -3779,6 +3822,34 @@ Y_{i,t}^{\text{post}} = \alpha + \boldsymbol{\beta}' \text{AI}_{i,t} + \gamma Y^
 $$
 
 where $\alpha_{s,y} \equiv \text{SIC2} \times \text{Year}$ fixed effects absorb industry-year shocks, and standard errors are clustered by firm. The vector $\text{AI}_{i,t}$ comprises expanding historical posture ($\text{HistD}_{i,t^{-}}, \text{HistS}_{i,t^{-}}$), incremental call-specific surprise ($\text{SurpriseD}_{i,t}, \text{SurpriseS}_{i,t}$), prior-year decoupling ($W_{i,t-1}$), and expanding-window archetype indicators ($\mathbf{1}_{\{\text{GovLed}\}_{i,t}}, \mathbf{1}_{\{\text{Vocal}\}_{i,t}}$, with *Defensive Disclosers* as reference; Section 3.3.3). Predetermined controls $X^{\text{pre}}_{i,t}$ include log market cap, 60-day return momentum, return on assets (ROA), and pre-call volatility. Model $R^2$ is dominated by the lagged outcome by construction; each table therefore reports both the total $R^2$ and the partial $R^2$ of the disclosure block, which is the quantity of interest.
+
+### Break-date sweep for the December 2023 warning {.unnumbered}
+
+The acceleration in risk and governance framing predates the regulator. The step estimated at December 2023 is indistinguishable from zero in both series ($p$ `{python} pstr(_at("Risk frames", _sec_break, "p_step"))` for risk framing and $p$ `{python} pstr(_at("Governance frames", _sec_break, "p_step"))` for governance framing), and refitting the same specification at every candidate break month from January 2023 to June 2025 fits best in `{python} _best_break("Risk frames")` and `{python} _best_break("Governance frames")` respectively -- three quarters or more before the warning -- with the estimated slope change shrinking the later the break is placed (@tbl-e-break-dates). The reported months are the best-fitting break of each series, the warning itself, and the range either side of it.
+
+```{python}
+#| label: tbl-e-break-dates
+#| tbl-cap: "[Interrupted time series of risk and governance framing, refitted at alternative break dates.]{custom-style=\"CaptionText\"}"
+#| echo: false
+from tabulate import tabulate
+from IPython.display import Markdown
+
+_shown = ["2023-01", "2023-03", "2023-06", "2023-12", "2024-06", "2024-12", "2025-06"]
+_rows = []
+for outcome in ["Risk frames", "Governance frames"]:
+    best = _best_break(outcome)
+    for month in _shown:
+        mark = " (best fit)" if month == best else (" (SEC warning)" if month == _sec_break else "")
+        _rows.append([outcome if month == _shown[0] else "", month + mark,
+                      f"{_at(outcome, month, 'step'):+.4f}", pstr(_at(outcome, month, "p_step")),
+                      f"{_at(outcome, month, 'slope_change'):+.4f}", pstr(_at(outcome, month, "p_slope_change")),
+                      f"{_at(outcome, month, 'r2'):.3f}"])
+Markdown(tabulate(_rows, headers=["Series", "Break date", "Step", "p", "Slope change", "p", "$R^2$"]))
+```
+
+::: {custom-style="FigureNote"}
+*Notes:* Monthly series per 1,000 words over every document published in the month, from January 2021, with quarter-of-year seasonality and the log number of reporting firms held constant and Newey-West standard errors at six lags. "Step" is the immediate level change at the break, "slope change" the change in monthly trend afterwards. A break at one date cannot be separated from anything else happening at that date: the sweep says which month the series turns, not what turned it.
+:::
 
 ### Governance-Led crash-risk finding: sector exclusion and posture switchers {.unnumbered}
 

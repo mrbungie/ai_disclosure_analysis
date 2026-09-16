@@ -14,6 +14,11 @@ earnings calls):
   covariates/document/ai_vendor_families   one presence flag per provider
                                            family (`vendor_openai`,
                                            `vendor_deepseek`, ...)
+  covariates/activity/ai_vendors           the same ecosystem flags at the
+                                           activity grain, so an attribution
+                                           statistic computed over activity
+                                           statements can be split by ecosystem
+                                           on its own denominator
 
 The unit is the document and presence is binary: a call naming Azure twenty
 times counts once for Microsoft and once for the United States. Ecosystems
@@ -71,6 +76,32 @@ def mentions(spine: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def activity_vendors(found: pd.DataFrame) -> None:
+    """Ecosystem flags per disclosed AI activity: the activity's text names a
+    provider of that ecosystem. Keyed on text_hash, the activity spine's link
+    to the paragraph the statement was extracted from."""
+    texts = (L.scan("silver.ai_vendor_mentions").select("text_hash", "accession_number", "paragraph_index")
+             .unique().collect().to_pandas()
+             .merge(found[["accession_number", "paragraph_index", "ecosystem", "vendor_ticker", "is_stack"]],
+                    on=["accession_number", "paragraph_index"], how="inner"))
+    spine = L.read_gold("activity", spine_columns=["id", "ticker", "text_hash", "activity_id", "fecha"])
+    named = spine[["text_hash", "ticker"]].merge(texts, on="text_hash", how="inner")
+    external = named["vendor_ticker"].ne(named["ticker"]) | named["vendor_ticker"].isna()
+    named = named[external]
+
+    out = spine.copy()
+    for ecosystem, key in ECOSYSTEMS.items():
+        hashes = set(named.loc[named["ecosystem"] == ecosystem, "text_hash"])
+        out[f"vendor_{key}"] = out["text_hash"].isin(hashes)
+    out["vendor_any"] = out[[f"vendor_{k}" for k in ECOSYSTEMS.values()]].any(axis=1)
+    # The filer's own products, kept so an own-branding statistic can use the
+    # same detector as the external one.
+    own = spine[["text_hash", "ticker"]].merge(texts, on="text_hash", how="inner")
+    own = own[own["vendor_ticker"].eq(own["ticker"])]
+    out["vendor_self"] = out["text_hash"].isin(set(own["text_hash"]))
+    L.write_gold("covariates", "activity", "ai_vendors", out, builder=BUILDER)
+
+
 def main() -> None:
     spine = L.read_gold("document", spine_columns=["id", "ticker", "accession_number", "fecha"])
 
@@ -111,6 +142,8 @@ def main() -> None:
         naming = set(external.loc[external["family"] == family, "accession_number"])
         families[column_name(family)] = families["accession_number"].isin(naming)
     L.write_gold("covariates", "document", "ai_vendor_families", families, builder=BUILDER)
+
+    activity_vendors(found)
 
     reached = out[out["n_vendor_paragraphs"] > 0]
     print(f"{len(out):,} documents | {len(reached):,} naming an external AI vendor "
