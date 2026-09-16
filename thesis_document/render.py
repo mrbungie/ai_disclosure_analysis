@@ -257,6 +257,15 @@ def style_all_tables(document: Document) -> None:
                     p.paragraph_format.space_before = Pt(0.4)
                     p.paragraph_format.space_after = Pt(0.4)
                     p.paragraph_format.line_spacing = 1.0
+                    # The template's "Table Grid" style carries a 709-twip
+                    # first-line indent meant for body paragraphs. Inherited
+                    # by a cell, it eats 1.25 cm from the first line alone,
+                    # which in a narrow column leaves too little room for the
+                    # word that starts it and breaks it mid-syllable
+                    # ("Busin / ess purpose") while the lines below sit flush.
+                    p.paragraph_format.first_line_indent = 0
+                    p.paragraph_format.left_indent = 0
+                    p.paragraph_format.right_indent = 0
 
                     if r_idx == 0:
                         if is_numeric_col[c_idx] and c_idx > 0:
