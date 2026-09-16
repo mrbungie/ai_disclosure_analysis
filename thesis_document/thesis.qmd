@@ -954,7 +954,7 @@ plt.show()
 *Notes:* White circles denote medians; petrol bars interquartile ranges; grey whiskers the 5th–95th percentile. All measures are scaled from 0 to 1.
 :::
 
-The correlation structure of these eight dimensions shows two key properties (@tbl-a3-posture-correlation, Appendix C):
+The correlation structure of the seven posture dimensions and disclosure intensity shows two key properties (@tbl-a3-posture-correlation, Appendix C):
 
 1. **Governance framing operates independently.** Governance orientation barely correlates with promotional posture ($r =$ `{python} f"{hd_corr['governance_orientation']['promotional_posture']:.2f}"`), risk framing ($r =$ `{python} f"{hd_corr['governance_orientation']['risk_orientation']:.2f}"`), or disclosure intensity ($r =$ `{python} f"{hd_corr['governance_orientation']['disclosure_intensity']:.2f}"`). It constitutes an autonomous disclosure dimension rather than a proxy for general verbosity or risk aversion.
 2. **Risk orientation counterbalances operational execution.** Risk framing correlates negatively with realized temporal posture ($r =$ `{python} f"{hd_corr['risk_orientation']['temporal_posture']:.2f}"`), specificity ($r =$ `{python} f"{hd_corr['risk_orientation']['specificity']:.2f}"`), customer positioning ($r =$ `{python} f"{hd_corr['risk_orientation']['ai_positioning']:.2f}"`), and intensity ($r =$ `{python} f"{hd_corr['risk_orientation']['disclosure_intensity']:.2f}"`). Firms framing AI as an operational hazard report fewer deployments and concrete initiatives.
@@ -1057,7 +1057,7 @@ Markdown(tabulate(_rows, headers=["Archetype", "Firms ($n$)", "Share (%)", "Arch
 - **Governance-Led Disclosers:** institutional oversight and risk containment, emphasizing board committee charters, model-risk auditing, and responsible-AI frameworks over product marketing.
 - **Defensive Disclosers:** passive regulatory compliance, listing boilerplate Item 1A risks without committing management to operational milestones.
 
-Each vertex maps an extreme, interpretable configuration (@fig-archetype-heatmap): Vocal Substantives anchors customer positioning and specificity, Governance-Led Disclosers peaks on governance orientation, and Defensive Disclosers concentrates on risk framing with negative intensity.
+Each vertex maps an extreme, interpretable configuration (@fig-archetype-heatmap): Vocal Substantives anchors customer positioning and specificity, Governance-Led Disclosers peaks on governance orientation, and Defensive Disclosers concentrates on risk framing with the lowest specificity of the three. The vertices are fitted on posture alone; how much a firm discloses is measured separately and does not shape them, so that Vocal Substantives also disclose most is a property of those firms rather than a feature the fit was given.
 
 ```{python}
 #| label: fig-archetype-heatmap
@@ -2862,7 +2862,7 @@ Two limits qualify all of this. The associations are cross-sectional: under firm
 
 # From Measurement to Managerial Application
 
-The central empirical finding of Chapter 6 is an asymmetry: market outcomes are associated with narrative disclosure intensity ($D$), while verifiable operational substance ($S$) and decoupling show little incremental association in the specifications examined. Market prices therefore do not appear, in this setting, to provide a reliable filter between narrative intensity and disclosed execution, so investment allocators and corporate directors cannot rely on market multiples alone to discipline AI disclosure. To bridge this analytical gap, this chapter operationalizes the measurement architecture into a concrete credibility framework for due diligence, corporate governance, and regulatory oversight.
+The central empirical finding of Chapter 6 is an asymmetry: market outcomes are associated with how much a firm discloses ($D$) and, where the outcome is a market price, with whether it frames AI through governance -- while verifiable operational substance ($S$) and the decoupling of any single call show little incremental association. Market prices therefore do not appear, in this setting, to provide a reliable filter between narrative intensity and disclosed execution, so investment allocators and corporate directors cannot rely on market multiples alone to discipline AI disclosure. To bridge this analytical gap, this chapter operationalizes the measurement architecture into a concrete credibility framework for due diligence, corporate governance, and regulatory oversight.
 
 The framework organizes due diligence into three sequential questions, each answered by the same six constructs used throughout this thesis -- narrative volume ($D$), communication posture ($P$), claimed operational activities ($A$), evidentiary grounding ($G$), substance ($S$), and decoupling ($W$): **Step 1, Posture** -- which communication archetype does the firm's register resemble (Chapter 3)? **Step 2, Execution** -- does that posture correspond to grounded operational substance, or to narrative volume alone? **Step 3, Venue** -- does that execution hold consistently between voluntary earnings calls and statutory Form 10-K filings (Chapter 5)?
 
@@ -3433,7 +3433,7 @@ The correlation structure across the eight AI disclosure strategy dimensions is 
 
 ```{python}
 #| label: tbl-a3-posture-correlation
-#| tbl-cap: "[Correlation matrix of the eight posture dimensions.]{custom-style=\"CaptionText\"}"
+#| tbl-cap: "[Correlation matrix of the seven fitted posture dimensions and disclosure intensity, which is reported here but does not enter the fit.]{custom-style=\"CaptionText\"}"
 #| echo: false
 import pandas as pd
 from tabulate import tabulate
