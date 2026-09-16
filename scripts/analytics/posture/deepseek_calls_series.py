@@ -45,7 +45,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
 import layers as L  # noqa: E402
 
 START = "2021-01"
-MIN_CALLS = 100
+MIN_CALLS = 50
 EVENT = "2025-01"
 HAC_LAGS = 6
 QUOTE_PATTERN = r"(?i)(^|[^a-z0-9])(deepseek)([^a-z0-9]|$)"
