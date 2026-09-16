@@ -490,6 +490,58 @@ def clear_figure_indentation(document: Document) -> None:
         ))
 
 
+def tighten_note_spacing(document: Document) -> None:
+    """Pull a FigureNote paragraph up against the block it annotates.
+
+    The note inherits the body style's 120-twip space above, which on a table
+    note reads as a gap and detaches the note from the rows it explains. Zero
+    above, a little below, and keepNext so the note never starts a page on its
+    own.
+    """
+    body = document.element.body
+    for para in body.iter(qn("w:p")):
+        pPr = para.find(qn("w:pPr"))
+        style = pPr.find(qn("w:pStyle")) if pPr is not None else None
+        if style is None or style.get(qn("w:val")) != "FigureNote":
+            continue
+        for existing in pPr.findall(qn("w:spacing")):
+            pPr.remove(existing)
+        pPr.append(parse_xml(
+            r'<w:spacing xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            r'w:before="0" w:after="120"/>'))
+
+
+def keep_notes_with_tables(document: Document) -> None:
+    """Keep a table's note on the same page as the table.
+
+    A FigureNote sits AFTER the block it annotates, so the caption rule does
+    not reach it: the table can end at the foot of a page and leave its note
+    stranded at the top of the next one, where it reads as a fragment. Setting
+    keepNext on the last row carries the table over with the note instead.
+    """
+    body = document.element.body
+    for para in body.findall(qn("w:p")):
+        pPr = para.find(qn("w:pPr"))
+        style = pPr.find(qn("w:pStyle")) if pPr is not None else None
+        if style is None or style.get(qn("w:val")) != "FigureNote":
+            continue
+        previous = para.getprevious()
+        if previous is None or previous.tag != qn("w:tbl"):
+            continue
+        rows = previous.findall(qn("w:tr"))
+        if not rows:
+            continue
+        for row_para in rows[-1].iter(qn("w:p")):
+            row_pPr = row_para.find(qn("w:pPr"))
+            if row_pPr is None:
+                row_pPr = parse_xml(r'<w:pPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>')
+                row_para.insert(0, row_pPr)
+            for existing in row_pPr.findall(qn("w:keepNext")):
+                row_pPr.remove(existing)
+            row_pPr.insert(0, parse_xml(
+                r'<w:keepNext xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>'))
+
+
 def keep_captions_with_tables(document: Document) -> None:
     """Glue every table caption to the table it introduces.
 
@@ -663,6 +715,8 @@ def render_quarto_content(tmp_dir: Path) -> Path:
     small_caps_headings(doc)
     style_all_tables(doc)
     fix_prose_math_font_size(doc)
+    tighten_note_spacing(doc)
+    keep_notes_with_tables(doc)
     keep_captions_with_tables(doc)
     style_code_blocks(doc)
     resize_oversized_images(doc, content_width_emu(doc))
