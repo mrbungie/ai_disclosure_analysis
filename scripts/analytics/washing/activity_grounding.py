@@ -11,7 +11,10 @@ spine de documentos. Determinístico, sin LLM.
   `fig_brecha_actividades.png`.
 
 Salida: `data/results/washing/activity_grounding.json` (clave `channel_gap`,
-la única que lee `thesis.qmd`).
+la única que lee `thesis.qmd`). Dentro de `channel_gap`, `pooled` trae la
+brecha de todo el panel y `by_year` la misma brecha por ejercicio, cada una
+con `gap_pp`, `n`, `t`, `p` y el IC del 95% (`ci_low`, `ci_high`) calculado
+sobre las celdas de ese año.
 """
 from __future__ import annotations
 
@@ -59,10 +62,32 @@ def channel_activity_gap() -> dict:
                      "gap_pp": 100 * gaps[f].mean(), "t": float(t), "p": float(p)})
     tbl = pd.DataFrame(rows).set_index("family")
     by_year = (gaps.groupby("fy")[GAP_FAMILIES].mean() * 100).T
+    # Mismo test de una muestra que las filas agrupadas, pero dentro de cada
+    # ejercicio: la celda empresa × ejercicio es la unidad, así que el IC del
+    # año sale de las celdas de ese año y no de un reescalado del agrupado.
+    fiscal_years = [int(v) for v in sorted(gaps["fy"].unique())]
+    by_year_stats: dict[str, dict[str, dict]] = {}
+    for f in GAP_FAMILIES:
+        per_year: dict[str, dict] = {}
+        for fy in fiscal_years:
+            x = gaps.loc[gaps["fy"] == fy, f].dropna()
+            n = len(x)
+            mean = 100 * float(x.mean()) if n else float("nan")
+            if n < 2 or float(x.std(ddof=1)) == 0.0:
+                per_year[str(fy)] = {"gap_pp": mean, "n": n, "t": None, "p": None,
+                                     "ci_low": None, "ci_high": None}
+                continue
+            t, p = stats.ttest_1samp(x, 0.0)
+            se = 100 * float(x.std(ddof=1)) / np.sqrt(n)
+            crit = float(stats.t.ppf(0.975, n - 1))
+            per_year[str(fy)] = {"gap_pp": mean, "n": n, "t": float(t), "p": float(p),
+                                 "ci_low": mean - crit * se, "ci_high": mean + crit * se}
+        by_year_stats[f] = per_year
     print(f"\n3. BRECHA DE ACTIVIDADES ENTRE CANALES — {n_cells} celdas empresa × ejercicio con ≥3 actividades en cada canal, {n_firms} empresas")
     print("   % de las actividades del canal en cada familia; brecha = call − filing, p.p.")
     print(tbl.round(2).to_string())
     print("\n   brecha por ejercicio (p.p.):"); print(by_year.round(1).to_string())
+    print("\n   celdas por ejercicio:"); print(gaps.groupby("fy").size().to_string())
     # figura
     import matplotlib
     matplotlib.use("Agg")
@@ -81,7 +106,7 @@ def channel_activity_gap() -> dict:
     fig.colorbar(im, ax=ax, shrink=0.8, label="call − filing, percentage points of the channel's activities")
     fig.tight_layout(); fig.savefig(L.results_path("washing", "fig_brecha_actividades.png"), dpi=150); plt.close(fig)
     return {"n_cells": int(n_cells), "n_firms": int(n_firms), "pooled": json.loads(tbl.to_json(orient="index")),
-            "by_year": json.loads(by_year.round(2).to_json(orient="index"))}
+            "by_year": by_year_stats}
 
 
 def main() -> None:

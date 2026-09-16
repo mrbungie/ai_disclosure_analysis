@@ -2586,14 +2586,19 @@ The pooled model gives the average gap over the whole panel, which leaves one qu
 _gap_year = results_json("washing", "activity_grounding.json")["channel_gap"]["by_year"]
 
 def gy(family, year):
-    return f'{_gap_year[family][str(year)]:+.1f}'
+    """Year's call-minus-filing gap with its 95% CI, both from the same cells."""
+    r = _gap_year[family][str(year)]
+    return f'{r["gap_pp"]:+.1f} pp in {year}, 95% CI [{r["ci_low"]:+.1f}, {r["ci_high"]:+.1f}]'
+
+_gap_year_n = ", ".join(f'{y}: {_gap_year["quantified_outcome"][str(y)]["n"]}'
+                        for y in range(2021, 2027))
 ```
 
-- **Quantified outcomes:** the call premium on numbers is already there before ChatGPT and stays there (`{python} gy("quantified_outcome", 2021)` pp in 2021, `{python} gy("quantified_outcome", 2023)` pp in 2023, `{python} gy("quantified_outcome", 2025)` pp in 2025). Managers have always put more figures into the oral discussion than into the filing.
-- **Named products and processes:** this gap instead widens with generative AI. It is small in the early cycles (`{python} gy("named_product_or_process", 2021)` pp in 2021, `{python} gy("named_product_or_process", 2022)` pp in 2022) and much larger by the end of the panel (`{python} gy("named_product_or_process", 2024)` pp in 2024, `{python} gy("named_product_or_process", 2025)` pp in 2025).
-- **Governance and restrictions:** the filings absorb almost all of the growth in governance and risk caveats after 2023. The gap is modest at the start (`{python} gy("governance_or_restriction", 2021)` pp in 2021) and widens once the regulatory warnings arrive (`{python} gy("governance_or_restriction", 2024)` pp in 2024, `{python} gy("governance_or_restriction", 2025)` pp in 2025, `{python} gy("governance_or_restriction", 2026)` pp in 2026).
+- **Quantified outcomes:** the call premium on numbers is already there before ChatGPT and stays there (`{python} gy("quantified_outcome", 2021)`; `{python} gy("quantified_outcome", 2023)`; `{python} gy("quantified_outcome", 2025)`). Managers have always put more figures into the oral discussion than into the filing.
+- **Named products and processes:** this gap instead widens with generative AI. In the early cycles it cannot be separated from zero (`{python} gy("named_product_or_process", 2021)`; `{python} gy("named_product_or_process", 2022)`), and by the end of the panel it is a clear call premium (`{python} gy("named_product_or_process", 2024)`; `{python} gy("named_product_or_process", 2025)`).
+- **Governance and restrictions:** the filings absorb almost all of the growth in governance and risk caveats after 2023. The gap is modest at the start (`{python} gy("governance_or_restriction", 2021)`) and widens once the regulatory warnings arrive (`{python} gy("governance_or_restriction", 2024)`; `{python} gy("governance_or_restriction", 2025)`; `{python} gy("governance_or_restriction", 2026)`).
 
-The quantification premium on calls is therefore an old habit, while the split on product-level claims and on governance language opens specifically as generative AI spreads and regulatory attention grows. These are yearly means of the same within-firm-year gap and carry no inference of their own, so they describe the direction of the movement rather than test it.
+The quantification premium on calls is therefore an old habit, while the split on product-level claims and on governance language opens specifically as generative AI spreads and regulatory attention grows. Each year is tested on its own cells, so the yearly intervals are wider than the pooled ones and the early cycles are the thinnest (`{python} _gap_year_n` firm-year cells).
 
 An investor should therefore read both venues and not rely on one of them alone, and an issuer should check that the claims are substantively consistent between the oral and the statutory disclosure, without expecting the same wording or the same level of detail in both.
 
