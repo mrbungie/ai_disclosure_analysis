@@ -490,6 +490,47 @@ def clear_figure_indentation(document: Document) -> None:
         ))
 
 
+def style_code_blocks(document: Document) -> None:
+    """Set the verbatim blocks in Appendix A in a smaller monospaced face.
+
+    Pandoc puts a fenced code block in the `SourceCode` paragraph style and
+    every run inside it in the `VerbatimChar` character style, neither of which
+    this template defines, so they inherit the body font at body size: the
+    prompt and the schema come out in the same Calibri as the prose around
+    them, which loses the alignment the schema comment column depends on and
+    reads as if it were prose. Applying the font run by run rather than by
+    redefining the styles keeps it working whichever of the two pandoc emits.
+    """
+    body = document.element.body
+    for para in body.iter(qn("w:p")):
+        pPr = para.find(qn("w:pPr"))
+        style = pPr.find(qn("w:pStyle")) if pPr is not None else None
+        in_block = style is not None and style.get(qn("w:val")) in {"SourceCode", "VerbatimChar"}
+        if not in_block:
+            continue
+        # Body text is justified, and a justified monospaced block stretches its
+        # spaces to reach the right margin, which is exactly what destroys the
+        # column the schema comments line up in. Force left alignment.
+        for existing in pPr.findall(qn("w:jc")):
+            pPr.remove(existing)
+        pPr.append(parse_xml(
+            r'<w:jc xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:val="left"/>'))
+        for run in para.iter(qn("w:r")):
+            rPr = run.find(qn("w:rPr"))
+            if rPr is None:
+                rPr = parse_xml(r'<w:rPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>')
+                run.insert(0, rPr)
+            for tag in ("w:rFonts", "w:sz", "w:szCs"):
+                for existing in rPr.findall(qn(tag)):
+                    rPr.remove(existing)
+            rPr.append(parse_xml(
+                r'<w:rFonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+                r'w:ascii="Consolas" w:hAnsi="Consolas" w:cs="Consolas"/>'))
+            # half-points: 16 = 8pt, against the 11pt body
+            rPr.append(parse_xml(r'<w:sz xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:val="16"/>'))
+            rPr.append(parse_xml(r'<w:szCs xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:val="16"/>'))
+
+
 def resize_oversized_images(document: Document, max_width_emu: int) -> None:
     """Scale down (preserving aspect ratio) any embedded drawing wider than
     the page can actually print. Both `wp:extent` (the drawing's layout
@@ -594,6 +635,7 @@ def render_quarto_content(tmp_dir: Path) -> Path:
     small_caps_headings(doc)
     style_all_tables(doc)
     fix_prose_math_font_size(doc)
+    style_code_blocks(doc)
     resize_oversized_images(doc, content_width_emu(doc))
     doc.save(str(candidates[0]))
 
