@@ -185,5 +185,39 @@ class TestItem8Recovery(unittest.TestCase):
         self.assertLess(len(segments.get("8", "")), ss._ITEM_8_MIN_PLAUSIBLE_CHARS)
 
 
+class TestTocSubRowAnchor(unittest.TestCase):
+    """A cross-reference-index TOC (WFC's 10-Qs) gives the item row itself
+    no page number, and therefore no anchor — the page links sit on the
+    sub-section rows listed under it. The item's start is its first
+    sub-row's anchor."""
+
+    def _toc(self):
+        return [
+            "| Item 1. | | | Financial Statements | | | Page | | |",
+            "|  | | | Consolidated Balance Sheet | | | [55](#stmts) | | |",
+            "| Item 2. | | | Management's Discussion and Analysis | | |  | | |",
+            "|  | | | Summary Financial Data | | | [2](#mda) | | |",
+            "|  | | | Overview | | | [3](#overview) | | |",
+            "| PART II | | | Other Information | | |  | | |",
+            "| Item 1. | | | Legal Proceedings | | | [128](#legal) | | |",
+        ]
+
+    def test_item_inherits_first_subrow_anchor(self):
+        lines = self._toc()
+        rows = ss._raw_candidates(lines, form="10-Q")
+        entries = dict(ss._toc_anchor_entries(lines, rows))
+        self.assertEqual(entries["1"], "stmts")
+        self.assertEqual(entries["2"], "mda")
+        self.assertEqual(entries["1__partII"], "legal")
+
+    def test_inheritance_stops_at_the_next_part_row(self):
+        # Item 2's own row and its sub-rows carry no link at all here, so it
+        # must resolve to nothing rather than borrow Part II's first anchor.
+        lines = [l for l in self._toc() if "#mda" not in l and "#overview" not in l]
+        rows = ss._raw_candidates(lines, form="10-Q")
+        entries = dict(ss._toc_anchor_entries(lines, rows))
+        self.assertNotIn("2", entries)
+
+
 if __name__ == "__main__":
     unittest.main()

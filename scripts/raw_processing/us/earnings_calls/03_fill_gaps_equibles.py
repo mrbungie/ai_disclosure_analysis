@@ -125,10 +125,12 @@ def _mcp_call(api_key: str, tool: str, arguments: dict, id_: int = 1) -> dict:
     else:
         raise EquiblesError(f"exhausted retries: {last_err}")
 
+    # the server answers either one SSE `data:` frame or a plain JSON body
     line = next((l for l in raw.split("\n") if l.startswith("data:")), None)
-    if line is None:
-        raise EquiblesError(f"no SSE data frame in response: {raw[:500]}")
-    payload = json.loads(line[len("data:"):].strip())
+    try:
+        payload = json.loads(line[len("data:"):].strip() if line is not None else raw)
+    except json.JSONDecodeError as e:
+        raise EquiblesError(f"unparseable response: {raw[:500]}") from e
     if "error" in payload:
         raise EquiblesError(f"{tool} error: {payload['error']}")
     result = payload["result"]

@@ -1,0 +1,1093 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atomic AI Disclosure Validator</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --surface-alt: #f1f5f9;
+    --border: #e2e8f0;
+    --fg: #0f172a;
+    --muted: #64748b;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --primary-light: #eff6ff;
+    --yes: #16a34a;
+    --yes-bg: #dcfce7;
+    --yes-border: #86efac;
+    --no: #dc2626;
+    --no-bg: #fee2e2;
+    --no-border: #fca5a5;
+    --unc: #d97706;
+    --unc-bg: #fef3c7;
+    --unc-border: #fcd34d;
+    --highlight: #fef08a;
+    --highlight-border: #eab308;
+    --radius: 8px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.5;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--fg);
+  }
+  .brand .tag {
+    font-size: 11px;
+    background: #e0e7ff;
+    color: #3730a3;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+
+  /* Scope switcher */
+  .ambitos {
+    display: flex;
+    gap: 6px;
+    background: var(--surface-alt);
+    padding: 3px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
+  .ambito-btn {
+    border: none;
+    background: transparent;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s;
+  }
+  .ambito-btn:hover { color: var(--fg); }
+  .ambito-btn.active {
+    background: var(--surface);
+    color: var(--primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .ambito-count {
+    font-size: 11px;
+    background: var(--border);
+    color: var(--muted);
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-family: var(--mono);
+  }
+  .ambito-btn.active .ambito-count {
+    background: #dbeafe;
+    color: var(--primary);
+  }
+
+  .header-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn {
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--fg);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s;
+  }
+  .btn:hover { background: var(--surface-alt); }
+  .btn.btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .btn.btn-primary:hover { background: var(--primary-hover); }
+
+  /* Toolbar */
+  .toolbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 20px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+  }
+  .nav-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .filter-select {
+    padding: 5px 10px;
+    font-size: 13px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--fg);
+  }
+  .prog-bar-wrap {
+    flex: 1;
+    min-width: 140px;
+    max-width: 260px;
+    background: var(--surface-alt);
+    height: 8px;
+    border-radius: 999px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .prog-bar-fill {
+    height: 100%;
+    background: var(--primary);
+    width: 0%;
+    transition: width 0.2s ease;
+  }
+  .prog-text {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+
+  /* Main Layout */
+  main {
+    flex: 1;
+    max-width: 1300px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 20px;
+    display: grid;
+    grid-template-columns: 1.15fr 0.95fr;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 960px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  }
+
+  /* Context Panel */
+  .context-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge-ticker {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    background: #e2e8f0;
+    color: #1e293b;
+    padding: 3px 8px;
+    border-radius: 5px;
+  }
+  .firm-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--fg);
+  }
+  .doc-meta {
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+
+  .paragraph-box {
+    background: #fafbfd;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    max-height: 480px;
+    overflow-y: auto;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .sentence {
+    padding: 3px 6px;
+    margin: 2px 0;
+    border-radius: 4px;
+    transition: background 0.15s;
+  }
+  .sentence .s-idx {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-right: 6px;
+    user-select: none;
+  }
+  .sentence.highlighted {
+    background: var(--highlight);
+    border-left: 3px solid var(--highlight-border);
+    font-weight: 500;
+  }
+
+  /* Verification Panel */
+  .claim-box {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .claim-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .cat-badge {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #475569;
+  }
+  .cat-badge.prefilter { background: #e0e7ff; color: #3730a3; }
+  .cat-badge.frames { background: #e0f2fe; color: #0369a1; }
+  .cat-badge.activities { background: #fae8ff; color: #86198f; }
+
+  .status-badge {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+  .status-badge.pending { background: #f1f5f9; color: var(--muted); }
+  .status-badge.ans-Y { background: var(--yes-bg); color: var(--yes); border: 1px solid var(--yes-border); }
+  .status-badge.ans-N { background: var(--no-bg); color: var(--no); border: 1px solid var(--no-border); }
+  .status-badge.ans-U { background: var(--unc-bg); color: var(--unc); border: 1px solid var(--unc-border); }
+
+  .claim-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--fg);
+    line-height: 1.35;
+  }
+
+  .question-card {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-left: 4px solid var(--primary);
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .question-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #1e40af;
+    margin-bottom: 4px;
+  }
+  .question-text {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1e293b;
+    line-height: 1.45;
+  }
+
+  .model-claim-card {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #334155;
+  }
+  .model-claim-card b { color: var(--fg); }
+
+  .hint-box {
+    font-size: 13px;
+    color: #475569;
+    background: #fffbeb;
+    border: 1px solid #fef3c7;
+    border-radius: 6px;
+    padding: 9px 12px;
+    display: flex;
+    gap: 8px;
+  }
+  .hint-box span { font-size: 15px; }
+
+  /* Verification Actions (Y / N / U) */
+  .vote-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-top: 6px;
+  }
+  .vote-btn {
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 700;
+    padding: 14px 12px;
+    border-radius: var(--radius);
+    border: 2px solid var(--border);
+    background: var(--surface);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .vote-btn .key {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(0,0,0,0.06);
+  }
+  .vote-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.06);
+  }
+
+  .vote-btn.btn-y:hover, .vote-btn.btn-y.active {
+    background: var(--yes-bg);
+    border-color: var(--yes);
+    color: var(--yes);
+  }
+  .vote-btn.btn-y.active { box-shadow: 0 0 0 2px var(--yes); }
+
+  .vote-btn.btn-n:hover, .vote-btn.btn-n.active {
+    background: var(--no-bg);
+    border-color: var(--no);
+    color: var(--no);
+  }
+  .vote-btn.btn-n.active { box-shadow: 0 0 0 2px var(--no); }
+
+  .vote-btn.btn-u:hover, .vote-btn.btn-u.active {
+    background: var(--unc-bg);
+    border-color: var(--unc);
+    color: var(--unc);
+  }
+  .vote-btn.btn-u.active { box-shadow: 0 0 0 2px var(--unc); }
+
+  /* Notes & Helpers */
+  .note-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: var(--font);
+    resize: vertical;
+    min-height: 40px;
+  }
+
+  .footer-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .kbd-legend {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+
+  /* Modals */
+  dialog {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    max-width: 650px;
+    width: 92%;
+    margin: auto;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
+  }
+  dialog::backdrop { background: rgba(0,0,0,0.4); backdrop-filter: blur(2px); }
+  dialog h3 { margin-bottom: 12px; font-size: 18px; }
+  dialog textarea {
+    width: 100%;
+    min-height: 220px;
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 12px;
+  }
+  dialog .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  /* Stats Table */
+  table.stats-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin: 12px 0;
+  }
+  table.stats-tbl th, table.stats-tbl td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+  }
+  table.stats-tbl th { background: var(--surface-alt); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span>AI Validator</span>
+    <span class="tag">Atomic Y / N / U</span>
+  </div>
+
+  <div class="ambitos">
+    <button class="ambito-btn active" id="tab-prefilter" onclick="switchAmbito('prefilter')">
+      <span>Prefilter</span>
+      <span class="ambito-count" id="count-prefilter">0/0</span>
+    </button>
+    <button class="ambito-btn" id="tab-frames" onclick="switchAmbito('frames')">
+      <span>Frames</span>
+      <span class="ambito-count" id="count-frames">0/0</span>
+    </button>
+    <button class="ambito-btn" id="tab-activities" onclick="switchAmbito('activities')">
+      <span>Activities</span>
+      <span class="ambito-count" id="count-activities">0/0</span>
+    </button>
+  </div>
+
+  <div class="header-actions">
+    <button class="btn" onclick="openStats()">📊 Summary</button>
+    <button class="btn" onclick="exportAnnotations()">📥 Export</button>
+    <button class="btn" onclick="importAnnotations()">📤 Import</button>
+    <button class="btn" onclick="resetAll()">🗑️ Reset</button>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="nav-group">
+    <button class="btn" id="btn-prev" onclick="prevItem()" title="Previous (Left Arrow)">←</button>
+    <span style="font-family:var(--mono);font-size:12px;">
+      <input type="number" id="jump-input" style="width:60px;padding:3px;text-align:center;border:1px solid var(--border);border-radius:4px;" min="1" onchange="jumpToIndex(this.value)">
+      <span id="jump-total">/ 0</span>
+    </span>
+    <button class="btn" id="btn-next" onclick="nextItem()" title="Next (Right Arrow)">→</button>
+    <button class="btn" onclick="goToPending()" title="Jump to first unanswered item (P)">First Pending</button>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:6px;">
+    <label style="font-size:12px;color:var(--muted)">Filter:</label>
+    <select class="filter-select" id="status-filter" onchange="onFilterChange()">
+      <option value="all">All items</option>
+      <option value="pending">Pending only</option>
+      <option value="answered">Answered only</option>
+    </select>
+    <select class="filter-select" id="cat-filter" onchange="onFilterChange()">
+      <option value="all">All categories</option>
+    </select>
+  </div>
+
+  <div class="prog-bar-wrap">
+    <div class="prog-bar-fill" id="prog-fill"></div>
+  </div>
+  <span class="prog-text" id="prog-summary">0 / 0 (0%)</span>
+</div>
+
+<main id="main-content">
+  <!-- Left: Document & Paragraph Context -->
+  <section class="card" id="context-panel">
+    <div class="context-header">
+      <span class="badge-ticker" id="firm-ticker">—</span>
+      <span class="firm-name" id="firm-name">—</span>
+      <span class="doc-meta" id="doc-meta">—</span>
+    </div>
+    <div class="paragraph-box" id="para-content">
+      <!-- Sentences rendered here -->
+    </div>
+  </section>
+
+  <!-- Right: Atomic Question & Voting -->
+  <section class="card" id="vote-panel">
+    <div class="claim-box">
+      <div class="claim-header">
+        <span class="cat-badge" id="claim-cat">Category</span>
+        <span class="status-badge pending" id="claim-status">Pending</span>
+      </div>
+
+      <div class="claim-title" id="claim-title">Fact Verification Title</div>
+
+      <div class="question-card">
+        <div class="question-label">Atomic Verification Question</div>
+        <div class="question-text" id="claim-question">Question text</div>
+      </div>
+
+      <div class="model-claim-card" id="model-claim">
+        <b>Extracted Fact:</b> <span id="model-claim-text">—</span>
+      </div>
+
+      <div class="hint-box" id="hint-box" style="display:none;">
+        <span>💡</span>
+        <div id="hint-text">Guideline</div>
+      </div>
+
+      <div class="vote-grid">
+        <button class="vote-btn btn-y" id="btn-vote-y" onclick="vote('Y')">
+          <span>✓ YES</span>
+          <span class="key">Y or 1</span>
+        </button>
+        <button class="vote-btn btn-n" id="btn-vote-n" onclick="vote('N')">
+          <span>✗ NO</span>
+          <span class="key">N or 2</span>
+        </button>
+        <button class="vote-btn btn-u" id="btn-vote-u" onclick="vote('U')">
+          <span>? UNCERTAIN</span>
+          <span class="key">U or 3</span>
+        </button>
+      </div>
+
+      <div>
+        <input type="text" class="note-input" id="item-note" placeholder="Optional note or comment (press Enter to save)..." onchange="saveNote(this.value)">
+      </div>
+
+      <div class="footer-nav">
+        <span class="kbd-legend">Shortcuts: [Y/1] Yes · [N/2] No · [U/3] Uncertain · [← / →] Navigate · [P] First Pending</span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Generic Modal Dialog -->
+<dialog id="dlg">
+  <h3 id="dlg-title">Dialog Title</h3>
+  <div id="dlg-body"></div>
+  <div class="actions">
+    <button class="btn" onclick="document.getElementById('dlg').close()">Close</button>
+    <button class="btn btn-primary" id="dlg-primary-btn" style="display:none;">Accept</button>
+  </div>
+</dialog>
+
+<script>
+// ==========================================
+// State and Persistence
+// ==========================================
+const STORAGE_KEY = 'validator_atomic.v1';
+let DATA = null;
+let currentAmbito = 'prefilter';
+let currentIndex = 0;
+let filteredIndices = [];
+let annotations = loadAnnotations();
+
+function loadAnnotations() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+  } catch (e) {
+    console.error('Error loading annotations:', e);
+    return {};
+  }
+}
+
+function saveAnnotations() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(annotations));
+  } catch (e) {
+    alert('Failed to save to localStorage: ' + e);
+  }
+}
+
+// Load data.json
+fetch('data.json')
+  .then(res => {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  })
+  .then(data => {
+    DATA = data;
+    initApp();
+  })
+  .catch(err => {
+    document.getElementById('main-content').innerHTML = `
+      <div class="card" style="grid-column: 1 / -1; padding: 40px; text-align: center;">
+        <h2 style="color:var(--no);margin-bottom:12px;">Failed to load data.json</h2>
+        <p style="color:var(--muted);margin-bottom:16px;">Make sure to run <code>build_sample.py</code> and serve the folder locally.</p>
+        <pre style="background:var(--surface-alt);padding:12px;border-radius:6px;display:inline-block;font-size:13px;">cd apps/validator && python -m http.server 8765</pre>
+      </div>`;
+    console.error(err);
+  });
+
+function initApp() {
+  updateAmbitoCounts();
+  populateCategoryFilter();
+  updateFilteredList();
+  goToPending();
+}
+
+function getItems(ambito) {
+  if (!DATA || !DATA.items) return [];
+  return DATA.items[ambito] || [];
+}
+
+function updateAmbitoCounts() {
+  if (!DATA) return;
+  ['prefilter', 'frames', 'activities'].forEach(amb => {
+    const list = getItems(amb);
+    const done = list.filter(it => annotations[it.id] && annotations[it.id].verdict).length;
+    const el = document.getElementById('count-' + amb);
+    if (el) el.textContent = `${done}/${list.length}`;
+  });
+}
+
+function switchAmbito(ambito) {
+  currentAmbito = ambito;
+  document.querySelectorAll('.ambito-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.id === 'tab-' + ambito);
+  });
+  populateCategoryFilter();
+  document.getElementById('status-filter').value = 'all';
+  document.getElementById('cat-filter').value = 'all';
+  updateFilteredList();
+  goToPending();
+}
+
+function populateCategoryFilter() {
+  const catSelect = document.getElementById('cat-filter');
+  catSelect.innerHTML = '<option value="all">All categories</option>';
+  const list = getItems(currentAmbito);
+  const cats = new Map();
+  list.forEach(it => {
+    if (it.category && !cats.has(it.category)) {
+      cats.set(it.category, it.category_label || it.category);
+    }
+  });
+  cats.forEach((label, cat) => {
+    const opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = label;
+    catSelect.appendChild(opt);
+  });
+}
+
+function onFilterChange() {
+  updateFilteredList();
+  currentIndex = 0;
+  renderCurrentItem();
+}
+
+function updateFilteredList() {
+  const list = getItems(currentAmbito);
+  const statusF = document.getElementById('status-filter').value;
+  const catF = document.getElementById('cat-filter').value;
+
+  filteredIndices = [];
+  list.forEach((it, idx) => {
+    const hasAns = !!(annotations[it.id] && annotations[it.id].verdict);
+    if (statusF === 'pending' && hasAns) return;
+    if (statusF === 'answered' && !hasAns) return;
+    if (catF !== 'all' && it.category !== catF) return;
+    filteredIndices.push(idx);
+  });
+
+  document.getElementById('jump-total').textContent = `/ ${filteredIndices.length}`;
+  updateProgressToolbar();
+}
+
+function updateProgressToolbar() {
+  const list = getItems(currentAmbito);
+  const total = list.length;
+  const done = list.filter(it => annotations[it.id] && annotations[it.id].verdict).length;
+  const pct = total ? (done / total * 100).toFixed(1) : 0;
+
+  document.getElementById('prog-fill').style.width = pct + '%';
+  document.getElementById('prog-summary').textContent = `${done} / ${total} (${pct}%)`;
+}
+
+// ==========================================
+// Rendering and Navigation
+// ==========================================
+function renderCurrentItem() {
+  updateProgressToolbar();
+  updateAmbitoCounts();
+
+  if (filteredIndices.length === 0) {
+    document.getElementById('context-panel').innerHTML = `
+      <div style="padding:40px;text-align:center;color:var(--muted);">
+        <h3>No items match the selected filter</h3>
+        <p style="margin-top:6px;font-size:13px;">Try changing the status or category filter.</p>
+      </div>`;
+    document.getElementById('vote-panel').style.display = 'none';
+    document.getElementById('jump-input').value = 0;
+    return;
+  }
+
+  document.getElementById('vote-panel').style.display = 'block';
+  if (currentIndex < 0) currentIndex = 0;
+  if (currentIndex >= filteredIndices.length) currentIndex = filteredIndices.length - 1;
+
+  document.getElementById('jump-input').value = currentIndex + 1;
+
+  const rawIdx = filteredIndices[currentIndex];
+  const it = getItems(currentAmbito)[rawIdx];
+  if (!it) return;
+
+  // Metadata
+  document.getElementById('firm-ticker').textContent = it.ticker || '—';
+  document.getElementById('firm-name').textContent = it.company || 'Company not specified';
+  document.getElementById('doc-meta').textContent = `${it.form || ''} ${it.accession_number ? '· ' + it.accession_number : ''}`;
+
+  // Paragraph with highlighted sentences
+  const paraBox = document.getElementById('para-content');
+  const evSet = new Set(it.highlight_sentences || []);
+  const sentences = it.sentences || [];
+
+  paraBox.innerHTML = sentences.map(s => {
+    const isHi = evSet.has(s.idx);
+    return `<div class="sentence ${isHi ? 'highlighted' : ''}">
+      <span class="s-idx">[${s.idx}]</span>${escapeHtml(s.text)}
+    </div>`;
+  }).join('');
+
+  // Scroll to first highlighted sentence if possible
+  const firstHi = paraBox.querySelector('.sentence.highlighted');
+  if (firstHi) {
+    setTimeout(() => { firstHi.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 50);
+  }
+
+  // Claim & Question
+  const catBadge = document.getElementById('claim-cat');
+  catBadge.className = `cat-badge ${currentAmbito}`;
+  catBadge.textContent = it.category_label || it.category || currentAmbito;
+
+  document.getElementById('claim-title').textContent = it.title || 'Verification';
+  document.getElementById('claim-question').textContent = it.question;
+  document.getElementById('model-claim-text').textContent = it.model_claim || String(it.model_value);
+
+  // Context Hint
+  const hintBox = document.getElementById('hint-box');
+  if (it.context_hint) {
+    document.getElementById('hint-text').textContent = it.context_hint;
+    hintBox.style.display = 'flex';
+  } else {
+    hintBox.style.display = 'none';
+  }
+
+  // Current Answer
+  const currentAns = annotations[it.id] ? annotations[it.id].verdict : null;
+  const statusEl = document.getElementById('claim-status');
+  if (currentAns) {
+    statusEl.className = `status-badge ans-${currentAns}`;
+    statusEl.textContent = currentAns === 'Y' ? 'Answered: Yes (Y)' : currentAns === 'N' ? 'Answered: No (N)' : 'Answered: Uncertain (U)';
+  } else {
+    statusEl.className = 'status-badge pending';
+    statusEl.textContent = 'Pending';
+  }
+
+  // Active Buttons
+  document.getElementById('btn-vote-y').classList.toggle('active', currentAns === 'Y');
+  document.getElementById('btn-vote-n').classList.toggle('active', currentAns === 'N');
+  document.getElementById('btn-vote-u').classList.toggle('active', currentAns === 'U');
+
+  // Notes
+  document.getElementById('item-note').value = (annotations[it.id] && annotations[it.id].note) || '';
+}
+
+function vote(verdict) {
+  if (filteredIndices.length === 0) return;
+  const rawIdx = filteredIndices[currentIndex];
+  const it = getItems(currentAmbito)[rawIdx];
+  if (!it) return;
+
+  const existing = annotations[it.id] || {};
+  annotations[it.id] = {
+    ...existing,
+    verdict: verdict,
+    ts: new Date().toISOString()
+  };
+  saveAnnotations();
+
+  // Auto-advance to next item
+  if (currentIndex < filteredIndices.length - 1) {
+    currentIndex++;
+    renderCurrentItem();
+  } else {
+    renderCurrentItem();
+  }
+}
+
+function saveNote(note) {
+  if (filteredIndices.length === 0) return;
+  const rawIdx = filteredIndices[currentIndex];
+  const it = getItems(currentAmbito)[rawIdx];
+  if (!it) return;
+
+  const existing = annotations[it.id] || {};
+  annotations[it.id] = {
+    ...existing,
+    note: note.trim(),
+    ts: new Date().toISOString()
+  };
+  saveAnnotations();
+}
+
+function prevItem() {
+  if (currentIndex > 0) {
+    currentIndex--;
+    renderCurrentItem();
+  }
+}
+
+function nextItem() {
+  if (currentIndex < filteredIndices.length - 1) {
+    currentIndex++;
+    renderCurrentItem();
+  }
+}
+
+function jumpToIndex(val) {
+  const num = parseInt(val, 10);
+  if (!isNaN(num) && num >= 1 && num <= filteredIndices.length) {
+    currentIndex = num - 1;
+    renderCurrentItem();
+  } else {
+    document.getElementById('jump-input').value = currentIndex + 1;
+  }
+}
+
+function goToPending() {
+  const idx = filteredIndices.findIndex(rawIdx => {
+    const it = getItems(currentAmbito)[rawIdx];
+    return !annotations[it.id] || !annotations[it.id].verdict;
+  });
+  currentIndex = idx >= 0 ? idx : 0;
+  renderCurrentItem();
+}
+
+// ==========================================
+// Keyboard Shortcuts
+// ==========================================
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+  if (e.key === 'y' || e.key === 'Y' || e.key === '1') {
+    e.preventDefault();
+    vote('Y');
+  } else if (e.key === 'n' || e.key === 'N' || e.key === '2') {
+    e.preventDefault();
+    vote('N');
+  } else if (e.key === 'u' || e.key === 'U' || e.key === '3') {
+    e.preventDefault();
+    vote('U');
+  } else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+    e.preventDefault();
+    prevItem();
+  } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+    e.preventDefault();
+    nextItem();
+  } else if (e.key === 'p' || e.key === 'P') {
+    e.preventDefault();
+    goToPending();
+  }
+});
+
+// ==========================================
+// Modals: Summary, Export, Import
+// ==========================================
+const dlg = document.getElementById('dlg');
+
+function openStats() {
+  if (!DATA) return;
+  let totalAnnotated = 0;
+  let statsByAmbito = { prefilter: { Y:0, N:0, U:0, total:0 }, frames: { Y:0, N:0, U:0, total:0 }, activities: { Y:0, N:0, U:0, total:0 } };
+  let statsByCat = {};
+
+  ['prefilter', 'frames', 'activities'].forEach(amb => {
+    const list = getItems(amb);
+    statsByAmbito[amb].total = list.length;
+    list.forEach(it => {
+      const a = annotations[it.id];
+      if (a && a.verdict) {
+        totalAnnotated++;
+        statsByAmbito[amb][a.verdict]++;
+        const cat = it.category_label || it.category;
+        statsByCat[cat] = statsByCat[cat] || { Y:0, N:0, U:0, total:0 };
+        statsByCat[cat][a.verdict]++;
+        statsByCat[cat].total++;
+      }
+    });
+  });
+
+  let html = `
+    <p style="font-size:14px;margin-bottom:12px;">Total verified: <b>${totalAnnotated}</b> atomic facts evaluated.</p>
+    <table class="stats-tbl">
+      <thead><tr><th>Scope</th><th>Yes (Y)</th><th>No (N)</th><th>Uncertain (U)</th><th>Progress</th></tr></thead>
+      <tbody>`;
+
+  ['prefilter', 'frames', 'activities'].forEach(amb => {
+    const s = statsByAmbito[amb];
+    const done = s.Y + s.N + s.U;
+    const pct = s.total ? (done / s.total * 100).toFixed(1) : 0;
+    html += `<tr>
+      <td><b>${amb}</b></td>
+      <td style="color:var(--yes)">${s.Y}</td>
+      <td style="color:var(--no)">${s.N}</td>
+      <td style="color:var(--unc)">${s.U}</td>
+      <td>${done}/${s.total} (${pct}%)</td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+
+  if (Object.keys(statsByCat).length > 0) {
+    html += `<h4 style="margin:16px 0 6px;">Breakdown by Category</h4><table class="stats-tbl">
+      <thead><tr><th>Category</th><th>Yes (Y)</th><th>No (N)</th><th>Uncertain</th><th>Total</th></tr></thead><tbody>`;
+    Object.entries(statsByCat).forEach(([cat, s]) => {
+      html += `<tr>
+        <td>${cat}</td>
+        <td style="color:var(--yes)">${s.Y}</td>
+        <td style="color:var(--no)">${s.N}</td>
+        <td style="color:var(--unc)">${s.U}</td>
+        <td>${s.total}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  document.getElementById('dlg-title').textContent = 'Atomic Validation Summary';
+  document.getElementById('dlg-body').innerHTML = html;
+  document.getElementById('dlg-primary-btn').style.display = 'none';
+  dlg.showModal();
+}
+
+function exportAnnotations() {
+  const payload = {
+    exported_at: new Date().toISOString(),
+    version: DATA ? DATA.version : 'v2_atomic',
+    seed: DATA ? DATA.seed : null,
+    total_annotations: Object.keys(annotations).length,
+    annotations: annotations
+  };
+  const jsonStr = JSON.stringify(payload, null, 2);
+
+  document.getElementById('dlg-title').textContent = 'Export Annotations';
+  document.getElementById('dlg-body').innerHTML = `
+    <p style="font-size:13px;color:var(--muted);margin-bottom:8px;">
+      Save this JSON export to <code>apps/validator/annotations/&lt;name&gt;.json</code>.
+    </p>
+    <textarea id="export-text">${escapeHtml(jsonStr)}</textarea>
+    <div style="display:flex;gap:8px;">
+      <button class="btn" onclick="navigator.clipboard.writeText(document.getElementById('export-text').value);alert('Copied to clipboard');">Copy to Clipboard</button>
+      <button class="btn btn-primary" onclick="downloadJSON('annotations_${Date.now()}.json', document.getElementById('export-text').value)">Download JSON</button>
+    </div>
+  `;
+  document.getElementById('dlg-primary-btn').style.display = 'none';
+  dlg.showModal();
+}
+
+function downloadJSON(filename, text) {
+  const blob = new Blob([text], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+function importAnnotations() {
+  document.getElementById('dlg-title').textContent = 'Import Annotations';
+  document.getElementById('dlg-body').innerHTML = `
+    <p style="font-size:13px;color:var(--muted);margin-bottom:8px;">
+      Paste an exported JSON below. Responses will be merged (most recent timestamp wins).
+    </p>
+    <textarea id="import-text" placeholder="Paste JSON here..."></textarea>
+  `;
+  const btn = document.getElementById('dlg-primary-btn');
+  btn.style.display = 'inline-flex';
+  btn.textContent = 'Import';
+  btn.onclick = () => {
+    try {
+      const parsed = JSON.parse(document.getElementById('import-text').value);
+      const incoming = parsed.annotations || parsed;
+      let count = 0;
+      Object.entries(incoming).forEach(([k, v]) => {
+        if (!annotations[k] || (v.ts || '') > (annotations[k].ts || '')) {
+          annotations[k] = v;
+          count++;
+        }
+      });
+      saveAnnotations();
+      dlg.close();
+      alert(`Successfully imported/updated ${count} annotations.`);
+      renderCurrentItem();
+    } catch (e) {
+      alert('Invalid JSON format: ' + e.message);
+    }
+  };
+  dlg.showModal();
+}
+
+function resetAll() {
+  if (confirm('Are you sure you want to CLEAR all annotations saved in this browser? This action cannot be undone.')) {
+    annotations = {};
+    saveAnnotations();
+    renderCurrentItem();
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>

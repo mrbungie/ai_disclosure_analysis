@@ -183,6 +183,42 @@ def _fetch_primary_html(f) -> str:
     return html
 
 
+def _html_is_truncated(html: str) -> bool:
+    """True when the document's last "<" never gets its ">" — the signature
+    of a transfer that stopped mid-tag.
+
+    Two 10-Q mirrors were saved this way (EBAY's 2024-08-01 and XRX's
+    2022-11-02, ending literally at `...<td colspan` and `...</span><`):
+    a complete, well-formed gzip file holding a partial document, so the
+    existing "file exists and is non-empty" idempotency check kept treating
+    them as downloaded and the segmenter kept parsing whatever prefix
+    arrived (409 and 766 markdown lines, against ~3,000 for a normal 10-Q).
+    Requiring a closing `</html>` instead was tried first and rejected: it
+    flags real, complete documents from filers whose generator never emits
+    one (LIN's 2022 DEF 14A supplements, EDGARMaster output ending in a
+    stray `<body>`). Across all 53,461 stored filings the unterminated-tag
+    test flags exactly the two truncated ones and nothing else."""
+    last_open = html.rfind("<")
+    return last_open != -1 and html.find(">", last_open) == -1
+
+
+_TAIL_KEEP = 4096  # enough to hold the final tag, whatever precedes it
+
+
+def _stored_html_is_truncated(path: Path) -> bool:
+    """`_html_is_truncated` for an already-saved gzip mirror, streamed so a
+    multi-megabyte filing never has to be held in memory in full just to
+    look at how it ends."""
+    try:
+        with gzip.open(path, "rt", encoding="utf-8", errors="ignore") as f:
+            tail = ""
+            while chunk := f.read(1 << 20):
+                tail = (tail + chunk)[-_TAIL_KEEP:]
+    except OSError:
+        return True  # unreadable/corrupt archive — re-fetch it like a truncated one
+    return _html_is_truncated(tail)
+
+
 def _fetch_one_company(row, form, start_date, end_date, allow_amendments, html_dir, existing_manifest_df):
     """Runs in a worker thread. Returns (firm_info, manifest_rows)."""
     ticker = row["ticker"]
@@ -259,11 +295,18 @@ def _fetch_one_company(row, form, start_date, end_date, allow_amendments, html_d
         # OUR OWN idempotency check, on top of edgartools' own cache: if we
         # already wrote this filing's gzip mirror, don't even ask edgartools
         # for it again.
-        if local_path.exists() and local_path.stat().st_size > 0:
+        if local_path.exists() and local_path.stat().st_size > 0 and not _stored_html_is_truncated(local_path):
             download_status = "completed"
         else:
             try:
                 html = _fetch_primary_html(f)
+                if _html_is_truncated(html):
+                    # Not written: a truncated mirror on disk is worse than
+                    # none, because every idempotency check downstream reads
+                    # it as a finished download. Left "failed" so a rerun
+                    # fetches it again.
+                    raise ValueError(
+                        f"truncated document from EDGAR ({len(html)} chars, ends mid-tag)")
                 with gzip.open(local_path, "wt", encoding="utf-8") as out:
                     out.write(html)
                 download_status = "completed"
@@ -384,11 +427,14 @@ def fetch_filings(universe_df, form, start_date, end_date, allow_amendments, htm
 
     def _fully_done(ticker):
         """True if every known-existing manifest row for this ticker is
-        already completed AND its gzip file is actually on disk — lets a
-        retry pass skip re-querying edgartools for the whole company's
-        filing list just to retry a handful of other companies' failures.
-        Without this, a rerun that only needs to retry 14/517 companies
-        still re-discovers all 517 from scratch every time."""
+        already completed AND its gzip file is actually on disk, whole —
+        lets a retry pass skip re-querying edgartools for the whole
+        company's filing list just to retry a handful of other companies'
+        failures. Without this, a rerun that only needs to retry 14/517
+        companies still re-discovers all 517 from scratch every time.
+        "Whole" (see `_stored_html_is_truncated`) and not merely non-empty:
+        a mid-tag-truncated mirror otherwise makes its company look fully
+        fetched forever, so the bad document is never re-requested."""
         if existing_manifest_df is None:
             return False
         rows = existing_manifest_df[
@@ -397,7 +443,8 @@ def fetch_filings(universe_df, form, start_date, end_date, allow_amendments, htm
         if rows.empty:
             return False
         return bool((rows["download_status"] == "completed").all()) and all(
-            Path(p).exists() and Path(p).stat().st_size > 0 for p in rows["local_path"]
+            Path(p).exists() and Path(p).stat().st_size > 0 and not _stored_html_is_truncated(Path(p))
+            for p in rows["local_path"]
         )
 
     skipped_tickers = set()

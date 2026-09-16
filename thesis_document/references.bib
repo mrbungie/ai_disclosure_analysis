@@ -1384,3 +1384,62 @@ author  = {Hassan, Tarek A. and Hollander, Stephan and van Lent, Laurence and Ta
   pages   = {460--465},
   doi     = {10.1511/2014.111.460}
 }
+
+% [NIVEL 4 - DATASET DE TERCEROS]
+% Fuente primaria de transcripts de earnings calls, publicada en Hugging Face
+% por un tercero. Prioridad 1 en la union de proveedores (bronze/call_transcripts.py).
+@misc{kurry2024transcripts,
+  author       = {Kurry},
+  title        = {{S\&P} 500 Earnings Call Transcripts},
+  year         = {2024},
+  howpublished = {Hugging Face Datasets},
+  note         = {huggingface.co/datasets/kurry/sp500\_earnings\_transcripts},
+  url          = {https://huggingface.co/datasets/kurry/sp500_earnings_transcripts}
+}
+
+% [NIVEL 4 - PROVEEDOR COMERCIAL]
+@misc{equibles,
+  author       = {{Equibles}},
+  title        = {Earnings Call Transcripts {API}},
+  howpublished = {equibles.com},
+  note         = {Commercial data provider; used to fill gaps in transcript coverage},
+  url          = {https://equibles.com}
+}
+
+% [NIVEL 4 - PROVEEDOR COMERCIAL]
+@misc{stockanalysis,
+  author       = {{StockAnalysis}},
+  title        = {Earnings Call Transcripts},
+  howpublished = {stockanalysis.com},
+  note         = {Used to fill residual gaps in transcript coverage},
+  url          = {https://stockanalysis.com}
+}
+
+% [MATERIAL PROPIO - REPRODUCIBILIDAD]
+% Codigo, prompts de extraccion y scripts que construyen cada tabla y figura.
+@misc{oviedo2026code,
+  author       = {Oviedo, Germ\'an},
+  title        = {{AI} Disclosure Analysis: Pipeline, Extraction Prompts and Analytics},
+  year         = {2026},
+  howpublished = {GitHub repository},
+  note         = {github.com/mrbungie/ai\_disclosure\_analysis},
+  url          = {https://github.com/mrbungie/ai_disclosure_analysis}
+}
+
+@misc{oviedo2026data,
+  author       = {Oviedo, Germ\'an},
+  title        = {{AI} Disclosure Analysis: Derived Datasets},
+  year         = {2026},
+  howpublished = {Hugging Face Datasets},
+  note         = {huggingface.co/datasets/mrbungie/ai-disclosure-analysis},
+  url          = {https://huggingface.co/datasets/mrbungie/ai-disclosure-analysis}
+}
+
+@misc{oviedo2026models,
+  author       = {Oviedo, Germ\'an},
+  title        = {{AI} Disclosure Analysis: Fitted Models},
+  year         = {2026},
+  howpublished = {Hugging Face Models},
+  note         = {huggingface.co/mrbungie/ai-disclosure-analysis},
+  url          = {https://huggingface.co/mrbungie/ai-disclosure-analysis}
+}

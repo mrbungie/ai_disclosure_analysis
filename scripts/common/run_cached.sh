@@ -28,6 +28,33 @@ if [[ $# -lt 3 ]]; then
 fi
 
 KEY="$1"; shift
+
+# ONLY / SKIP -- pick what a `make` run actually executes, without editing the
+# Makefile or waiting on stages the change cannot have touched. Both take a
+# comma-separated list of substrings matched against the cache key:
+#
+#   ONLY=call-beta,crash make analytics     only those stages run
+#   SKIP=stability,posture make analytics   everything else runs
+#
+# ONLY wins when both are set. A skipped stage leaves its cache hash alone, so
+# it re-runs normally on the next unfiltered build rather than being recorded
+# as up to date.
+_matches() {  # $1 = comma-separated list, $2 = key
+    local IFS=','
+    for token in $1; do
+        [[ -n "$token" && "$2" == *"$token"* ]] && return 0
+    done
+    return 1
+}
+if [[ -n "${ONLY:-}" ]]; then
+    if ! _matches "$ONLY" "$KEY"; then
+        echo "[skip ONLY]   $KEY -- not in ONLY=$ONLY"
+        exit 0
+    fi
+elif [[ -n "${SKIP:-}" ]] && _matches "$SKIP" "$KEY"; then
+    echo "[skip SKIP]   $KEY -- matched SKIP=$SKIP"
+    exit 0
+fi
 WATCHES=()
 while [[ "$1" != "--" ]]; do
     WATCHES+=("$1")

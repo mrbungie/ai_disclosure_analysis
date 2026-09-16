@@ -32,7 +32,7 @@ import call_regression as C  # noqa: E402
 
 OUTCOME = "beta_post_63"
 BASE = C.AI_VARS + ["beta_pre"] + C.BASE_CTRLS
-REPORTED = C.AI_VARS + C.WEIGHTS + ["beta_pre"] + C.BASE_CTRLS
+REPORTED = C.AI_VARS + C.REPORTED_WEIGHTS + ["beta_pre"] + C.BASE_CTRLS
 LEVERAGE = {"debt_to_equity": ["debt_to_equity"], "liabilities_to_assets": ["liabilities_to_assets"],
             "accounting": ["liabilities_to_assets"]}
 
@@ -63,7 +63,7 @@ def main() -> None:
     table.to_csv(out, index=False)
     pd.DataFrame(samples).to_csv(out.parent / "call_beta_regression_samples.csv", index=False)
     print(pd.DataFrame(samples).to_string(index=False))
-    print(table[(table.model == "baseline") & table.variable.isin(C.AI_VARS + C.WEIGHTS)][["variable", "beta_std", "p"]].round(4).to_string(index=False))
+    print(table[(table.model == "baseline") & table.variable.isin(C.AI_VARS + C.REPORTED_WEIGHTS)][["variable", "beta_std", "p"]].round(4).to_string(index=False))
 
 
 if __name__ == "__main__":

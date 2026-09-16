@@ -22,10 +22,11 @@ import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
+sys.path.insert(0, str(REPO_ROOT / "scripts" / "gold" / "posture"))
 import layers as L  # noqa: E402
+from posture_features import CLUSTER_FEATURES  # noqa: E402
 
-FEAT_COLS = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation", "temporal_posture",
-            "ai_positioning", "specificity", "disclosure_intensity"]
+FEAT_COLS = list(CLUSTER_FEATURES)
 
 
 def main() -> None:

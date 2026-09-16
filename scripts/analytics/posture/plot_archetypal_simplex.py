@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "common"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "gold" / "posture"))
-from posture_features import fit_aa  # noqa: E402
+from posture_features import CLUSTER_FEATURES, fit_aa  # noqa: E402
 import layers as L  # noqa: E402
 
 # 1. Load universe and define proper 4-digit SIC mapping
@@ -46,8 +46,9 @@ fu_name_map = fu.set_index("ticker")["company_name"].to_dict()
 
 # 2. Load posture data and fit AA(k=3)
 df = L.read_gold("firm", ("covariates", "posture_archetype_static"))
-FEATS = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
-         "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
+# fitted features come from the one place that defines them: intensity is a
+# covariate, not a posture, so it does not shape the vertices
+FEATS = list(CLUSTER_FEATURES)
 fit_pop = df[df["archetype"] != "No AI"].copy()
 X = fit_pop[FEATS].values
 X_std = (X - X.mean(axis=0)) / X.std(axis=0, ddof=0)

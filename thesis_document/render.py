@@ -10,10 +10,9 @@
 Render the thesis into a final, submission-ready .docx.
 
 Pipeline:
-  0. Refresh every deterministic data layer and analytics output the thesis
-     cites (`make layers analytics`) so the render can never bake in stale
-     numbers from a script someone forgot to re-run -- see
-     `refresh_analytics()`.
+  0. Optionally refresh the data layers the thesis cites, chosen with
+     `--refresh=analytics|gold|layers`. The default rebuilds nothing: a render
+     reads what is on disk -- see `refresh_analytics()`.
   1. Render thesis.qmd with Quarto (executing inline Python blocks for all figures).
   2. Post-process all data tables in docx: compact booktabs styling, tight cell
      margins, repeating headers, non-splitting rows, and calibrated typography.
@@ -55,11 +54,23 @@ QMD = ROOT / "thesis.qmd"
 COVER = ROOT / "cover.docx"
 COMPILED_DIR = ROOT / "compiled"
 COMPILED_PDF_DIR = ROOT / "compiled_pdf"
+SHORT_TABLE_ROWS = 9  # header + 8 body rows still fits a page with its caption
 AUTHOR_SLUG = "GermanOviedo"
 VENV_PYTHON = ROOT / ".venv" / "bin" / "python"
 if not VENV_PYTHON.exists():
     VENV_PYTHON = ROOT.parent / ".venv" / "bin" / "python"
 SOFFICE = shutil.which("soffice") or shutil.which("libreoffice")
+
+
+def iter_runs(paragraph):
+    """Every run of a paragraph, including those wrapped in a w:hyperlink.
+
+    python-docx's `paragraph.runs` walks only direct w:r children, so a link
+    run is invisible to it. With link-citations on every citation is a link,
+    which is exactly the text that then escapes per-run restyling.
+    """
+    from docx.text.run import Run
+    return [Run(node, paragraph) for node in paragraph._p.iter(qn("w:r"))]
 
 
 def is_numeric_content(text: str) -> bool:
@@ -242,6 +253,12 @@ def style_all_tables(document: Document) -> None:
             for c in range(num_cols)
         ]
 
+        # A short table that straddles a page break reads as two fragments, and
+        # the orphaned last row looks like an error rather than a layout. Keeping
+        # every row with the next one pushes the whole block to the next page
+        # instead. Only for tables short enough to fit on one page at all: on a
+        # long table, keepNext would chase it to the end of the document.
+        keep_together = len(table.rows) <= SHORT_TABLE_ROWS
         for r_idx, row in enumerate(table.rows):
             trPr = row._tr.get_or_add_trPr()
             trPr.append(parse_xml(r'<w:cantSplit xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>'))
@@ -255,9 +272,20 @@ def style_all_tables(document: Document) -> None:
                     tcPr.append(parse_xml(r'<w:tcBorders xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:bottom w:val="single" w:sz="8" w:space="0" w:color="475569"/></w:tcBorders>'))
 
                 for p in cell.paragraphs:
+                    if keep_together and r_idx < len(table.rows) - 1:
+                        p.paragraph_format.keep_with_next = True
                     p.paragraph_format.space_before = Pt(0.4)
                     p.paragraph_format.space_after = Pt(0.4)
                     p.paragraph_format.line_spacing = 1.0
+                    # The template's "Table Grid" style carries a 709-twip
+                    # first-line indent meant for body paragraphs. Inherited
+                    # by a cell, it eats 1.25 cm from the first line alone,
+                    # which in a narrow column leaves too little room for the
+                    # word that starts it and breaks it mid-syllable
+                    # ("Busin / ess purpose") while the lines below sit flush.
+                    p.paragraph_format.first_line_indent = 0
+                    p.paragraph_format.left_indent = 0
+                    p.paragraph_format.right_indent = 0
 
                     if r_idx == 0:
                         if is_numeric_col[c_idx] and c_idx > 0:
@@ -270,7 +298,11 @@ def style_all_tables(document: Document) -> None:
                         else:
                             p.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
-                    for run in p.runs:
+                    # `p.runs` only returns direct w:r children, so every run
+                    # nested inside a w:hyperlink -- which is what a citation
+                    # becomes once link-citations is on -- was skipped and kept the
+                    # body size inside a table set several points smaller.
+                    for run in iter_runs(p):
                         run.font.name = "Calibri"
                         run.font.size = font_size
                         if r_idx == 0:
@@ -329,6 +361,53 @@ def fix_prose_math_font_size(document: Document, half_points: int = 22) -> None:
         set_math_run_size(math_zone, half_points)
 
 
+HEADING_STYLE_NAME = "heading 1"
+_WORD_RE = re.compile(r"[A-Za-z][A-Za-z'\u2019]*")
+
+
+def small_caps_headings(document: Document) -> None:
+    """Draw every Heading 1 in small capitals with a full-size initial.
+
+    Two things have to be true at once for that look. The text must be
+    title-cased, because small capitals reduce a lowercase letter and leave a
+    real capital at full height -- the .qmd keeps headings in ordinary
+    sentence case, which is how a heading should read in the source, so the
+    casing is applied to the rendered document instead. And the runs must say
+    small caps outright: the style cannot be relied on, since cover.docx is
+    the master of the docxcompose merge and the merged file keeps ITS Heading
+    1 definition, which asks for full capitals.
+
+    Words already carrying a capital (AI, SIC, XBRL, 10-K) are left as
+    written. Title-casing never changes a string's length, so the result goes
+    back over the paragraph's runs character by character and any inline
+    formatting survives.
+    """
+    heading_ids = set()
+    for style in document.styles:
+        name = style.element.find(qn("w:name"))
+        if name is not None and name.get(qn("w:val")) == HEADING_STYLE_NAME:
+            heading_ids.add(style.style_id)
+
+    for paragraph in document.paragraphs:
+        p_pr = paragraph._p.find(qn("w:pPr"))
+        if p_pr is None:
+            continue
+        p_style = p_pr.find(qn("w:pStyle"))
+        if p_style is None or p_style.get(qn("w:val")) not in heading_ids:
+            continue
+
+        runs = paragraph.runs
+        cased = _WORD_RE.sub(
+            lambda m: m.group(0) if m.group(0) != m.group(0).lower() else m.group(0).capitalize(),
+            "".join(run.text for run in runs),
+        )
+        pos = 0
+        for run in runs:
+            run.text, pos = cased[pos : pos + len(run.text)], pos + len(run.text)
+            run.font.all_caps = False
+            run.font.small_caps = True
+
+
 def content_width_emu(document: Document) -> int:
     """Actual printable width of the page, in EMU (914400 per inch).
 
@@ -341,8 +420,264 @@ def content_width_emu(document: Document) -> int:
     properties (not a hardcoded constant) means this keeps working if the
     template's page size or margins ever change.
     """
-    section = document.sections[0]
-    return section.page_width - section.left_margin - section.right_margin - section.gutter
+    # A `::: {.landscape}` block makes Quarto split the document into sections,
+    # and a section that inherits its page setup reports None for these
+    # properties, so the first section is not always the one that knows how
+    # wide the page is. Take the first section that states a width, and read a
+    # missing gutter as zero.
+    for section in document.sections:
+        if section.page_width is None or section.left_margin is None or section.right_margin is None:
+            continue
+        return section.page_width - section.left_margin - section.right_margin - (section.gutter or 0)
+    raise ValueError("no section declares a page width and margins")
+
+
+def merge_duplicate_paragraph_properties(document: Document) -> int:
+    """Collapse the two `w:pPr` blocks Quarto emits on every captioned figure
+    and table into the single one the schema allows.
+
+    Quarto writes the caption paragraph as pandoc's centered figure caption
+    *plus* its own `ImageCaption` styling, and the two land as sibling
+    `w:pPr` elements:
+
+        <w:p><w:pPr><w:jc w:val="center"/></w:pPr>
+             <w:pPr><w:jc w:val="left"/><w:spacing w:before="200"/>
+                    <w:pStyle w:val="ImageCaption"/></w:pPr>
+
+    `w:p` may hold at most one `w:pPr`, and it must come first, so this is
+    invalid. Word tolerates it; LibreOffice -- which does the PDF export --
+    does not: it drops the `ImageCaption` style, the paragraph falls back to
+    a default that carries a 709-twip (1.25 cm) first-line indent, and the
+    caption's first line starts a centimetre in while the rest sits flush.
+    The same indent lands on the figure itself, pushing a full-width image
+    past the right margin so its last panel is cut off.
+
+    Later properties win (the second block is Quarto's own, more specific
+    styling) and `w:pStyle` is moved to the front, which the schema requires.
+    Returns how many paragraphs were repaired.
+    """
+    body = document.element.body
+    repaired = 0
+    for para in body.iter(qn("w:p")):
+        pPrs = [child for child in para if child.tag == qn("w:pPr")]
+        if len(pPrs) < 2:
+            continue
+        keeper = pPrs[0]
+        for extra in pPrs[1:]:
+            for prop in list(extra):
+                for existing in keeper.findall(prop.tag):
+                    keeper.remove(existing)
+                keeper.append(prop)
+            para.remove(extra)
+        style = keeper.find(qn("w:pStyle"))
+        if style is not None:
+            keeper.remove(style)
+            keeper.insert(0, style)
+        repaired += 1
+    return repaired
+
+
+def clear_figure_indentation(document: Document) -> None:
+    """Zero the indentation on figure and caption paragraphs.
+
+    Quarto puts embedded images in a `Compact`-styled paragraph, a style this
+    template never defines, so it resolves to a default that carries the same
+    709-twip first-line indent as `Table Grid`. On a figure scaled to the full
+    printable width that indent is enough to push the right edge off the page.
+    Images and their captions are never meant to be indented, so the reset is
+    unconditional rather than a subtraction of the inherited value.
+    """
+    body = document.element.body
+    caption_styles = {"ImageCaption", "TableCaption", "FigureNote"}
+    for para in body.iter(qn("w:p")):
+        pPr = para.find(qn("w:pPr"))
+        if pPr is None:
+            continue
+        style = pPr.find(qn("w:pStyle"))
+        styled_caption = style is not None and style.get(qn("w:val")) in caption_styles
+        if not styled_caption and next(para.iter(qn("w:drawing")), None) is None:
+            continue
+        for ind in pPr.findall(qn("w:ind")):
+            pPr.remove(ind)
+        pPr.append(parse_xml(
+            r'<w:ind xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            r'w:firstLine="0" w:left="0" w:right="0"/>'
+        ))
+
+
+def tighten_note_spacing(document: Document) -> None:
+    """Pull a FigureNote paragraph up against the block it annotates.
+
+    Two things push it away. Its own space above, which is zeroed here, and an
+    empty paragraph pandoc leaves between a table and whatever follows it: that
+    one contributes a whole blank line plus the body style's spacing, and is
+    what actually opened the gap under the tables. It is only removed when it
+    is genuinely empty -- no runs, no links, no bookmark and no section break,
+    since a paragraph carrying any of those is holding something.
+    """
+    body = document.element.body
+    carries = (qn("w:r"), qn("w:hyperlink"), qn("w:bookmarkStart"), qn("w:sectPr"))
+    for para in list(body.findall(qn("w:p"))):
+        pPr = para.find(qn("w:pPr"))
+        style = pPr.find(qn("w:pStyle")) if pPr is not None else None
+        if style is None or style.get(qn("w:val")) != "FigureNote":
+            continue
+        for existing in pPr.findall(qn("w:spacing")):
+            pPr.remove(existing)
+        pPr.append(parse_xml(
+            r'<w:spacing xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            r'w:before="0" w:after="120"/>'))
+        previous = para.getprevious()
+        if previous is None or previous.tag != qn("w:p"):
+            continue
+        if any(next(previous.iter(tag), None) is not None for tag in carries):
+            continue
+        body.remove(previous)
+
+
+def merge_figure_notes_into_captions(document: Document) -> None:
+    """Run a figure note on from its caption instead of breaking the line.
+
+    `unwrap_captioned_tables` only un-nests a wrapper whose cell holds another
+    table, which is the data-table case. A figure's wrapper holds an image and
+    a caption paragraph, so it survives, and the note that follows it is a
+    sibling of the WRAPPER, not of the caption. The caption has to be found
+    inside it. A note sitting after a real data table finds no ImageCaption
+    there and is left alone, under its table, which is where it belongs.
+
+    The caption is bold and the note is not, so the two cannot share a style;
+    what moves is the runs, and each keeps its own character formatting.
+    """
+    body = document.element.body
+    # Read the note colour off the style rather than hardcoding it, so the
+    # merged runs follow the template if it ever changes.
+    note_color = "595959"
+    for style_el in document.styles.element:
+        if style_el.tag == qn("w:style") and style_el.get(qn("w:styleId")) == "FigureNote":
+            style_rPr = style_el.find(qn("w:rPr"))
+            found = style_rPr.find(qn("w:color")) if style_rPr is not None else None
+            if found is not None and found.get(qn("w:val")):
+                note_color = found.get(qn("w:val"))
+    merged = 0
+    for para in list(body.findall(qn("w:p"))):
+        pPr = para.find(qn("w:pPr"))
+        style = pPr.find(qn("w:pStyle")) if pPr is not None else None
+        if style is None or style.get(qn("w:val")) != "FigureNote":
+            continue
+        previous = para.getprevious()
+        if previous is None:
+            continue
+        if previous.tag == qn("w:tbl"):
+            captions = [node for node in previous.iter(qn("w:p"))
+                        if (node.find(qn("w:pPr")) is not None
+                            and node.find(qn("w:pPr")).find(qn("w:pStyle")) is not None
+                            and node.find(qn("w:pPr")).find(qn("w:pStyle")).get(qn("w:val")) == "ImageCaption")]
+            caption = captions[-1] if captions else None
+        elif previous.tag == qn("w:p"):
+            prev_pPr = previous.find(qn("w:pPr"))
+            prev_style = prev_pPr.find(qn("w:pStyle")) if prev_pPr is not None else None
+            caption = previous if (prev_style is not None
+                                   and prev_style.get(qn("w:val")) == "ImageCaption") else None
+        else:
+            caption = None
+        if caption is None:
+            continue
+        caption.append(parse_xml(
+            r'<w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            r'<w:t xml:space="preserve"> </w:t></w:r>'))
+        # The note's look came from the FigureNote PARAGRAPH style, which it
+        # loses on arrival: inside a bold caption paragraph the note would
+        # inherit the bold. Carry the note's own formatting down onto each run
+        # so the caption stays bold and the note keeps its lighter colour.
+        for run in para.iter(qn("w:r")):
+            rPr = run.find(qn("w:rPr"))
+            if rPr is None:
+                rPr = parse_xml(r'<w:rPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>')
+                run.insert(0, rPr)
+            for tag in ("w:b", "w:bCs", "w:color"):
+                for existing in rPr.findall(qn(tag)):
+                    rPr.remove(existing)
+            rPr.append(parse_xml(
+                r'<w:b xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:val="0"/>'))
+            rPr.append(parse_xml(
+                r'<w:bCs xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:val="0"/>'))
+            rPr.append(parse_xml(
+                r'<w:color xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+                r'w:val="%s"/>' % note_color))
+        for node in [child for child in para if child.tag != qn("w:pPr")]:
+            caption.append(node)
+        body.remove(para)
+        merged += 1
+    print(f"      merged {merged} figure notes into their captions")
+
+
+def keep_captions_with_tables(document: Document) -> None:
+    """Glue every table caption to the table it introduces.
+
+    `unwrap_captioned_tables` removes the wrapper Quarto uses to hold the two
+    together, which is what stops LibreOffice corrupting a nested table at a
+    page break, but it also lets the caption be left behind at the foot of a
+    page while its table starts the next one. Setting keepNext on the caption
+    paragraph (and on any run of paragraphs directly above the table, since a
+    caption can wrap to two lines) pushes the whole block over instead.
+    """
+    body = document.element.body
+    for tbl in body.findall(qn("w:tbl")):
+        previous = tbl.getprevious()
+        while previous is not None and previous.tag == qn("w:p"):
+            pPr = previous.find(qn("w:pPr"))
+            if pPr is None:
+                pPr = parse_xml(r'<w:pPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>')
+                previous.insert(0, pPr)
+            for existing in pPr.findall(qn("w:keepNext")):
+                pPr.remove(existing)
+            pPr.insert(0, parse_xml(
+                r'<w:keepNext xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>'))
+            text = "".join(node.text or "" for node in previous.iter(qn("w:t")))
+            if text.strip():
+                break  # the caption itself; anything above it is ordinary prose
+            previous = previous.getprevious()
+
+
+def style_code_blocks(document: Document) -> None:
+    """Set the verbatim blocks in Appendix A in a smaller monospaced face.
+
+    Pandoc puts a fenced code block in the `SourceCode` paragraph style and
+    every run inside it in the `VerbatimChar` character style, neither of which
+    this template defines, so they inherit the body font at body size: the
+    prompt and the schema come out in the same Calibri as the prose around
+    them, which loses the alignment the schema comment column depends on and
+    reads as if it were prose. Applying the font run by run rather than by
+    redefining the styles keeps it working whichever of the two pandoc emits.
+    """
+    body = document.element.body
+    for para in body.iter(qn("w:p")):
+        pPr = para.find(qn("w:pPr"))
+        style = pPr.find(qn("w:pStyle")) if pPr is not None else None
+        in_block = style is not None and style.get(qn("w:val")) in {"SourceCode", "VerbatimChar"}
+        if not in_block:
+            continue
+        # Body text is justified, and a justified monospaced block stretches its
+        # spaces to reach the right margin, which is exactly what destroys the
+        # column the schema comments line up in. Force left alignment.
+        for existing in pPr.findall(qn("w:jc")):
+            pPr.remove(existing)
+        pPr.append(parse_xml(
+            r'<w:jc xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:val="left"/>'))
+        for run in para.iter(qn("w:r")):
+            rPr = run.find(qn("w:rPr"))
+            if rPr is None:
+                rPr = parse_xml(r'<w:rPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>')
+                run.insert(0, rPr)
+            for tag in ("w:rFonts", "w:sz", "w:szCs"):
+                for existing in rPr.findall(qn(tag)):
+                    rPr.remove(existing)
+            rPr.append(parse_xml(
+                r'<w:rFonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+                r'w:ascii="Consolas" w:hAnsi="Consolas" w:cs="Consolas"/>'))
+            # half-points: 16 = 8pt, against the 11pt body
+            rPr.append(parse_xml(r'<w:sz xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:val="16"/>'))
+            rPr.append(parse_xml(r'<w:szCs xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:val="16"/>'))
 
 
 def resize_oversized_images(document: Document, max_width_emu: int) -> None:
@@ -376,45 +711,60 @@ def resize_oversized_images(document: Document, max_width_emu: int) -> None:
 
 
 def fix_hyperlink_style(document: Document) -> None:
-    """Force the docx's `Hyperlink` character style to bold black, no
-    underline.
+    """Make a link read exactly like the text around it.
 
-    Pandoc's docx writer always emits its own `Hyperlink` style (blue,
-    single underline) into the output regardless of what `reference-doc`
-    defines for that style name -- editing template/reference.docx alone
-    does not change it, so it has to be patched here, post-render."""
-    try:
-        style = document.styles["Hyperlink"]
-    except KeyError:
-        return
-    style.font.bold = True
-    style.font.italic = False
-    style.font.underline = False
-    style.font.color.rgb = RGBColor(0, 0, 0)
+    Pandoc's docx writer always emits its own link style (blue, underlined)
+    whatever the reference-doc says, so it has to be patched post-render. This
+    used to force bold black, which was fine while the only links were the
+    handful of external URLs; with link-citations on, every citation and every
+    internal reference became bold, and being clickable is not emphasis.
+
+    Emptying the run properties instead leaves the link active while it
+    inherits font, size and colour from wherever it sits, including a table
+    cell set several points smaller than the body. The style is matched on its
+    canonical w:name rather than its id, because this template calls it
+    Hipervnculo and pandoc calls it Hyperlink.
+    """
+    for style in document.styles.element:
+        if style.tag != qn("w:style"):
+            continue
+        name = style.find(qn("w:name"))
+        if name is None or name.get(qn("w:val")) not in {"Hyperlink", "FollowedHyperlink"}:
+            continue
+        for rPr in style.findall(qn("w:rPr")):
+            style.remove(rPr)
 
 
-def refresh_analytics() -> None:
-    """Rebuild every deterministic data/gold/ and data/results/ output the
-    thesis cites (`make layers analytics`, see the repo Makefile), before
-    Quarto ever reads them.
+REFRESH_TARGETS = {
+    "none": (),
+    "analytics": ("analytics",),          # results/ only, from the gold already on disk
+    "gold": ("gold", "analytics"),        # gold/ and results/, from silver
+    "layers": ("layers", "analytics"),    # bronze and silver too -- minutes, rarely needed
+}
 
-    Without this, a render is only as fresh as whoever last remembered to
-    re-run the right scripts by hand -- exactly how `call_beta_*`,
-    `strategy_economic_profiles.json`, and `bootstrap_jaccard_results.
-    json` went stale for days after `activity_profiles.py`/
-    `build_strategy_dimensions.py` changed (2026-09-13). No LLM calls, no
-    API spend: `make layers` rebuilds the gold layer from silver/bronze
-    (which DID cost LLM calls upstream and are never touched here), and
-    `make analytics` rebuilds the results layer on top of it.
 
-    Does NOT rebuild silver/bronze from the raw corpus (minutes-long) or run
-    `b2-check` (multi-session B2 sync) -- run `make refresh-stale` by hand
-    first if the underlying corpus or the AI classify/activities runs
-    themselves changed, not just the gold/analytics layers built on top of
-    them.
+def refresh_analytics(targets: tuple[str, ...]) -> None:
+    """Rebuild the layers named by `--refresh` before Quarto reads them.
+
+    The default is to rebuild NOTHING. A render used to run `make layers
+    analytics` every time, and `layers` depends on `bronze`, which carries no
+    cache guard: every render therefore re-derived paragraphs and sentences
+    from the whole raw corpus -- around ten minutes -- whether or not anything
+    upstream had changed. Rendering is not the moment to discover that, and a
+    document is not made fresher by recomputing inputs nobody touched.
+
+    So the caller says what to refresh. `analytics` re-runs the results layer
+    over the gold already on disk, which is what changes when an analysis
+    script changes. `gold` adds the gold rebuild, for when a gold builder
+    changed. `layers` adds bronze and silver, for when the corpus itself did.
+    Nothing here makes LLM calls or spends API budget.
+
+    Stage-level selection still works underneath: SKIP and ONLY filter the
+    cached stages (scripts/common/run_cached.sh), so
+    `--refresh=analytics ONLY=call-beta` re-runs one stage.
     """
     repo_root = ROOT.parent
-    subprocess.run(["make", "layers", "analytics"], check=True, cwd=repo_root)
+    subprocess.run(["make", *targets], check=True, cwd=repo_root)
 
 
 def render_quarto_content(tmp_dir: Path) -> Path:
@@ -433,10 +783,18 @@ def render_quarto_content(tmp_dir: Path) -> Path:
         raise RuntimeError(f"Expected exactly one rendered docx in {tmp_dir}, found {candidates}")
     
     doc = Document(str(candidates[0]))
+    repaired = merge_duplicate_paragraph_properties(doc)
+    print(f"      merged duplicate paragraph properties on {repaired} paragraphs")
+    clear_figure_indentation(doc)
     remove_autogenerated_title_paragraph(doc)
     unwrap_captioned_tables(doc)
+    small_caps_headings(doc)
     style_all_tables(doc)
     fix_prose_math_font_size(doc)
+    merge_figure_notes_into_captions(doc)
+    tighten_note_spacing(doc)
+    keep_captions_with_tables(doc)
+    style_code_blocks(doc)
     resize_oversized_images(doc, content_width_emu(doc))
     doc.save(str(candidates[0]))
 
@@ -624,11 +982,18 @@ def main() -> None:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     final_path = COMPILED_DIR / f"{AUTHOR_SLUG}_FinalThesis_{timestamp}.docx"
 
-    if "--skip-analytics" in sys.argv:
-        print("[0/6] Skipping analytics refresh (--skip-analytics) -- numbers may be stale.")
+    refresh = "none"
+    for arg in sys.argv[1:]:
+        if arg.startswith("--refresh="):
+            refresh = arg.split("=", 1)[1]
+    if refresh not in REFRESH_TARGETS:
+        raise SystemExit(f"--refresh must be one of {', '.join(REFRESH_TARGETS)}")
+    if refresh == "none":
+        print("[0/6] Rendering the data as it stands (--refresh=none, the default).")
     else:
-        print("[0/6] Refreshing analytics outputs (make layers analytics)...")
-        refresh_analytics()
+        targets = REFRESH_TARGETS[refresh]
+        print(f"[0/6] Refreshing: make {' '.join(targets)}...")
+        refresh_analytics(targets)
 
     with tempfile.TemporaryDirectory(prefix="thesis_render_") as tmp:
         tmp_dir = Path(tmp)

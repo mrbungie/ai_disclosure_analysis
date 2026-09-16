@@ -1,0 +1,7 @@
+# Dependencies for Hugging Face Spaces deployment
+gradio>=6.0.0
+duckdb>=1.2.0
+pandas>=2.0.0
+pyarrow>=14.0.0
+polars>=1.0.0
+plotly>=6.0.0

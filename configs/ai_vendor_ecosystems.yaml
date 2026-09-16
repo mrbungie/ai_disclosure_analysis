@@ -1,0 +1,450 @@
+# AI vendor ecosystems: named providers, platforms and models
+#
+# Maps concrete commercial names -- companies, cloud platforms, accelerators,
+# model families and enterprise AI products -- to (family, ecosystem, type).
+# `ai_vendor_mentions.py` matches every term below with word-boundary regex
+# against AI-relevant paragraph text; `build_ai_vendors.py` turns the matches
+# into gold document-grain presence variables.
+#
+# The measure names WHO is mentioned, not WHERE the text says something is.
+# Country and demonym words ("china", "chinese", "europe", "american") are
+# deliberately absent: a geographic word is a market or regulatory reference,
+# not evidence that an ecosystem's technology is present in the disclosure.
+# Nothing here is matched on a country literal.
+#
+# This is a candidate base, not a claim that every name occurs in the corpus.
+# A term nobody mentions simply scores zero.
+#
+# Fields per family
+#   family     the provider or model family the terms name (one per company
+#              group; aliases and product names collapse into it)
+#   ecosystem  United States | China | Europe | Other
+#   country    the specific country, kept alongside the four-way ecosystem
+#   type       the family's primary role in the AI stack:
+#                model_developer      frontier labs and model families
+#                cloud_infrastructure hyperscale compute and platform services
+#                semiconductor        accelerators, fabs, IP cores
+#                enterprise_software  applied AI inside business software
+#              The first three form the AI technology stack; enterprise
+#              software is carried separately and never silently pooled with
+#              them.
+#   ticker     the issuer's own ticker when the family is itself an S&P 500
+#              filer, so a firm naming its own products can be flagged as a
+#              self-reference rather than counted as external ecosystem reach
+#
+# Ecosystem assignment: the headquarters of the entity that develops and
+# operates the technology. Two conventions are worth stating because they are
+# not mechanical. A wholly integrated subsidiary that ships under its parent's
+# brand takes the parent's ecosystem (Google DeepMind -> United States,
+# despite London operations). A listed company with its own operating
+# headquarters keeps that headquarters even under foreign majority ownership
+# (Arm -> Europe, despite SoftBank control).
+#
+# Product names are kept in their historical form, so that a 2023 paragraph
+# saying "Bard" and a 2025 paragraph saying "Gemini" both resolve to Google
+# without either denomination being erased.
+
+# Generic vocabulary that names no ecosystem. Never attributed, and also
+# excluded as context evidence for the ambiguous terms below.
+generic_exclusions:
+  - "artificial intelligence"
+  - "ai"
+  - "generative ai"
+  - "genai"
+  - "gen ai"
+  - "agentic ai"
+  - "edge ai"
+  - "large language model"
+  - "large language models"
+  - "llm"
+  - "llms"
+  - "foundation model"
+  - "foundation models"
+  - "transformer"
+  - "gpt"                   # architecture name and third-party product suffix
+  - "machine learning"
+  - "deep learning"
+  - "neural network"
+  - "computer vision"
+  - "nlp"
+  - "cloud"
+  - "hyperscalers"
+  - "gpu"
+  - "gpus"
+  - "tpu"
+  - "tpus"
+  - "graphics processing units"
+  - "open source"
+  - "open-source"
+  - "open weights"
+  - "third parties"
+  - "third-party providers"
+  - "technology providers"
+  - "technology partners"
+
+# Terms that are ordinary words, personal names or multi-vendor products.
+# Each is counted only when one of its context terms appears in the SAME
+# paragraph; otherwise the match is discarded.
+context_required:
+  copilot:            ["microsoft", "github", "azure", "microsoft 365", "m365", "dynamics 365", "windows"]
+  gemini:             ["google", "alphabet", "deepmind", "vertex", "bard", "workspace", "android"]
+  bard:               ["google", "alphabet"]
+  gemma:              ["google", "alphabet", "deepmind"]
+  titan:              ["amazon", "aws", "bedrock"]
+  nova:               ["amazon", "aws", "bedrock"]
+  granite:            ["ibm", "watson", "watsonx"]
+  watson:             ["ibm"]
+  ernie:              ["baidu"]
+  claude:             ["anthropic", "bedrock", "sonnet", "opus", "haiku"]
+  llama:              ["meta", "open-weight", "open weight", "open-source", "open source", "fine-tune", "fine-tuned"]
+  mistral:            ["mistral ai", "mixtral", "codestral", "pixtral", "le chat", "open-weight", "open weight", "model", "models"]
+  cohere:             ["command r", "command r+", "aya", "embed", "rerank", "model", "models"]
+  kimi:               ["moonshot", "model", "models"]
+  jamba:              ["ai21", "model", "models"]
+  einstein:           ["salesforce", "agentforce", "sales cloud", "service cloud"]
+  firefly:            ["adobe"]
+  foundry:            ["palantir", "azure", "gotham", "aip"]
+  aip:                ["palantir", "foundry"]
+  sensei:             ["adobe"]
+  joule:              ["sap"]
+  now assist:         ["servicenow"]
+  cortex:             ["snowflake"]
+  grok:               ["xai", "x.ai", "musk"]
+  arm:                ["arm holdings", "arm-based", "arm architecture", "arm processor", "arm cpu", "arm core", "arm ecosystem"]
+
+vendors:
+
+  # ---------------------------------------------------------------- United States
+  - family: OpenAI
+    ecosystem: United States
+    country: United States
+    type: model_developer
+    terms: ["openai", "open ai", "chatgpt", "chat gpt", "gpt-3", "gpt 3", "gpt-3.5", "gpt-4", "gpt 4",
+            "gpt-4o", "gpt-4.1", "gpt-5", "dall-e", "dall e", "sora", "whisper model", "sam altman"]
+
+  - family: Microsoft
+    ecosystem: United States
+    country: United States
+    type: cloud_infrastructure
+    ticker: MSFT
+    terms: ["microsoft", "azure", "azure openai", "azure ai", "azure machine learning", "microsoft copilot",
+            "github copilot", "copilot studio", "microsoft 365 copilot", "m365 copilot", "security copilot",
+            "copilot", "github", "openai service", "phi-3", "maia 100", "nuance", "dragon ambient"]
+
+  - family: Google
+    ecosystem: United States
+    country: United States
+    type: cloud_infrastructure
+    ticker: GOOGL
+    terms: ["google", "alphabet", "google cloud", "google cloud platform", "vertex ai", "vertex",
+            "google deepmind", "deepmind", "gemini", "google gemini", "bard", "gemma", "palm 2",
+            "tensorflow", "google workspace", "waymo", "tpu v5", "trillium"]
+
+  - family: Amazon
+    ecosystem: United States
+    country: United States
+    type: cloud_infrastructure
+    ticker: AMZN
+    terms: ["amazon", "amazon web services", "aws", "amazon bedrock", "bedrock", "sagemaker", "sage maker",
+            "amazon q", "aws trainium", "trainium", "aws inferentia", "inferentia", "titan", "nova",
+            "alexa", "anthropic partnership"]
+
+  - family: NVIDIA
+    ecosystem: United States
+    country: United States
+    type: semiconductor
+    ticker: NVDA
+    terms: ["nvidia", "nvidia ai", "nvidia nemo", "nemo", "nvidia nim", "nim microservices", "cuda", "dgx",
+            "tensorrt", "blackwell", "hopper", "h100", "h200", "gb200", "a100", "omniverse", "mellanox",
+            "bluefield", "grace hopper"]
+
+  - family: Anthropic
+    ecosystem: United States
+    country: United States
+    type: model_developer
+    terms: ["anthropic", "claude"]
+
+  - family: Meta
+    ecosystem: United States
+    country: United States
+    type: model_developer
+    ticker: META
+    terms: ["meta ai", "meta platforms", "llama", "llama 2", "llama 3", "llama 4", "pytorch", "fair research"]
+
+  - family: IBM
+    ecosystem: United States
+    country: United States
+    type: enterprise_software
+    ticker: IBM
+    terms: ["ibm", "international business machines", "watson", "watsonx", "watson x", "ibm granite",
+            "granite", "red hat"]
+
+  - family: xAI
+    ecosystem: United States
+    country: United States
+    type: model_developer
+    terms: ["xai", "x.ai", "grok"]
+
+  - family: Databricks
+    ecosystem: United States
+    country: United States
+    type: cloud_infrastructure
+    terms: ["databricks", "mosaicml", "mosaic ml", "dbrx", "mlflow"]
+
+  - family: AMD
+    ecosystem: United States
+    country: United States
+    type: semiconductor
+    ticker: AMD
+    terms: ["amd", "advanced micro devices", "instinct", "mi300", "mi355", "rocm", "epyc"]
+
+  - family: Intel
+    ecosystem: United States
+    country: United States
+    type: semiconductor
+    ticker: INTC
+    terms: ["intel", "gaudi", "xeon", "habana", "openvino"]
+
+  - family: Qualcomm
+    ecosystem: United States
+    country: United States
+    type: semiconductor
+    ticker: QCOM
+    terms: ["qualcomm", "snapdragon", "hexagon npu"]
+
+  - family: Broadcom
+    ecosystem: United States
+    country: United States
+    type: semiconductor
+    ticker: AVGO
+    terms: ["broadcom", "vmware", "tomahawk", "jericho"]
+
+  - family: Micron
+    ecosystem: United States
+    country: United States
+    type: semiconductor
+    ticker: MU
+    terms: ["micron", "hbm3e"]
+
+  - family: CoreWeave
+    ecosystem: United States
+    country: United States
+    type: cloud_infrastructure
+    terms: ["coreweave", "lambda labs", "crusoe energy"]
+
+  - family: Oracle
+    ecosystem: United States
+    country: United States
+    type: cloud_infrastructure
+    ticker: ORCL
+    terms: ["oracle", "oracle cloud infrastructure", "oci"]
+
+  - family: Salesforce
+    ecosystem: United States
+    country: United States
+    type: enterprise_software
+    ticker: CRM
+    terms: ["salesforce", "agentforce", "salesforce einstein", "einstein", "mulesoft", "slack ai"]
+
+  - family: ServiceNow
+    ecosystem: United States
+    country: United States
+    type: enterprise_software
+    ticker: NOW
+    terms: ["servicenow", "now assist"]
+
+  - family: Snowflake
+    ecosystem: United States
+    country: United States
+    type: enterprise_software
+    terms: ["snowflake", "snowflake cortex", "cortex"]
+
+  - family: Palantir
+    ecosystem: United States
+    country: United States
+    type: enterprise_software
+    ticker: PLTR
+    terms: ["palantir", "foundry", "aip", "gotham"]
+
+  - family: Adobe
+    ecosystem: United States
+    country: United States
+    type: enterprise_software
+    ticker: ADBE
+    terms: ["adobe", "adobe firefly", "firefly", "sensei"]
+
+  - family: Apple
+    ecosystem: United States
+    country: United States
+    type: cloud_infrastructure
+    ticker: AAPL
+    terms: ["apple intelligence", "siri", "core ml", "apple silicon"]
+
+  - family: AI chip challengers
+    ecosystem: United States
+    country: United States
+    type: semiconductor
+    terms: ["cerebras", "groq", "sambanova", "tenstorrent"]
+
+  - family: Synopsys
+    ecosystem: United States
+    country: United States
+    type: semiconductor
+    terms: ["synopsys", "cadence design systems", "ansys simai"]
+
+  - family: Server OEMs
+    ecosystem: United States
+    country: United States
+    type: cloud_infrastructure
+    terms: ["supermicro", "super micro", "dell technologies", "dell ai", "hpe ai", "cisco ai",
+            "hewlett packard enterprise"]
+
+  - family: Other US developers
+    ecosystem: United States
+    country: United States
+    type: model_developer
+    terms: ["hugging face", "c3.ai", "c3 ai", "perplexity ai", "runway ml", "midjourney", "kensho",
+            "workday ai", "workday adaptive", "figure ai", "physical intelligence"]
+
+  # ---------------------------------------------------------------------- China
+  - family: DeepSeek
+    ecosystem: China
+    country: China
+    type: model_developer
+    terms: ["deepseek", "deep seek", "deepseek-r1", "deepseek r1", "deepseek-v3", "deepseek v3"]
+
+  - family: Alibaba
+    ecosystem: China
+    country: China
+    type: model_developer
+    terms: ["alibaba", "alibaba cloud", "aliyun", "qwen", "qwq", "tongyi", "tongyi qianwen"]
+
+  - family: Baidu
+    ecosystem: China
+    country: China
+    type: model_developer
+    terms: ["baidu", "baidu ernie", "ernie", "ernie bot", "apollo autonomous"]
+
+  - family: Tencent
+    ecosystem: China
+    country: China
+    type: model_developer
+    terms: ["tencent", "tencent cloud", "hunyuan"]
+
+  - family: Huawei
+    ecosystem: China
+    country: China
+    type: semiconductor
+    terms: ["huawei", "huawei ascend", "ascend 910", "huawei pangu", "pangu", "kirin", "cann"]
+
+  - family: ByteDance
+    ecosystem: China
+    country: China
+    type: model_developer
+    terms: ["bytedance", "byte dance", "doubao", "seedance"]
+
+  - family: Other Chinese developers
+    ecosystem: China
+    country: China
+    type: model_developer
+    terms: ["moonshot ai", "moonshot", "kimi", "zhipu", "chatglm", "minimax", "01.ai", "yi-lightning",
+            "baichuan", "sensetime", "sensenova", "stepfun", "kuaishou", "kling", "iflytek", "smic",
+            "cambricon", "biren"]
+
+  # --------------------------------------------------------------------- Europe
+  - family: Mistral AI
+    ecosystem: Europe
+    country: France
+    type: model_developer
+    terms: ["mistral ai", "mistral", "mixtral", "ministral", "codestral", "pixtral", "le chat"]
+
+  - family: Aleph Alpha
+    ecosystem: Europe
+    country: Germany
+    type: model_developer
+    terms: ["aleph alpha", "aleph-alpha", "luminous model"]
+
+  - family: SAP
+    ecosystem: Europe
+    country: Germany
+    type: enterprise_software
+    terms: ["sap", "sap se", "sap joule", "joule", "sap business ai"]
+
+  - family: Siemens
+    ecosystem: Europe
+    country: Germany
+    type: enterprise_software
+    terms: ["siemens", "siemens industrial copilot", "mindsphere", "xcelerator"]
+
+  - family: Arm
+    ecosystem: Europe
+    country: United Kingdom
+    type: semiconductor
+    terms: ["arm holdings", "arm ltd", "arm-based", "arm architecture", "arm cpu", "arm processor",
+            "arm core", "arm ecosystem", "arm"]
+
+  - family: ASML
+    ecosystem: Europe
+    country: Netherlands
+    type: semiconductor
+    terms: ["asml", "euv lithography"]
+
+  - family: Other European developers
+    ecosystem: Europe
+    country: Europe
+    type: model_developer
+    terms: ["stability ai", "stable diffusion", "deepl", "deep l", "synthesia", "speechmatics",
+            "black forest labs", "flux.1", "elevenlabs", "wayve", "poolside", "silo ai",
+            "isomorphic labs", "nscale", "stmicroelectronics", "nxp semiconductors", "infineon",
+            "nokia ai", "ericsson ai", "celonis", "graphcore"]
+
+  # ---------------------------------------------------------------------- Other
+  - family: Cohere
+    ecosystem: Other
+    country: Canada
+    type: model_developer
+    terms: ["cohere", "cohere command", "command r", "command r+", "aya expanse"]
+
+  - family: AI21 Labs
+    ecosystem: Other
+    country: Israel
+    type: model_developer
+    terms: ["ai21", "ai21 labs", "jamba", "jurassic-2"]
+
+  - family: TSMC
+    ecosystem: Other
+    country: Taiwan
+    type: semiconductor
+    terms: ["tsmc", "taiwan semiconductor", "mediatek", "foxconn", "hon hai", "quanta computer", "wistron"]
+
+  - family: Samsung
+    ecosystem: Other
+    country: South Korea
+    type: semiconductor
+    terms: ["samsung", "samsung gauss", "sk hynix", "exynos"]
+
+  - family: Naver
+    ecosystem: Other
+    country: South Korea
+    type: model_developer
+    terms: ["naver", "hyperclova", "lg exaone", "exaone", "upstage solar"]
+
+  - family: Japanese developers
+    ecosystem: Other
+    country: Japan
+    type: model_developer
+    terms: ["tsuzumi", "sakana ai", "preferred networks", "rakuten ai", "fujitsu takane", "softbank ai",
+            "renesas", "sony ai"]
+
+  - family: Indian IT services
+    ecosystem: Other
+    country: India
+    type: enterprise_software
+    terms: ["infosys topaz", "tata consultancy", "tcs ignio", "wipro ai360", "hcltech ai", "krutrim"]
+
+  - family: Gulf developers
+    ecosystem: Other
+    country: United Arab Emirates
+    type: model_developer
+    terms: ["g42", "jais model", "falcon llm", "falcon-40b", "falcon 40b", "falcon-180b", "falcon 180b",
+            "technology innovation institute", "humain", "mgx"]

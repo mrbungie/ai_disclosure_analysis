@@ -1,5 +1,6 @@
 .venv/
 data/
+models/
 reports/
 __pycache__/
 *.pyc
@@ -15,5 +16,40 @@ scratch/
 .tmp*
 .make_cache/
 
-# ui-validator: la muestra se regenera; las anotaciones humanas sí se versionan
+# validator: sample is regenerated; human annotations are versioned
+apps/validator/data.json
 ui-validator/data.json
+
+# Agent guidelines and session configs
+AGENTS.md
+CLAUDE.md
+.antigravitycli/
+.antigravity*
+.claude/
+.claude*
+
+# Thesis build artifacts and reference PDFs
+thesis_document/compiled_pdf/
+thesis_document/figures/
+thesis_document/sources/
+thesis_document/sources_pdf/
+compiled_pdf/
+sources_pdf/
+*_files/
+thesis_document/*_files/
+thesis_document/compiled/
+
+# Deprecated templates, planning docs, and archives
+MIB_Final_Thesis_Template.docx
+thesis_document/template/MIB_Final_Thesis_Template.docx
+thesis_document/docs/chapter_viz_plan_and_sources.md
+thesis_document/docs/files.zip
+*.zip
+TODO.md
+thesis_document/TODO.md
+CITATION_AUDIT.md
+thesis_document/CITATION_AUDIT.md
+
+# Word lock files
+~$*
+**/~$*

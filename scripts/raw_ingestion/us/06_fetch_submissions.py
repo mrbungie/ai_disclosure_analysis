@@ -1,6 +1,8 @@
 """
 scripts/raw_ingestion/us/06_fetch_submissions.py — EDGAR submissions history
-(data.sec.gov/submissions) of every analysis-universe CIK.
+(data.sec.gov/submissions) of every firm-universe CIK and of the listing CIKs
+of configs/us/listing_ciks.csv (the listed issuer when the universe row
+carries its acquirer's CIK).
 
 One JSON per CIK in data/raw/sec_submissions/ (`CIK##########.json`, the
 `recent` block) plus the older pages it points to (`CIK##########-submissions-
@@ -21,6 +23,7 @@ import sys
 import time
 from pathlib import Path
 
+import pandas as pd
 import requests
 import yaml
 
@@ -52,7 +55,8 @@ def main() -> None:
     session = requests.Session()
     session.headers.update({"User-Agent": config["sec"]["user_agent"]})
 
-    ciks = L.read("bronze.firm_universe").get_column("cik").drop_nulls().unique().sort().to_list()
+    ciks = L.read("bronze.firm_universe").get_column("cik").drop_nulls().to_list()
+    ciks = sorted(set(ciks) | set(pd.read_csv(REPO_ROOT / "configs/us/listing_ciks.csv", dtype=str)["cik"]))
     fetched = 0
     for cik in ciks:
         name = f"CIK{int(cik):010d}.json"

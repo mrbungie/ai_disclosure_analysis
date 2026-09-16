@@ -69,7 +69,11 @@ def _process_one(row, target_items, form, clean_html_to_lines, general_segment, 
 
     try:
         lines = clean_html_to_lines(html_path)
-        all_segments = general_segment(lines, form=form, ticker=ticker)
+        # html_path as well as lines: a segmenter may need the source
+        # document's own structure (anchor ids, say) for content the
+        # markdown line list can't express — see section_segmenter's
+        # general_segment. Segmenters that don't accept it ignore it.
+        all_segments = general_segment(lines, form=form, ticker=ticker, html_path=html_path)
         sections = []
         extracted_details = {}
         n_found = 0

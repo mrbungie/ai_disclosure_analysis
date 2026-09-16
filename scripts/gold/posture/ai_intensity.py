@@ -39,7 +39,7 @@ import layers as L  # noqa: E402
 # dos rellenos de huecos (03/04, scripts/us/earnings_calls/) que sí cubren
 # 2026. Si un mismo document_id apareciera en más de una, gana la primera de
 # esta lista (prefijo de `source`).
-CALL_SOURCE_PRIORITY = ["huggingface:", "equibles:", "stockanalysis.com:"]
+CALL_SOURCE_PRIORITY = ["huggingface:", "equibles:", "stockanalysis.com:", "equibles_backfill:"]
 CALL_FORM_TYPE = "Earnings call transcript"
 FILING_FORMS = ("10-K", "10-Q", "DEF 14A", "8-K")
 
@@ -59,7 +59,23 @@ def _calls_manifest() -> pl.LazyFrame:
 
 
 COUNT_COLUMNS = ["n_frames", "n_promo", "n_quant", "n_spec", "n_risk", "n_gov", "n_hyp", "n_realized",
-                 "n_deployed", "n_revenue_outcome", "n_cost_outcome", "n_ai_investment", "n_ai_infrastructure"]
+                 "n_deployed", "n_revenue_outcome", "n_cost_outcome", "n_ai_investment", "n_ai_infrastructure",
+                 "n_open_source"]
+
+# Open-weight vocabulary, counted only on paragraphs that already carry an AI
+# frame: in filings "open source" on its own is usually a software-licence risk
+# factor, and the frame is what makes the mention about AI.
+#
+# Bounded on both sides, so a term cannot match inside a word. OSS is the one
+# case-sensitive term -- lowercased it matches "OSs", the plural of operating
+# system. `falcon` was in an earlier version of this list and is not a model
+# here: every occurrence read was CrowdStrike's Falcon platform, 118 paragraphs
+# of it.
+OPEN_SOURCE_PATTERN = (
+    r"(^|[^A-Za-z0-9])("
+    r"(?i:open[- ]source|open[- ]weights?|open[- ]models?|hugging ?face|"
+    r"llama|mistral|deepseek|qwen|kimi|zhipu|minimax|baichuan|glm|gemma|vllm|ollama)"
+    r"|OSS)([^A-Za-z0-9]|$)")
 
 
 def _any_concept_like(prefix: str) -> pl.Expr:
@@ -89,6 +105,22 @@ def _frame_counts() -> pd.DataFrame:
                  flag(pl.col("concepts").list.contains("infrastructure")).alias("n_ai_infrastructure"))
             .collect()
             .to_pandas())
+
+
+def _open_source_counts() -> pl.LazyFrame:
+    """Paragraphs per document that carry an AI frame AND name open-weight
+    tooling. One count per document, zero where the document has frames but
+    none of them mention it."""
+    framed = (L.scan("silver.ai_frames").filter(pl.col("has_frame"))
+              .select("text_hash").unique())
+    return (L.scan("bronze.paragraphs")
+            .filter(pl.col("is_scorable"))
+            .select("accession_number", "text_hash", "paragraph_text")
+            .join(framed, on="text_hash", how="inner")
+            .filter(pl.col("paragraph_text").str.contains(OPEN_SOURCE_PATTERN))
+            .unique(["accession_number", "text_hash"])
+            .group_by("accession_number")
+            .agg(pl.len().cast(pl.Int64).alias("n_open_source")))
 
 
 def _paragraph_counts() -> pl.LazyFrame:
@@ -132,6 +164,7 @@ def document_table() -> pd.DataFrame:
             .collect(engine="streaming").to_pandas())
     docs = docs.astype({"fecha": "datetime64[us]", "period_end": "datetime64[us]", "call_fy": "Int32"})
     docs = docs.merge(_frame_counts(), on="accession_number", how="left")
+    docs = docs.merge(_open_source_counts().collect().to_pandas(), on="accession_number", how="left")
     docs[COUNT_COLUMNS] = docs[COUNT_COLUMNS].fillna(0.0)
     docs["fecha"] = pd.to_datetime(docs["fecha"])
     docs["quarter"] = docs["fecha"].dt.to_period("Q")

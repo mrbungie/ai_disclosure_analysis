@@ -56,7 +56,6 @@ lexical:
   concepts:
     strong:
       - ai
-      - ml
       - llm
       - llms
       - agi
@@ -73,6 +72,18 @@ lexical:
       - foundation models
       - neural network
       - neural networks
+      - computer vision
+      # vocabulario 2025 que el corpus usa y esta lista no tenía: se medían
+      # 1.778 párrafos con "agentic" y el 17% no llegaba al clasificador,
+      # concentrados en earnings calls, donde el registro hablado se aleja de
+      # la prosa de filing contra la que están calibrados los anchors.
+      - agentic
+      - transformer model
+      - transformer architecture
+      - physical ai
+      - digital labor
+      - chatbot
+      - chatbots
     weak:
       - algorithm
       - predictive
@@ -81,11 +92,19 @@ lexical:
       - classifier
       - automation
       - automated decision
-      - computer vision
       - natural language processing
       - model
       - adas
       - rpa
+      - ml
+      # ambiguos por sí solos: "chatbot" aparece en texto procedimental de
+      # votación y en chistes de earnings call, "humanoid" y "frontier model"
+      # a veces describen el mercado y no una capacidad propia
+      - frontier model
+      - frontier models
+      - humanoid robot
+      - npu
+      - npus
 
   entities:
     usa:
@@ -98,6 +117,8 @@ lexical:
         - copilot
         - anthropic
         - meta ai
+        - adobe firefly
+        - adobe sensei
         - llama 2
         - llama 3
         - vertex ai

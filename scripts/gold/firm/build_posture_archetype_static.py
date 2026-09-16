@@ -71,7 +71,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "gold" / "posture"))
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "gold" / "document"))
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
 from posture_features import (  # noqa: E402  (pins BLAS threads before numpy/archetypes import)
-    CLUSTER_FEATURES, INTENSITY, MIN_FRAMES, POSTURE, SEED, bootstrap_stability, build_posture,
+    CLUSTER_FEATURES, INTENSITY, MIN_FRAMES, OUTPUT_FEATURES, POSTURE, SEED, bootstrap_stability, build_posture,
     fit_aa, load_frames, name_archetypes, shrink_to_prior,
 )
 
@@ -129,7 +129,7 @@ def main() -> None:
 
     aa, W = fit_aa(X, k)
     active = active.reset_index(drop=True)
-    for col in CLUSTER_FEATURES:
+    for col in OUTPUT_FEATURES:
         active[col] = shrunk[col].values
     active["cluster"] = W.argmax(axis=1)
     z_profile = pd.DataFrame(aa.archetypes_, columns=CLUSTER_FEATURES)
@@ -144,7 +144,7 @@ def main() -> None:
     print(display.to_string())
 
     no_ai = merged[~has_frames].copy()
-    no_ai[CLUSTER_FEATURES] = 0.0
+    no_ai[OUTPUT_FEATURES] = 0.0
     no_ai["cluster"], no_ai["archetype"], no_ai["archetype_stability"] = -1, "No AI", 1.0
     pooled = pd.concat([active, no_ai], ignore_index=True, sort=False)
 
@@ -158,7 +158,7 @@ def main() -> None:
     spine = universe[["ticker"]].assign(id=universe["ticker"]).merge(L.firm_delistings(), on="ticker", how="left")
     L.write_gold("spines", "firm", "firm", spine, builder=BUILDER,
                  extra={"grain": "firm (ticker with at least one scorable filing)"})
-    pooled_out = pooled[["ticker", "n_frames"] + CLUSTER_FEATURES + ["cluster", "archetype", "archetype_stability"]]
+    pooled_out = pooled[["ticker", "n_frames"] + OUTPUT_FEATURES + ["cluster", "archetype", "archetype_stability"]]
     L.write_gold("covariates", "firm", "posture_archetype_static", pooled_out.assign(id=pooled_out["ticker"]),
                  builder=BUILDER, inputs=[MODEL_PATH],
                  extra={"point_in_time": False, "use": "descriptive: one Archetypal Analysis fit over the whole panel"})

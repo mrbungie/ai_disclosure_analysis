@@ -46,7 +46,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
 import layers as L  # noqa: E402
 
-EARNINGS_CALLS_MANIFEST = L.INTERIM / "manifests" / "filing_manifest_earnings_calls.parquet"
+# every earnings-call source keeps its own manifest (Hugging Face, Equibles,
+# stockanalysis, the Equibles backfill): the ticker of a call can live in any of them
+EARNINGS_CALLS_MANIFESTS = sorted((L.INTERIM / "manifests").glob("filing_manifest_earnings_calls*.parquet"))
 DEFAULT_DIR = REPO_ROOT / "data" / "interim" / "ai_classify"
 FRAME_GLOB = "ai_frames__session=*.parquet"
 
@@ -437,8 +439,8 @@ def doc_firm() -> pl.LazyFrame:
     docs = pl.concat([
         L.scan("silver.filing_manifest").filter(us).select("accession_number", "ticker"),
         L.scan("silver.filing_manifest_10q").filter(us).select("accession_number", "ticker"),
-        pl.scan_parquet(EARNINGS_CALLS_MANIFEST).select(pl.col("document_id").alias("accession_number"),
-                                                        "ticker"),
+        *[pl.scan_parquet(m).select(pl.col("document_id").alias("accession_number"), "ticker")
+          for m in EARNINGS_CALLS_MANIFESTS],
     ])
     names = (L.scan("silver.firm_universe").filter(us).group_by("ticker")
              .agg(pl.col("company_name").drop_nulls().min()))

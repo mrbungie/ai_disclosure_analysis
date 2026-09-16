@@ -1,54 +1,55 @@
-"""Señal incremental: ¿el contenido semántico de la divulgación de IA aporta
-información más allá de los fundamentals y del volumen de IA?
+"""Señal incremental: ¿cuánto agrega cada capa de medición de la divulgación de
+IA a lo que ya explican los fundamentals, sobre outcomes medidos después?
 
-Es el análisis central de la tesis (RQ4). Para cada outcome Y se ajustan
-modelos anidados sobre el panel de TODAS las empresas-año con filings
-(spine firm_year unido con las familias gold de volumen de divulgación,
-financials, market y targets; modo extensivo: intensidades con cero cuando la
-empresa no habla de IA), ejercicios 2021-2025:
+Panel point in time: datasets/firm_quarter/firm_quarter. Cada fila es una
+empresa-trimestre usable desde `as_of_date` (día siguiente al cierre del
+trimestre): los predictores son covariates publicadas antes de `as_of_date`
+y los outcomes son targets medidos estrictamente después.
 
-    M0  Y = a[sector×año] + b·fundamentals + e
-    M1  M0 + θ·log(1 + frames de IA por 1.000 palabras)           (volumen)
-    M2  M1 + bloque semántico: log(1 + x por 1.000 palabras) para
-        realizado, despliegue, capacidad (inversión + infraestructura),
-        riesgo, gobernanza, promocional, especificidad              (contenido)
-    M3  M1 + dummies de archetype (covariates/firm_year/posture_archetype_static)
+Modelos anidados, la misma muestra (efectos fijos sector SIC2 x trimestre por
+demeaning, errores cluster por empresa):
 
-Lo que se reporta no son 80 coeficientes sino ΔR² = R²(M2) − R²(M1) y el R²
-parcial del bloque semántico, (R²M2 − R²M1)/(1 − R²M1), con intervalo
-bootstrap por empresa. Responde: ¿cuánto agregan las palabras una vez que se
-observan sus fundamentals, sector, año y volumen de divulgación de IA?
+    M0  Y = a[sector×trimestre] + b·fundamentals + e
+    M1  M0 + log(1 + frames de IA por 1.000 palabras)                  (menciones)
+    M2  M1 + postura: las siete tasas de postura de los frames y los
+        pesos de arquetipo w_voc, w_gov (w_def es el complemento)      (postura)
+    M3  M2 + actividades: log(1 + actividades por 1.000 palabras) de
+        seis familias                                                    (actividad)
+    M4  M3 + índice de decoupling W                                      (washing)
 
-Outcomes (cinco): beta, volatilidad idiosincrática (desv. est. de los residuos
-del modelo de mercado sobre los 252 días previos al filing, anualizada), P/S,
-R&D/ventas, crecimiento de ingresos t+1. La volatilidad total va como robustez.
+Texto: familia de canal `filings` (10-K, 10-Q, 8-K, DEF 14A) en ventana `ttm`
+(documentos de los últimos cuatro trimestres); arquetipos en su única familia
+`posture_ttm`; W = `filings_ttm_w` (covariates/firm_quarter/washing_score,
+estimado dentro de cada trimestre). Sin frames de IA en la ventana, las tasas
+de postura y los pesos quedan en cero (la ausencia la mide M1), igual que los
+pesos cuando la familia de postura (10-K, 8-K, DEF 14A) no tiene frames; sin
+actividades, cero. W sólo existe para empresas-trimestre con divulgación de
+IA: M4 se compara con M3 sobre esa submuestra.
 
-Inferencia sobre el bloque semántico, además del ΔR²: R² ajustado de cada
-modelo (siete regresores más nunca bajan el R² crudo), test conjunto de Wald
-con SE cluster por empresa (H0: los siete coeficientes son cero) y test de
-permutación del ΔR² permutando las siete features entre empresas DENTRO de
-cada celda sector×año. Descomposición: el mismo ΔR² con un bloque de seis familias de actividad
-divulgada (`activity_profiles.py`: despliegue a clientes, despliegue interno,
-IA propia, proveedor nombrado, infraestructura, resultado cuantificado, por
-1.000 palabras), solo y junto al semántico, para saber si la señal viene del
-estilo con que se documenta o de la actividad identificable.
-Robustez de composición: el bloque semántico como
-shares del total de frames (frames_k / frames de IA), encogidos hacia la media
-del corpus con el mismo prior empírico-Bayes que los segmentos, para separar
-"cómo se reparte" de "cuánto"; sin frames, los shares quedan en el prior. Fundamentals: log(market cap),
-margen bruto, margen operativo, rotación de activos (R&D, capex y deuda/equity
-quedan fuera por cobertura XBRL; R&D es outcome). Winsorización 1/99 de todo
-lo financiero.
+Fundamentals (covariates as of `as_of_date`): log(market cap) al cierre
+previo (covariates/firm_quarter/market), margen bruto, margen operativo y
+rotación de activos del último trimestre fiscal presentado
+(covariates/firm_quarter/financials; cada razón sólo cuando sus componentes
+son del mismo trimestre fiscal). Winsorización 1/99 de fundamentals y
+outcomes.
 
-Robustez, la misma para todos los outcomes: sólo 10-K en el canal de texto,
-excluyendo SIC 35/36/48/73 (IT y comunicaciones), efectos fijos de empresa en
-vez de sector×año (qué parte es transversal y qué parte within-firm).
+Outcomes (targets/firm_quarter) y su versión anual anterior:
+    beta                        beta_post_63       (beta de 252 días antes del 10-K)
+    volatilidad_idiosincratica  idio_vol_post_63   (idio vol de 252 días antes del 10-K)
+    price_to_sales              ps_ratio_post      (P/S antes del 10-K)
+    rd_sobre_ventas             next_rd_intensity  (R&D/ventas del ejercicio del 10-K)
+    crecimiento_ingresos_t1     next_revenue_yoy   (crecimiento del ejercicio siguiente)
+    volatilidad_total_63d       vol_post_63        (robustez; vol total de 60 días antes)
 
-Salida: `data/results/shock/incremental_signal.json`,
-`data/results/shock/incremental_signal_coefficients.csv` (coeficientes
-estandarizados del bloque M2, con IC95 y p, uno por outcome × feature) y
-una tabla por outcome en consola. El M2 ajustado por outcome también se
-persiste en `models/incremental_signal/<outcome>/model.pkl`.
+Inferencia: ΔR² de cada capa con intervalo bootstrap por empresa, R²
+ajustado, test de Wald conjunto de cada bloque (SE cluster por empresa).
+Robustez: efectos fijos de empresa en vez de sector×trimestre.
+
+Salida: data/results/shock/incremental_signal.json y
+data/results/shock/incremental_signal_coefficients.csv (coeficientes
+estandarizados de M3, postura y actividad, con IC95 y p). El M3 ajustado por
+outcome se persiste en models/incremental_signal/<outcome>/model.pkl (gold no
+lee ese directorio).
 """
 from __future__ import annotations
 
@@ -60,116 +61,71 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "gold" / "posture"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "common"))
-from ai_intensity import document_table, aggregate  # noqa: E402
 import layers as L  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-YEARS = (2021, 2022, 2023, 2024, 2025, 2026)
-OUTCOMES = {"beta": "beta", "volatilidad_idiosincratica": "idio_vol_252d", "price_to_sales": "ps_ratio",
-            "rd_sobre_ventas": "rd_intensity", "crecimiento_ingresos_t1": "next_revenue_yoy"}
-EXTRA_OUTCOMES = {"volatilidad_total_60d": "vol_pre_60d"}    # robustez, no cabecera
-# Sin R&D ni capex entre los fundamentals: su cobertura XBRL (45% y 87%) dejaría
-# el panel en un quinto; R&D es además uno de los outcomes.
+OUTCOMES = {"beta": "beta_post_63", "volatilidad_idiosincratica": "idio_vol_post_63", "price_to_sales": "ps_ratio_post",
+            "rd_sobre_ventas": "next_rd_intensity", "crecimiento_ingresos_t1": "next_revenue_yoy"}
+EXTRA_OUTCOMES = {"volatilidad_total_63d": "vol_post_63"}
 FUNDAMENTALS = ["log_market_cap", "gross_margin", "operating_margin", "asset_turnover"]
-SEMANTIC = {"realizado": "realized_per_1k", "despliegue": "deployed_per_1k", "capacidad": "capability_per_1k",
-            "riesgo": "risk_per_1k", "gobernanza": "gov_per_1k", "promocional": "promo_per_1k", "especificidad": "spec_per_1k"}
-# bloque de actividades divulgadas (`activity_profiles.py`): seis familias de
-# acción concreta, por 1.000 palabras de los filings del año, con ceros
-ACTIVITY = {"despliegue_a_clientes": "customer_facing_deployment_per_1k", "despliegue_interno": "internal_deployment_per_1k",
-            "ia_propia": "proprietary_ai_per_1k", "proveedor_nombrado": "third_party_named_provider_per_1k",
-            "infraestructura": "infrastructure_investment_per_1k", "resultado_cuantificado": "quantified_outcome_per_1k"}
-# columnas del panel por familia gold (docs/gold_pipeline.md)
-PANEL_FAMILIES = [
-    ("covariates", "disclosure_volume"),
-    ("covariates", "financials", ["gross_margin", "operating_margin", "debt_to_equity", "asset_turnover",
-                                  "capex_intensity", "rd_intensity", "sic2", "has_10k"]),
-    ("covariates", "market", ["market_cap", "beta", "ps_ratio", "idio_vol_252d", "vol_pre_60d"]),
-    ("targets", "financials", ["next_revenue_yoy"]),
-    ("covariates", "posture_archetype_static", ["archetype"]),
-    ("covariates", "activities", list(ACTIVITY.values())),
-    ("covariates", "washing_score", ["w"]),
+TEXT = "filings_ttm"
+VOLUME = f"{TEXT}_frames_per_1k"
+POSTURE_RATES = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
+                 "temporal_posture", "ai_positioning", "specificity"]
+POSTURE = [f"{TEXT}_{c}" for c in POSTURE_RATES] + ["posture_ttm_w_voc", "posture_ttm_w_gov"]
+ACTIVITY_FAMILIES = ["customer_facing_deployment", "internal_deployment", "proprietary_ai", "third_party_named_provider",
+                     "infrastructure_investment", "quantified_outcome"]
+ACTIVITY = [f"{TEXT}_{c}_per_1k" for c in ACTIVITY_FAMILIES]
+WASHING = f"{TEXT}_w"
+BLOCKS = {"M1": [VOLUME], "M2": POSTURE, "M3": ACTIVITY, "M4": [WASHING]}
+LAYER_NAMES = {"M1": "menciones", "M2": "postura", "M3": "actividad", "M4": "washing"}
+FAMILIES = [
+    ("covariates", "market", ["log_market_cap"]),
+    ("covariates", "financials", ["revenue", "revenue_quarter", "cogs", "cogs_quarter", "operating_income",
+                                  "operating_income_quarter", "assets", "assets_quarter"]),
+    ("covariates", "disclosure_volume", [VOLUME, f"{TEXT}_n_frames"]),
+    ("covariates", "posture_rates", [f"{TEXT}_{c}" for c in POSTURE_RATES]),
+    ("covariates", "posture_archetype", ["posture_ttm_w_voc", "posture_ttm_w_gov"]),
+    ("covariates", "activities", ACTIVITY),
+    ("covariates", "washing_score", [WASHING]),
+    ("targets", "market", ["beta_post_63", "idio_vol_post_63", "vol_post_63", "ps_ratio_post"]),
+    ("targets", "financials", ["next_revenue_yoy", "next_rd_intensity"]),
 ]
-IT_COMM_SIC2 = {"35", "36", "48", "73"}
 SEED = 42
 
 
 def winsor(s: pd.Series, lo=0.01, hi=0.99) -> pd.Series:
-    a, b = s.quantile(lo), s.quantile(hi)
-    return s.clip(a, b)
+    return s.clip(s.quantile(lo), s.quantile(hi))
 
 
 def load() -> pd.DataFrame:
-    m = L.read_dataset("firm_year", *PANEL_FAMILIES).rename(columns={"w": "washing_z"})
-    m = m[m["year"].isin(YEARS)].copy()
-    m["capability_per_1k"] = m["ai_investment_per_1k"] + m["ai_infrastructure_per_1k"]
-    m["archetype"] = m["archetype"].fillna("No AI")
-    m["log_market_cap"] = np.log(m["market_cap"])
-    for c in ["gross_margin", "operating_margin", "debt_to_equity", "asset_turnover", "capex_intensity", "rd_intensity",
-              "beta", "idio_vol_252d", "vol_pre_60d", "ps_ratio", "next_revenue_yoy"]:
+    m = L.read_dataset("firm_quarter", *FAMILIES, spine_columns=L.GOLD_SPINE_COLUMNS["firm_quarter"] + ["sic2"])
+    same = lambda a, b: m[f"{a}_quarter"] == m[f"{b}_quarter"]  # noqa: E731
+    revenue = m["revenue"].where(m["revenue"] > 0)
+    m["gross_margin"] = ((m["revenue"] - m["cogs"]) / revenue).where(same("revenue", "cogs"))
+    m["operating_margin"] = (m["operating_income"] / revenue).where(same("revenue", "operating_income"))
+    m["asset_turnover"] = (m["revenue"] / m["assets"].where(m["assets"] > 0)).where(same("revenue", "assets"))
+    for c in FUNDAMENTALS + list(OUTCOMES.values()) + list(EXTRA_OUTCOMES.values()):
         m[c] = winsor(m[c])
-    # shares semánticos encogidos (composición, independiente de la cantidad)
-    counts = {"realizado": "n_realized", "despliegue": "n_deployed", "capacidad": None, "riesgo": "n_risk",
-              "gobernanza": "n_gov", "promocional": "n_promo", "especificidad": "n_spec"}
-    m["n_capacidad"] = m["n_ai_investment"] + m["n_ai_infrastructure"]
-    for name, col in counts.items():
-        col = col or "n_capacidad"
-        raw = np.where(m["n_frames"] > 0, m[col] / m["n_frames"], np.nan)
-        s = pd.Series(raw, index=m.index)
-        mean, var = float(s.mean()), float(s.var(ddof=1))
-        strength = max(mean * (1 - mean) / var - 1, 1e-6) if 0 < mean < 1 and var > 0 else 1.0
-        alpha, beta_ = mean * strength, (1 - mean) * strength
-        m[f"share_{name}"] = (s.fillna(0) * m["n_frames"] + alpha) / (m["n_frames"] + alpha + beta_)
-    m["sector_year"] = m["sic2"].astype(str) + "_" + m["year"].astype(str)
-    m = m.fillna({c: 0.0 for c in ACTIVITY.values()})
-    # as-of, no ceros por defecto: un ejercicio sin 10-K propio (fiscal year en curso,
-    # ver washing_score.load_10k_years) no tiene actividad divulgada cero, sino que
-    # todavía no llegó el 10-K que la documentaría. Se usa el último 10-K disponible de
-    # la misma empresa hasta ese punto en vez de diluir el bloque de actividad hacia cero.
-    # `has_10k` viene de covariates/firm_year/financials (misma definición:
-    # silver.filing_manifest, form_type == "10-K").
-    m = m.sort_values(["ticker", "year"])
-    for c in ACTIVITY.values():
-        m[c] = m[c].where(m["has_10k"]).groupby(m["ticker"]).ffill().fillna(0.0)
-    m = m.drop(columns="has_10k")
-    # washing_z (washing_score.py): W = z(intensidad de divulgación de IA) -
-    # z(sustancia de la actividad de IA divulgada, ponderada por
-    # fundamentación). Sólo está definido para empresas-año con divulgación
-    # de IA (any_ai=1; 1,449 de 2,475): una empresa-año sin divulgación de
-    # IA no tiene una brecha divulgación-sustancia que preguntar. Se deja
-    # NaN para el resto, sin imputar — el bloque M4 usa sólo la submuestra
-    # con washing_z definido (ver `nested`).
-    m["washing_scored"] = m["washing_z"].notna()
-    # texto sólo 10-K, para la robustez
-    docs = document_table()
-    k = aggregate(docs[docs["form"] == "10-K"].assign(year=lambda d: d["fecha"].dt.year), ["ticker", "year"])
-    k["capability_per_1k"] = k["ai_investment_per_1k"] + k["ai_infrastructure_per_1k"]
-    cols = ["frames_per_1k"] + list(SEMANTIC.values())
-    m = m.merge(k[["ticker", "year"] + cols].rename(columns={c: f"{c}__10k" for c in cols}), on=["ticker", "year"], how="left")
+    no_frames = m[f"{TEXT}_n_frames"].fillna(0) == 0
+    m[VOLUME] = m[VOLUME].fillna(0.0)
+    for c in POSTURE:
+        m[c] = m[c].where(~no_frames, 0.0)
+    # the weights come from the posture channel family (10-K, 8-K, DEF 14A): null
+    # when only 10-Q frames exist in the window, read as no posture weight
+    m[["posture_ttm_w_voc", "posture_ttm_w_gov"]] = m[["posture_ttm_w_voc", "posture_ttm_w_gov"]].fillna(0.0)
+    m[ACTIVITY] = m[ACTIVITY].fillna(0.0)
+    m["sector_quarter"] = m["sic2"].astype(str) + "_" + m["quarter"].astype(str)
     return m
 
 
-def design(d: pd.DataFrame, y: str, block: str, fe: str, suffix: str = "") -> tuple[np.ndarray, np.ndarray, list[str]]:
-    fund = [c for c in FUNDAMENTALS if c != y]
-    X = d[fund].copy()
-    if block in ("M1", "M2", "M3", "M2A", "M2AB", "M4"):
-        X["volumen"] = np.log1p(d["frames_per_1k" if suffix == "__share" else f"frames_per_1k{suffix}"])
-    if block in ("M2", "M2AB", "M4"):
-        for name, col in SEMANTIC.items():
-            X[name] = d[f"share_{name}"] if suffix == "__share" else np.log1p(d[f"{col}{suffix}"])
-    if block in ("M2A", "M2AB", "M4"):
-        for name, col in ACTIVITY.items():
-            X[name] = np.log1p(d[col])
-    if block == "M3":
-        for s in sorted(d["archetype"].unique()):
-            if s != "No AI":
-                X[f"arch_{s}"] = (d["archetype"] == s).astype(float)
-    if block == "M4":
-        # Y = Volume + Specificity/content(M2) + Behavior(activities) + Washing.
-        X["washing"] = d["washing_z"]
-    # efectos fijos por demeaning dentro del grupo
+def design(d: pd.DataFrame, y: str, block: str, fe: str) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """Fundamentals plus every layer up to `block`, demeaned within `fe`."""
+    X = d[FUNDAMENTALS].copy()
+    for b in ("M1", "M2", "M3", "M4")[: int(block[1])]:
+        for c in BLOCKS[b]:
+            X[c] = np.log1p(d[c]) if b in ("M1", "M3") else d[c]
     g = d[fe].to_numpy()
     Xd = X - X.groupby(g).transform("mean")
     yd = d[y] - d[y].groupby(g).transform("mean")
@@ -178,251 +134,124 @@ def design(d: pd.DataFrame, y: str, block: str, fe: str, suffix: str = "") -> tu
 
 def r2(X: np.ndarray, y: np.ndarray) -> float:
     beta, *_ = np.linalg.lstsq(X, y, rcond=None)
-    resid = y - X @ beta
     tss = float(np.sum(y ** 2))
-    return 1 - float(np.sum(resid ** 2)) / tss if tss > 0 else np.nan
+    return 1 - float(np.sum((y - X @ beta) ** 2)) / tss if tss > 0 else np.nan
 
 
 def adj_r2(X: np.ndarray, y: np.ndarray, n_groups: int) -> float:
     """R² ajustado contando los efectos fijos absorbidos (n_groups) como parámetros."""
     n, k = X.shape
-    r = r2(X, y)
     dof = n - k - n_groups
-    return 1 - (1 - r) * (n - 1) / dof if dof > 0 else np.nan
+    return 1 - (1 - r2(X, y)) * (n - 1) / dof if dof > 0 else np.nan
 
 
-def wald_semantic(d: pd.DataFrame, y: str, fe: str, suffix: str) -> dict:
-    """H0: los siete coeficientes del bloque semántico son cero, en M2, con
-    covarianza cluster por empresa."""
+def wald(d: pd.DataFrame, y: str, block: str, fe: str) -> dict:
+    """H0: los coeficientes de la capa `block` son cero en el modelo `block`."""
     import statsmodels.api as sm
-    X, yy, names = design(d, y, "M2", fe, suffix)
+    X, yy, names = design(d, y, block, fe)
     res = sm.OLS(yy, X).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(d["ticker"])[0]})
-    idx = [i for i, n in enumerate(names) if n in SEMANTIC]
+    idx = [i for i, n in enumerate(names) if n in BLOCKS[block]]
     R = np.zeros((len(idx), len(names)))
-    for r_, i in enumerate(idx): R[r_, i] = 1.0
+    for row, i in enumerate(idx):
+        R[row, i] = 1.0
     ft = res.wald_test(R, use_f=True, scalar=True)
     return {"F": float(ft.statistic), "p": float(ft.pvalue), "df": len(idx)}
 
 
-def wald_block(d: pd.DataFrame, y: str, block: str, names_in_block: list[str], fe: str = "sector_year") -> dict:
-    import statsmodels.api as sm
-    X, yy, names = design(d, y, block, fe, "")
-    res = sm.OLS(yy, X).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(d["ticker"])[0]})
-    idx = [i for i, n in enumerate(names) if n in names_in_block]
-    R = np.zeros((len(idx), len(names)))
-    for r_, i in enumerate(idx): R[r_, i] = 1.0
-    ft = res.wald_test(R, use_f=True, scalar=True)
-    return {"F": float(ft.statistic), "p": float(ft.pvalue), "df": len(idx)}
+def sample(m: pd.DataFrame, y: str, fe: str, washing: bool = False) -> pd.DataFrame:
+    need = [y, fe, "ticker"] + FUNDAMENTALS + ([WASHING] if washing else [])
+    d = m.dropna(subset=need)
+    return d[d.groupby(fe)[y].transform("size") >= 2].reset_index(drop=True)
 
 
-def decomposition(d: pd.DataFrame, y: str, fe: str = "sector_year") -> dict:
-    """¿La señal viene del estilo semántico o de la actividad identificable?
-    Sobre la misma muestra de la especificación principal: M1 + semántica,
-    M1 + actividades, M1 + ambas; cada bloque también condicional al otro."""
-    out = {}
-    r = {b: r2(*design(d, y, b, fe, "")[:2]) for b in ("M1", "M2", "M2A", "M2AB")}
-    out["delta_r2_semantica"] = r["M2"] - r["M1"]
-    out["delta_r2_actividades"] = r["M2A"] - r["M1"]
-    out["delta_r2_ambos"] = r["M2AB"] - r["M1"]
-    out["delta_r2_actividades_dado_semantica"] = r["M2AB"] - r["M2"]
-    out["delta_r2_semantica_dado_actividades"] = r["M2AB"] - r["M2A"]
-    out["wald_actividades_solo"] = wald_block(d, y, "M2A", list(ACTIVITY), fe)
-    out["wald_actividades_dado_semantica"] = wald_block(d, y, "M2AB", list(ACTIVITY), fe)
-    out["wald_semantica_dado_actividades"] = wald_block(d, y, "M2AB", list(SEMANTIC), fe)
-    return out
-
-
-def permutation_semantic(d: pd.DataFrame, y: str, fe: str, suffix: str, observed: float, reps: int, seed: int = SEED) -> dict:
-    """ΔR² nulo permutando las siete features semánticas entre empresas-año
-    DENTRO de cada celda sector×año (o empresa, si fe=ticker): preserva la
-    estructura de sector, año y volumen; destruye sólo la asociación entre
-    contenido y outcome."""
-    rng = np.random.default_rng(seed)
-    cols = [f"share_{n}" for n in SEMANTIC] if suffix == "__share" else [f"{c}{suffix}" for c in SEMANTIC.values()]
-    groups = d.groupby(fe).indices
-    null = []
-    for _ in range(reps):
-        s = d.copy()
-        block = s[cols].to_numpy().copy()
-        for idx in groups.values():
-            if len(idx) > 1:
-                block[idx] = block[rng.permutation(idx)]
-        s[cols] = block
-        X1, yy, _ = design(s, y, "M1", fe, suffix); X2, _, _ = design(s, y, "M2", fe, suffix)
-        null.append(r2(X2, yy) - r2(X1, yy))
-    null = np.array(null)
-    return {"p": float((np.sum(null >= observed) + 1) / (len(null) + 1)), "null_mean": float(null.mean()),
-            "null_p95": float(np.percentile(null, 95)), "reps": int(len(null))}
-
-
-def nested(d: pd.DataFrame, y: str, fe: str = "sector_year", suffix: str = "") -> dict:
-    if suffix == "__share":
-        need = [y] + [c for c in FUNDAMENTALS if c != y] + ["frames_per_1k"] + [f"share_{n}" for n in SEMANTIC] + [fe, "ticker", "archetype"] + list(ACTIVITY.values())
-    else:
-        need = [y] + [c for c in FUNDAMENTALS if c != y] + [f"frames_per_1k{suffix}"] + [f"{c}{suffix}" for c in SEMANTIC.values()] + [fe, "ticker", "archetype"] + list(ACTIVITY.values())
-    d = d.dropna(subset=need)
-    d = d[d.groupby(fe)[y].transform("size") >= 2]
-    out = {"n": int(len(d)), "n_firms": int(d["ticker"].nunique())}
+def nested(m: pd.DataFrame, y: str, fe: str = "sector_quarter") -> tuple[dict, pd.DataFrame]:
+    d = sample(m, y, fe)
+    out = {"n": int(len(d)), "n_firms": int(d["ticker"].nunique()), "n_quarters": int(d["quarter"].nunique())}
     n_groups = int(d[fe].nunique())
-    for block in ("M0", "M1", "M2", "M3", "M2AB"):
-        X, yy, _ = design(d, y, block, fe, suffix)
-        out[f"r2_{block}"] = r2(X, yy)
-        out[f"adj_r2_{block}"] = adj_r2(X, yy, n_groups)
-    out["delta_adj_r2_semantica"] = out["adj_r2_M2"] - out["adj_r2_M1"]
-    out["delta_r2_semantica"] = out["r2_M2"] - out["r2_M1"]
-    out["partial_r2_semantica"] = out["delta_r2_semantica"] / (1 - out["r2_M1"]) if out["r2_M1"] < 1 else np.nan
-    out["delta_r2_volumen"] = out["r2_M1"] - out["r2_M0"]
-    out["delta_r2_arquetipos"] = out["r2_M3"] - out["r2_M1"]
-
-    # Washing (M4) sólo está definido en la submuestra con divulgación de IA
-    # (washing_z no-NaN): una empresa-año sin divulgación de IA no tiene una
-    # brecha divulgación-sustancia que preguntar. Se compara M4 contra M2AB
-    # en ESA submuestra (no en el panel extensivo de M0-M3), para que la
-    # comparación sea manzanas con manzanas.
-    dw = d.dropna(subset=["washing_z"])
-    dw = dw[dw.groupby(fe)[y].transform("size") >= 2]
-    out["n_washing"] = int(len(dw))
-    out["n_washing_firms"] = int(dw["ticker"].nunique())
+    for block in ("M0", "M1", "M2", "M3"):
+        X, yy, _ = design(d, y, block, fe)
+        out[f"r2_{block}"], out[f"adj_r2_{block}"] = r2(X, yy), adj_r2(X, yy, n_groups)
+    for prev, block in (("M0", "M1"), ("M1", "M2"), ("M2", "M3")):
+        out[f"delta_r2_{LAYER_NAMES[block]}"] = out[f"r2_{block}"] - out[f"r2_{prev}"]
+        out[f"wald_{LAYER_NAMES[block]}"] = wald(d, y, block, fe)
+    dw = sample(m, y, fe, washing=True)
+    out["n_washing"], out["n_washing_firms"] = int(len(dw)), int(dw["ticker"].nunique())
     if len(dw) > 20:
-        X_2ab, yy_w, _ = design(dw, y, "M2AB", fe, suffix)
-        X_4, _, _ = design(dw, y, "M4", fe, suffix)
-        out["r2_M2AB_washing_sample"] = r2(X_2ab, yy_w)
-        out["r2_M4"] = r2(X_4, yy_w)
-        out["delta_r2_washing"] = out["r2_M4"] - out["r2_M2AB_washing_sample"]
-    else:
-        out["r2_M2AB_washing_sample"] = np.nan
-        out["r2_M4"] = np.nan
-        out["delta_r2_washing"] = np.nan
+        X3, yy, _ = design(dw, y, "M3", fe)
+        X4, _, _ = design(dw, y, "M4", fe)
+        out["r2_M3_washing_sample"], out["r2_M4"] = r2(X3, yy), r2(X4, yy)
+        out["delta_r2_washing"] = out["r2_M4"] - out["r2_M3_washing_sample"]
+        out["wald_washing"] = wald(dw, y, "M4", fe)
     return out, d
 
 
-def bootstrap(d: pd.DataFrame, y: str, fe: str, suffix: str, reps: int, seed: int = SEED) -> dict:
-    """Bootstrap por empresa (cluster) de ΔR² y R² parcial del bloque semántico."""
+def bootstrap(d: pd.DataFrame, y: str, fe: str, reps: int, seed: int = SEED) -> dict:
+    """Bootstrap por empresa (cluster) del ΔR² de menciones, postura y actividad."""
     rng = np.random.default_rng(seed)
-    firms = d["ticker"].unique(); groups = d.groupby("ticker").indices
-    deltas, partials = [], []
+    firms, groups = d["ticker"].unique(), d.groupby("ticker").indices
+    draws = {LAYER_NAMES[b]: [] for b in ("M1", "M2", "M3")}
     for _ in range(reps):
-        pick = rng.choice(firms, size=len(firms), replace=True)
-        idx = np.concatenate([groups[f] for f in pick])
-        s = d.iloc[idx].reset_index(drop=True)
-        try:
-            X1, yy, _ = design(s, y, "M1", fe, suffix); X2, _, _ = design(s, y, "M2", fe, suffix)
-            r1, r2_ = r2(X1, yy), r2(X2, yy)
-            deltas.append(r2_ - r1); partials.append((r2_ - r1) / (1 - r1))
-        except Exception:
-            continue
-    q = lambda v: [float(np.nanpercentile(v, 2.5)), float(np.nanpercentile(v, 97.5))]
-    return {"delta_r2_ci95": q(deltas), "partial_r2_ci95": q(partials), "reps": len(deltas)}
+        s = d.iloc[np.concatenate([groups[f] for f in rng.choice(firms, size=len(firms), replace=True)])]
+        s = s.reset_index(drop=True)
+        r = {b: r2(*design(s, y, b, fe)[:2]) for b in ("M0", "M1", "M2", "M3")}
+        for prev, b in (("M0", "M1"), ("M1", "M2"), ("M2", "M3")):
+            draws[LAYER_NAMES[b]].append(r[b] - r[prev])
+    return {f"delta_r2_{k}_ci95": [float(np.nanpercentile(v, 2.5)), float(np.nanpercentile(v, 97.5))]
+            for k, v in draws.items()} | {"bootstrap_reps": reps}
 
 
-def coefficients(d: pd.DataFrame, y: str, fe: str, suffix: str, model_name: str | None = None) -> dict:
-    """Coeficientes estandarizados del bloque semántico en M2, SE cluster por
-    empresa — para saber QUÉ dimensión aporta, no sólo cuánto.
-
-    `model_name` (e.g. the outcome label, "beta") persists the fitted M2
-    OLS itself to models/incremental_signal/<model_name>/model.pkl, kept
-    reproducible/inspectable rather than only its extracted numbers; the
-    coefficient table below (`main()`) is written straight from this
-    return value, not re-derived from the pickle."""
+def coefficients(d: pd.DataFrame, y: str, fe: str, model_name: str) -> dict:
+    """Coeficientes estandarizados de M3 (menciones, postura, actividad), SE
+    cluster por empresa; el ajuste se guarda en models/incremental_signal/."""
+    import joblib
     import statsmodels.api as sm
-    X, yy, names = design(d, y, "M2", fe, suffix)
-    sd = X.std(axis=0); sd[sd == 0] = 1
-    Xs = X / sd; ys = yy / (yy.std() or 1)
-    res = sm.OLS(ys, Xs).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(d["ticker"])[0]})
-    if model_name:
-        import joblib
-        model_dir = Path(__file__).resolve().parents[3] / "models" / "incremental_signal" / model_name
-        model_dir.mkdir(parents=True, exist_ok=True)
-        joblib.dump({"model": res, "feature_names": names, "outcome": y, "fe": fe, "suffix": suffix},
-                    model_dir / "model.pkl")
-    intervals = res.conf_int(alpha=0.05)
-    return {
-        n: {"beta_std": float(b), "p": float(p), "ci95": [float(lo), float(hi)]}
-        for n, b, p, (lo, hi) in zip(names, res.params, res.pvalues, intervals)
-        if n in SEMANTIC or n == "volumen"
-    }
+    X, yy, names = design(d, y, "M3", fe)
+    sd = X.std(axis=0)
+    sd[sd == 0] = 1
+    res = sm.OLS(yy / (yy.std() or 1), X / sd).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(d["ticker"])[0]})
+    model_dir = REPO_ROOT / "models" / "incremental_signal" / model_name
+    model_dir.mkdir(parents=True, exist_ok=True)
+    joblib.dump({"model": res, "feature_names": names, "outcome": y, "fe": fe}, model_dir / "model.pkl")
+    return {n: {"beta_std": float(b), "p": float(p), "ci95": [float(lo), float(hi)]}
+            for n, b, p, (lo, hi) in zip(names, res.params, res.pvalues, res.conf_int(alpha=0.05))
+            if n not in FUNDAMENTALS}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--bootstrap", type=int, default=300)
-    parser.add_argument("--permutations", type=int, default=200)
+    parser.add_argument("--bootstrap", type=int, default=200)
     args = parser.parse_args()
     m = load()
-    print(f"panel: {len(m):,} empresas-año {YEARS[0]}-{YEARS[-1]}, {m.ticker.nunique()} empresas, "
-          f"{m.any_ai.mean()*100:.0f}% con algún frame de IA\n")
-    report = {"years": YEARS, "outcomes": {}}
-    hdr = (f"{'outcome':26s} {'n':>5s} {'R²M0':>6s} {'R²M1':>6s} {'R²M2':>6s} {'R²M3':>6s} {'ΔR² sem':>8s} {'IC95':>16s} "
-           f"{'ΔR²aj sem':>9s} {'R²parc':>7s} {'Wald F':>7s} {'p':>6s} {'p perm':>7s}")
-    print("PRINCIPAL — sector×año, todos los filings"); print(hdr)
+    print(f"panel: {len(m):,} empresas-trimestre, {m.ticker.nunique()} empresas, "
+          f"{m['quarter'].min()} .. {m['quarter'].max()}\n")
+    report = {"unit": "firm_quarter", "text": f"{TEXT} (10-K, 10-Q, 8-K, DEF 14A; last four quarters)",
+              "timing": "predictors published before as_of_date; outcomes measured after as_of_date",
+              "outcome_columns": {**OUTCOMES, **EXTRA_OUTCOMES}, "outcomes": {}, "robustez": {}}
+    print(f"{'outcome':26s} {'n':>6s} {'R²M0':>6s} {'ΔR² menc':>9s} {'ΔR² post':>9s} {'ΔR² act':>8s} {'ΔR² W':>8s} "
+          f"{'p post':>7s} {'p act':>6s} {'p W':>6s}")
+    coef_rows = []
     for label, y in OUTCOMES.items():
         res, d = nested(m, y)
-        boot = bootstrap(d, y, "sector_year", "", args.bootstrap)
-        coefs = coefficients(d, y, "sector_year", "", model_name=label)
-        wald = wald_semantic(d, y, "sector_year", "")
-        perm = permutation_semantic(d, y, "sector_year", "", res["delta_r2_semantica"], args.permutations)
-        dw = d.dropna(subset=["washing_z"])
-        dw = dw[dw.groupby("sector_year")[y].transform("size") >= 2]
-        wald_washing = wald_block(dw, y, "M4", ["washing"], "sector_year") if len(dw) > 20 else {"F": float("nan"), "p": float("nan"), "df": 1}
-        res.update(boot); res["coeficientes_M2"] = coefs; res["wald_semantica"] = wald; res["permutacion_semantica"] = perm
-        res["wald_washing"] = wald_washing
-        ci = boot["delta_r2_ci95"]
-        print(f"{label:26s} {res['n']:5d} {res['r2_M0']:6.3f} {res['r2_M1']:6.3f} {res['r2_M2']:6.3f} {res['r2_M3']:6.3f} "
-              f"{res['delta_r2_semantica']:+8.4f} [{ci[0]:+.4f},{ci[1]:+.4f}] {res['delta_adj_r2_semantica']:+9.4f} "
-              f"{res['partial_r2_semantica']:7.4f} {wald['F']:7.2f} {wald['p']:6.3f} {perm['p']:7.3f}")
-        print(f"    R² ajustado M0/M1/M2/M3: {res['adj_r2_M0']:.3f} / {res['adj_r2_M1']:.3f} / {res['adj_r2_M2']:.3f} / {res['adj_r2_M3']:.3f} "
-              f"| ΔR² volumen {res['delta_r2_volumen']:+.4f} | ΔR² arquetipos {res['delta_r2_arquetipos']:+.4f} | ΔR² nulo (perm) media {perm['null_mean']:+.4f}, p95 {perm['null_p95']:+.4f}")
-        print(f"    Y = Volume + content + behavior + Washing (M4, submuestra con divulgación de IA, n={res['n_washing']}): "
-              f"R²={res['r2_M4']:.3f} | ΔR² washing sobre volume+content+behavior = {res['delta_r2_washing']:+.4f} "
-              f"(Wald F={wald_washing['F']:.2f}, p={wald_washing['p']:.3f})")
-        top = sorted(coefs.items(), key=lambda kv: -abs(kv[1]["beta_std"]))[:3]
-        print("    " + " | ".join(f"{k}: {v['beta_std']:+.3f} (p={v['p']:.2f})" for k, v in top))
+        res.update(bootstrap(d, y, "sector_quarter", args.bootstrap))
+        res["coeficientes_M3"] = coefficients(d, y, "sector_quarter", label)
+        coef_rows += [{"outcome": label, "feature": f, **{k: v[k] for k in ("beta_std", "p")},
+                       "ci95_low": v["ci95"][0], "ci95_high": v["ci95"][1]} for f, v in res["coeficientes_M3"].items()]
         report["outcomes"][label] = res
-    # robustez
-    variants = {
-        "shares_composicion": dict(fe="sector_year", suffix="__share", subset=None),
-        "solo_10k": dict(fe="sector_year", suffix="__10k", subset=None),
-        "sin_it_comunicaciones": dict(fe="sector_year", suffix="", subset=lambda d: ~d["sic2"].astype(str).isin(IT_COMM_SIC2)),
-        "efectos_fijos_empresa": dict(fe="ticker", suffix="", subset=None),
-    }
-    report["robustez"] = {}
-    for vname, v in variants.items():
-        print(f"\nROBUSTEZ — {vname}"); print(f"{'outcome':26s} {'n':>5s} {'R²M1':>6s} {'R²M2':>6s} {'ΔR² sem':>8s} {'ΔR²aj':>7s} {'R²parc':>7s} {'Wald p':>7s}")
-        report["robustez"][vname] = {}
-        outcomes = dict(OUTCOMES); outcomes.update(EXTRA_OUTCOMES if vname == "solo_10k" else {})
-        for label, y in outcomes.items():
-            dd = m if v["subset"] is None else m[v["subset"](m)]
-            try:
-                res, d = nested(dd, y, v["fe"], v["suffix"]); wald = wald_semantic(d, y, v["fe"], v["suffix"])
-            except Exception as e:  # noqa: BLE001
-                print(f"{label:26s} sin muestra ({e})"); continue
-            print(f"{label:26s} {res['n']:5d} {res['r2_M1']:6.3f} {res['r2_M2']:6.3f} {res['delta_r2_semantica']:+8.4f} {res['delta_adj_r2_semantica']:+7.4f} {res['partial_r2_semantica']:7.4f} {wald['p']:7.3f}")
-            report["robustez"][vname][label] = {**{k: res[k] for k in ("n", "r2_M0", "r2_M1", "r2_M2", "r2_M3", "adj_r2_M1", "adj_r2_M2", "delta_r2_semantica", "delta_adj_r2_semantica", "partial_r2_semantica", "delta_r2_volumen", "delta_r2_arquetipos")}, "wald": wald}
-    print("\nDESCOMPOSICIÓN — ¿estilo semántico o actividad identificable? ΔR² sobre M1, misma muestra principal")
-    print(f"{'outcome':26s} {'semánt.':>8s} {'activ.':>8s} {'ambos':>8s} {'act|sem':>8s} {'sem|act':>8s} {'p act':>6s} {'p act|sem':>9s} {'p sem|act':>9s}")
-    report["descomposicion"] = {}
-    for label, y in OUTCOMES.items():
-        _, d = nested(m, y); dec = decomposition(d, y)
-        report["descomposicion"][label] = dec
-        print(f"{label:26s} {dec['delta_r2_semantica']:+8.4f} {dec['delta_r2_actividades']:+8.4f} {dec['delta_r2_ambos']:+8.4f} "
-              f"{dec['delta_r2_actividades_dado_semantica']:+8.4f} {dec['delta_r2_semantica_dado_actividades']:+8.4f} "
-              f"{dec['wald_actividades_solo']['p']:6.3f} {dec['wald_actividades_dado_semantica']['p']:9.3f} {dec['wald_semantica_dado_actividades']['p']:9.3f}")
-    print("\nVOLATILIDAD TOTAL (robustez del outcome, especificación principal)")
-    for label, y in EXTRA_OUTCOMES.items():
-        res, d = nested(m, y); wald = wald_semantic(d, y, "sector_year", "")
-        print(f"{label:26s} {res['n']:5d} {res['r2_M1']:6.3f} {res['r2_M2']:6.3f} {res['delta_r2_semantica']:+8.4f} {res['delta_adj_r2_semantica']:+7.4f} {res['partial_r2_semantica']:7.4f} {wald['p']:7.3f}")
-        report["robustez"].setdefault("volatilidad_total", {})[label] = {**{k: res[k] for k in ("n", "r2_M1", "r2_M2", "delta_r2_semantica", "delta_adj_r2_semantica", "partial_r2_semantica")}, "wald": wald}
+        print(f"{label:26s} {res['n']:6d} {res['r2_M0']:6.3f} {res['delta_r2_menciones']:+9.4f} {res['delta_r2_postura']:+9.4f} "
+              f"{res['delta_r2_actividad']:+8.4f} {res.get('delta_r2_washing', np.nan):+8.4f} "
+              f"{res['wald_postura']['p']:7.3f} {res['wald_actividad']['p']:6.3f} {res.get('wald_washing', {}).get('p', np.nan):6.3f}")
+    for label, y in {**OUTCOMES, **EXTRA_OUTCOMES}.items():
+        for vname, fe in (("sector_trimestre", "sector_quarter"), ("efectos_fijos_empresa", "ticker")):
+            if vname == "sector_trimestre" and label in OUTCOMES:
+                continue
+            res, _ = nested(m, y, fe)
+            report["robustez"].setdefault(vname, {})[label] = res
+    print("\nROBUSTEZ — efectos fijos de empresa")
+    for label, res in report["robustez"]["efectos_fijos_empresa"].items():
+        print(f"{label:26s} {res['n']:6d} ΔR² menciones {res['delta_r2_menciones']:+.4f} postura {res['delta_r2_postura']:+.4f} "
+              f"actividad {res['delta_r2_actividad']:+.4f} washing {res.get('delta_r2_washing', np.nan):+.4f}")
     out_json = L.results_path("shock", "incremental_signal.json")
     out_json.write_text(json.dumps(report, indent=2, default=float) + "\n")
-
-    # coeficientes estandarizados del bloque M2, una fila por (outcome, feature)
-    # -- escritos directamente desde `coefficients()`, sin reabrir el model.pkl.
-    coef_rows = [
-        {"outcome": label, "feature": feature, "beta_std": v["beta_std"], "p": v["p"],
-         "ci95_low": v["ci95"][0], "ci95_high": v["ci95"][1]}
-        for label in OUTCOMES
-        for feature, v in report["outcomes"][label]["coeficientes_M2"].items()
-    ]
     out_csv = L.results_path("shock", "incremental_signal_coefficients.csv")
     pd.DataFrame(coef_rows).to_csv(out_csv, index=False)
     print(f"\n-> {out_json}\n-> {out_csv}")

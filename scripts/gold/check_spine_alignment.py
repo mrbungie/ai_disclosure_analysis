@@ -10,10 +10,10 @@ Checks every file under data/gold:
   - covariates/targets/datasets: the spine columns first, then values; exactly
     one row per spine key (missing = outside = duplicates = 0) and the same id
     and date as the spine for every key;
-  - spines/call: the call-sequence invariant (scripts/gold/call/build_spine.py
-    `sequence_violations`): per ticker, consecutive calls at least 30 days
-    apart, fiscal period advancing k >= 1 quarters within the date window of k
-    quarters, except at a `label_break`.
+  - spines/call: fiscal periods that contradict the previous call of the same
+    ticker (`sequence_violations`) are reported, not treated as violations:
+    transcript vendors disagree on some labels and the pipeline keeps what each
+    transcript says rather than rewriting a date or a period.
 
 Exits 1 on any violation.
 
@@ -69,6 +69,7 @@ def check_table(path: Path, grain: str, spine: pd.DataFrame | None) -> tuple[dic
 
 def main() -> int:
     violations = 0
+    notes: list[str] = []
     print(f"{'table':50s} {'rows':>7s} {'missing':>8s} {'outside':>8s} {'dups':>6s} {'id/date':>8s}  status")
     tables = sorted(p for p in L.GOLD.rglob("*") if p.is_file())
     for path in tables:
@@ -91,10 +92,12 @@ def main() -> int:
             continue
         r, problems = check_table(spine_path, grain, None)
         if grain == "call":
+            # reported, not a violation: vendors disagree on some fiscal labels
+            # and the pipeline keeps what each transcript says
             bad = sequence_violations(pd.read_parquet(spine_path, columns=["ticker", "fecha", "fiscal_period", "call_sequence"]))
             if len(bad):
-                problems.append(f"{len(bad)} calls break the call-sequence invariant "
-                                f"(e.g. {bad[['ticker', 'fecha', 'fiscal_period']].head(3).to_dict('records')})")
+                notes.append(f"spines/call: {len(bad)} calls whose fiscal period contradicts the previous call "
+                             f"({bad['ticker'].nunique()} tickers), labelled `conflict`")
         spine = normalize(pd.read_parquet(spine_path, columns=L.GOLD_SPINE_COLUMNS[grain]))
         rows = [(f"spines/{grain}/{grain}", r, problems)]
         for kind in L.GOLD_KINDS[1:]:
@@ -108,6 +111,8 @@ def main() -> int:
                 continue
             print(f"{name:50s} {r['rows']:>7,} {r['missing']:>8,} {r['outside']:>8,} {r['duplicates']:>6,} "
                   f"{r['mismatched']:>8,}  {status}")
+    for n in notes:
+        print(n)
     print(f"\n{violations} violation(s)")
     return 1 if violations else 0
 

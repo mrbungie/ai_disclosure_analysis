@@ -27,7 +27,7 @@ Rows follow the firm-quarter spine (spines/firm_quarter/firm_quarter: universe
 tickers x closed quarters; a delisted firm keeps the quarters starting on or
 before its delisting date, so the delisting quarter is the last one, with
 as_of_date after the delisting; spine attributes `delisted`,
-`delisting_date`). A firm with no document of the family in the
+`delisting_date` and `sic2`, the firm's two-digit SIC). A firm with no document of the family in the
 window has null measures (not zero); zeros are real zero counts over existing
 documents, and rates with a zero denominator are null. Analytics decide how
 to fill.
@@ -169,12 +169,14 @@ def main() -> None:
     grid = grid[delist.isna() | (grid["quarter"].map(lambda q: q.start_time) <= delist)].reset_index(drop=True)
     spine = finish(grid.assign(_=0.0), pd.Series(False, index=grid.index)).drop(columns="_")
     spine = spine.merge(L.firm_delistings(), on="ticker", how="left")
+    sic = L.read("silver.firm_universe").select("ticker", "sic").to_pandas()
+    spine["sic2"] = spine["ticker"].map(sic.set_index("ticker")["sic"]).astype(str).str.zfill(4).str[:2]
     L.write_gold("spines", "firm_quarter", "firm_quarter", spine, builder=BUILDER,
                  extra={"grain": "firm_quarter (universe ticker x closed calendar quarter in which the firm was listed)",
                         "usable_from": "as_of_date = quarter end + 1 day"})
     print(f"{len(tickers)} tickers x {len(quarters)} closed quarters ({quarters[0]} .. {quarters[-1]})")
 
-    wide = {measure: spine.drop(columns=["delisted", "delisting_date"]) for measure in MEASURES}
+    wide = {measure: spine.drop(columns=["delisted", "delisting_date", "sic2"]) for measure in MEASURES}
     for family, forms in FAMILIES.items():
         vol = windowed(*events["disclosure_volume"], forms, grid)
         act = windowed(*events["activities"], forms, grid)

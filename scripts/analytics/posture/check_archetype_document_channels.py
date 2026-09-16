@@ -30,15 +30,16 @@ import polars as pl
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "gold" / "posture"))
-from posture_features import fit_aa  # noqa: E402
+from posture_features import CLUSTER_FEATURES, fit_aa  # noqa: E402
 import layers as L  # noqa: E402
 
 OUT_JSON = L.results_path("posture", "archetype_document_channels.json")
 
 # 1. Fit Archetypal Analysis (k=3)
 df = L.read_gold("firm", ("covariates", "posture_archetype_static"))
-FEATS = ["promotional_posture", "hedging_posture", "risk_orientation", "governance_orientation",
-         "temporal_posture", "ai_positioning", "specificity", "disclosure_intensity"]
+# the features the archetypes are fitted on, from the one place that defines
+# them: intensity is a covariate, not a posture, and is not among them
+FEATS = list(CLUSTER_FEATURES)
 fit_pop = df[df["archetype"] != "No AI"].copy()
 X = fit_pop[FEATS].values
 X_std = (X - X.mean(axis=0)) / X.std(axis=0, ddof=0)
