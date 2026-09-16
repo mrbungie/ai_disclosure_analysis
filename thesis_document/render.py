@@ -490,6 +490,34 @@ def clear_figure_indentation(document: Document) -> None:
         ))
 
 
+def keep_captions_with_tables(document: Document) -> None:
+    """Glue every table caption to the table it introduces.
+
+    `unwrap_captioned_tables` removes the wrapper Quarto uses to hold the two
+    together, which is what stops LibreOffice corrupting a nested table at a
+    page break, but it also lets the caption be left behind at the foot of a
+    page while its table starts the next one. Setting keepNext on the caption
+    paragraph (and on any run of paragraphs directly above the table, since a
+    caption can wrap to two lines) pushes the whole block over instead.
+    """
+    body = document.element.body
+    for tbl in body.findall(qn("w:tbl")):
+        previous = tbl.getprevious()
+        while previous is not None and previous.tag == qn("w:p"):
+            pPr = previous.find(qn("w:pPr"))
+            if pPr is None:
+                pPr = parse_xml(r'<w:pPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>')
+                previous.insert(0, pPr)
+            for existing in pPr.findall(qn("w:keepNext")):
+                pPr.remove(existing)
+            pPr.insert(0, parse_xml(
+                r'<w:keepNext xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>'))
+            text = "".join(node.text or "" for node in previous.iter(qn("w:t")))
+            if text.strip():
+                break  # the caption itself; anything above it is ordinary prose
+            previous = previous.getprevious()
+
+
 def style_code_blocks(document: Document) -> None:
     """Set the verbatim blocks in Appendix A in a smaller monospaced face.
 
@@ -635,6 +663,7 @@ def render_quarto_content(tmp_dir: Path) -> Path:
     small_caps_headings(doc)
     style_all_tables(doc)
     fix_prose_math_font_size(doc)
+    keep_captions_with_tables(doc)
     style_code_blocks(doc)
     resize_oversized_images(doc, content_width_emu(doc))
     doc.save(str(candidates[0]))
