@@ -2430,7 +2430,7 @@ $$
 Y_{i,t,\text{venue}} = \alpha_{i,t} + \beta \, \mathbf{1}[\text{venue} = \text{Call}] + \varepsilon_{i,t,\text{venue}}
 $$
 
-Each cell contains exactly two observations: all earnings calls for the fiscal year are pooled into a single call record, while all statutory SEC filings (10-K and 10-Qs) form the filing benchmark. Metrics are evaluated per thousand words or as proportions of disclosed activities. By clustering standard errors at the firm level, the estimator absorbs time-invariant firm unobservables and macroeconomic shocks to identify the within-firm, within-period venue gap ($\text{Call}_{i,t} - \text{Filing}_{i,t}$). Because oral calls involve interactive analyst Q&A alongside management remarks, this estimate captures net institutional differences between venues with differing legal exposure [@frankel1999; @matsumoto2011], identifying systematic compositional shifts in disclosed activity types and evidence within the same firm-year.
+Each cell holds exactly two observations: all earnings calls of the fiscal year pooled into one call record, and all statutory filings of that year (the 10-K and the 10-Qs) as the filing benchmark. The metrics are per thousand words or shares of the disclosed activities. Standard errors are clustered at the firm level, and the fixed effects absorb whatever is constant about the firm as well as macroeconomic shocks, so what is identified is the venue gap inside the same firm and period ($\text{Call}_{i,t} - \text{Filing}_{i,t}$). A call mixes management remarks with analyst Q&A, so the estimate is the net institutional difference between two venues with different legal exposure [@frankel1999; @matsumoto2011], read as a shift in the composition of disclosed activity and evidence within one firm-year.
 
 ```{python}
 #| label: fig-venue-call-filing-differences
@@ -2545,9 +2545,9 @@ prop_pp, prop_p = diffs1[FAMILIES1.index("proprietary_ai")], p1[FAMILIES1.index(
 
 What firms claim to do remains consistent across venues, but the evidence attached to those claims diverges sharply (@fig-venue-call-filing-differences).
 
-In Panel A, activity mix comparisons show that while internal operational deployment (`{python} f"{intd_pp:+.1f}"` pp, $p$ `{python} _fmt_p(intd_p)`) and proprietary development (`{python} f"{prop_pp:+.1f}"` pp, $p$ `{python} _fmt_p(prop_p)`) are closely aligned across venues, customer-facing deployment appears more prominently on earnings calls (`{python} f"{cfd_pp:+.1f}"` pp, $p$ `{python} _fmt_p(cfd_p)`), reflecting managers' tendency to emphasize commercial AI applications when addressing market analysts.
+Panel A compares the activity mix. Internal operational deployment (`{python} f"{intd_pp:+.1f}"` pp, $p$ `{python} _fmt_p(intd_p)`) and proprietary development (`{python} f"{prop_pp:+.1f}"` pp, $p$ `{python} _fmt_p(prop_p)`) line up closely between the two venues. Customer-facing deployment is the exception and appears more often on calls (`{python} f"{cfd_pp:+.1f}"` pp, $p$ `{python} _fmt_p(cfd_p)`), which is what one would expect from managers speaking to analysts about commercial applications.
 
-In Panel B, the evidence attached to those activities is a different story:
+Panel B, the evidence attached to those activities, tells a different story:
 
 ```{python}
 #| echo: false
@@ -2570,11 +2570,11 @@ b_governance = _gap_bullet("governance_or_restriction")
 - **Named product or process:** `{python} b_product`.
 - **Governance caveats and restrictions:** `{python} b_governance`.
 
-> Within the same firm and fiscal year, activity composition is broadly similar across earnings calls and statutory filings, although calls contain modestly more customer-facing deployment. The sharper and more systematic venue gap lies in evidentiary grounding rather than in the underlying categories of AI activity.
+> Inside the same firm and fiscal year, the composition of activity is broadly similar in earnings calls and statutory filings, with somewhat more customer-facing deployment on the calls. The sharper and more systematic gap is in the evidence, not in the categories of AI activity.
 >
-> The share of activities with a quantified outcome, a named product or process, or a named provider is significantly lower in the filings. Because the design compares venue-level composition, this pattern is consistent with filtering under greater statutory exposure rather than explicit retraction of individual call claims.
+> The share of activities with a quantified outcome, a named product or process, or a named provider is significantly lower in the filings. Since the design compares composition at venue level, this looks like filtering under higher statutory exposure rather than an explicit retraction of any individual claim made on a call.
 
-Consequently, investors should consult both venues rather than relying on either in isolation, while corporate issuers must review the substantive consistency of claims across oral and statutory disclosures, without expecting identical wording or equal detail across channels.
+An investor should therefore read both venues and not rely on one of them alone, and an issuer should check that the claims are substantively consistent between the oral and the statutory disclosure, without expecting the same wording or the same level of detail in both.
 
 ## Promotion is not the opposite of evidence
 
@@ -2647,27 +2647,27 @@ plt.show()
 *Notes:* Relative amplification in quantified evidence exceeds that of promotional claims.
 :::
 
-This co-movement is consistent with @jia2025, who find that post-ChatGPT discussions of generative AI frequently combine positive tone with action initiatives; their initiative measure includes plans, whereas this thesis separately examines activity grounding and reported outcomes. Together, these findings support evaluating tone and disclosed evidence as distinct dimensions of corporate communication, not as opposite ends of the same one.
+The co-movement agrees with @jia2025, who find that discussions of generative AI after ChatGPT often combine a positive tone with concrete initiatives; their initiative measure also counts plans, while the grounding and the reported outcomes are kept separate here. Taken together, tone and disclosed evidence should be treated as two different dimensions of corporate communication and not as two ends of the same one.
 
 ## What credibility means in this thesis
 
-Three conclusions emerge from the credibility ladder:
+Three conclusions come out of the credibility ladder:
 
-1. **Persistent decoupling:** Decoupling between narrative intensity and grounded substance represents an enduring firm-year characteristic (year-over-year $\rho =$ `{python} f"{hd_w_rho:.2f}"`).
-2. **Evidentiary filtering:** The cross-venue gap stems from missing evidentiary grounding in statutory filings rather than a differing operational activity mix.
-3. **Singular scrutiny:** Direct regulatory scrutiny remains exceedingly rare. In the single observed case, the issuer responded by reducing narrative volume and narrowing decoupling rather than inflating boilerplate.
+1. **Decoupling persists.** The gap between narrative intensity and grounded substance is a lasting characteristic of the firm-year (year over year, $\rho =$ `{python} f"{hd_w_rho:.2f}"`).
+2. **What differs between venues is the evidence.** The cross-venue gap comes from grounding that is missing in the statutory filings, not from a different mix of operational activity.
+3. **Direct scrutiny is rare.** In the one case observed, the issuer reacted by reducing narrative volume and narrowing its decoupling, not by adding boilerplate.
 
-AI washing in this thesis therefore denotes an observable, persistent Decoupling ($W$) between narrative volume and grounded operational substance, not legal proof of fraud or nonimplementation.
+AI washing in this thesis is therefore an observable and persistent decoupling ($W$) between narrative volume and grounded operational substance. It is not legal proof of fraud, nor proof that nothing was implemented.
 
-In practice, analysts can prioritize corporate review by focusing on persistent decoupling and sharp cross-venue discrepancies. The next question is whether these disclosure differences correspond to observable economic outcomes: Chapter 5 examines whether capital markets and firm fundamentals reflect these narrative and substantive signals.
+In practice an analyst can set priorities by looking for persistent decoupling and for sharp differences between venues. Whether those differences correspond to anything the market and the fundamentals actually register is the next question.
 
 # Market Relevance of Disclosure Signals
 
-This chapter asks whether the disclosure measures built in this thesis carry information that equity markets price. The unit of observation is an earnings call held by an S&P 500 constituent between 2021 and 2026, evaluating whether predetermined disclosure signals are associated with post-call market and fundamental outcomes. Following @gelman2014, these regressions serve as exploratory diagnostics across three motivating theoretical channels: narrative volume pricing as thematic risk exposure [@eisfeldt2023], disclosed substance operating as a costly signal [@spence1973; @verrecchia1983], and decoupling accumulating as opacity that surfaces in tail risk [@jin2006; @fu2021].
+Do the disclosure measures built here carry information that equity markets price? The unit of observation is an earnings call held by an S&P 500 constituent between 2021 and 2026, and the test is whether disclosure signals known before the call are associated with market and fundamental outcomes after it. Following @gelman2014, the regressions are exploratory diagnostics rather than confirmatory tests, and three channels motivate them: narrative volume priced as exposure to a theme [@eisfeldt2023], disclosed substance acting as a costly signal [@spence1973; @verrecchia1983], and decoupling accumulating as opacity that eventually shows up in tail risk [@jin2006; @fu2021].
 
 ## The disclosure construct and the estimating equation
 
-Every disclosure regressor is predetermined relative to the call via a backward as-of join on the call date, ensuring a call never carries information published after it. @tbl-market-regressors lists the full set of regressors and controls.
+Every disclosure regressor is predetermined with respect to the call, through a backward as-of join on the call date, so that no call ever carries information published after it. @tbl-market-regressors lists the regressors and the controls.
 
 | Term | Symbol | What it measures | Scale |
 |:---|:---|:---|:---|
@@ -2685,7 +2685,7 @@ The estimating equation is an analysis of covariance (ANCOVA) regressing post-ca
 
 $$Y_{i,t} = \alpha + \beta\,\text{Disclosure}_{i,t^-} + \gamma\,Y_{i,t^-} + \delta\,\text{Controls}_{i,t^-} + \text{Sector}_i + \text{Year}_t + \varepsilon_{i,t}$$
 
-Because archetype weights sum to one, the Defensive posture is held as the reference vertex; coefficients on $w_{\text{voc}}$ and $w_{\text{gov}}$ capture compositional reallocations of weight away from Defensive, where a 10 percentage-point shift corresponds to $0.10 \times \beta$. The indicator $\text{has}$ captures the extensive margin of disclosing any AI activity, separating whether a firm speaks from how it allocates its posture.
+The archetype weights sum to one, so the Defensive posture is kept as the reference vertex. The coefficients on $w_{\text{voc}}$ and $w_{\text{gov}}$ are therefore reallocations of weight away from Defensive, and a shift of 10 percentage points corresponds to $0.10 \times \beta$. The indicator $\text{has}$ covers the extensive margin, that is, whether the firm discloses any AI activity at all, which keeps the decision to speak apart from the way the posture is distributed.
 
 ## Outcomes and their measurement windows
 
@@ -2704,7 +2704,7 @@ Because archetype weights sum to one, the Defensive posture is held as the refer
 
 : Outcomes and their measurement windows. Post-call trading windows span days $[+21, +63]$ for beta and $[+2, +63]$ for valuation and return distribution metrics; accounting changes are measured at the first post-call annual report with ratio changes winsorized at 1% to limit denominator distortion. {#tbl-market-outcomes}
 
-Because eight outcomes are estimated across six disclosure variables, hypothesis tests are evaluated using a Benjamini-Hochberg false discovery rate correction across the full family of 48 coefficients rather than outcome by outcome.
+Eight outcomes are estimated over six disclosure variables, so the hypothesis tests use a Benjamini-Hochberg false discovery rate correction over the whole family of 48 coefficients, not outcome by outcome.
 
 ## Results
 
