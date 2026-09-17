@@ -679,3 +679,85 @@ def annual_panel() -> pd.DataFrame:
                           "long_term_debt", "shares_out", "next_revenue_yoy"]}
     print("cobertura:", coverage)
     return ratios
+
+
+FS_GROWTH_METRICS = ["revenue", "rd_expense", "capex", "sga_expense"]
+
+
+def annual_panel_fs() -> pd.DataFrame:
+    """fs (FactSet) replacement for `annual_panel()`: one row per fs annual
+    STND period matched to a filing date (docs/plans/fs_gold_replacement.md).
+    Same output columns/semantics as `annual_panel()` -- `year` is the
+    CALENDAR year of `filing_date` (matches the firm_year spine's join key),
+    not the fiscal year. Source: `silver.fs_financials` (period="annual"),
+    already point-in-time dated (EDGAR filing_date primary, fs release-date
+    fallback, `pit_source` column) and scale-corrected
+    (scripts/sources/fs/build_fundamentals_wide.py)."""
+    fin = (L.scan("silver.fs_financials")
+           .filter((pl.col("period") == "annual") & pl.col("filing_date_pt").is_not_null())
+           .collect().to_pandas())
+    fin["filing_date_pt"] = pd.to_datetime(fin["filing_date_pt"])
+    fin["period_end"] = pd.to_datetime(fin["period_end"])
+    fin = fin.sort_values(["ticker", "period_end"]).reset_index(drop=True)
+
+    fin = fin.rename(columns={"filing_date_pt": "filing_date", "period_end": "disclosed_period_end"})
+    fin["year"] = fin["filing_date"].dt.year
+
+    # Two fs periods can resolve to the same (ticker, year) mostly in
+    # pre-corpus history (before ~2020) where the EDGAR-fallback release
+    # date is looser -- the spine only ever needs one fiscal year per
+    # (ticker, calendar filing year), so keep the most RECENT disclosed
+    # fiscal year for that year (the one an actual 10-K filed that calendar
+    # year would report), same one-row-per-filing intent as the XBRL-era
+    # annual_panel(), which never had this collision because it iterated
+    # actual 10-K filings one at a time.
+    fin = (fin.sort_values(["ticker", "year", "disclosed_period_end"])
+           .drop_duplicates(["ticker", "year"], keep="last")
+           .sort_values(["ticker", "disclosed_period_end"]).reset_index(drop=True))
+
+    grp = fin.groupby("ticker", sort=False)
+    prior_end = grp["disclosed_period_end"].shift(1)
+    prior_gap = (fin["disclosed_period_end"] - prior_end).dt.days
+    prior_revenue = grp["revenue"].shift(1)
+    fin["revenue_yoy"] = np.where(
+        prior_gap.between(ANNUAL_MIN_DAYS, ANNUAL_MAX_DAYS) & prior_revenue.notna() & (prior_revenue > 0),
+        fin["revenue"] / prior_revenue - 1, np.nan)
+
+    next_end = grp["disclosed_period_end"].shift(-1)
+    next_gap = (next_end - fin["disclosed_period_end"]).dt.days
+    fin["next_period_end"] = next_end
+    fin["next_gap_days"] = next_gap
+    usable_next = next_gap.between(ANNUAL_MIN_DAYS, ANNUAL_MAX_DAYS)
+    for metric in FS_GROWTH_METRICS:
+        base, nxt = fin[metric], grp[metric].shift(-1)
+        fin[f"next_{metric}_yoy"] = np.where(usable_next & base.notna() & nxt.notna() & (base > 0),
+                                             nxt / base - 1, np.nan)
+
+    fin["gross_profit"] = fin["gross_profit"] if "gross_profit" in fin.columns else np.nan
+    fin["gross_margin"] = safe_div(fin["revenue"] - fin["cost_of_revenue"], fin["revenue"])
+    fin["operating_margin"] = safe_div(fin["operating_income"], fin["revenue"])
+    fin["net_margin"] = safe_div(fin["net_income"], fin["revenue"])
+    fin["roa"] = safe_div(fin["net_income"], fin["total_assets"])
+    fin["roe"] = safe_div(fin["net_income"], fin["equity"])
+    fin["current_ratio"] = safe_div(fin["current_assets"], fin["current_liabilities"])
+    fin["debt_to_equity"] = safe_div(fin["long_term_debt"], fin["equity"])
+    fin["asset_turnover"] = safe_div(fin["revenue"], fin["total_assets"])
+    fin["rd_intensity"] = safe_div(fin["rd_expense"], fin["revenue"])
+    fin["capex_intensity"] = safe_div(fin["capex"], fin["revenue"])
+    # ebitda is fs's own STND field (direct read), not operating_income + da
+    # (kept from build_firm_financials.annual_panel's XBRL-era formula) --
+    # fs reports EBITDA natively per docs/sources/fs.md's field mapping.
+
+    universe = (L.scan("silver.firm_universe")
+                .filter((pl.col("country_code") == "us") & pl.col("ticker").is_not_null())
+                .select("ticker", "sic").collect().to_pandas())
+    universe["sic2"] = universe["sic"].astype("string").str.zfill(4).str[:2]
+    fin = fin.merge(universe[["ticker", "sic2"]].drop_duplicates("ticker"), on="ticker", how="left")
+
+    coverage = {c: f"{fin[c].notna().mean()*100:.0f}%"
+                for c in ["revenue", "rd_expense", "capex", "sga_expense",
+                          "operating_income", "total_assets", "equity",
+                          "long_term_debt", "shares_out", "next_revenue_yoy"]}
+    print("fs annual_panel cobertura:", coverage)
+    print("pit_source:", fin["pit_source"].value_counts(dropna=False).to_dict())
+    return fin

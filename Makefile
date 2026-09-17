@@ -1,4 +1,4 @@
-.PHONY: test install-deps tickers-tui data-views explorer validator validator-sample hf-sync hf-sync-models hf-sync-data hf-sync-interim hf-sync-raw hf-sync-all build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market bronze silver layers prefilter gold gold-document gold-firm gold-firm-year gold-firm-quarter gold-call gold-datasets gold-check analytics analytics-corpus analytics-posture analytics-washing analytics-shock analytics-channel-gap analytics-call-beta analytics-crash-archetypes analytics-appendix analytics-stability analytics-prefilter-eval b2-check refresh-stale help
+.PHONY: test install-deps tickers-tui data-views explorer validator validator-sample hf-sync hf-sync-models hf-sync-data hf-sync-interim hf-sync-raw hf-sync-all build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market bronze silver layers prefilter gold gold-document gold-firm gold-firm-year gold-firm-quarter gold-call gold-datasets gold-check analytics analytics-corpus analytics-posture analytics-washing analytics-shock analytics-channel-gap analytics-call-beta analytics-crash-archetypes analytics-coverage analytics-appendix analytics-stability analytics-prefilter-eval b2-check refresh-stale help
 
 # Default target
 all: test
@@ -99,10 +99,12 @@ bronze:
 	.venv/bin/python scripts/bronze/call_transcripts.py
 	.venv/bin/python scripts/bronze/patents.py
 	.venv/bin/python scripts/bronze/xbrl_facts.py
+	.venv/bin/python scripts/bronze/fs.py
 
 silver:
 	@echo "Building data/silver/ (analysis universe + LLM outputs and vendor mentions per paragraph instance)..."
 	.venv/bin/python scripts/silver/universe.py
+	.venv/bin/python scripts/silver/fs.py
 	.venv/bin/python scripts/silver/ai_outputs.py
 	.venv/bin/python scripts/silver/ai_vendors.py
 	.venv/bin/python scripts/silver/patents.py
@@ -417,6 +419,14 @@ analytics-crash-archetypes: gold
 		-- bash -c '.venv/bin/python scripts/analytics/crash_archetypes/call_crash_regressions.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/crash_archetypes/call_archetype_full_battery.py $(ARGS)'
 
+analytics-coverage: gold
+	@echo "Analytics (coverage) -> data/results/coverage/..."
+	@$(RUN_CACHED) analytics-coverage \
+		scripts/analytics/coverage/build_fs_coverage_tables.py \
+		'data/gold/**/*.parquet' data/silver/fs_financials.parquet data/silver/firm_universe.parquet \
+		$(LAYER_MANIFESTS) \
+		-- .venv/bin/python scripts/analytics/coverage/build_fs_coverage_tables.py $(ARGS)
+
 analytics-appendix: gold
 	@echo "Analytics (appendix) -> data/results/..."
 	@$(RUN_CACHED) analytics-appendix \
@@ -455,7 +465,7 @@ analytics-prefilter-eval:
 			.venv/bin/python scripts/analytics/prefilter/form_validation_metrics.py $(ARGS) && \
 			.venv/bin/python scripts/analytics/prefilter/run_diff.py $(ARGS)'
 
-analytics: analytics-corpus analytics-posture analytics-washing analytics-shock analytics-channel-gap analytics-call-beta analytics-crash-archetypes analytics-appendix analytics-stability
+analytics: analytics-corpus analytics-posture analytics-washing analytics-shock analytics-channel-gap analytics-call-beta analytics-crash-archetypes analytics-coverage analytics-appendix analytics-stability
 
 # ---- 10_fusion: merging the 10-K text pipeline with market data — not built yet ----
 

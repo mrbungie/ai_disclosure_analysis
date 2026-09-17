@@ -255,23 +255,36 @@ def block_market_model(panel_capm: pd.DataFrame, panel_ff3: pd.DataFrame) -> pd.
 
 
 def block_leave_one_year_out(panel: pd.DataFrame) -> pd.DataFrame:
-    variables = AI + ["beta_pre_default", *CONTROLS]
+    """Symmetric 42-day pre/post design (beta_post_63 ~ beta_pre_63, same
+    window length and gap on both sides), matching the headline spec of
+    call_beta_regressions.py, not the asymmetric beta_post_126/beta_pre_default
+    this battery uses for its other blocks."""
+    variables = AI + ["beta_pre_63", *CONTROLS]
     rows = []
     for year in sorted(panel["fecha"].dt.year.unique()):
         d = panel[panel["fecha"].dt.year != year]
-        result, dd = fit_fe(d, variables, "beta_post_126")
+        result, dd = fit_fe(d, variables, "beta_post_63")
         rows.append(ai_coef_table(result, f"excl_{year}", AI).assign(n_calls=len(dd)))
     return pd.concat(rows, ignore_index=True)
 
 
 def block_leave_one_sector_out(panel: pd.DataFrame) -> pd.DataFrame:
-    variables = AI + ["beta_pre_default", *CONTROLS]
+    """Symmetric 42-day pre/post design, see block_leave_one_year_out."""
+    variables = AI + ["beta_pre_63", *CONTROLS]
     rows = []
     for sic2 in sorted(panel["sic2"].dropna().unique()):
         d = panel[panel["sic2"] != sic2]
         if d["fe"].nunique() < 2:
             continue
-        result, dd = fit_fe(d, variables, "beta_post_126")
+        try:
+            result, dd = fit_fe(d, variables, "beta_post_63")
+        except np.linalg.LinAlgError:
+            # A handful of exclusions leave the symmetric 42-day design's
+            # matrix singular (a sector x year fixed-effect cell loses all
+            # its remaining variation once that sector is dropped); skipped
+            # rather than reported with a spurious fit.
+            print(f"  excl_sic2_{sic2}: singular design under the symmetric 42-day spec, skipped")
+            continue
         tag = f"excl_sic2_{sic2}" + ("_tech" if sic2 in TECH_SIC2 else "")
         rows.append(ai_coef_table(result, tag, AI).assign(n_calls=len(dd)))
     return pd.concat(rows, ignore_index=True)
@@ -322,7 +335,7 @@ def main() -> None:
     base["fecha"] = pd.to_datetime(base["fecha"])
 
     windows = {
-        "pre_default": (-252, -21), "pre_126_21": (-126, -21), "pre_252_42": (-252, -42),
+        "pre_default": (-252, -21), "pre_126_21": (-126, -21), "pre_252_42": (-252, -42), "pre_63": (-63, -21),
         "post_63": (21, 63), "post_126": (21, 126), "post_252": (21, 252),
     }
     default_windows = {"pre_default": (-252, -21), "post_126": (21, 126)}

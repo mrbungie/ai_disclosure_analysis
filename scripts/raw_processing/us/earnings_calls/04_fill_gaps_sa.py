@@ -1,8 +1,8 @@
 """
-scripts/us/earnings_calls/04_fill_gaps_stockanalysis.py — third, independent
+scripts/us/earnings_calls/04_fill_gaps_sa.py — third, independent
 earnings-call source: stockanalysis.com, scraped via local headless Chrome.
 
-WHY A THIRD SOURCE. 03_fill_gaps_equibles.py covers most of the gaps the
+WHY A THIRD SOURCE. 03_fill_gaps_eq.py covers most of the gaps the
 Hugging Face bulk dataset (01_fetch_transcripts.py) leaves behind, but
 Equibles' free/shared MCP plan caps out at 100 requests/day — a run over
 the full ~517-ticker universe hits that ceiling with tickers still
@@ -25,7 +25,7 @@ tried first.
 
 WHY A THIRD MANIFEST FILE, NOT A MERGE. Same rule as 03: this never reads
 FROM or writes TO filing_manifest_earnings_calls.parquet (HF, rewritten
-wholesale by 01 on every run) or filing_manifest_earnings_calls_equibles
+wholesale by 01 on every run) or filing_manifest_earnings_calls_eq
 .parquet (03's own file). 02_extract_sections.py concatenates all three
 at read time. A ticker's transcript quarter is fetched from whichever
 source had it available FIRST — once any manifest lists a (ticker, year,
@@ -47,7 +47,7 @@ own label, not a recomputed calendar quarter, is what keeps this
 consistent with the other two sources.
 
 Usage:
-    uv run python scripts/us/earnings_calls/04_fill_gaps_stockanalysis.py [--tickers AAPL,MSFT] [--dry-run] [--limit-tickers N]
+    uv run python scripts/us/earnings_calls/04_fill_gaps_sa.py [--tickers AAPL,MSFT] [--dry-run] [--limit-tickers N]
 """
 
 import argparse
@@ -69,7 +69,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
 
 import pipeline_logger
 from importlib import import_module
-_equibles = import_module("03_fill_gaps_equibles")
+_equibles = import_module("03_fill_gaps_eq")
 existing_periods = _equibles.existing_periods
 
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
@@ -230,10 +230,10 @@ def main() -> None:
 
     config = yaml.safe_load((REPO_ROOT / "configs" / "us" / "config.yaml").read_text())
     manifest_dir = REPO_ROOT / config["storage"]["interim_manifests"]
-    raw_dir = REPO_ROOT / "data" / "raw" / "earnings_calls_stockanalysis"
+    raw_dir = REPO_ROOT / "data" / "raw" / "earnings_calls_sa"
     hf_manifest_path = manifest_dir / "filing_manifest_earnings_calls.parquet"
-    equibles_manifest_path = manifest_dir / "filing_manifest_earnings_calls_equibles.parquet"
-    own_manifest_path = manifest_dir / "filing_manifest_earnings_calls_stockanalysis.parquet"
+    equibles_manifest_path = manifest_dir / "filing_manifest_earnings_calls_eq.parquet"
+    own_manifest_path = manifest_dir / "filing_manifest_earnings_calls_sa.parquet"
 
     universe = with_aliases(pd.read_csv(REPO_ROOT / "configs" / "us" / "universe.csv"))
     if args.tickers:

@@ -15,8 +15,8 @@ from _paths import COUNTRY, MANIFESTS, L, files
 
 BUILDER = "scripts/bronze/manifests.py"
 EXTRA_MANIFESTS = ("filing_manifest_proxy", "filing_manifest_8k", "filing_manifest_earnings_calls",
-                   "filing_manifest_earnings_calls_equibles", "filing_manifest_earnings_calls_stockanalysis",
-                   "filing_manifest_earnings_calls_equibles_backfill",
+                   "filing_manifest_earnings_calls_eq", "filing_manifest_earnings_calls_sa",
+                   "filing_manifest_earnings_calls_eq_backfill",
                    "filing_manifest_20f", "filing_manifest_6k")
 
 

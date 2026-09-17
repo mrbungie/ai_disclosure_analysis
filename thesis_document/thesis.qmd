@@ -219,13 +219,6 @@ hd_quant_pooled = _apj["top_behaviours"]["quantified_outcome"]
 hd_quant_filings = _apj["top_behaviours_filings_only"]["quantified_outcome"]
 hd_obj_unspec_firms = _apj["object_families"]["AI, unspecified object"]["pct_firms"]
 hd_src_unspec = _apj["distributions"]["source"]["unspecified"]
-_inc = results_json("shock", "incremental_signal.json")["outcomes"]["beta"]
-hd_inc_n = int(_inc["n_washing"])
-hd_inc_r2_base = _inc["r2_M3_washing_sample"]
-hd_inc_r2_w = _inc["r2_M4"]
-hd_inc_dr2 = _inc["delta_r2_washing"]
-hd_inc_F = _inc["wald_washing"]["F"]
-hd_inc_p = _inc["wald_washing"]["p"]
 _cg = results_json("washing", "activity_grounding.json")["channel_gap"]["pooled"]
 hd_gap_quant_pp = _cg["quantified_outcome"]["gap_pp"]
 hd_gap_named_pp = _cg["named_product_or_process"]["gap_pp"]
@@ -288,31 +281,10 @@ _sic2_counts = _us["sic2"].value_counts()
 uni_top_sic2 = str(_sic2_counts.index[0])
 uni_top_sic2_n = int(_sic2_counts.iloc[0])
 
-# XBRL coverage of the firm-year financial panel (Appendix A).
-_fin_fy = pd.read_parquet(gold("covariates", "firm_year", "financials"))
-fin_n_firmyears = int(len(_fin_fy))
-
-
-def fin_cov(col):
-    """Share of firm-years with a non-missing value for an XBRL-derived column."""
-    return float(_fin_fy[col].notna().mean() * 100)
-
-
-def fin_n(col):
-    return int(_fin_fy[col].notna().sum())
-
-
 # Archetype-count bootstrap, judge funnel, and horse-race quantities quoted
 # outside the chunks that build their figures.
 hd_boot_reps = int(results_json("posture", "bootstrap_jaccard_results.json")["replicates"])
 hd_pass1_paragraphs = int(results_json("prefilter", "run_diff.json")["current_positive"])
-_inc_all = results_json("shock", "incremental_signal.json")["outcomes"]
-hd_inc_dr2_max = max(v["delta_r2_washing"] for v in _inc_all.values())
-hd_inc_ps_pp = (_inc_all["price_to_sales"]["delta_r2_postura"]
-                + _inc_all["price_to_sales"]["delta_r2_actividad"]) * 100
-hd_loyo_pmax = float(_res_table("call_beta", "call_beta_robustness_leave_one_year_out.csv")
-                     .query("variable == 'intensity_expanding'")["p"].max())
-cb_base = pick("call_beta", "call_beta_regression_samples.csv", model="baseline")
 
 # Prefilter gate validation (Appendix B evaluation table).
 _pf_forms = {r["form"]: r for r in results_json("prefilter", "form_validation_metrics.json")["rows"]}
@@ -328,9 +300,9 @@ The corpus covers `{python} hd_paragraphs_m` million paragraphs from `{python} f
 
 The gap between narrative volume and disclosed substance looks like a firm characteristic and not like reporting noise: it persists from one reporting cycle to the next. Inside the same firm and fiscal year, voluntary earnings calls are clearly more promotional, and carry more quantified claims, than the statutory 10-K, so the two venues are not interchangeable sources on the same firm. Regulatory attention narrows that distance: after the SEC comment letter to Welltower, the firm restated its AI language in formal terms in the filings that followed.
 
-The capital-market regressions relate these measures to post-call outcomes. Accumulated decoupling is associated with a higher systematic beta, while the decoupling measured in a single call shows no association across the outcomes tested. Sustained disclosure volume goes with a larger market capitalization and a slightly higher beta; it is the governance-oriented framing, not the volume, that goes with a lower beta.
+The capital-market regressions relate these measures to post-call outcomes. Accumulated decoupling and sustained disclosure volume both associate with a larger shift in systematic risk (beta) around the call, while the decoupling measured in a single call shows no association across the outcomes tested. A governance-oriented disclosure composition goes with a smaller beta shift, more post-announcement drift, and slower revenue growth over the following year; the announcement-window price reaction and the weekly crash-risk measures carry none of this.
 
-Those are the empirical results. The same constructs are then assembled into a process that sorts claims by how much they matter, names the verification each one needs, and hands the decision to the economic analysis that follows it. That process is a proposed application and its effectiveness has still to be evaluated. The framework does not label firms as fraudulent or as technologically advanced. An issuer can *compare is own communication against what it is able to document, and an investor or board can decide which external claims deserve deeper verification before committing capital. An adaptation to private companies and early-stage ventures is set out as a proposal; it was not estimated on those firms.
+Those are the empirical results. The same constructs are then assembled into a process that sorts claims by how much they matter, names the verification each one needs, and hands the decision to the economic analysis that follows it. That process is a proposed application and its effectiveness has still to be evaluated. The framework does not label firms as fraudulent or as technologically advanced. An issuer can compare its own communication against what it is able to document, and an investor or board can decide which external claims deserve deeper verification before committing capital. An adaptation to private companies and early-stage ventures is set out as a proposal; it was not estimated on those firms.
 
 {{< pagebreak >}}
 
@@ -340,7 +312,7 @@ Those are the empirical results. The same constructs are then assembled into a p
 
 Corporate AI disclosure has become harder and harder to read. Investors and analysts need to separate firms with real AI adoption from firms that are mostly making promotional claims, because real adoption can move productivity and firm value [@basnet2025; @song2026]. Managers and boards have the same problem seen from the inside: they have to communicate technical initiatives without overstating how mature they are, because the distance between what a firm says and what it can show is now a legal and reputational exposure. Regulators have made that exposure concrete and have named overstated AI capability as a form of misstatement [@gensler2023; @sec2024pressrelease], and SEC comment letters show that an inconsistency between a promotional earnings call and the formal filings can attract direct scrutiny [@welltower2025letter]. 
 
-AI rapidly became a standard topic of corporate communication after ChatGPT’s release [@anantharaman2026]. In the S&P 500, the share of firms mentioning AI in SEC filings went from `{python} f"{hd_share[2021]:.0f}"`% in 2021 to `{python} f"{hd_share[2025]:.0f}"`% in 2025. Over the same period, narrative intensity across the panel increased `{python} f"{hd_frames_ratio:.1f}"`-fold and, when annualizing 2026 observations, reaches approximately `{python} f"{hd_int_ratio_est:.0f}"` times its 2021 level. Once AI appears in the disclosures of nearly every large public company, a simple mention count says very little about whether a firm is describing operational activity or is just following what everybody else writes.
+AI rapidly became a standard topic of corporate communication after ChatGPT's release [@anantharaman2026]. In the S&P 500, the share of firms mentioning AI in SEC filings went from `{python} f"{hd_share[2021]:.0f}"`% in 2021 to `{python} f"{hd_share[2025]:.0f}"`% in 2025. Over the same period, narrative intensity across the panel increased `{python} f"{hd_frames_ratio:.1f}"`-fold and, when annualizing 2026 observations, reaches approximately `{python} f"{hd_int_ratio_est:.0f}"` times its 2021 level. Once AI appears in the disclosures of nearly every large public company, a simple mention count says very little about whether a firm is describing operational activity or is just following what everybody else writes.
 
 This is a measurement problem. The usual textual methods in finance work with keyword frequencies or dictionary-based sentiment [@loughran2011], and such methods give the same weight to a routine risk disclaimer and to a detailed account of an AI deployment or a commercial partnership. To judge the substance and the credibility of corporate AI disclosure one has to move past how often a firm mentions AI and look instead at how it frames the claim, what operational activity it reports, and how concretely that activity is backed by disclosed evidence.
 
@@ -362,7 +334,7 @@ The thesis makes three contributions:
 
 ## Theoretical foundations and state of the art
 
-Accounting and finance research shows that corporate narratives contain information beyond financial data: @li2008 links readability to earnings persistence, @loughran2011 identify financial vocabulary misclassified by general dictionaries, and @gentzkow2019 formalize text as economic data. Following the post-2022 surge in AI disclosure [@anantharaman2026], studies distinguish actionable plans from boilerplate [@basnet2025], compare disclosure with AI hiring and patents [@song2026; @babina2024; @eisfeldt2023; @barrios2025], and examine promotional language and valuations unsupported by fundamentals [@cheng2019; @huang2014]. Regulatory scrutiny of AI-related misstatements [@gensler2023; @sec2024pressrelease; @welltower2025letter] connects this debate to greenwashing and selective disclosure [@delmas2011; @marquis2016; @seele2022].
+Corporate narratives carry informative signals beyond standard accounting data: @li2008 links readability to earnings persistence, @loughran2011 identify financial vocabulary misclassified by general dictionaries, and @gentzkow2019 formalize text as economic data. Following the post-2022 surge in AI disclosure [@anantharaman2026], studies distinguish actionable plans from boilerplate [@basnet2025], compare disclosure with AI hiring and patents [@song2026; @babina2024; @eisfeldt2023; @barrios2025], and examine promotional language and valuations unsupported by fundamentals [@cheng2019; @huang2014]. Regulatory scrutiny of AI-related misstatements [@gensler2023; @sec2024pressrelease; @welltower2025letter] connects this debate to greenwashing and selective disclosure [@delmas2011; @marquis2016; @seele2022].
 
 Instead of relying only on external hiring or patent proxies, this study asks whether the disclosure itself is internally consistent and factually grounded. Four theoretical mechanisms support that measurement:
 
@@ -382,7 +354,7 @@ Four research questions guide the empirical tests:
 | **RQ1: Evolution and composition** | Institutional isomorphism [@dimaggio1983] | AI narrative volume diffuses rapidly across all sectors, whereas concrete, verifiable activities expand at a substantially slower rate. |
 | **RQ2: Strategic heterogeneity** | Signalling theory [@spence1973] & organizational configurations | Stable communication archetypes emerge, where disclosure posture predicts verified operational activity and firm fundamentals beyond raw volume. |
 | **RQ3: Decoupling and venue divergence** | Organizational decoupling [@crilly2012] & channel liability [@frankel1999] | Unbacked promotional claims appear more heavily in voluntary earnings calls than in statutory filings, with regulatory scrutiny compressing this gap. |
-| **RQ4: Capital market pricing** | Costly signalling [@crawford1982; @rogers2011] | Markets price accumulated disclosure habits and evidentiary grounding into systematic risk (beta) rather than reacting to unverified single-quarter narrative volume. |
+| **RQ4: Capital market pricing** | Costly signalling [@crawford1982; @rogers2011] | Markets price accumulated decoupling, cumulative disclosure intensity, and a governance-weighted posture into systematic risk (beta) rather than reacting to unverified single-quarter narrative volume. |
 
 : Research questions, theoretical mechanisms, and expected outcomes. {#tbl-rq-theory}
 
@@ -394,7 +366,7 @@ The empirical pipeline converts corporate disclosures into six constructs ($D, P
 
 *Code and data availability.* Code and extraction prompts are available on GitHub [@oviedo2026code]; derived datasets and fitted models are on Hugging Face Datasets [@oviedo2026data] and Models [@oviedo2026models], respectively. Releases and revisions are pinned to this thesis version; licensed transcripts are excluded. [Appendix A.3](#appendix-a3) documents extraction, and the README provides reproduction instructions.
 
-The next four chapters present the empirical findings, the chapter after them turns those findings into a due-diligence framework, and the last chapter concludes.
+The subsequent chapters follow this architecture: Chapters 2 through 5 present the empirical progression from disclosure postures and operational activities to cross-venue credibility and capital-market pricing; Chapter 6 translates these empirical constructs into an operational due-diligence framework for issuers and allocators; Chapter 7 concludes.
 
 # Corporate AI Disclosure Strategies
 
@@ -527,7 +499,7 @@ Panel A: broad SIC divisions. Panel B: two-digit SIC major groups (top 12 plus r
 
 The spread across divisions and 2-digit groups in @fig-sic-distribution means that AI adoption here is observed under very different cost structures and capital intensities, not inside one technology cohort. Technology, financial services and healthcare account for more than half the sample and 45 smaller SIC groups cover the rest, so sectoral controls can separate economy-wide diffusion pressure from industry-specific workflow integration ([Appendix A.1](#appendix-a1)).
 
-The analysis draws on five data sources, textual, financial and technological: statutory SEC filings (Forms 10-K, 10-Q, DEF 14A, 8-K, 20-F) taken from EDGAR; earnings-call transcripts covering both the management presentation and the analyst Q&A; daily market prices and returns; standardized SEC XBRL accounting fundamentals; and OECD-classified AI patent records from Google Patents.
+The analysis draws on five data sources, textual, financial and technological: statutory SEC filings (Forms 10-K, 10-Q, DEF 14A, 8-K, 20-F) taken from EDGAR; earnings-call transcripts covering both the management presentation and the analyst Q&A; daily market prices and returns; standardized accounting fundamentals from FactSet [@factset]; and OECD-classified AI patent records from Google Patents.
 
 ```{python}
 #| echo: false
@@ -1285,7 +1257,7 @@ The composition over time in @fig-archetype-composition-annual works the same wa
 
 The failure of the $k = 4$ split fits here too. Promotional language without technical specificity does not form a stable cluster of its own, which means that AI washing is not a separate communication style. It is a gap inside the firm between narrative volume and grounded substance, and that gap is what $W$ measures.
 
-In practice this taxonomy gives corporate leaders a benchmark against their industry peers and gives investors a first screen for deciding where deeper due diligence is worth the effort. The archetypes set the context for reading a disclosure and choosing a comparison group. They are not a ranking of quality, and none of them is a strategy to copy. Whether the postures correspond to real execution is a different question, and it needs the concrete operational activities that firms report.
+The archetypes set the context for reading corporate narratives and defining peer comparisons, characterizing communication postures rather than ranking execution quality. Whether these postures correspond to concrete operational execution is a distinct empirical question, examined next through the specific AI activities firms disclose.
 
 # AI Activity and Business Models
 
@@ -2112,7 +2084,7 @@ plt.show()
 k = −1 is the FY2024 10-K the letter reviewed; k = 0 is the first 10-K filed after the letter. Panel A: AI claim density; Panel B: realized-integration claims, the dimension the staff asked about.
 :::
 
-The response was not defensive retreat (@fig-sec-welltower). In the first annual report filed after the inquiry, Welltower's AI claim density `{python} _trend("claim_density")` from `{python} _wv("claim_density", -1)` to `{python} _wv("claim_density", 0)` claims per thousand words, and in the dimension the letter targeted, realized integration, density `{python} _trend("realized_density")` to `{python} _wv("realized_density", 0)`. Decoupling narrowed from `{python} _wv("w", -1)` to `{python} _wv("w", 0)`. One firm cannot establish a regulatory effect, and read alongside the aggregate series, where no break dates to the intervention, the evidence supports a narrow claim: scrutiny is rare, and where it occurred the firm added evidence rather than withdrawing claims (case details in @tbl-g2-sec-cases, [Appendix E](#appendix-e)). For an issuer the lesson is that a prominent claim made on an earnings call needs coherent backing in the formal filings as well. For an investor, the SEC correspondence points at exactly which assertions need independent clarification.
+The response was not defensive retreat (@fig-sec-welltower). In the first annual report filed after the inquiry, Welltower's AI claim density `{python} _trend("claim_density")` from `{python} _wv("claim_density", -1)` to `{python} _wv("claim_density", 0)` claims per thousand words, and in the dimension the letter targeted, realized integration, density `{python} _trend("realized_density")` to `{python} _wv("realized_density", 0)`. Decoupling narrowed from `{python} _wv("w", -1)` to `{python} _wv("w", 0)`. One firm cannot establish a regulatory effect, and read alongside the aggregate series, where no break dates to the intervention, the evidence supports a narrow claim: scrutiny is rare, and where it occurred the firm added evidence rather than withdrawing claims (case details in @tbl-g2-sec-cases, [Appendix E](#appendix-e)). Rather than triggering defensive retreat, regulatory inquiry disciplined cross-channel consistency: prominent claims voiced on earnings calls required commensurate evidentiary backing in statutory filings, highlighting precisely which operational assertions warranted independent verification.
 
 ### DeepSeek, January 2025
 
@@ -2183,7 +2155,7 @@ What ties the series to the event is the text rather than the timing: analysts n
 
 ## What disclosed AI activity adds to disclosure posture
 
-Disclosed activity carries information that posture alone does not. At equal disclosure volume, Vocal Substantives report `{python} f"{hd_vs_ratio:.2f}"` times as many AI activities as Defensive Disclosers, so the archetypes are not a proxy for verbosity. An issuer can use this inventory to benchmark its own technical initiatives and its evidence against peers, and an investor can use it to aim due-diligence questions at deployment maturity, quantified outcomes and reliance on third-party vendors. A firm still has wide discretion over what it emphasizes inside any single document, which leaves open whether these operational claims survive when the legal and regulatory commitment attached to them rises.
+Disclosed activity carries information that posture alone does not. At equal disclosure volume, Vocal Substantives report `{python} f"{hd_vs_ratio:.2f}"` times as many AI activities as Defensive Disclosers, demonstrating that the archetypes do not simply reflect verbosity. Yet firms retain wide discretion over what they emphasize inside any single document, leaving open whether these operational claims survive when legal and regulatory commitments increase.
 
 # Credibility Under Increasing Disclosure Commitment
 
@@ -2242,8 +2214,8 @@ The construct turns the ideas of organizational decoupling [@meyer1977; @westpha
 #| label: fig-ds-alignment-scatter
 #| fig-cap: "[Talk against substance: where firms rank on each, and where the two come apart.]{custom-style=\"CaptionText\"}"
 #| echo: false
-#| fig-width: 6.5
-#| fig-height: 5.0
+#| fig-width: 6.8
+#| fig-height: 5.2
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -2252,44 +2224,89 @@ import matplotlib.pyplot as plt
 # a 2021 firm-year against the 2026 cross-section it never ranked against.
 SCATTER_YEAR = 2025
 _ds = L.read_dataset("firm_year", ("covariates", "washing_score"), ("covariates", "disclosure_volume", ["frames_per_1k"])).dropna(subset=["frames_per_1k", "substance", "w"])
-_ds = _ds[_ds["year"] == SCATTER_YEAR]
-_arch_ds = pd.read_parquet(gold("covariates", "firm_year", "posture_archetype_static"))[["ticker", "year", "archetype"]]
-_ds = _ds.merge(_arch_ds, on=["ticker", "year"], how="left")
+_ds = _ds[_ds["year"] == SCATTER_YEAR].copy()
 _ds["pct_d"] = _ds["pct_disclosure"]
 _ds["pct_s"] = _ds["pct_substance"]
 
-ARCH_COLORS = {"Vocal Substantives": "#355F6B", "Governance-Led Disclosers": "#B85F42",
-               "Defensive Disclosers": "#A5AFB6", "No AI": "#D5D9DD"}
 _q_hi, _q_lo = _ds["w"].quantile(0.95), _ds["w"].quantile(0.05)
 _tail_hi = _ds["w"] >= _q_hi
 _tail_lo = _ds["w"] <= _q_lo
 _body = ~(_tail_hi | _tail_lo)
 
-fig, ax = plt.subplots(figsize=(6.5, 5.0), dpi=300)
-for arch, color in ARCH_COLORS.items():
-    sub = _ds[_body & (_ds["archetype"] == arch)]
-    ax.scatter(sub["pct_d"], sub["pct_s"], s=10, color=color, alpha=0.35, linewidths=0, label=arch)
+fig, ax = plt.subplots(figsize=(6.8, 5.2), dpi=300)
 
-ax.scatter(_ds.loc[_tail_hi, "pct_d"], _ds.loc[_tail_hi, "pct_s"], s=22, facecolor="#B85F42",
-           edgecolor="#B85F42", linewidths=0.6, alpha=0.9,
-           label=f"Top 5% decoupled (W ≥ {_q_hi:.2f})", zorder=5)
-ax.scatter(_ds.loc[_tail_lo, "pct_d"], _ds.loc[_tail_lo, "pct_s"], s=22, facecolor="#355F6B",
+ax.scatter(_ds.loc[_body, "pct_d"], _ds.loc[_body, "pct_s"], s=12, color="#A5AFB6",
+           alpha=0.35, linewidths=0, label="Disclosing firms (inner 90%)")
+
+ax.scatter(_ds.loc[_tail_hi, "pct_d"], _ds.loc[_tail_hi, "pct_s"], s=26, facecolor="#B85F42",
+           edgecolor="#8C3B23", linewidths=0.6, alpha=0.9,
+           label=f"Top 5% decoupled (W ≥ {_q_hi:.2f})", zorder=4)
+ax.scatter(_ds.loc[_tail_lo, "pct_d"], _ds.loc[_tail_lo, "pct_s"], s=26, facecolor="#355F6B",
            edgecolor="#18323A", linewidths=0.6, alpha=0.9,
-           label=f"Bottom 5% quiet substance (W ≤ {_q_lo:.2f})", zorder=5)
+           label=f"Bottom 5% quiet substance (W ≤ {_q_lo:.2f})", zorder=4)
 
-ax.plot([0, 1], [0, 1], color="#1C1F22", lw=1.2, ls="--")
+ax.plot([0, 1], [0, 1], color="#1C1F22", lw=1.2, ls="--", label="Diagonal (W = 0, Talk = Substance)")
+
+# 5 notable firms in top 5% decoupled (W >= 0.38)
+labels_hi = [
+    ("WM", "Waste Mgmt", (16, -14), "left"),
+    ("DFS", "Discover", (-16, 16), "right"),
+    ("DHR", "Danaher", (16, -14), "left"),
+    ("FOX", "Fox Corp", (16, 14), "left"),
+    ("IT", "Gartner", (16, -12), "left"),
+]
+
+# 5 notable firms in bottom 5% quiet substance (W <= -0.35)
+labels_lo = [
+    ("MS", "Morgan Stanley", (16, -14), "left"),
+    ("AIG", "AIG", (-14, 14), "right"),
+    ("CVX", "Chevron", (-16, 14), "right"),
+    ("GILD", "Gilead", (-14, 14), "right"),
+    ("COF", "Capital One", (14, 12), "left"),
+]
+
+# 5 notable firms near the diagonal (W ≈ 0)
+labels_diag = [
+    ("CAT", "Caterpillar", (15, -16), "left"),
+    ("DPZ", "Domino's", (16, -14), "left"),
+    ("HD", "Home Depot", (16, -12), "left"),
+    ("HAS", "Hasbro", (-15, 16), "right"),
+    ("NVDA", "NVIDIA", (-35, -20), "right"),
+]
+
+for ticker, name, offset, ha in labels_hi:
+    row = _ds[_ds["ticker"] == ticker].iloc[0]
+    ax.scatter([row["pct_d"]], [row["pct_s"]], s=44, facecolor="#B85F42", edgecolor="#1C1F22", lw=1.0, zorder=6)
+    ax.annotate(f"{name} ({ticker})", xy=(row["pct_d"], row["pct_s"]), xytext=offset, textcoords="offset points",
+                fontsize=7.0, fontweight="bold", color="#7A2E18", ha=ha,
+                arrowprops=dict(arrowstyle="->", color="#B85F42", lw=0.8, shrinkA=0, shrinkB=4))
+
+for ticker, name, offset, ha in labels_lo:
+    row = _ds[_ds["ticker"] == ticker].iloc[0]
+    ax.scatter([row["pct_d"]], [row["pct_s"]], s=44, facecolor="#355F6B", edgecolor="#1C1F22", lw=1.0, zorder=6)
+    ax.annotate(f"{name} ({ticker})", xy=(row["pct_d"], row["pct_s"]), xytext=offset, textcoords="offset points",
+                fontsize=7.0, fontweight="bold", color="#1E3E47", ha=ha,
+                arrowprops=dict(arrowstyle="->", color="#355F6B", lw=0.8, shrinkA=0, shrinkB=4))
+
+for ticker, name, offset, ha in labels_diag:
+    row = _ds[_ds["ticker"] == ticker].iloc[0]
+    ax.scatter([row["pct_d"]], [row["pct_s"]], s=44, facecolor="#1C1F22", edgecolor="#FFFFFF", lw=0.9, zorder=6)
+    ax.annotate(f"{name} ({ticker})", xy=(row["pct_d"], row["pct_s"]), xytext=offset, textcoords="offset points",
+                fontsize=7.0, fontweight="bold", color="#1C1F22", ha=ha,
+                arrowprops=dict(arrowstyle="->", color="#1C1F22", lw=0.8, shrinkA=0, shrinkB=4))
+
 ax.set_xlabel(f"Disclosure Intensity (D), percentile rank within {SCATTER_YEAR}", fontsize=9.0, fontweight="bold")
 ax.set_ylabel(f"Disclosed Substance (S), percentile rank within {SCATTER_YEAR}", fontsize=9.0, fontweight="bold")
-ax.set_xlim(-0.02, 1.02)
-ax.set_ylim(-0.02, 1.02)
-ax.legend(fontsize=7.2, loc="upper left", framealpha=0.9, markerscale=1.3)
+ax.set_xlim(-0.03, 1.03)
+ax.set_ylim(-0.03, 1.03)
+ax.legend(fontsize=7.2, loc="upper left", framealpha=0.9, markerscale=1.2)
 ax.grid(True, linestyle=":", alpha=0.35)
 plt.tight_layout()
 plt.show()
 ```
 
 ::: {custom-style="FigureNote"}
-One point per firm in `{python} str(SCATTER_YEAR)`, placed by where it ranks that year on talk ($D$) and on grounded activity ($S$). These are the ranks $W$ is built from, so the dashed diagonal is exactly $W = 0$. Only one year is plotted because the ranking happens within a year; pooling the panel would judge a 2021 firm against a 2026 cross-section it never faced. A firm-year holds what the firm published during that calendar year -- for `{python} str(SCATTER_YEAR)`, the annual report covering fiscal `{python} str(SCATTER_YEAR - 1)` together with the quarterlies, proxy and current reports filed alongside it. It is what a reader could have had in hand that year, not the accounting period the documents describe. Colors mark communication archetype. The flat band along the bottom is a tie: every firm with no extracted AI activity scores zero substance and lands on the same rank.
+One point per firm in `{python} str(SCATTER_YEAR)`, placed by where it ranks that year on talk ($D$) and on grounded activity ($S$). These are the ranks $W$ is built from, so the dashed diagonal is exactly $W = 0$. Only one year is plotted because the ranking happens within a year; pooling the panel would judge a 2021 firm against a 2026 cross-section it never faced. A firm-year holds what the firm published during that calendar year -- for `{python} str(SCATTER_YEAR)`, the annual report covering fiscal `{python} str(SCATTER_YEAR - 1)` together with the quarterlies, proxy and current reports filed alongside it. It is what a reader could have had in hand that year, not the accounting period the documents describe. Colored points mark the top and bottom 5% tails of decoupling ($W$), with five notable firms annotated in each tail alongside five firms near the diagonal. The flat band along the bottom is a tie: every firm with no extracted AI activity scores zero substance and lands on the same rank.
 :::
 
 Most firms land close to the diagonal (@fig-ds-alignment-scatter): they rank about as high on talk as on grounded activity, which is what you would hope to see. The firms that talk most are not the ones the measure flags: Vocal Substantives crowd the top-right corner, high on both, and sit near the line. What $W$ reads is the distance from it. Below the line, the narrative has run ahead of anything the filings can show; above it, the activity is there and the firm has barely mentioned it.
@@ -2408,11 +2425,11 @@ split_half_p_str = "< 0.001" if split_half_p < 0.001 else f"= {split_half_p:.3g}
 persistence_n_pairs = validation["persistence"]["n_pairs"]
 ```
 
-Firms that talk about AI at comparable intensity end up far apart on substance (@fig-ds-dumbbell). Across the panel $W$ is widely dispersed ($\text{standard deviation} =$ `{python} f"{std_w:.2f}"`), with `{python} n_tail` firm-years in the decoupled tail at the 95th percentile ($W \ge$ `{python} f"{cutoff:.2f}"`). These are not firms with no interest in AI; they talk about AI a great deal while disclosing almost no verifiable operational substance. The tail is where an analyst looks first: a firm ranking in the top quintile on disclosure and the bottom quintile on substance is making claims that its own filings do not support. For a reporting company, a high decoupling rank is an internal diagnostic: either the concrete details of the initiatives are missing from the text, or the broad claims need to be cut back, and the measure does not decide in advance which of the two it is. The gap is also a lasting posture and not a reporting accident: it persists from one year to the next at a Spearman $\rho =$ `{python} f"{persistence_rho:+.3f}"` ([Appendix D](#appendix-d)).
+Firms that talk about AI at comparable intensity end up far apart on substance (@fig-ds-dumbbell). Across the panel $W$ is widely dispersed ($\text{standard deviation} =$ `{python} f"{std_w:.2f}"`), with `{python} n_tail` firm-years in the decoupled tail at the 95th percentile ($W \ge$ `{python} f"{cutoff:.2f}"`). These firms dedicate substantial narrative volume to AI while disclosing minimal verifiable operational substance, combining top-quintile disclosure intensity with bottom-quintile substantive grounding. This divergence represents a durable reporting posture rather than idiosyncratic annual noise, persisting year-over-year at a Spearman $\rho =$ `{python} f"{persistence_rho:+.3f}"` ([Appendix D](#appendix-d)).
 
 ## What changes from filing to call
 
-If decoupling is a lasting posture, the next question is what happens when the same firm discusses AI in two venues carrying very different legal liability.
+A lasting decoupling raises a further question: what happens when the same firm discusses AI in two venues carrying very different legal liability.
 
 ```{python}
 #| echo: false
@@ -2741,7 +2758,7 @@ plt.show()
 Relative amplification in quantified evidence exceeds that of promotional claims.
 :::
 
-The co-movement agrees with @jia2025, who find that discussions of generative AI after ChatGPT often combine a positive tone with concrete initiatives; their initiative measure also counts plans, while the grounding and the reported outcomes are kept separate here. Taken together, tone and disclosed evidence should be treated as two different dimensions of corporate communication and not as two ends of the same one.
+This co-movement aligns with @jia2025, who find that corporate discussions of generative AI frequently join positive sentiment with concrete initiatives; while their metric includes planned initiatives, the framework here separates grounding from realized operational outcomes. Tone and disclosed evidence constitute two distinct dimensions of corporate communication rather than opposing poles of a single axis.
 
 ## What credibility means in this thesis
 
@@ -2752,8 +2769,6 @@ Three conclusions come out of the credibility ladder:
 3. **Direct scrutiny is rare.** In the one case observed, the issuer reacted by reducing narrative volume and narrowing its decoupling, not by adding boilerplate.
 
 AI washing in this thesis is therefore an observable and persistent decoupling ($W$) between narrative volume and grounded operational substance. It is not legal proof of fraud, nor proof that nothing was implemented.
-
-In practice an analyst can set priorities by looking for persistent decoupling and for sharp differences between venues. Whether those differences correspond to anything the market and the fundamentals actually register is the next question.
 
 # Market Relevance of Disclosure Signals
 
@@ -2770,12 +2785,13 @@ Every disclosure regressor is predetermined with respect to the call, through a 
 | Cumulative disclosure intensity | $D$ | AI frames per 1k words across statutory filings through prior quarter | Standardized |
 | Discloses AI in filings | $\text{has}$ | Indicator for filing any AI frame in trailing year | Binary {0, 1} |
 | Posture weights | $w_{\text{voc}}, w_{\text{gov}}$ | Trailing 12-month archetype mixture relative to Defensive reference | [0, 1] |
-| Lagged outcome | $Y_{t-1}$ | Pre-call outcome level | Standardized |
+| Lagged outcome | $Y_{t-1}$ | Pre-call level of the same construct, where one exists | Standardized |
 | Controls | -- | Log market cap, 60-day pre-call return, ROA | Standardized |
+| Crash-risk controls (KLZ) | $\text{DTURN}, \text{SIGMA}, \text{RET}, \text{MB}, \text{LEV}$ | Share-turnover change, pre-call return volatility and mean, market-to-book, leverage | Standardized |
 
-: Regressors and controls predetermined at call date $t$. Continuous regressors and lagged outcomes are standardized to unit variance. {#tbl-market-regressors}
+: Regressors and controls predetermined at call date $t$. Continuous regressors and lagged outcomes are standardized to unit variance. The Kim, Li and Zhang (2011) controls are added only to the two weekly crash-risk outcomes [@kim2011]. {#tbl-market-regressors}
 
-The estimating equation is an analysis of covariance (ANCOVA) regressing post-call outcomes on predetermined disclosure quantities, the lagged outcome $Y_{i,t^-}$ to absorb firm-level persistence, predetermined controls (log market capitalization, 60-day return momentum, and ROA), additive sector and year fixed effects, and standard errors clustered at the firm level:
+The estimating equation is an analysis of covariance (ANCOVA) regressing post-call outcomes on predetermined disclosure quantities, the lagged outcome $Y_{i,t^-}$ where the outcome has a pre-call level of the same construct, predetermined controls (log market capitalization, 60-day return momentum, and ROA, plus the KLZ controls for the two crash-risk outcomes), additive sector and year fixed effects, and standard errors clustered at the firm level:
 
 $$Y_{i,t} = \alpha + \beta\,\text{Disclosure}_{i,t^-} + \gamma\,Y_{i,t^-} + \delta\,\text{Controls}_{i,t^-} + \text{Sector}_i + \text{Year}_t + \varepsilon_{i,t}$$
 
@@ -2783,20 +2799,20 @@ The archetype weights sum to one, so the Defensive posture is kept as the refere
 
 ## Outcomes and their measurement windows
 
-@tbl-market-outcomes lists the eight outcomes, each measured over a window opening after the call.
+@tbl-market-outcomes lists the eight outcomes. Each is drawn from a design already established in the event-study and crash-risk literatures, applied here to the firm's own earnings call rather than to an earnings announcement or a macro shock.
 
 | Outcome | Window | Form |
 |:---|:---|:---|
-| Market beta | Trading days $[+21, +63]$ after the call | Post-call level |
-| Log market capitalization | Trading days $[+2, +63]$ after the call | Post-call level |
-| Negative return skewness (NCSKEW) | Trading days $[+2, +63]$ after the call | Post-call level |
-| Down-to-up volatility (DUVOL) | Trading days $[+2, +63]$ after the call | Post-call level |
+| Beta shift (Brenner 1979) | Trading days $[-63,-21)$ and $[+21,+63)$ around the call, pooled | Change in slope (POST $\times$ MKT interaction) |
+| Cumulative abnormal return, CAR[-1,+1] | Trading days $[-1,+1]$ around the call | Announcement-window abnormal return |
+| Post-announcement drift, CAR[+2,+63] | Trading days $[+2,+63]$ after the call | Cumulative abnormal return |
+| Negative return skewness (NCSKEW), weekly | 26 trading weeks after the call | Post-call level |
+| Down-to-up volatility (DUVOL), weekly | 26 trading weeks after the call | Post-call level |
 | Gross margin expansion | Four fiscal quarters after the call's own quarter | Change from the trailing four quarters, pp, winsorized at 1% |
 | Change in ROIC-WACC spread | Four fiscal quarters after the call's own quarter | Change from the trailing four quarters, pp, winsorized at 1% |
 | Revenue growth | Four fiscal quarters after the call's own quarter | Growth over the trailing four quarters |
-| Price-to-sales ratio | Trading days $[+2, +63]$ after the call | Post-call level |
 
-: Outcomes and their measurement windows. Post-call trading windows span days $[+21, +63]$ for beta and $[+2, +63]$ for valuation and return distribution metrics. The three accounting outcomes are measured over the four fiscal quarters that follow the call's own quarter, against the four that precede it, with ratio changes winsorized at 1% to limit denominator distortion. {#tbl-market-outcomes}
+: Outcomes and their measurement windows. The beta shift is a single pooled regression over the trading days on both sides of the call, with a 21-trading-day gap left on each side of the call date; the two CAR outcomes and the two weekly crash-risk measures are estimated from the residuals of a separate market model fit before the call; the three accounting outcomes are measured over the four fiscal quarters that follow the call's own quarter, against the four that precede it, with ratio changes winsorized at 1% to limit denominator distortion. [Appendix A.5](#appendix-a5) gives the estimating equations. {#tbl-market-outcomes}
 
 Eight outcomes are estimated over six disclosure variables, so the hypothesis tests use a Benjamini-Hochberg false discovery rate correction over the whole family of 48 coefficients, not outcome by outcome.
 
@@ -2849,12 +2865,12 @@ mkt_crit1 = f"{_grid['bh_crit'].iloc[0]:.4f}"
 mkt_crit_cut = f"{_grid['bh_crit'].iloc[_cut - 1]:.4f}" if _cut else "n/a"
 # Survivor names are read off the same grid the table reports, so the prose
 # cannot drift from the correction as outcomes change.
-_MKT_LABEL = {"log_market_cap_post": "market capitalization", "duvol_post": "DUVOL",
-              "ncskew_post": "NCSKEW", "beta_post_63": "beta",
+_MKT_LABEL = {"beta_shift_delta": "the beta shift", "car_m1_p1": "the announcement-window CAR",
+              "car_p2_p63": "post-announcement drift", "ncskew_wk_post": "weekly NCSKEW",
+              "duvol_wk_post": "weekly DUVOL",
               "revenue_growth_ttm_post_pct": "revenue growth",
               "gross_margin_ttm_change_pp": "gross margin",
-              "roic_minus_wacc_ttm_change_pp": "the ROIC-WACC spread",
-              "ps_ratio_post": "price-to-sales"}
+              "roic_minus_wacc_ttm_change_pp": "the ROIC-WACC spread"}
 
 def _mkt_names(variable, surviving):
     rows = _grid[(_grid["variable"] == variable) & (_grid["survives"] == surviving)]
@@ -2865,8 +2881,8 @@ def _mkt_names(variable, surviving):
 
 mkt_int_survive = _mkt_names("intensity_expanding", True)
 mkt_int_nominal = _mkt_names("intensity_expanding", False)
-n_calls_main = f"{int(_bat[_bat['target'] == 'duvol_post']['n_calls'].iloc[0]):,}"
-n_firms_main = int(_bat[_bat["target"] == "duvol_post"]["n_firms"].iloc[0])
+n_calls_main = f"{int(_bat[_bat['target'] == 'beta_shift_delta']['n_calls'].iloc[0]):,}"
+n_firms_main = int(_bat[_bat["target"] == "beta_shift_delta"]["n_firms"].iloc[0])
 def _mkt_stars(p):
     # escaped, so the significance marks survive next to the bold markers
     # instead of being eaten as emphasis
@@ -2919,9 +2935,9 @@ _COLS = [
     ("c", "Governance vs. Defensive", r"$\beta_{\text{gov}}$"),
     ("c", "Governance vs. Vocal",     r"$\beta_{\text{gov}}-\beta_{\text{voc}}$"),
 ]
-_OUTCOMES = ["beta_post_63", "log_market_cap_post", "ncskew_post", "duvol_post",
+_OUTCOMES = ["beta_shift_delta", "car_m1_p1", "car_p2_p63", "ncskew_wk_post", "duvol_wk_post",
              "gross_margin_ttm_change_pp", "roic_minus_wacc_ttm_change_pp",
-             "revenue_growth_ttm_post_pct", "ps_ratio_post"]
+             "revenue_growth_ttm_post_pct"]
 
 def _mkt_joint_cell(target):
     row = _con[(_con["target"] == target) & (_con["contrast"] == "Composition (joint)")].iloc[0]
@@ -2940,21 +2956,21 @@ for t in _OUTCOMES:
 Markdown("\n".join([_head, _rule] + _rows))
 ```
 
-**Cumulative disclosure intensity ($D$) is the most consistent predictor of post-call market outcomes.** Trailing disclosure intensity associates with larger market capitalization (MCap: $\beta =$ `{python} b_of("log_market_cap_post", "intensity_expanding")`, $p$ `{python} p_of("log_market_cap_post", "intensity_expanding")`), higher revenue growth over the following four quarters ($\beta =$ `{python} b_of("revenue_growth_ttm_post_pct", "intensity_expanding")`, $p$ `{python} p_of("revenue_growth_ttm_post_pct", "intensity_expanding")`), higher beta ($\beta =$ `{python} b_of("beta_post_63", "intensity_expanding")`, $p$ `{python} p_of("beta_post_63", "intensity_expanding")`), and reduced downside asymmetry (DUVOL: $\beta =$ `{python} b_of("duvol_post", "intensity_expanding")`, $p$ `{python} p_of("duvol_post", "intensity_expanding")`; NCSKEW: $\beta =$ `{python} b_of("ncskew_post", "intensity_expanding")`, $p$ `{python} p_of("ncskew_post", "intensity_expanding")`). Of these, `{python} mkt_int_survive` clear the 5% Benjamini-Hochberg false discovery rate (BH-FDR) correction over all `{python} str(mkt_m)` disclosure coefficients, whose cutoff falls at $p =$ `{python} mkt_crit_cut`. The rest stay nominal. This is what exposure to a market theme looks like [@eisfeldt2023] among established, growing issuers whose post-call return distribution is less left-skewed.
+**Accumulated disclosure, not a single call's decoupling, predicts how far a firm's systematic risk moves around its own earnings call.** Historical decoupling ($W_{\text{exp}}$) and cumulative disclosure intensity ($D$) both associate with a larger beta shift ($W_{\text{exp}}$: $\beta =$ `{python} b_of("beta_shift_delta", "w_expanding")`, $p$ `{python} p_of("beta_shift_delta", "w_expanding")`; $D$: $\beta =$ `{python} b_of("beta_shift_delta", "intensity_expanding")`, $p$ `{python} p_of("beta_shift_delta", "intensity_expanding")`), and both clear the 5% Benjamini-Hochberg false discovery rate (BH-FDR) correction over all `{python} str(mkt_m)` disclosure coefficients, whose cutoff falls at $p =$ `{python} mkt_crit_cut`. The decoupling of an individual call ($W_{\text{call}}$) carries none of this: across all eight outcomes its coefficient never separates from zero ($\beta \in [$ `{python} f"{_bat[_bat.variable == 'w_call']['beta_std'].min():+.3f}"`, `{python} f"{_bat[_bat.variable == 'w_call']['beta_std'].max():+.3f}"` $]$). Persistent decoupling behaves as a firm characteristic rather than an episode, consistent with accumulated opacity being priced into systematic risk [@jin2006; @fu2021], though the design cannot separate that channel from a market-theme exposure reading of the same intensity effect [@eisfeldt2023].
 
-**Decoupling matters as a habit, and not as a single-call episode.** The decoupling of an individual call ($W_{\text{call}}$) provides zero incremental explanatory power across all eight outcomes ($\beta \in [$ `{python} f"{_bat[_bat.variable == 'w_call']['beta_std'].min():+.3f}"`, `{python} f"{_bat[_bat.variable == 'w_call']['beta_std'].max():+.3f}"` $]$). Accumulated historical decoupling ($W_{\text{exp}}$), on the other hand, predicts a higher systematic beta ($\beta =$ `{python} b_of("beta_post_63", "w_expanding")`, $p$ `{python} p_of("beta_post_63", "w_expanding")`) and survives full BH-FDR control. Persistent decoupling behaves as a firm characteristic, and the association with beta is consistent with accumulated opacity being priced [@jin2006; @fu2021], though the design cannot separate that channel from others.
+**A governance-weighted disclosure composition goes with a smaller beta shift, more post-announcement drift, and slower revenue growth.** The joint $F$-test for posture composition rejects that it adds nothing for the beta shift ($p =$ `{python} f"{_mkt_joint('beta_shift_delta'):.3f}"`), post-announcement drift ($p =$ `{python} f"{_mkt_joint('car_p2_p63'):.3f}"`), and revenue growth ($p =$ `{python} f"{_mkt_joint('revenue_growth_ttm_post_pct'):.3f}"`); it says nothing for the remaining five outcomes. A composition weighted toward Governance rather than Defensive goes with a smaller beta shift ($\beta =$ `{python} b_of("beta_shift_delta", "w_gov")`, $p$ `{python} p_of("beta_shift_delta", "w_gov")`), more positive post-announcement drift ($\beta =$ `{python} b_of("car_p2_p63", "w_gov")`, $p$ `{python} p_of("car_p2_p63", "w_gov")`), and slower revenue growth over the following four quarters ($\beta =$ `{python} b_of("revenue_growth_ttm_post_pct", "w_gov")`, $p$ `{python} p_of("revenue_growth_ttm_post_pct", "w_gov")`); all three survive BH-FDR control. Cumulative disclosure intensity also adds to the post-announcement drift ($\beta =$ `{python} b_of("car_p2_p63", "intensity_expanding")`, $p$ `{python} p_of("car_p2_p63", "intensity_expanding")`, surviving), while its association with revenue growth stays nominal ($\beta =$ `{python} b_of("revenue_growth_ttm_post_pct", "intensity_expanding")`, $p$ `{python} p_of("revenue_growth_ttm_post_pct", "intensity_expanding")`). A governance-heavy posture therefore reads as a more defensive, slower-growing profile that the market marks down for risk at the call and marks up gradually over the following quarter.
 
-**Posture composition is associated with the price measures and not with the accounting ones.** The joint $F$-test for posture composition is significant for beta ($p =$ `{python} f"{_mkt_joint('beta_post_63'):.3f}"`), MCap ($p =$ `{python} f"{_mkt_joint('log_market_cap_post'):.3f}"`), and DUVOL ($p =$ `{python} f"{_mkt_joint('duvol_post'):.3f}"`), and says nothing for margins or spreads. A composition weighted toward Governance rather than Defensive goes with a lower beta ($\beta =$ `{python} b_of("beta_post_63", "w_gov")`, $p$ `{python} p_of("beta_post_63", "w_gov")`), a larger MCap ($\beta =$ `{python} b_of("log_market_cap_post", "w_gov")`, $p$ `{python} p_of("log_market_cap_post", "w_gov")`), and less downside asymmetry (DUVOL $\beta =$ `{python} b_of("duvol_post", "w_gov")`, $p$ `{python} p_of("duvol_post", "w_gov")`). Governance also separates cleanly from Vocal posture on beta ($\beta_{\text{gov}} - \beta_{\text{voc}} =$ `{python} f"{ctr('beta_post_63', 'Governance vs. Vocal')[0]:+.3f}"`, $p$ `{python} pstr(ctr('beta_post_63', 'Governance vs. Vocal')[1])`).
+**The announcement-window reaction and the weekly crash-risk measures show no association with any disclosure variable.** The three-day cumulative abnormal return around the call, $\text{CAR}[-1,+1]$, and the two weekly crash-risk measures, NCSKEW and DUVOL, return no coefficient that clears even the 10% nominal threshold against any of the six disclosure variables, before any multiple-testing correction. Investors do not price the disclosure content differently at the moment of the call, and the shape of the return distribution over the following 26 weeks carries none of it either. Two robustness checks confirm this for the weekly measures: excluding each sector in turn, and restricting to calls where the firm's dominant posture had already changed by the call, leave every disclosure coefficient on NCSKEW and DUVOL statistically indistinguishable from zero.
 
-**Disclosing AI at all is associated with a more left-skewed return distribution.** Filing any AI frame during the trailing year ($\beta_{\text{has}}$), which is a presence indicator over that window and not a record of when the firm began, goes with both asymmetry measures (NCSKEW: $\beta =$ `{python} b_of("ncskew_post", "has_posture")`, $p$ `{python} p_of("ncskew_post", "has_posture")`; DUVOL: $\beta =$ `{python} b_of("duvol_post", "has_posture")`, $p$ `{python} p_of("duvol_post", "has_posture")`), and both survive BH-FDR control. Among firms that disclose, a larger cumulative volume ($D$) runs the other way. NCSKEW and DUVOL summarise the shape of the return distribution over the window; they are not counts of observed crashes, so neither coefficient says how often a crash actually happened.
+**The accounting outcomes carry the least of the disclosure signal.** Gross margin expansion and the change in the ROIC-WACC spread show no association with any of the six disclosure variables, nominal or corrected. Revenue growth's one surviving coefficient is the Governance composition effect above; none of the other five disclosure variables reaches even nominal significance on it.
 
-**These results also mark where this kind of analysis stops.** For a director or an allocator, the disclosure record is a useful complement to ordinary financial statement analysis, since it shows persistent opacity and governance framing without any proprietary data. But the associations are cross-sectional comparisons between firms and not causal policy advice: changing the language of a disclosure will not by itself change a cost of capital or a crash exposure. What they justify is attention to the communication record over time, and that is where the framework takes over from the regressions. The accounting outcomes now sit on a twelve-month window fixed to each call, which removes the mismatch of reading several calls against one annual report, but they remain slower and noisier than the price measures and none of them clears the correction.
+**These results also mark where this econometric analysis stops.** These associations capture cross-sectional differences across `{python} n_calls_main` calls (`{python} n_firms_main` firms) rather than causal policy interventions: modifying disclosure language does not mechanically alter capital costs or tail-risk exposure. The lowest joint-composition $p$-value across outcomes (`{python} comp_p_min`) still describes an association, not an effect estimate. The disclosure coefficients under the post-call beta *level* specification, alongside the beta *shift* used here, are reported as a robustness check against alternative windows and market-model specifications in [Appendix D](#appendix-d) (@tbl-call-beta-paper).
 
 # From Disclosure Evidence to Strategic Decisions
 
 ## What the findings change for decision-makers
 
-Everything measured so far describes how firms write about AI. This chapter asks the question a reader actually has: knowing this, what would I do differently? The evidence is associative, so it cannot prescribe an effect. What it can do is redirect attention, and that is worth something on its own, because attention is the scarce input in both disclosure review and due diligence. @tbl-decision-bridge sets out each finding next to the decision it changes on either side of the market.
+The evidence is associative, so it cannot prescribe an effect. What it can do is redirect attention, and that is worth something on its own, because attention is the scarce input in both disclosure review and due diligence. @tbl-decision-bridge sets out each finding next to the decision it changes on either side of the market.
 
 | What the evidence establishes | What changes for an investor | What changes for a manager |
 |:---|:---|:---|
@@ -2963,8 +2979,8 @@ Everything measured so far describes how firms write about AI. This chapter asks
 | Disclosed activity grew while its average grounding thinned. | Check the evidence behind the material initiatives before reading breadth as maturity. | Track progress and outcomes, not the count of announced initiatives. |
 | Promotion and evidence coexist. | An ambitious story is not by itself a reason to walk away. | You can be ambitious and still bound the scope, the maturity and the evidence. |
 | The two venues carry different information. | Read them together and check the discrepancies that matter. | Keep the facts consistent even when detail and emphasis differ. |
-| Accumulated decoupling is associated with beta; a single call's is not. | Put the communication record into the risk view, without turning the score into a rule. | Follow accumulated commitments and how they resolve, not only the next release. |
-| No accounting association survives correction. | Do not carry these measures into growth or margin assumptions. | Justify AI spending on your own operating evidence. |
+| Accumulated decoupling and disclosure volume are associated with the beta shift around the call; a single call's decoupling is not. | Put the communication record into the risk view, without turning the score into a rule. | Follow accumulated commitments and how they resolve, not only the next release. |
+| A governance-weighted posture goes with slower revenue growth; margins and the ROIC-WACC spread show no association. | Do not carry margin or spread assumptions from these measures; treat a governance-heavy posture as a slower-growth signal worth checking. | Justify AI spending on your own operating evidence, not on posture alone. |
 
 : What the findings change for the two sides of the market. {#tbl-decision-bridge}
 
@@ -3231,19 +3247,7 @@ A short hypothetical shows the shape of it. A seed-stage company says its produc
 
 There is strategic heterogeneity, and separating volume from posture from evidence is what makes it visible. Corporate AI disclosure spread across almost the whole market, from one third of S&P 500 firms in 2021 to more than nine in ten by 2025–2026, while the concrete evidence behind each disclosed activity thinned over the same years: companies talk about AI more than before, and each mention carries less proof. Firms sort into three stable ways of communicating, shaped by their industry, and the style tracks what they report doing rather than only how much they say, since at equal disclosure volume some styles report several times as many concrete activities as others. Promotional claims run further ahead of the evidence on earnings calls than in statutory filings, the gap between talk and evidence is a stable trait of the firm rather than an accident of one year, and the one company observed under direct SEC scrutiny narrowed the gap instead of disputing it.
 
-On the market side the answer is narrower and has to be stated with its correction attached. Four associations survive multiple-testing control. Cumulative disclosure volume goes with a larger firm and with a less left-skewed return distribution; accumulated decoupling goes with a higher beta; a posture weighted toward Governance goes with a lower beta and a larger size. The positive association between cumulative volume and beta is nominal and does not survive, and neither does any of the accounting associations. Disclosed substance separates firms that differ operationally, but that separation is not what these market measures pick up, which is a statement about these specifications and this sample rather than a finding that substance does not matter to value.
-
-## Contributions to knowledge and practice
-
-Three contributions, and they were not established in the same way. The first is a measurement architecture: six constructs that hold narrative volume, communication posture, disclosed activity and documentary grounding apart, extracted at a scale no manual reading reaches and validated against held-out human audits and an external patent benchmark. The second is empirical: the diffusion and thinning of grounding, the three postures and their sectoral sorting, the cross-venue asymmetry in evidence, and the market associations with the correction applied. Both of these were estimated.
-
-The third is a proposed application. The process in the preceding chapter turns a documentary diagnosis into an order of verification and a conditional decision, and its components rest on the estimated results, but it has not yet been tested against decisions people actually took. What it offers is a way to make the review repeatable and to state, for any claim, what would settle it. That is what a reader can take from it, and evaluating whether it improves decisions is the natural next study.
-
-## Implications for investors and managers
-
-For an investor, the practical change is where the attention goes. Presence of AI language no longer separates firms, so a screen built on mentions sorts almost nobody; what sorts firms is the distance between what they say and what they document, and that distance is stable enough to be worth tracking across reporting cycles rather than reacting to one call. The two venues carry different information, so a discrepancy between them is a question to put to management, not a conclusion. And because no accounting association survived correction, none of these measures should be carried into a growth or margin assumption.
-
-For a manager the change runs the other way. Communication does not have to be quiet to be credible, since promotion and evidence coexist in the data, but an ambitious claim has to arrive with its scope, its maturity and its backing attached. That is a documentation problem before it is a communication problem, which is why the register in the preceding chapter, and not a rule about phrasing, is what the process produces. Consistency of fact across venues is a stronger discipline than uniformity of wording, and it is available to a board before it is available to a regulator.
+On the market side the answer is narrower and has to be stated with its correction attached. Six associations survive multiple-testing control, and they concentrate in how far a firm's systematic risk moves around its own call and in what happens to its price afterward, not in the announcement itself. Accumulated decoupling and cumulative disclosure volume both go with a larger shift in beta around the call; a posture weighted toward Governance goes with a smaller beta shift, more post-announcement drift over the following quarter, and slower revenue growth over the following year; cumulative disclosure volume also adds to that drift. The decoupling of a single call, the announcement-window price reaction, and the weekly measures of crash risk carry none of this, and neither does gross margin or the ROIC-WACC spread. Disclosed substance separates firms that differ operationally, but that separation is not what these market measures pick up, which is a statement about these specifications and this sample rather than a finding that substance does not matter to value.
 
 ## Interpreting potential AI washing
 
@@ -3251,9 +3255,21 @@ The evidence here identifies decouplings and documentary asymmetries. It does no
 
 What it does show is the shape of the phenomenon. It is continuous rather than categorical: because decoupling persists across years, firms sit at different points on one spectrum instead of falling into a separate class of offenders, which fits institutional pressure to adopt a shared vocabulary at least as well as it fits a group of bad actors. It is a fact about information rather than about capability, since firms disclosed proportionally less concrete evidence per activity as AI became a market-wide topic, and that says nothing about whether the underlying programs improved or worsened. And it filters by venue: earnings calls carry more quantified metrics and more named providers per thousand words, while the statutory filing keeps standardised hazard warnings and high-level strategy.
 
-A gap of this kind is compatible with several explanations. Competitive sensitivity, an editorial choice about what belongs in a filing, genuine overstatement and simple disorganisation all produce the same measured distance. Separating them requires evidence this design does not have, which is exactly why the framework ends by naming the verification to perform rather than by issuing a verdict.
+A gap of this kind is compatible with several explanations. Competitive sensitivity, editorial conventions governing statutory filings, genuine overstatement, and internal disorganisation can each produce identical measured divergence. Disentangling these mechanisms requires internal evidentiary access beyond public disclosures; the framework therefore specifies targeted verification steps rather than imputing intent.
 
-## Limits and next steps
+## Contributions to knowledge and practice
+
+Three contributions, and they were not established in the same way. The first is a measurement architecture: six constructs that hold narrative volume, communication posture, disclosed activity and documentary grounding apart, extracted at a scale no manual reading reaches and validated against held-out human audits and an external patent benchmark. The second is empirical: the diffusion and thinning of grounding, the three postures and their sectoral sorting, the cross-venue asymmetry in evidence, and the market associations with the correction applied. Both of these were estimated.
+
+The third is a proposed application. The process set out in Chapter 6 turns a documentary diagnosis into an order of verification and a conditional decision, and its components rest on the estimated results, but it has not yet been tested against decisions people actually took. What it offers is a way to make the review repeatable and to state, for any claim, what would settle it. Evaluating whether it improves practical decisions is the natural next study.
+
+## Implications for governance and capital allocation
+
+For allocators and analysts, the practical shift is from tracking mention frequency to measuring documentary distance. Because AI vocabulary is now nearly ubiquitous across large-cap issuers, keyword screens provide negligible cross-sectional sorting. What distinguishes firms is the persistent distance between narrative intensity and verifiable operational substance across reporting cycles. Cross-venue discrepancies between voluntary calls and statutory filings highlight specific operational claims warranting direct inquiry rather than mechanical negative inference. Because accounting associations do not survive multiple-testing control, textual AI disclosure metrics should not be mapped directly into earnings growth or operating margin adjustments.
+
+For corporate managers and directors, the evidence demonstrates that promotional communication and dense evidentiary grounding frequently coexist: credibility does not require silent under-communication, but ambitious claims demand explicit scope, operational maturity, and verifiable backing. Factual consistency across disclosure channels imposes a stronger governance discipline than uniform wording, providing boards with an internal check prior to regulatory intervention.
+
+## Limits and open questions
 
 Four limits bound this evidence, and each one has a consequence for how it should be used.
 
@@ -3262,13 +3278,7 @@ Four limits bound this evidence, and each one has a consequence for how it shoul
 - **A relative rank is not an absolute improvement.** $W$ is a within-year percentile gap, so a firm's position can improve because its peers changed. Internal progress has to be tracked against evidence and stated commitments.
 - **The S&P 500 is not the whole economy.** These patterns describe large, closely watched, mandatorily reporting U.S. firms. The percentiles, the archetypes and the financial associations do not transfer to private companies or early-stage ventures, whatever the reading logic does.
 
-Four next steps follow, and the first two are about evidence rather than about application. One is to put the associations on more and better data. They rest on a single index over six years, so a longer panel, a wider universe and outcomes measured with less noise would show whether these coefficients are stable or particular to this window. The accounting side needs it most: fixing the measurement window to twelve months around each call costs a quarter of the sample, and nothing on that side survived the correction anyway.
-
-The second is to find data where there is currently none. Private companies and early-stage ventures are where the framework would help most and where it is least validated, and even a small hand-collected panel of investor updates, pilot contracts and commercial proposals would turn the adaptation set out earlier from a proposal into something testable.
-
-The third is whether the process changes decisions at all: whether analysts working with the register of claims reach different and better-founded conclusions than analysts reading the same filings without it. The fourth is methodological. A wider panel of company-specific event studies, with a way of isolating one firm's own news from market-wide moves, would replace the single Welltower case with a general design.
-
-Corporate AI disclosure is a structured communication system: the vocabulary spreads quickly, the activity behind it is disclosed unevenly, and the discipline of the evidence depends on the venue. It is neither a reliable proxy for capability nor empty rhetoric. What a decision-maker can do now that was harder before is put the claims of a firm in order of how much they matter, see which of them the firm's own documents support and which it only asserts, and know which question to ask next. That is not a verdict on whether a company is washing, and it does not need to be. It is the step that decides where the next hour of work goes.
+These boundaries suggest four specific open questions. The first is whether these cross-sectional associations remain stable across longer historical panels, broader equity universes, and less noisy financial metrics. The second is empirical validation in private markets: constructing hand-collected panels of investor updates, pilot contracts, and commercial proposals to test the proposed venture adaptation. The third is behavioral: evaluating whether investment analysts and corporate allocators equipped with structured claim registers reach measurably different or better-calibrated judgments than those reviewing raw filings alone. The fourth is methodological: expanding company-specific event studies to isolate idiosyncratic disclosure responses to regulatory scrutiny from market-wide technological shocks.
 
 {{< pagebreak >}}
 
@@ -3296,7 +3306,7 @@ uni_total = int(len(_uni))
 uni_delisted = int((_uni["active_status"] == "delisted").sum())
 ```
 
-The sample is a fixed cohort of S&P 500 constituents as of January 1, 2021 ($N =$ `{python} uni_frame_total` unique issuers, with dual-class structures unified under the primary equity ticker). Fixing index membership at the start of the period removes survivorship and look-ahead bias: the panel keeps the `{python} uni_delisted` firms later acquired, restructured or delisted and follows their disclosure over their active listing window instead of conditioning on membership through 2026. Daily equity prices start on January 1, 2020, which leaves a full 252-trading-day history for the market model before the first 2021 filings. Returns and trading volumes come from Yahoo Finance, with Stooq and Tiingo as fallbacks for delisted constituents.
+The sample is a fixed cohort of S&P 500 constituents as of January 1, 2021 ($N =$ `{python} uni_frame_total` unique issuers, with dual-class structures unified under the primary equity ticker). Fixing index membership at the start of the period removes survivorship and look-ahead bias: the panel keeps the `{python} uni_delisted` firms later acquired, restructured or delisted and follows their disclosure over their active listing window instead of conditioning on membership through 2026. Daily equity prices, dividend-inclusive total returns, daily market capitalization and the S&P 500 total-return benchmark run from FactSet [@factset], starting September 17, 2015 and truncated to null after a constituent's delisting date rather than carried forward; the analysis panel uses this series from 2021 onward, the same window as the disclosure corpus.
 
 @tbl-a0-sic-sector-mapping defines the structural correspondence between the `{python} uni_n_sic2` two-digit Standard Industrial Classification (SIC) major groups observed in the S&P 500 universe ($N=$ `{python} uni_frame_total`) and the `{python} uni_n_sectors` aggregated economic sectors used throughout this study. Collapsing the 2-digit groups into these `{python} uni_n_sectors` sectors avoids very sparse cells in the cross-sectional models and still keeps the economic distinctions that matter here: how technology is generated, capital intensity, regulatory exposure and the operating model. The same taxonomy governs the universe distribution (@fig-sic-distribution, Panel C), the strategic simplex projection (@fig-archetypal-ternary-simplex), the disclosure archetype sorting (@fig-sector-archetype-heatmap), and the sector-by-year fixed effects in empirical regressions.
 
@@ -3369,12 +3379,11 @@ Markdown(tabulate(app_rows, headers=headers_app))
 | Origin | What it supplies | Access |
 |:---|:---|:---|
 | SEC EDGAR | Forms 10-K, 10-Q, DEF 14A, 8-K, 20-F, and the staff comment letters of [Appendix E](#appendix-e), parsed into item sections on the SEC's own taxonomy | Public, via `edgartools`, under 10 requests per second with a declared institutional user-agent |
-| SEC XBRL company facts and frames | Standardized accounting fundamentals, annual and quarterly | Public API |
+| FactSet [@factset] | Standardized annual and quarterly accounting fundamentals; daily prices, dividend-inclusive total returns, market capitalization, and the S&P 500 total-return benchmark | Commercial provider |
 | Hugging Face, `kurry/sp500_earnings_transcripts` [@kurry2024transcripts] | Earnings-call transcripts, first source in the union | Third-party dataset |
 | Equibles [@equibles] | Earnings-call transcripts, gap fill | Commercial provider |
 | StockAnalysis [@stockanalysis] | Earnings-call transcripts, residual gap fill | Commercial provider |
-| Yahoo Finance, with Stooq and Tiingo as fallback | Daily prices, returns and volumes, including delisted tickers | Public and freemium APIs |
-| Ken French data library | Fama-French factors and the risk-free series | Public |
+| Ken French data library | Daily risk-free rate | Public |
 | Google Patents via BigQuery | Patent publications 2021-2023, matched to issuers on curated assignee aliases and classified with the OECD (2025) AI taxonomy | Public dataset, paid query |
 | Hugging Face, `BAAI/bge-m3` [@chen2024bge] | Embedding model behind the prefilter's semantic anchors | Open weights |
 | OpenRouter, `openai/gpt-5.6-luna` | Zero-shot extraction in both passes | Paid API |
@@ -3787,33 +3796,136 @@ where $\text{rank}(\cdot) \in [0, 1]$ is the empirical percentile rank computed 
 
 **Treatment of zeros and low-volume text.** A firm with no AI claims has $D_{it} = 0$, $A_{it} = 0$, $G_{it} = 0$ and $S_{it} = 0$. Decoupling ($W_{it}$) is defined only over disclosing firms ($D_{it} > 0$), since a rank gap means nothing when there is no narrative at all. For firms with only one or two claims, empirical-Bayes shrinkage toward the sector-year prior is evaluated in [Appendix B](#appendix-b) and the ranking does not depend on low-denominator artifacts.
 
-### A.5 Financial data preparation, XBRL hierarchy, and market models {.unnumbered #appendix-a5}
+### A.5 Financial data preparation and market models {.unnumbered #appendix-a5}
 
-| Financial concept | Coverage of the firm-year panel |
-|---|---:|
-| Revenue | `{python} f"{fin_cov('revenue'):.0f}"`% |
-| Net margin | `{python} f"{fin_cov('net_margin'):.0f}"`% |
-| Capex | `{python} f"{fin_cov('capex'):.0f}"`% |
-| SG&A | `{python} f"{fin_cov('sga_expense'):.0f}"`% |
-| R&D expense | `{python} f"{fin_cov('rd_expense'):.0f}"`% (`{python} f"{fin_n('rd_expense'):,}"` of `{python} f"{fin_n_firmyears:,}"` firm-years; outcome only) |
+Accounting fundamentals are FactSet's own standardized annual and quarterly statements [@factset], not the SEC's XBRL tags: FactSet already resolves each statutory line to a common definition across filers, so the panel walks a fallback hierarchy of alternative standardized-statement line items for each concept. When a firm's primary line for a concept is missing in a year, the pipeline moves to the next line in a fixed priority order, and only then leaves the item missing. Nothing is imputed. The R&D mapping below shows that logic, including what is excluded at each step. XBRL remains the source elsewhere in this study, for the frame- and activity-extraction pipeline described in [Appendix A.3](#appendix-a3); this section is about the financial panel only.
 
-: XBRL concept coverage. {#tbl-d1-xbrl-coverage}
+**Point-in-time dating.** Every financial and market observation is anchored to a point-in-time date rather than the statement's own fiscal period end. The primary date is the EDGAR filing date of the Form 10-K (for annual figures) or the Form 10-Q or 10-K (for quarterly figures, since a fiscal fourth quarter is disclosed inside the annual report), matched to the statement by ticker and fiscal period end within a ten-calendar-day window. When no EDGAR filing matches, the date falls back to FactSet's own earnings-release date. @tbl-a5-pit-source reports the measured share of each source, by grain and by year, over the 2021-2026 analysis window.
 
-The coverage in @tbl-d1-xbrl-coverage comes from a fallback hierarchy of alternative XBRL tags for each item: when a firm's primary tag for a concept is missing in a year, the pipeline moves to the next tag in a fixed priority order, and only then leaves the item missing. Nothing is imputed. The R&D mapping below shows that logic, including what is excluded at each step.
+**Bank and broker revenue.** Depository institutions, security and commodity brokers and other financial intermediaries (SIC 60-62) do not report a "Sales" line under FactSet's standardized statements, since lending and trading are their business rather than a cost against a sales line. For these firms, revenue is net interest income plus non-interest income; every other firm's revenue is the standardized "Sales" line. The two are not the same construct, so every revenue-derived figure in this panel (revenue, revenue growth, net margin, asset turnover) carries a `revenue_basis` flag recording which definition applies, and @tbl-a5-revenue-basis reports the resulting split by grain and year, rather than blending the two silently into one "revenue" number.
 
 Disclosure dates are linked to financial fundamentals by fiscal period: an annual accounting variable matches the fiscal year of its Form 10-K, and an annual growth calculation uses a $[340, 380]$-day validity window against the nearest prior filing date. Financial ratios are winsorized at the 1st and 99th percentiles so that a small denominator cannot distort them.
 
-**R&D coverage and interpretation.** How R&D is reported in statutory filings varies a great deal from one industry to another. Comparable current R&D expense is built from four standardized XBRL concepts -- the primary GAAP line, its variant excluding acquired in-process cost, the dedicated software-development line, and the IFRS equivalent -- taken in that priority order. Four further lines are excluded as non-comparable: capitalized software (a balance-sheet intangible, not period expense), in-process R&D from purchase accounting (a one-time transaction charge), research tax credits (a tax benefit, not research activity) and extractive exploration expense (ASC 932). Combining the software and IFRS lines recovers 34 firm-years that narrower GAAP mappings miss, yielding `{python} f"{fin_n('rd_expense'):,}"` valid firm-years (`{python} f"{fin_cov('rd_expense'):.1f}"`% of the `{python} f"{fin_n_firmyears:,}"` total panel).
+**R&D coverage and interpretation.** How R&D is reported in statutory filings varies a great deal from one industry to another. Comparable current R&D expense is built from four standardized statement concepts -- the primary GAAP line, its variant excluding acquired in-process cost, the dedicated software-development line, and the IFRS equivalent -- taken in that priority order. Four further lines are excluded as non-comparable: capitalized software (a balance-sheet intangible, not period expense), in-process R&D from purchase accounting (a one-time transaction charge), research tax credits (a tax benefit, not research activity) and extractive exploration expense (ASC 932).
 
 A missing R&D value comes from accounting convention in the industry, not from a failed extraction. R&D disclosure is normal in Healthcare, Technology and Manufacturing and almost absent in Financial Services, Utilities and Transportation, where the same spending is expensed inside SG&A or capitalized into physical infrastructure. Since non-reporting is decided by the business model of the industry, R&D-to-sales is never imputed as zero; doing so would treat a bank that does not report software spending as a bank with no technological innovation. In the regressions, R&D intensity is either estimated inside the disclosing subsample, with the effective sample size reported, or controlled with a non-reporting indicator.
 
-**Market beta and estimation-window diagnostics.** For each firm-year, market beta is estimated from a one-factor market model over the 252 trading days strictly before the actual filing date of the Form 10-K. Let $R_{i,t}$ denote the daily return on the firm's adjusted close, $R_{f,t}$ the daily risk-free rate, and $(\text{MKT} - \text{RF})_t$ the daily market excess return from the Ken French Fama--French three-factor data series. The estimated regression is
+```{python}
+#| echo: false
+#| output: false
+import pandas as pd
+from tabulate import tabulate
+from IPython.display import Markdown
 
-$$
-R_{i,t} - R_{f,t} = \alpha_i + \beta_i (\text{MKT} - \text{RF})_t + \varepsilon_{i,t}.
-$$
+_cov_gv = pd.read_csv(results("coverage", "coverage_by_grain_variable.csv"))
+_cov_yr = pd.read_csv(results("coverage", "coverage_by_year.csv"))
+_pit = pd.read_csv(results("coverage", "pit_source_shares.csv"))
+_basis = pd.read_csv(results("coverage", "revenue_basis_shares.csv"))
 
-The beta-estimation procedure identifies the first trading day on or after the filing date and takes the preceding 252 price observations. It then retains only dates for which the firm return, $(\text{MKT} - \text{RF})_t$, and $R_{f,t}$ are all available, and estimates the intercept and slope by OLS. The procedure requires at least 120 valid daily observations; otherwise beta is recorded as missing. The idiosyncratic-volatility measure uses the standard deviation of residuals from the same fitted model, annualized by $\sqrt{252}$.
+_GRAIN_ORDER = ["firm_year", "firm_quarter", "call"]
+_GRAIN_LABEL = {"firm_year": "Firm-year", "firm_quarter": "Firm-quarter", "call": "Call"}
+_cov_gv["grain"] = pd.Categorical(_cov_gv["grain"], categories=_GRAIN_ORDER, ordered=True)
+_cov_gv = _cov_gv.sort_values(["grain", "family", "variable"])
+```
+
+@tbl-a5-coverage-grain reports non-null coverage of every tracked market and financial variable at each analysis grain, read directly from the gold covariates and targets tables. Coverage is not pooled across grains: a firm-year beta has a single pre-window, a call carries four beta windows and a firm-quarter carries both a pre- and a post-call window, so each grain's own denominator is reported rather than one blended figure.
+
+```{python}
+#| label: tbl-a5-coverage-grain
+#| tbl-cap: "[Non-null coverage of market and financial variables, by analysis grain.]{custom-style=\"CaptionText\"}"
+#| echo: false
+_rows = [[_GRAIN_LABEL[r.grain], r.family, r.variable, f"{r.n_nonnull:,} / {r.n_total:,}", f"{r.pct_nonnull:.1f}%"]
+         for r in _cov_gv.itertuples()]
+Markdown(tabulate(_rows, headers=["Grain", "Family", "Variable", "Non-null / Total", "%"]))
+```
+
+```{python}
+#| label: tbl-a5-coverage-year
+#| tbl-cap: "[Non-null coverage of a representative subset of market and financial variables, by year (2026 year-to-date).]{custom-style=\"CaptionText\"}"
+#| echo: false
+_YEAR_VARS = [
+    ("firm_year", "revenue"), ("firm_year", "cash"), ("firm_year", "interest_expense"),
+    ("firm_year", "sga_expense"), ("firm_year", "rd_expense"), ("firm_year", "beta"),
+    ("firm_quarter", "revenue"), ("firm_quarter", "rd_expense"), ("firm_quarter", "beta_pre_252"),
+    ("call", "beta_shift_pre"), ("call", "car_p2_p63"), ("call", "revenue_growth_ttm_pre"),
+]
+_years = sorted(_cov_yr["year"].unique())
+_rows = []
+for grain, var in _YEAR_VARS:
+    sub = _cov_yr[(_cov_yr["grain"] == grain) & (_cov_yr["variable"] == var)].set_index("year")
+    row = [_GRAIN_LABEL[grain], var] + [f"{sub.loc[y, 'pct_nonnull']:.0f}%" if y in sub.index else "--" for y in _years]
+    _rows.append(row)
+Markdown(tabulate(_rows, headers=["Grain", "Variable"] + [str(y) for y in _years]))
+```
+
+```{python}
+#| label: tbl-a5-pit-source
+#| tbl-cap: "[Point-in-time dating source, by grain and year: share of rows matched to an EDGAR filing date, falling back to FactSet's earnings-release date, or unmatched.]{custom-style=\"CaptionText\"}"
+#| echo: false
+_piv = _pit.pivot_table(index=["grain", "year"], columns="pit_source", values="pct", fill_value=0.0)
+for c in ["edgar", "fs_release", "null"]:
+    if c not in _piv.columns:
+        _piv[c] = 0.0
+_rows = [[_GRAIN_LABEL[g], y, f"{r['edgar']:.1f}%", f"{r['fs_release']:.1f}%", f"{r['null']:.1f}%"]
+         for (g, y), r in _piv.iterrows()]
+Markdown(tabulate(_rows, headers=["Grain", "Year", "EDGAR", "FactSet release date", "Unmatched"]))
+```
+
+```{python}
+#| label: tbl-a5-revenue-basis
+#| tbl-cap: "[Revenue basis, by grain and year: share of rows on the standard \"Sales\" line versus the bank/broker net-interest-plus-fee definition.]{custom-style=\"CaptionText\"}"
+#| echo: false
+_pivb = _basis.pivot_table(index=["grain", "year"], columns="revenue_basis", values="pct", fill_value=0.0)
+for c in ["sales", "bank_nii_plus_nonii", "null"]:
+    if c not in _pivb.columns:
+        _pivb[c] = 0.0
+_rows = [[_GRAIN_LABEL[g], y, f"{r['sales']:.1f}%", f"{r['bank_nii_plus_nonii']:.1f}%", f"{r['null']:.1f}%"]
+         for (g, y), r in _pivb.iterrows()]
+Markdown(tabulate(_rows, headers=["Grain", "Year", "Sales", "Net interest + fee (bank/broker)", "Unmatched"]))
+```
+
+::: {custom-style="FigureNote"}
+*Notes:* Coverage, point-in-time source and revenue-basis shares are computed by `scripts/analytics/coverage/build_fs_coverage_tables.py` directly from `data/gold` and `data/silver/fs_financials.parquet`, restricted to the S&P 500 2021-01-01 universe. Point-in-time and revenue-basis shares are restricted to statement periods ending on or after November 1, 2020, the manifests' own coverage window; the 2026 firm-year column is thin because most fiscal-2026 annual reports had not yet been filed at the data cut-off. Current assets, current liabilities and the current ratio are null for real estate, insurance, banking and holding-company SIC codes (60-65, 67, 70) by construction: these industries do not present a classified balance sheet, so the null is a correct absence rather than an extraction gap.
+:::
+
+**Return construction.** Every daily return in this panel is the percentage change in a dividend-inclusive total-return index, not a price return, so a dividend payment does not register as a price drop. The market benchmark is the S&P 500 total-return index, in excess of the daily risk-free rate from the Ken French data library. The market model estimated for every beta reported in this thesis is:
+$$
+R_{i,t} - R_{f,t} = \alpha_i + \beta_i\,(\text{MKT}_{\text{TR}} - R_f)_t + \varepsilon_{i,t}
+$$
+where $R_{i,t}$ is firm $i$'s daily total return, $R_{f,t}$ the daily risk-free rate, and $\text{MKT}_{\text{TR},t}$ the S&P 500 total-return index's daily return. $\beta_i$ is estimated by OLS over a window of trading days specific to each analysis grain and direction (pre- or post-event), listed in @tbl-a5-beta-windows. The idiosyncratic-volatility measure is the standard deviation of $\hat\varepsilon_{i,t}$ over the same window, annualized by $\sqrt{252}$. The trading-day index for any point-in-time event date is the first trading day on or after that date; a pre-event window ends the day before that index and a post-event window begins at it.
+
+| Grain | Beta | Window (trading days) | Minimum observations |
+|---|---|---|---:|
+| Firm-year | `beta` | 252 days before the 10-K filing date | 120 |
+| Call | `beta_pre` | 252 days before the call date | 120 |
+| Call | `beta_post_63` | [+21, +63] after the call date | 60 |
+| Call | `beta_post_126` | [+21, +126] after the call date | 120 |
+| Call | `beta_post_252` | [+21, +252] after the call date | 120 |
+| Firm-quarter | `beta_pre_252` | 252 days before the quarter's as-of date | 120 |
+| Firm-quarter | `beta_post_63` | 63 days after the quarter's as-of date | 60 |
+
+: Beta constructions used across the analysis grains. Every window excludes the trading day of the event itself, and a beta with fewer than the minimum observations is recorded as missing rather than estimated over a truncated window. {#tbl-a5-beta-windows}
+
+**Beta shift.** The market-relevance regressions in the Market Relevance of Disclosure Signals chapter estimate a beta *shift* around each call rather than a single post-call level: one pooled regression per call over the trading days $[-63, -21)$ before the call and $[+21, +63)$ after it,
+$$
+(R_{i,d} - R_{f,d}) = \alpha + \beta\,\text{MKT}_d + \Delta\alpha\,\text{POST}_d + \Delta\beta\,(\text{POST}_d \times \text{MKT}_d) + \varepsilon_d,
+$$
+where $\text{POST}_d$ indicates a post-call trading day [@brenner1979]. $\Delta\beta$ (`beta_shift_delta`) is the outcome; the pre-call slope $\beta$ (`beta_shift_pre`) is its own natural pre-call control. Pooling the two 42-day windows into one residual-variance estimate, rather than differencing two separately fitted betas, is the design Brenner (1979) proposes for detecting a shift in systematic risk around an event; at least 40 observations are required on each side.
+
+**Weekly crash risk.** Negative return skewness (NCSKEW) and down-to-up volatility (DUVOL) are computed from the residuals of an expanded weekly market model with two leading and two lagging weeks [@chen2001],
+$$
+(R_{i,w} - R_{f,w}) = \alpha + \sum_{k=-2}^{2} \beta_k\,\text{MKT}_{w+k} + \varepsilon_{i,w},
+$$
+fit over a 26-trading-week window, where a trading week is a calendar week with at least one trading day. The pre-call window ($[-26, 0)$ weeks, ending at the call's own week) and the post-call window ($[+1, +27)$ weeks, starting the week after it) are separated by a one-week gap at the call itself, so that the call's own short-run price reaction does not contaminate the residuals used to measure crash risk:
+$$
+\text{NCSKEW}_{i} = -\frac{n(n-1)^{3/2}\sum_w \hat\varepsilon_{i,w}^3}{(n-1)(n-2)\left(\sum_w \hat\varepsilon_{i,w}^2\right)^{3/2}}, \qquad
+\text{DUVOL}_{i} = \ln\!\left[\frac{(n_u - 1)\sum_{\text{down}} \hat\varepsilon_{i,w}^2}{(n_d - 1)\sum_{\text{up}} \hat\varepsilon_{i,w}^2}\right],
+$$
+where "down" and "up" partition the window's residuals at their own mean and $n_d, n_u$ are their counts. Both measures require at least 20 valid weekly observations and at least two on each side of the mean. The pre-window residuals also supply $\text{SIGMA}$ (their standard deviation), $\text{RET}$ (their mean, $\times 100$) and, together with the pre-call 10-K's shares outstanding, $\text{DTURN}$ (the change in average weekly share turnover between the pre-window and the 26 weeks before it) -- the Kim, Li and Zhang (2011) controls added to the two crash-risk regressions alongside log market capitalization and ROA [@kim2011].
+
+**Cumulative abnormal return and drift.** A separate market model ($\text{MKT}_{\text{TR}} - R_f$ only) is fit once per call over trading days $[-250, -30)$ before the call (minimum 120 days), and every later day's abnormal return is its realized excess return less this model's fitted value. The announcement-window cumulative abnormal return, $\text{CAR}[-1,+1]$, sums abnormal returns over the three trading days centered on the call [@brown1985]; the post-announcement drift, $\text{CAR}[+2,+63]$, sums them over the following 61 trading days, minimum 40 [@mackinlay1997]. Neither has a pre-call level of the same construct, since an abnormal return is already a deviation from a model fit to be mean-zero over its own estimation window, so neither regression carries a lagged-outcome control.
+
+**Market beta and estimation-window diagnostics.** The firm-year beta above is estimated over the 252 trading days strictly before the actual filing date of the Form 10-K.
 
 ```{python}
 #| echo: false

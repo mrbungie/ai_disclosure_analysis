@@ -1,8 +1,8 @@
 """
-scripts/raw_processing/us/earnings_calls/05_register_equibles_backfill.py —
+scripts/raw_processing/us/earnings_calls/05_register_eq_backfill.py —
 manifest of the Equibles backfill transcripts, the fourth earnings-call source.
 
-The backfill files (data/raw/earnings_calls_equibles_backfill/<TICKER>/
+The backfill files (data/raw/earnings_calls_eq_backfill/<TICKER>/
 <TICKER>_<eventdate>_FY<fy>Q<q>.json.gz, same payload as the Equibles raw
 files plus `equibles_event_date`) were fetched for quarters the other three
 sources miss. Their fiscal labels carry the same fiscal-year conventions as
@@ -12,11 +12,11 @@ another source. Metadata date = the event date, fiscal period = the payload's
 year and quarter; scripts/bronze/call_transcripts.py checks both against the
 text like every other source (lowest source priority).
 
-Writes data/interim/manifests/filing_manifest_earnings_calls_equibles_backfill.parquet
+Writes data/interim/manifests/filing_manifest_earnings_calls_eq_backfill.parquet
 (rebuilt from the files on disk; no network).
 
 Usage:
-    .venv/bin/python scripts/raw_processing/us/earnings_calls/05_register_equibles_backfill.py
+    .venv/bin/python scripts/raw_processing/us/earnings_calls/05_register_eq_backfill.py
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ FILE_NAME = re.compile(r"^(?P<ticker>.+)_(?P<date>\d{4}-\d{2}-\d{2})_FY(?P<fy>\d
 
 def main() -> None:
     config = yaml.safe_load((REPO_ROOT / "configs" / "us" / "config.yaml").read_text())
-    raw_dir = REPO_ROOT / "data" / "raw" / "earnings_calls_equibles_backfill"
+    raw_dir = REPO_ROOT / "data" / "raw" / "earnings_calls_eq_backfill"
     universe = pd.read_csv(REPO_ROOT / "configs" / "us" / "universe.csv", dtype={"cik": str})
     cik_by_ticker = dict(zip(universe["ticker"].str.replace(".", "-", regex=False), universe["cik"]))
     now = datetime.now(timezone.utc)
@@ -59,7 +59,7 @@ def main() -> None:
             "n_chars": len(payload.get("content") or ""), "created_at": now, "updated_at": now,
         })
     manifest = pd.DataFrame(rows)
-    out = REPO_ROOT / config["storage"]["interim_manifests"] / "filing_manifest_earnings_calls_equibles_backfill.parquet"
+    out = REPO_ROOT / config["storage"]["interim_manifests"] / "filing_manifest_earnings_calls_eq_backfill.parquet"
     manifest.to_parquet(out, index=False)
     print(f"{len(manifest)} backfill transcripts, {manifest['ticker'].nunique()} tickers -> {out.relative_to(REPO_ROOT)}")
 

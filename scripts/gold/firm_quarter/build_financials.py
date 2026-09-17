@@ -359,8 +359,51 @@ def quarterly_panel() -> pd.DataFrame:
     return panel.drop(columns=["cal_q"])
 
 
+# thesis metric name -> fs (FactSet) silver.fs_financials column
+FS_METRIC_MAP = {
+    "revenue": "revenue", "cogs": "cost_of_revenue", "rd_expense": "rd_expense",
+    "sga_expense": "sga_expense", "operating_income": "operating_income", "net_income": "net_income",
+    "eps_diluted": "eps_diluted", "capex": "capex", "assets": "total_assets",
+    "current_assets": "current_assets", "current_liabilities": "current_liabilities",
+    "equity": "equity", "debt": "long_term_debt",
+}
+
+
+def quarterly_panel_fs() -> pd.DataFrame:
+    """fs (FactSet) replacement for `quarterly_panel()`: one row per
+    (ticker, cal_q, metric) from `silver.fs_financials` (period="quarterly"),
+    already point-in-time dated (docs/plans/fs_gold_replacement.md). fs's
+    quarterly cash-flow figures are discrete by construction (no YTD
+    differencing needed, unlike the XBRL-era `discrete_quarters()` above)."""
+    fin = (L.scan("silver.fs_financials")
+           .filter((pl.col("period") == "quarterly") & pl.col("filing_date_pt").is_not_null())
+           .select(["ticker", "period_end", "filing_date_pt"] + list(set(FS_METRIC_MAP.values())))
+           .collect().to_pandas())
+    fin["period_end"] = pd.to_datetime(fin["period_end"])
+    fin["filing_date"] = pd.to_datetime(fin["filing_date_pt"])
+    fin["cal_q"] = fin["period_end"].dt.year * 10 + fin["period_end"].dt.quarter
+
+    rows_out = []
+    for metric, col in FS_METRIC_MAP.items():
+        sub = fin[["ticker", "cal_q", "filing_date", col]].dropna(subset=[col]).copy()
+        sub = sub.rename(columns={col: "value"})
+        # a (ticker, cal_q) can appear twice if two fs periods' quarter-end
+        # both round to the same calendar quarter (rare fiscal-calendar
+        # edge case) -- keep the earliest-known value, same as-of safety
+        # rule as the XBRL-era `first_disclosed()`.
+        sub = sub.sort_values(["ticker", "cal_q", "filing_date"]).drop_duplicates(["ticker", "cal_q"], keep="first")
+        sub["source_ref"] = None
+        sub["source"] = "fs"
+        sub["metric"] = metric
+        rows_out.append(sub)
+    panel = pd.concat(rows_out, ignore_index=True)
+    panel["year"] = panel["cal_q"] // 10
+    panel["quarter"] = panel["cal_q"] % 10
+    return panel.drop(columns=["cal_q"])
+
+
 def main() -> None:
-    panel = quarterly_panel().dropna(subset=["filing_date"])
+    panel = quarterly_panel_fs().dropna(subset=["filing_date"])
     panel["cal_q"] = panel["year"] * 10 + panel["quarter"]
     spine = L.read_gold("firm_quarter")
     out = spine.copy()
@@ -377,7 +420,7 @@ def main() -> None:
         out[f"{metric}_quarter"] = (known["year"].astype("Int64").astype(str) + "Q"
                                     + known["quarter"].astype("Int64").astype(str)).where(known["year"].notna()).values
     L.write_gold("covariates", "firm_quarter", "financials", out, builder="scripts/gold/firm_quarter/build_financials.py",
-                 inputs=[L.path("bronze.xbrl_facts")],
+                 inputs=[L.path("silver.fs_financials")],
                  extra={"usable_from": "as_of_date = quarter end + 1 day; values filed before as_of_date"})
 
 

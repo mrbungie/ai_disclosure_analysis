@@ -1,9 +1,16 @@
-"""Posture configuration + decoupling across horizons: post-call beta (63d),
-NCSKEW (105d) and NCSKEW (63d, matching the beta window).
+"""Posture configuration + decoupling across horizons: post-call beta (63d,
+symmetric pre/post window), NCSKEW (105d) and NCSKEW (63d, matching the beta
+window).
 
 Design, panel and estimation: scripts/analytics/call_regression.py. Controls:
 the outcome's pre-call level, log market cap, 60-day return, ROA; SIC2 x year
 fixed effects; errors clustered by firm.
+
+`beta_post_63`'s pre-control is `beta_pre_63` ([-63,-21), the same 42-day
+window and +-21-day announcement-period exclusion as beta_post_63's own
+[+21,+63)) -- the symmetric pre/post beta design of
+scripts/analytics/call_beta/call_beta_regressions.py, not the prior
+asymmetric `beta_pre` (252-day, no-gap).
 
 Output: data/results/call_beta/config_decoupling_asof.csv
 """
@@ -18,12 +25,12 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "analytics"))
 import call_regression as C  # noqa: E402
 
-OUTCOMES = [("beta_post_63", "beta_pre"), ("ncskew_post", "ncskew_pre"), ("ncskew_post_63", "ncskew_pre_63")]
+OUTCOMES = [("beta_post_63", "beta_pre_63"), ("ncskew_post", "ncskew_pre"), ("ncskew_post_63", "ncskew_pre_63")]
 
 
 def main() -> None:
     panel = C.attach_crash_risk(C.load_call_panel())
-    panel = C.attach(panel, "covariates", "market", ["ncskew_pre_63"])
+    panel = C.attach(panel, "covariates", "market", ["ncskew_pre_63", "beta_pre_63"])
     panel = C.attach(panel, "targets", "market", ["ncskew_post_63"])
     tables = []
     for y_col, pre_col in OUTCOMES:

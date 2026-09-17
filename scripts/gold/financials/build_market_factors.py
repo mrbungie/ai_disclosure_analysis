@@ -17,8 +17,12 @@ Definiciones (idénticas a las documentadas):
                 convención estándar para no capturar reversión de corto plazo.
   ret_m1_p5     retorno CRUDO: precio ajustado en +5 / precio en -1 - 1.
 
-  market_cap    precio de cierre (sin ajustar) del último día hábil ANTES del
-                filing x `shares_out` de la portada del 10-K.
+  market_cap    fs's own daily market cap on the last trading day BEFORE the
+                filing (direct read, not price x shares -- fixes the
+                pre-split understatement documented in
+                data/results/fs_validation/summary.md: the old build
+                multiplied an already split-adjusted close by a historical,
+                pre-split cover-page share count).
   P/E           precio / EPS diluido.  EV = market_cap + deuda LP - caja.
 
 El día 0 es el primer día hábil >= `filing_date`; la ventana empieza en el
@@ -66,10 +70,13 @@ def window_metrics(prices: pd.DataFrame, factors: pd.DataFrame,
     idx = int(np.searchsorted(dates, np.datetime64(filing_date), side="left"))
     result = {"beta": np.nan, "idio_vol_252d": np.nan, "vol_pre_60d": np.nan, "vol_post_60d": np.nan,
               "momentum_12_1": np.nan, "ret_m1_p5": np.nan,
-              "price_pre": np.nan, "beta_n_obs": np.nan}
+              "price_pre": np.nan, "market_cap": np.nan, "beta_n_obs": np.nan}
     if idx - EVENT_PRE < 0 or idx >= len(prices):
         return result
     result["price_pre"] = float(prices["close"].iloc[idx - EVENT_PRE])
+    mcap_pre = prices["market_cap"].iloc[idx - EVENT_PRE]
+    if pd.notna(mcap_pre):
+        result["market_cap"] = float(mcap_pre)
 
     if idx + EVENT_POST < len(prices):
         p0 = prices["adj_close"].iloc[idx - EVENT_PRE]
@@ -138,7 +145,8 @@ def filing_market_panel(annual: pd.DataFrame) -> pd.DataFrame:
     fundamentals = ratios[["ticker", "year", "shares_out", "eps_diluted", "revenue",
                            "equity", "ebitda", "long_term_debt", "cash"]]
     panel = market.merge(fundamentals, on=["ticker", "year"], how="left")
-    panel["market_cap"] = panel["price_pre"] * panel["shares_out"]
+    # market_cap comes straight from window_metrics (fs's own daily market cap,
+    # not price_pre * shares_out -- see the module docstring's market_cap note).
     panel["pe_ratio"] = safe_div(panel["price_pre"], panel["eps_diluted"])
     panel["ps_ratio"] = safe_div(panel["market_cap"], panel["revenue"])
     panel["pb_ratio"] = safe_div(panel["market_cap"], panel["equity"])

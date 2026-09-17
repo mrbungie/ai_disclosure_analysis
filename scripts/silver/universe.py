@@ -143,10 +143,12 @@ def main() -> None:
                   keys=["document_id"],
                   inputs=bronze_inputs("bronze.firm_universe", "bronze.filing_manifest_10q", "bronze.sec_filing_index"),
                   builder=BUILDER)
-    L.write_table("silver.market_prices",
-                  before_delisting(L.scan("bronze.market_prices").join(tickers, on="ticker", how="semi"), "date", dates),
-                  keys=["ticker", "date"],
-                  inputs=bronze_inputs("bronze.firm_universe", "bronze.market_prices", "bronze.sec_filing_index"), builder=BUILDER)
+    # silver.market_prices is now built by scripts/silver/fs.py (fs-backed,
+    # replaces the yfinance-backed table this script used to write here --
+    # docs/plans/fs_gold_replacement.md); it reuses this script's
+    # `before_delisting`/delisting-dates logic against the SAME
+    # silver.firm_universe this main() just wrote, and runs after it in
+    # the Makefile's `silver` target.
 
 
 if __name__ == "__main__":

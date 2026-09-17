@@ -160,9 +160,12 @@ def attach(panel: pd.DataFrame, kind: str, name: str, columns: list[str],
 
 
 def attach_crash_risk(panel: pd.DataFrame) -> pd.DataFrame:
+    """ncskew_post/duvol_post read the [+2, +63] post-call window (thesis
+    @tbl-market-outcomes), from targets/call/market's ncskew_post_63/
+    duvol_post_63."""
     panel = attach(panel, "covariates", "market", ["ncskew_pre", "duvol_pre"])
-    return attach(panel, "targets", "market", ["ncskew_post_105d", "duvol_post_105d"],
-                  {"ncskew_post_105d": "ncskew_post", "duvol_post_105d": "duvol_post"})
+    return attach(panel, "targets", "market", ["ncskew_post_63", "duvol_post_63"],
+                  {"ncskew_post_63": "ncskew_post", "duvol_post_63": "duvol_post"})
 
 
 def attach_fundamentals(panel: pd.DataFrame) -> pd.DataFrame:

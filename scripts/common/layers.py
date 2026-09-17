@@ -140,6 +140,15 @@ TABLES: dict[str, tuple[Path, list[str]]] = {
     "bronze.sec_filing_index": (BRONZE / "sec_filing_index.parquet", []),
     "bronze.sec_company_names": (BRONZE / "sec_company_names.parquet", []),
     "bronze.call_transcripts": (BRONZE / "call_transcripts.parquet", []),
+    # bronze -- fs (FactSet), one table per data/raw/fs/* dataset (docs/plans/fs_gold_replacement.md)
+    "bronze.fs_id_map": (BRONZE / "fs_id_map.parquet", []),
+    "bronze.fs_prices_daily": (BRONZE / "fs_prices_daily.parquet", []),
+    "bronze.fs_market_cap_daily": (BRONZE / "fs_market_cap_daily.parquet", []),
+    "bronze.fs_benchmark_daily": (BRONZE / "fs_benchmark_daily.parquet", []),
+    "bronze.fs_fundamentals_annual": (BRONZE / "fs_fundamentals_annual.parquet", []),
+    "bronze.fs_fundamentals_quarterly": (BRONZE / "fs_fundamentals_quarterly.parquet", []),
+    "bronze.fs_profile": (BRONZE / "fs_profile.parquet", []),
+    "bronze.fs_report_dates": (BRONZE / "fs_report_dates.parquet", []),
     # silver
     "silver.firm_universe": (SILVER / "firm_universe.parquet", []),
     "silver.filing_manifest": (SILVER / "filing_manifest.parquet", []),
@@ -151,6 +160,8 @@ TABLES: dict[str, tuple[Path, list[str]]] = {
     "silver.ai_vendor_mentions": (SILVER / "ai_vendor_mentions.parquet", []),
     "silver.patents_firm_year": (SILVER / "patents_firm_year.parquet", []),
     "silver.patents_preshock": (SILVER / "patents_preshock.parquet", []),
+    "silver.fs_financials": (SILVER / "fs_financials.parquet", []),
+    "silver.fs_market_factors_daily": (SILVER / "fs_market_factors_daily.parquet", []),
 }
 
 

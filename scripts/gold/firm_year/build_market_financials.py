@@ -29,7 +29,7 @@ import polars as pl
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "gold" / "financials"))
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
-from build_firm_financials import annual_panel  # noqa: E402
+from build_firm_financials import annual_panel_fs as annual_panel  # noqa: E402
 from build_market_factors import filing_market_panel  # noqa: E402
 from build_roic_wacc import value_creation  # noqa: E402
 

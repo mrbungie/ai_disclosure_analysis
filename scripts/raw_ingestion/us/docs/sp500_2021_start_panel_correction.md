@@ -39,7 +39,7 @@ below).
    already covered under a sister ticker (GOOGL, FOX, NWS — same CIK, same
    filings) and needed no new fetch. The other 31 were fully backfilled:
    10-K/10-Q/8-K/DEF 14A via `edgar_fetch`, earnings-call transcripts via
-   the HF dataset + `04_fill_gaps_stockanalysis.py`, XBRL facts via
+   the HF dataset + `04_fill_gaps_sa.py`, XBRL facts via
    `04_extract_inline_xbrl_facts.py`. Residual legitimate absences (CXO,
    TIF acquired Jan 2021; VAR acquired Apr 2021; ALXN acquired Jul 2021 —
    all closed too early in the sample to have a 2021+ 10-K/10-Q/proxy or,

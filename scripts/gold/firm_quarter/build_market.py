@@ -54,8 +54,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "gold" / "financials"))
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "gold" / "firm_quarter"))
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
 import layers as L  # noqa: E402
-import pit  # noqa: E402
-from build_financials import quarterly_panel  # noqa: E402
+from build_financials import quarterly_panel_fs as quarterly_panel  # noqa: E402
 from market_windows import event_index, load_factors, load_prices, one_factor_ols, with_factors  # noqa: E402
 
 BUILDER = "scripts/gold/firm_quarter/build_market.py"
@@ -77,6 +76,13 @@ def market_model(window: pd.DataFrame, min_obs: int) -> tuple[float, float]:
 
 
 def price_windows(spine: pd.DataFrame) -> pd.DataFrame:
+    """Adds fs's own daily `market_cap` at the same idx-1/next-idx-1 trading
+    days as price_pre/price_next -- `shares_out`/`shares_next` are then
+    derived as market_cap/price in `main()` (docs/plans/fs_gold_replacement.md:
+    fs shares_out from the STND wide tables is the right concept for a
+    financials-family, fiscal-period-end column; a firm_quarter market
+    covariate needs shares as of an arbitrary calendar date, which fs only
+    has via market_cap/price, not a period-end fundamentals field)."""
     prices, factors = load_prices(), load_factors()
     rows = []
     for row in spine[["id", "ticker", "as_of_date", "next_as_of_date"]].itertuples(index=False):
@@ -86,6 +92,9 @@ def price_windows(spine: pd.DataFrame) -> pd.DataFrame:
             idx = event_index(pr, row.as_of_date)
             if 1 <= idx <= len(pr) and pr["date"].iloc[idx - 1] >= row.as_of_date - pd.Timedelta(days=STALE_DAYS):
                 rec["price_pre"] = float(pr["close"].iloc[idx - 1])
+                mcap = pr["market_cap"].iloc[idx - 1]
+                if pd.notna(mcap):
+                    rec["market_cap"] = float(mcap)
             if idx >= BETA_PRE_DAYS:
                 rec["beta_pre_252"], rec["idio_vol_pre_252"] = market_model(
                     with_factors(pr.iloc[idx - BETA_PRE_DAYS:idx], factors), BETA_PRE_MIN_OBS)
@@ -97,27 +106,11 @@ def price_windows(spine: pd.DataFrame) -> pd.DataFrame:
             nxt = event_index(pr, row.next_as_of_date)
             if nxt < len(pr) and nxt - 1 >= idx:  # a trading day after the next as_of_date exists: that quarter closed
                 rec["price_next"] = float(pr["close"].iloc[nxt - 1])
+                mcap_next = pr["market_cap"].iloc[nxt - 1]
+                if pd.notna(mcap_next):
+                    rec["market_cap_next"] = float(mcap_next)
         rows.append(rec)
     return spine[["id"]].merge(pd.DataFrame(rows), on="id", how="left")
-
-
-def filing_shares() -> pd.DataFrame:
-    """ticker, filing_date, shares_out of every 10-K/10-Q in silver."""
-    filings = pl.concat([
-        L.scan("silver.filing_manifest").filter(pl.col("form_type") == "10-K").select("ticker", "accession_number"),
-        L.scan("silver.filing_manifest_10q").select("ticker", "accession_number")])
-    facts = (L.scan("bronze.xbrl_facts")
-             .filter((pl.col("concept") == "dei:EntityCommonStockSharesOutstanding") & pl.col("numeric_value").is_not_null())
-             .join(filings, on=["ticker", "accession_number"], how="semi")
-             .group_by("ticker", "accession_number", "filing_date", "has_dimensions")
-             .agg(pl.col("numeric_value").sum().alias("value"))
-             .collect().to_pandas())
-    # the non-dimensional total when the filing tags one, else the sum over classes
-    facts = facts.sort_values(["ticker", "accession_number", "has_dimensions"])
-    shares = facts.drop_duplicates(["ticker", "accession_number"], keep="first")
-    shares = shares.rename(columns={"value": "shares_out"})[["ticker", "filing_date", "shares_out"]]
-    shares["filing_date"] = pd.to_datetime(shares["filing_date"])
-    return shares.sort_values(["ticker", "filing_date"]).drop_duplicates(["ticker", "filing_date"], keep="last")
 
 
 def revenue_series() -> pd.DataFrame:
@@ -160,18 +153,22 @@ def main() -> None:
     spine["next_as_of_date"] = spine["as_of_date"] + pd.DateOffset(months=3)
     panel = spine.merge(price_windows(spine), on="id", how="left")
 
-    shares = filing_shares()
-    for date_col, name in (("as_of_date", "shares_out"), ("next_as_of_date", "shares_next")):
-        known = pit.asof_join(panel[["ticker", date_col]], shares, event_date=date_col, snapshot_date="filing_date",
-                              strict=True)
-        panel[name] = known["shares_out"].values
+    positive = lambda s: s.where(s > 0)  # noqa: E731
+    # shares_out/shares_next: market_cap/price at the same trading day as
+    # price_pre/price_next (fs has no fundamentals-table shares figure dated
+    # to an arbitrary calendar date, only a fiscal period end -- see
+    # price_windows()'s docstring).
+    panel["shares_out"] = panel["market_cap"] / positive(panel["price_pre"])
+    panel["shares_next"] = panel["market_cap_next"] / positive(panel["price_next"])
     series = revenue_series()
     panel["revenue_ttm"] = revenue_ttm_asof(series, panel, "as_of_date")
     panel["revenue_ttm_next"] = revenue_ttm_asof(series, panel, "next_as_of_date")
-    positive = lambda s: s.where(s > 0)  # noqa: E731
-    panel["log_market_cap"] = np.log(positive(panel["price_pre"] * panel["shares_out"]))
-    panel["ps_ratio"] = panel["price_pre"] * panel["shares_out"] / positive(panel["revenue_ttm"])
-    panel["ps_ratio_post"] = panel["price_next"] * panel["shares_next"] / positive(panel["revenue_ttm_next"])
+    # log_market_cap/ps_ratio read fs's own market_cap directly (not
+    # price * shares_out) -- this is the fix for the pre-split understatement
+    # documented in data/results/fs_validation/summary.md.
+    panel["log_market_cap"] = np.log(positive(panel["market_cap"]))
+    panel["ps_ratio"] = panel["market_cap"] / positive(panel["revenue_ttm"])
+    panel["ps_ratio_post"] = panel["market_cap_next"] / positive(panel["revenue_ttm_next"])
 
     # the fiscal quarter ending in the calendar quarter that starts at as_of_date
     as_of = pd.to_datetime(panel["as_of_date"])

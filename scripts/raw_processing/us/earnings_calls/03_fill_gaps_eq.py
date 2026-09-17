@@ -1,5 +1,5 @@
 """
-scripts/us/earnings_calls/03_fill_gaps_equibles.py — fills the Hugging Face
+scripts/us/earnings_calls/03_fill_gaps_eq.py — fills the Hugging Face
 earnings-call dataset's coverage gaps (docs/problemas_academicos.md #5;
 see 01_fetch_transcripts.py's docstring for why this instrument matters)
 using the Equibles MCP server (https://mcp.equibles.com/mcp).
@@ -10,8 +10,8 @@ scratch on every run (`manifest = pd.DataFrame(rows); manifest.to_parquet(...)`)
 scoped only to what it finds in the HF dataset — a second source's rows
 appended there today would be silently wiped the next time someone re-runs
 01_fetch_transcripts.py. This script instead owns its own manifest,
-`filing_manifest_earnings_calls_equibles.parquet`, and its own storage tree,
-`data/raw/earnings_calls_equibles/`. The two sources are unioned back
+`filing_manifest_earnings_calls_eq.parquet`, and its own storage tree,
+`data/raw/earnings_calls_eq/`. The two sources are unioned back
 together at read time in two places — scripts/us/earnings_calls/
 02_extract_sections.py (paragraph extraction) and scripts/bronze/
 manifests.py (bronze.filing_manifest) — neither of which can
@@ -40,8 +40,8 @@ structured JSON. Parsed here with regex, not a JSON schema.
 
 Usage:
     export EQUIBLES_API_KEY=eq_...
-    uv run python scripts/us/earnings_calls/03_fill_gaps_equibles.py
-    uv run python scripts/us/earnings_calls/03_fill_gaps_equibles.py --tickers DDOG,MRVL --dry-run
+    uv run python scripts/us/earnings_calls/03_fill_gaps_eq.py
+    uv run python scripts/us/earnings_calls/03_fill_gaps_eq.py --tickers DDOG,MRVL --dry-run
 """
 
 from __future__ import annotations
@@ -248,9 +248,9 @@ def main() -> None:
 
     config = yaml.safe_load((REPO_ROOT / "configs" / "us" / "config.yaml").read_text())
     manifest_dir = REPO_ROOT / config["storage"]["interim_manifests"]
-    raw_dir = REPO_ROOT / "data" / "raw" / "earnings_calls_equibles"
+    raw_dir = REPO_ROOT / "data" / "raw" / "earnings_calls_eq"
     hf_manifest_path = manifest_dir / "filing_manifest_earnings_calls.parquet"
-    own_manifest_path = manifest_dir / "filing_manifest_earnings_calls_equibles.parquet"
+    own_manifest_path = manifest_dir / "filing_manifest_earnings_calls_eq.parquet"
 
     universe = pd.read_csv(REPO_ROOT / "configs" / "us" / "universe.csv")
     if args.tickers:
