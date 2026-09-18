@@ -232,8 +232,8 @@ def _filing_manifest_selects(countries: list[tuple[str, dict]], dirs) -> list[st
         panel_where = _us_panel_where(country, manifests_dir)
         parts = [f"SELECT '{country}' AS country_code, * FROM {base_path}{panel_where}"]
         for extra in ("filing_manifest_proxy", "filing_manifest_8k",
-                      "filing_manifest_earnings_calls", "filing_manifest_earnings_calls_equibles",
-                      "filing_manifest_earnings_calls_stockanalysis", "filing_manifest_20f",
+                      "filing_manifest_earnings_calls", "filing_manifest_earnings_calls_eq",
+                      "filing_manifest_earnings_calls_sa", "filing_manifest_20f",
                       "filing_manifest_6k"):
             source = _manifest_source(f"{manifests_dir}/{extra}")
             if source:

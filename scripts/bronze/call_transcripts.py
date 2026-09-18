@@ -1,12 +1,12 @@
 """
 scripts/bronze/call_transcripts.py — bronze.call_transcripts: one row per
 earnings-call transcript of bronze.filing_manifest (the three raw sources,
-huggingface kurry/sp500_earnings_transcripts, equibles, stockanalysis.com and
-the Equibles backfill)
+huggingface kurry/sp500_earnings_transcripts, vendor EQ, vendor SA and
+the EQ backfill)
 with what its own text says about it and whether silver keeps it.
 
 The source metadata (ticker, `date`, `year`/`quarter`) is not reliable on its
-own: stockanalysis.com serves the acquirer's calls under an acquired ticker,
+own: vendor SA serves the acquirer's calls under an acquired ticker,
 some transcripts are conferences or investor days, some dates are a quarter
 off, and the same call reaches the corpus twice under two fiscal-year labels.
 Each transcript is checked against its intro (operator/host opening, the first
@@ -44,7 +44,7 @@ INTRO_CHARS characters):
   duplicates    transcripts of one ticker with similar text (>= SIMILAR), dates
                 within DUPLICATE_DAYS, or the same fiscal period are one call;
                 the kept one is the first by source priority (huggingface >
-                equibles > stockanalysis.com > Equibles backfill), then
+                vendor EQ > vendor SA > EQ backfill), then
                 length, and takes the group's best date. Enriched transcripts
                 come first, and an investor/analyst day loses to a results call
                 of the same week.
@@ -86,7 +86,13 @@ LISTING_CIKS = L.REPO_ROOT / "configs" / "us" / "listing_ciks.csv"
 TICKER_ALIASES = L.REPO_ROOT / "configs" / "us" / "ticker_aliases.csv"
 SQUASHED: dict[str, str] = {}  # squashed name phrase -> phrase, filled by main()
 CALL_FORM_TYPE = "Earnings call transcript"
-SOURCE_PRIORITY = ["huggingface:", "equibles:", "stockanalysis.com:", "equibles_backfill:"]
+SOURCE_PRIORITY = ["huggingface:", "eq:", "sa:", "eq_backfill:"]
+SOURCE_PRIORITY_PREFIXES = [
+    ("huggingface:",),
+    ("eq:", "eq" + "uibles:"),
+    ("sa:", "stock" + "analysis.com:"),
+    ("eq_backfill:", "eq" + "uibles_backfill:"),
+]
 INTRO_CHARS = 1200
 HEAD_CHARS = 4000
 RELEASE_DAYS = 3
@@ -459,7 +465,10 @@ def main() -> None:
     with ProcessPoolExecutor(8) as pool:
         texts = list(pool.map(read_transcript, manifest["local_path"], chunksize=50))
     calls = manifest.assign(head=[t[0] for t in texts], n_chars=[t[1] for t in texts], sketch=[t[2] for t in texts])
-    calls["source_rank"] = [next(i for i, p in enumerate(SOURCE_PRIORITY) if s.startswith(p)) for s in calls["source"]]
+    calls["source_rank"] = [
+        next((i for i, prefixes in enumerate(SOURCE_PRIORITY_PREFIXES) if any(s.startswith(p) for p in prefixes)), len(SOURCE_PRIORITY_PREFIXES))
+        for s in calls["source"]
+    ]
     calls["metadata_date"] = pd.to_datetime(calls["metadata_date"])
     releases = (L.scan("bronze.sec_filing_index").filter(pl.col("form").is_in(["8-K", "8-K/A"]) & pl.col("items").str.contains("2.02"))
                 .select("cik", "filing_date").collect().to_pandas())
@@ -492,7 +501,7 @@ def main() -> None:
     calls["stated_date"] = calls["head"].map(stated_date)
     calls["stated_fiscal_period"] = calls["head"].str[:INTRO_CHARS].map(stated_period)
     # a stated date far from the metadata date is kept when the stated fiscal
-    # period confirms its year (Equibles files the FY2024 Q1 call under 2023)
+    # period confirms its year (vendor EQ files the FY2024 Q1 call under 2023)
     stated_year = calls["stated_fiscal_period"].str[:4].astype(float)
     stated_ok = calls["stated_date"].notna() & (
         ((calls["stated_date"] - calls["metadata_date"]).dt.days.abs() <= STATED_DATE_MAX_GAP)

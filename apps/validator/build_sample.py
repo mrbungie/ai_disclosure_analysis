@@ -1,7 +1,7 @@
 """Builds `data.json` for the atomic human validation UI (`apps/validator/index.html`).
 
 Organizes validation across three main SCOPES:
-  1. prefilter   (AI mention & substantive corporate disclosure)
+  1. prefilter   (AI mention classification)
   2. frames      (AI frames: existence, temporal, promotional, specificities, evidence)
   3. activities  (Atomic activities: action, object, target, stage, AI source, entities, evidence)
 
@@ -44,7 +44,7 @@ PRED_DIR = L.ADDITIVE_SOURCES["prefilter_predictions_unique"]["path"]
 CALLS_MANIFEST = REPO_ROOT / "data" / "interim" / "manifests" / "filing_manifest_earnings_calls.parquet"
 ACTIVITIES_PATH = REPO_ROOT / "data" / "processed" / "clusters" / "firm_activities.parquet"
 OUT = Path(__file__).resolve().parent / "data.json"
-FORMS = ["10-K", "10-Q", "DEF 14A", "8-K", "Earnings call"]
+FORMS = ["10-K", "10-Q", "DEF 14A", "8-K", "Earnings call", "20-F", "6-K"]
 PARAGRAPH_KEY = ["country_code", "form", "accession_number", "item_key", "paragraph_index"]
 
 FRAME_SPECIFICITY = {
@@ -214,13 +214,17 @@ def _sentences_by_paragraph(paragraph_keys: pl.DataFrame) -> pl.DataFrame:
 
 def sample_frames(n: int, seed: int, firm_lookup: dict) -> list[dict]:
     per_form = max(1, n // len(FORMS))
+    n_neg = max(1, int(per_form * 0.15))
+    n_pos = per_form - n_neg
+
     frames_all = (
-        L.scan("silver.ai_frames")
-        .filter((pl.col("country_code") == "us") & pl.col("has_frame"))
+        L.scan("bronze.ai_frames")
+        .filter(pl.col("country_code") == "us")
         .select(
             *PARAGRAPH_KEY,
             "text_hash",
             "frame_id",
+            "has_frame",
             "subject",
             "ai_type",
             "temporal",
@@ -231,29 +235,45 @@ def sample_frames(n: int, seed: int, firm_lookup: dict) -> list[dict]:
         )
         .collect(engine="streaming")
     )
-    paras = frames_all.select(*PARAGRAPH_KEY, "text_hash").unique()
+    paras = (
+        frames_all.group_by(*PARAGRAPH_KEY, "text_hash")
+        .agg(pl.col("has_frame").any().alias("has_frame"))
+        .with_columns(
+            pl.when(pl.col("has_frame"))
+            .then(pl.lit("positive"))
+            .otherwise(pl.lit("negative"))
+            .alias("estrato")
+        )
+    )
     paras = paras.with_columns(
         pl.Series("_rnd", _seeded_order(paras["text_hash"], f"build_sample.frames|{seed}"))
     )
     paras = (
-        paras.with_columns(pl.col("_rnd").rank("ordinal").over("form").alias("_rn"))
-        .filter(pl.col("_rn") <= per_form)
+        paras.with_columns(pl.col("_rnd").rank("ordinal").over(["form", "estrato"]).alias("_rn"))
+        .filter(
+            ((pl.col("estrato") == "positive") & (pl.col("_rn") <= n_pos))
+            | ((pl.col("estrato") == "negative") & (pl.col("_rn") <= n_neg))
+        )
     )
     paras = paras.join(
         _sentences_by_paragraph(paras.select(*PARAGRAPH_KEY)), on=PARAGRAPH_KEY, how="left"
     ).sort(PARAGRAPH_KEY)
-    frames_all = frames_all.join(paras.select(*PARAGRAPH_KEY), on=PARAGRAPH_KEY, how="semi")
 
     items = []
     for r in paras.iter_rows(named=True):
         fr = frames_all.filter(
-            (pl.col("accession_number") == r["accession_number"])
+            (pl.col("country_code") == r["country_code"])
+            & (pl.col("form") == r["form"])
+            & (pl.col("accession_number") == r["accession_number"])
             & (pl.col("item_key") == r["item_key"])
             & (pl.col("paragraph_index") == r["paragraph_index"])
+            & pl.col("has_frame")
         ).sort("frame_id")
         sentences = [{"idx": s["idx"], "text": s["text"]} for s in (r["sentences"] or [])]
         frame_items = []
         for f in fr.iter_rows(named=True):
+            if f["frame_id"] is None:
+                continue
             spec_tags, rhet_tags = set(f["specificity"] or []), set(f["rhetoric"] or [])
             frame_items.append({
                 "frame_index": int(f["frame_id"]),
@@ -281,25 +301,30 @@ def sample_frames(n: int, seed: int, firm_lookup: dict) -> list[dict]:
 
 
 def sample_activities(n: int, seed: int, firm_lookup: dict) -> list[dict]:
-    per = max(1, n // (len(FORMS) * 3))
+    per = max(1, n // (len(FORMS) * 4))
     a = (
         L.scan("bronze.ai_activities")
-        .filter((pl.col("country_code") == "us") & pl.col("has_activity"))
-        .select(*PARAGRAPH_KEY, "text_hash", "activity_id")
-        .unique()
+        .filter(pl.col("country_code") == "us")
+        .select(*PARAGRAPH_KEY, "text_hash", "activity_id", "has_activity")
+        .collect(engine="streaming")
     )
     paras = (
         a.group_by(*PARAGRAPH_KEY, "text_hash")
-        .agg(pl.len().alias("n_act"))
+        .agg(
+            pl.col("has_activity").any().alias("has_act"),
+            pl.col("has_activity").filter(pl.col("has_activity")).len().alias("n_act"),
+        )
         .with_columns(
-            pl.when(pl.col("n_act") == 1)
+            pl.when(~pl.col("has_act") | (pl.col("n_act") == 0))
+            .then(pl.lit("0"))
+            .when(pl.col("n_act") == 1)
             .then(pl.lit("1"))
             .when(pl.col("n_act") == 2)
             .then(pl.lit("2"))
             .otherwise(pl.lit("3+"))
             .alias("estrato")
         )
-        .collect(engine="streaming")
+        .unique(subset=["text_hash"])
     )
     paras = paras.with_columns(
         pl.Series("_rnd", _seeded_order(paras["text_hash"], f"build_sample.activities|{seed}"))
@@ -339,6 +364,8 @@ def sample_activities(n: int, seed: int, firm_lookup: dict) -> list[dict]:
         sents = [{"idx": s["idx"], "text": s["text"]} for s in (r["sentences"] or [])]
         activities = []
         for x in acts.filter(pl.col("text_hash") == r["text_hash"]).iter_rows(named=True):
+            if x["activity_id"] is None:
+                continue
             ev_pos = [int(v) for v in (x["sentence_ids"] or [])]
             activities.append({
                 "activity_index": int(x["activity_id"]),
@@ -353,7 +380,7 @@ def sample_activities(n: int, seed: int, firm_lookup: dict) -> list[dict]:
                 "evidence": [sents[i]["idx"] for i in ev_pos if 0 <= i < len(sents)],
             })
         items.append({
-            "id": f"A:{r['text_hash']}",
+            "id": f"A:{r['form']}:{r['accession_number']}:{r['item_key']}:{int(r['paragraph_index'])}",
             "form": r["form"],
             "accession_number": r["accession_number"],
             **firm_of(firm_lookup, r["accession_number"]),
@@ -383,6 +410,25 @@ def sample_prefilter(n: int, seed: int, firm_lookup: dict) -> list[dict]:
         .collect()
     )
 
+    neg_cands = (
+        pred_us.filter(pl.col("predicted_proba") < 0.01)
+        .with_columns(
+            pl.Series(
+                "_rnd",
+                _seeded_order(
+                    pred_us.filter(pl.col("predicted_proba") < 0.01)["text_hash"],
+                    f"neg_sample|{seed}",
+                ),
+            )
+        )
+        .sort("_rnd")
+        .group_by("form")
+        .head(per)
+        ["text_hash"]
+        .to_list()
+    )
+    neg_set = set(neg_cands)
+
     matches = []
     reader = pq.ParquetFile(L.path("bronze.unique_paragraphs"))
     for batch in reader.iter_batches(batch_size=100_000, columns=["text_hash", "paragraph_text", "is_scorable"]):
@@ -395,6 +441,7 @@ def sample_prefilter(n: int, seed: int, firm_lookup: dict) -> list[dict]:
             pl.col("is_ai_prefiltered")
             | (pl.col("predicted_proba") >= 0.05)
             | pl.col("paragraph_text").str.to_lowercase().str.contains(ai_terms)
+            | pl.col("text_hash").is_in(neg_set)
         )
         if joined.height:
             matches.append(
@@ -487,20 +534,6 @@ def flatten_all(raw_data: dict[str, Any]) -> dict[str, list[dict]]:
             "model_value": bool(it.get("prefilter_says_ai")),
             "context_hint": "Check whether the text contains any explicit reference to AI, ML, machine learning, algorithmic models, or generative tools.",
         })
-        if it.get("prefilter_says_ai") or it.get("proba", 0) >= 0.05:
-            flattened["prefilter"].append({
-                "id": f"{pid}:substantive",
-                "ambito": "prefilter",
-                "category": "substantive",
-                "category_label": "Substantive Disclosure",
-                **base_meta,
-                "highlight_sentences": [0],
-                "title": "Substantive Firm Disclosure",
-                "question": "Is this a substantive disclosure about the company itself (its products, operations, strategy, or risks) rather than generic boilerplate or incidental mention?",
-                "model_claim": "Corporate relevance evaluation",
-                "model_value": True,
-                "context_hint": "Mark 'No' if it is solely a standard legal disclaimer, general risk factor boilerplate, or tangential mention of third parties without firm operational impact.",
-            })
 
     # ---- 2. FRAMES ----
     for it in raw_data.get("frames", []):

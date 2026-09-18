@@ -1,4 +1,4 @@
-.PHONY: test install-deps tickers-tui data-views explorer validator validator-sample hf-sync hf-sync-models hf-sync-data hf-sync-interim hf-sync-raw hf-sync-all build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market bronze silver layers prefilter gold gold-document gold-firm gold-firm-year gold-firm-quarter gold-call gold-datasets gold-check analytics analytics-corpus analytics-posture analytics-washing analytics-shock analytics-channel-gap analytics-call-beta analytics-crash-archetypes analytics-coverage analytics-appendix analytics-stability analytics-prefilter-eval b2-check refresh-stale help
+.PHONY: test install-deps tickers-tui data-views explorer validator validator-sample hf-sync hf-sync-models hf-sync-data hf-sync-interim hf-sync-raw hf-sync-all hf-download hf-download-models hf-download-data build-universe fetch-10k extract-sections collect-data fetch-10q extract-sections-10q collect-data-10q section-audit collect-market bronze silver layers prefilter gold gold-document gold-firm gold-firm-year gold-firm-quarter gold-call gold-datasets gold-check analytics analytics-corpus analytics-posture analytics-washing analytics-shock analytics-channel-gap analytics-call-beta analytics-crash-archetypes analytics-coverage analytics-appendix analytics-stability analytics-prefilter-eval b2-check refresh-stale help
 
 # Default target
 all: test
@@ -283,6 +283,18 @@ hf-sync-raw:
 hf-sync-all:
 	@echo "Syncing models, structured data, and raw archives to Hugging Face..."
 	@uv run python scripts/common/hf_sync.py --all $(ARGS)
+
+hf-download:
+	@echo "Downloading data layers and models from Hugging Face..."
+	@uv run python scripts/common/hf_sync.py --download $(ARGS)
+
+hf-download-models:
+	@echo "Downloading models from Hugging Face..."
+	@uv run python scripts/common/hf_sync.py --download-models $(ARGS)
+
+hf-download-data:
+	@echo "Downloading data layers from Hugging Face..."
+	@uv run python scripts/common/hf_sync.py --download-data $(ARGS)
 
 # Every gold table: <kind>/<grain>/<family>.parquet (datasets: datasets/<grain>/<grain>), one row per spine key with
 # the spine's id and date (nulls, never missing rows); nothing else under data/gold.

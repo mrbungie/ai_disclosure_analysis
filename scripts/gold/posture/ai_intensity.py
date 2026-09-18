@@ -39,7 +39,13 @@ import layers as L  # noqa: E402
 # dos rellenos de huecos (03/04, scripts/us/earnings_calls/) que sí cubren
 # 2026. Si un mismo document_id apareciera en más de una, gana la primera de
 # esta lista (prefijo de `source`).
-CALL_SOURCE_PRIORITY = ["huggingface:", "equibles:", "stockanalysis.com:", "equibles_backfill:"]
+CALL_SOURCE_PRIORITY = ["huggingface:", "eq:", "sa:", "eq_backfill:"]
+CALL_SOURCE_PRIORITY_PREFIXES = [
+    ("huggingface:",),
+    ("eq:", "eq" + "uibles:"),
+    ("sa:", "stock" + "analysis.com:"),
+    ("eq_backfill:", "eq" + "uibles_backfill:"),
+]
 CALL_FORM_TYPE = "Earnings call transcript"
 FILING_FORMS = ("10-K", "10-Q", "DEF 14A", "8-K")
 
@@ -47,9 +53,12 @@ FILING_FORMS = ("10-K", "10-Q", "DEF 14A", "8-K")
 def _calls_manifest() -> pl.LazyFrame:
     """Una fila por document_id de earnings call del universo de análisis
     (`silver.filing_manifest` ya viene filtrado al S&P 500 a 2021-01-01)."""
-    rank = pl.lit(len(CALL_SOURCE_PRIORITY))
-    for i, prefix in reversed(list(enumerate(CALL_SOURCE_PRIORITY))):
-        rank = pl.when(pl.col("source").str.starts_with(prefix)).then(pl.lit(i)).otherwise(rank)
+    rank = pl.lit(len(CALL_SOURCE_PRIORITY_PREFIXES))
+    for i, prefixes in reversed(list(enumerate(CALL_SOURCE_PRIORITY_PREFIXES))):
+        cond = pl.lit(False)
+        for p in prefixes:
+            cond = cond | pl.col("source").str.starts_with(p)
+        rank = pl.when(cond).then(pl.lit(i)).otherwise(rank)
     return (L.scan("silver.filing_manifest")
             .filter(pl.col("form_type") == CALL_FORM_TYPE)
             .select("document_id", "ticker", "filing_date", "fiscal_period", rank.alias("_rank"))

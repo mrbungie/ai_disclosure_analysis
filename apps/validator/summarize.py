@@ -3,7 +3,6 @@
 Calculates validation metrics by scope and category:
   1. Prefilter:
      - Precision, recall, and confusion matrix (raw and stratum-reweighted).
-     - Substantive corporate disclosure rate.
   2. Frames:
      - Real existence rate of extracted AI frames (no hallucination).
      - Accuracy of temporal, promotional, and specificity tags.
@@ -77,7 +76,6 @@ def main() -> None:
     if pf_ann:
         print(f"--- 1. PREFILTER (evaluated n = {len(pf_ann)} / {len(pf_items)}) ---")
         mentions = [it for it in pf_ann if it.get("category") == "mentions_ai"]
-        substantive = [it for it in pf_ann if it.get("category") == "substantive"]
 
         raw = {"tp": 0, "fp": 0, "fn": 0, "tn": 0, "unc": 0}
         cells = {"tp": 0.0, "fp": 0.0, "fn": 0.0, "tn": 0.0}
@@ -138,14 +136,6 @@ def main() -> None:
                 prec_w = cells["tp"] / max(1e-9, cells["tp"] + cells["fp"])
                 rec_w = cells["tp"] / max(1e-9, cells["tp"] + cells["fn"])
                 print(f"    - Reweighted:     Precision {100*prec_w:.1f}% | Recall {100*rec_w:.1f}%")
-
-        if substantive:
-            sub_y = sum(1 for it in substantive if ann[it["id"]]["verdict"] == "Y")
-            sub_n = sum(1 for it in substantive if ann[it["id"]]["verdict"] == "N")
-            sub_u = sum(1 for it in substantive if ann[it["id"]]["verdict"] == "U")
-            total_sub = sub_y + sub_n + sub_u
-            print(f"  Substantive Disclosure (n={total_sub}):")
-            print(f"    - Substantive: {sub_y}/{total_sub} ({100*sub_y/max(1,total_sub):.1f}%) | No: {sub_n} | Uncertain: {sub_u}")
         print()
 
     # ---- 2. FRAMES ----

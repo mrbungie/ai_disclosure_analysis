@@ -304,7 +304,8 @@ ax.set_ylim(-0.16, 1.05)
 ax.set_aspect("equal")
 ax.axis("off")
 
-plt.title("The S&P 500 AI Disclosure Simplex: Industry Centroids & Boundary Exemplars (k = 3)\n441 Active Index Constituents (10-K & DEF 14A Statutory SEC Filings)",
+plt.title("The S&P 500 AI Disclosure Simplex: Industry Centroids & Boundary Exemplars (k = 3)\n"
+          f"{len(fit_pop)} Active Index Constituents (10-K & DEF 14A Statutory SEC Filings)",
           fontsize=13, fontweight="bold", pad=25)
 
 # Vertex titles (flanking cleanly outside)

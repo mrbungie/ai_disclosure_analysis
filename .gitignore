@@ -27,6 +27,7 @@ CLAUDE.md
 .antigravity*
 .claude/
 .claude*
+.mcp.json
 
 # Thesis build artifacts and reference PDFs
 thesis_document/compiled_pdf/

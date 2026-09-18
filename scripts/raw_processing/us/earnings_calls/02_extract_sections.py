@@ -146,10 +146,10 @@ def main() -> None:
     sections_dir = REPO_ROOT / config["storage"]["interim_sections"]
     sections_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = manifest_dir / "filing_manifest_earnings_calls.parquet"
-    equibles_manifest_path = manifest_dir / "filing_manifest_earnings_calls_eq.parquet"
-    stockanalysis_manifest_path = manifest_dir / "filing_manifest_earnings_calls_sa.parquet"
+    eq_manifest_path = manifest_dir / "filing_manifest_earnings_calls_eq.parquet"
+    sa_manifest_path = manifest_dir / "filing_manifest_earnings_calls_sa.parquet"
     backfill_manifest_path = manifest_dir / "filing_manifest_earnings_calls_eq_backfill.parquet"
-    other_paths = [equibles_manifest_path, stockanalysis_manifest_path, backfill_manifest_path]
+    other_paths = [eq_manifest_path, sa_manifest_path, backfill_manifest_path]
     if not manifest_path.exists() and not any(p.exists() for p in other_paths):
         pipeline_logger.log_event(
             pipeline_step="us_extract_earnings_calls", level="ERROR",
@@ -160,7 +160,7 @@ def main() -> None:
     # mutating another's file): the Hugging Face bulk dataset here,
     # 03_fill_gaps_eq.py's per-ticker gap-filling,
     # 04_fill_gaps_sa.py's headless-Chrome gap-filling and
-    # 05_register_eq_backfill.py's Equibles backfill, each in its own
+    # 05_register_eq_backfill.py's EQ backfill, each in its own
     # parquet. 01_fetch_transcripts.py REWRITES
     # filing_manifest_earnings_calls.parquet wholesale on every run
     # (`manifest.to_parquet(..., index=False)` with a freshly-built

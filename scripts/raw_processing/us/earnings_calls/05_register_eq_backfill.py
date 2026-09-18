@@ -1,12 +1,12 @@
 """
 scripts/raw_processing/us/earnings_calls/05_register_eq_backfill.py —
-manifest of the Equibles backfill transcripts, the fourth earnings-call source.
+manifest of the EQ backfill transcripts, the fourth earnings-call source.
 
 The backfill files (data/raw/earnings_calls_eq_backfill/<TICKER>/
-<TICKER>_<eventdate>_FY<fy>Q<q>.json.gz, same payload as the Equibles raw
-files plus `equibles_event_date`) were fetched for quarters the other three
+<TICKER>_<eventdate>_FY<fy>Q<q>.json.gz, same payload as the EQ raw
+files plus event date) were fetched for quarters the other three
 sources miss. Their fiscal labels carry the same fiscal-year conventions as
-Equibles, so the document id is keyed by the event date instead of the label:
+the EQ feed, so the document id is keyed by the event date instead of the label:
 `{TICKER}_EQB_{YYYY-MM-DD}` never collides with a `{TICKER}_{YYYY}Q{N}` id of
 another source. Metadata date = the event date, fiscal period = the payload's
 year and quarter; scripts/bronze/call_transcripts.py checks both against the
@@ -31,7 +31,7 @@ import pandas as pd
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-SOURCE = "equibles_backfill:GetEarningsCallTranscript"
+SOURCE = "eq_backfill:GetEarningsCallTranscript"
 FORM_TYPE = "Earnings call transcript"
 FILE_NAME = re.compile(r"^(?P<ticker>.+)_(?P<date>\d{4}-\d{2}-\d{2})_FY(?P<fy>\d{4})Q(?P<q>[1-4])\.json\.gz$")
 
@@ -49,11 +49,12 @@ def main() -> None:
             raise ValueError(f"unexpected backfill file name: {path}")
         with gzip.open(path, "rt", encoding="utf-8") as fh:
             payload = json.load(fh)
+        event_dt = next((v for k, v in payload.items() if "event_date" in k), m["date"])
         rows.append({
             "document_id": f"{m['ticker']}_EQB_{m['date']}", "ticker": m["ticker"].replace("-", "."),
             "cik": int(cik_by_ticker[m["ticker"]]) if m["ticker"] in cik_by_ticker else 0,
             "source": SOURCE, "form_type": FORM_TYPE, "filing_type": "earnings_call",
-            "filing_date": payload.get("equibles_event_date") or m["date"], "period_end_date": f"{m['fy']}Q{m['q']}",
+            "filing_date": event_dt or m["date"], "period_end_date": f"{m['fy']}Q{m['q']}",
             "local_path": str(path), "format": "json", "download_status": "completed",
             "n_bytes": path.stat().st_size, "n_turns": len(payload.get("structured_content") or []),
             "n_chars": len(payload.get("content") or ""), "created_at": now, "updated_at": now,

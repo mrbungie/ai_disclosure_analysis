@@ -1,18 +1,18 @@
 """
 scripts/us/earnings_calls/04_fill_gaps_sa.py — third, independent
-earnings-call source: stockanalysis.com, scraped via local headless Chrome.
+earnings-call source: SA financial portal, scraped via local headless Chrome.
 
 WHY A THIRD SOURCE. 03_fill_gaps_eq.py covers most of the gaps the
 Hugging Face bulk dataset (01_fetch_transcripts.py) leaves behind, but
-Equibles' free/shared MCP plan caps out at 100 requests/day — a run over
+the EQ provider's free/shared MCP plan caps out at 100 requests/day — a run over
 the full ~517-ticker universe hits that ceiling with tickers still
-unprocessed. Those tickers are NOT missing data on Equibles' side (every
+unprocessed. Those tickers are NOT missing data on EQ's side (every
 one of them failed with "Daily call limit exceeded", not "not found");
 waiting a day and rerunning 03 would eventually clear them. This script
 exists for the tickers a same-day pass still needs: it hits a different,
-non-rate-limited source instead of waiting on Equibles' clock.
+non-rate-limited source instead of waiting on EQ's clock.
 
-WHY LOCAL HEADLESS CHROME, NOT `requests`/`urllib`. stockanalysis.com has
+WHY LOCAL HEADLESS CHROME, NOT `requests`/`urllib`. The portal has
 no public API and returns the transcript inline in server-rendered HTML —
 but its anti-bot layer 400s a bare urllib/requests client after 2-3
 sequential fetches even with a browser User-Agent and multi-second
@@ -20,7 +20,7 @@ delays (confirmed empirically). A real Chrome instance (`--headless=new
 --dump-dom`) presents a genuine browser fingerprint and was not blocked
 in the same testing. This is heavier per page (~5-10s, a subprocess
 spawn) than an API call, which is exactly why this script is the
-fallback, not the primary source — 01 (HF) and 03 (Equibles) are always
+fallback, not the primary source — 01 (HF) and 03 (EQ) are always
 tried first.
 
 WHY A THIRD MANIFEST FILE, NOT A MERGE. Same rule as 03: this never reads
@@ -31,16 +31,16 @@ at read time. A ticker's transcript quarter is fetched from whichever
 source had it available FIRST — once any manifest lists a (ticker, year,
 quarter), the other two scripts treat it as covered and skip it.
 
-SLUG RESOLUTION. stockanalysis.com URLs use a lowercased ticker slug that
+SLUG RESOLUTION. The portal URLs use a lowercased ticker slug that
 usually — but not always — matches the SEC ticker. `.` in a class-share
-ticker (BRK.B) does not map to any slug stockanalysis.com recognizes
+ticker (BRK.B) does not map to any slug recognized
 under any of the variants tried (also true for Berkshire specifically
 because it doesn't hold conference calls at all); such tickers 404 on
 every variant and are logged and skipped, not retried.
 
-FISCAL, NOT CALENDAR, YEAR/QUARTER. stockanalysis.com labels each
+FISCAL, NOT CALENDAR, YEAR/QUARTER. The portal labels each
 transcript with the company's own fiscal year/quarter (e.g. MRVL's "Q1
-2027" call happened in calendar May 2026) — the same convention Equibles'
+2027" call happened in calendar May 2026) — the same convention EQ's
 ListInvestorEvents already uses (03's FY{n} Qn parsing) and what the
 existing_periods() gap-detection compares against. Using the company's
 own label, not a recomputed calendar quarter, is what keeps this
@@ -54,6 +54,7 @@ import argparse
 import gzip
 import html as ihtml
 import json
+import os
 import re
 import subprocess
 import sys
@@ -67,17 +68,20 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
 
+from dotenv import load_dotenv
+load_dotenv(REPO_ROOT / ".env")
+
 import pipeline_logger
 from importlib import import_module
-_equibles = import_module("03_fill_gaps_eq")
-existing_periods = _equibles.existing_periods
+_eq = import_module("03_fill_gaps_eq")
+existing_periods = _eq.existing_periods
 
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 TICKER_ALIASES = REPO_ROOT / "configs" / "us" / "ticker_aliases.csv"
-BASE_URL = "https://stockanalysis.com"
+BASE_URL = os.environ.get("SA_BASE_URL", "")
 FROM_YEAR, TO_YEAR = 2021, 2026
 FORM_TYPE = "Earnings call transcript"
-SOURCE = "stockanalysis.com:headless-chrome"
+SOURCE = "sa:headless-chrome"
 #: seconds between page fetches — same host, so this is politeness, not a
 #: documented rate limit (none is published).
 RATE_LIMIT_SECONDS = 2.0
@@ -227,12 +231,15 @@ def main() -> None:
     if not Path(CHROME).exists():
         print(f"Chrome not found at {CHROME}; edit the CHROME constant.")
         return
+    if not BASE_URL:
+        print("SA_BASE_URL not set. Set SA_BASE_URL in environment or .env before running this script.")
+        return
 
     config = yaml.safe_load((REPO_ROOT / "configs" / "us" / "config.yaml").read_text())
     manifest_dir = REPO_ROOT / config["storage"]["interim_manifests"]
     raw_dir = REPO_ROOT / "data" / "raw" / "earnings_calls_sa"
     hf_manifest_path = manifest_dir / "filing_manifest_earnings_calls.parquet"
-    equibles_manifest_path = manifest_dir / "filing_manifest_earnings_calls_eq.parquet"
+    eq_manifest_path = manifest_dir / "filing_manifest_earnings_calls_eq.parquet"
     own_manifest_path = manifest_dir / "filing_manifest_earnings_calls_sa.parquet"
 
     universe = with_aliases(pd.read_csv(REPO_ROOT / "configs" / "us" / "universe.csv"))
@@ -244,10 +251,10 @@ def main() -> None:
     cik_by_ticker = dict(zip(universe["ticker"], universe["cik"]))
     through_by_ticker = dict(zip(universe["ticker"], universe["through"]))
 
-    covered = existing_periods([hf_manifest_path, equibles_manifest_path, own_manifest_path])
-    pipeline_logger.log_event(pipeline_step="us_fill_gaps_stockanalysis", level="INFO",
+    covered = existing_periods([hf_manifest_path, eq_manifest_path, own_manifest_path])
+    pipeline_logger.log_event(pipeline_step="us_fill_gaps_sa", level="INFO",
                               message=f"{len(covered):,} ticker-quarters already covered "
-                                      f"(HF + Equibles + prior stockanalysis runs) across {FROM_YEAR}-{TO_YEAR}",
+                                      f"(HF + EQ + prior SA runs) across {FROM_YEAR}-{TO_YEAR}",
                               log_dir=manifest_dir)
 
     existing_own = pd.read_parquet(own_manifest_path) if own_manifest_path.exists() else pd.DataFrame()
@@ -262,12 +269,12 @@ def main() -> None:
         try:
             slug = resolve_slug(ticker)
         except FetchError as e:
-            pipeline_logger.log_event(pipeline_step="us_fill_gaps_stockanalysis", level="ERROR",
+            pipeline_logger.log_event(pipeline_step="us_fill_gaps_sa", level="ERROR",
                                       message=f"{ticker}: slug resolution failed: {e}", log_dir=manifest_dir)
             continue
         if slug is None:
-            pipeline_logger.log_event(pipeline_step="us_fill_gaps_stockanalysis", level="WARNING",
-                                      message=f"{ticker}: no stockanalysis.com page under any slug variant "
+            pipeline_logger.log_event(pipeline_step="us_fill_gaps_sa", level="WARNING",
+                                      message=f"{ticker}: no SA page under any slug variant "
                                               f"tried ({_slug_candidates(ticker)}); skipped", log_dir=manifest_dir)
             continue
         time.sleep(RATE_LIMIT_SECONDS)
@@ -275,7 +282,7 @@ def main() -> None:
         try:
             events = list_events(slug)
         except FetchError as e:
-            pipeline_logger.log_event(pipeline_step="us_fill_gaps_stockanalysis", level="ERROR",
+            pipeline_logger.log_event(pipeline_step="us_fill_gaps_sa", level="ERROR",
                                       message=f"{ticker}: {e}", log_dir=manifest_dir)
             continue
         time.sleep(RATE_LIMIT_SECONDS)
@@ -301,12 +308,12 @@ def main() -> None:
             try:
                 payload_extra = fetch_transcript(slug, gap["detail_slug"])
             except FetchError as e:
-                pipeline_logger.log_event(pipeline_step="us_fill_gaps_stockanalysis", level="ERROR",
+                pipeline_logger.log_event(pipeline_step="us_fill_gaps_sa", level="ERROR",
                                           message=f"{ticker} {fy}Q{fq}: {e}", log_dir=manifest_dir)
                 continue
             time.sleep(RATE_LIMIT_SECONDS)
             if not payload_extra["structured_content"]:
-                pipeline_logger.log_event(pipeline_step="us_fill_gaps_stockanalysis", level="WARNING",
+                pipeline_logger.log_event(pipeline_step="us_fill_gaps_sa", level="WARNING",
                                           message=f"{ticker} {fy}Q{fq}: event listed but 0 turns parsed; skipped",
                                           log_dir=manifest_dir)
                 continue
@@ -332,12 +339,12 @@ def main() -> None:
                 "n_chars": len(payload["content"]), "created_at": datetime.now(timezone.utc),
                 "updated_at": datetime.now(timezone.utc),
             })
-            pipeline_logger.log_event(pipeline_step="us_fill_gaps_stockanalysis", level="SUCCESS",
+            pipeline_logger.log_event(pipeline_step="us_fill_gaps_sa", level="SUCCESS",
                                       message=f"{ticker} FY{fy}Q{fq}: {len(payload['structured_content'])} turns",
                                       log_dir=manifest_dir)
 
     pipeline_logger.log_event(
-        pipeline_step="us_fill_gaps_stockanalysis", level="INFO",
+        pipeline_step="us_fill_gaps_sa", level="INFO",
         message=f"{n_tickers_with_gaps} tickers had a fillable gap"
                 + (" (dry run, nothing fetched)" if args.dry_run else f"; {len(new_rows)} new transcripts fetched"),
         log_dir=manifest_dir)
@@ -349,8 +356,8 @@ def main() -> None:
     combined = combined.drop_duplicates("document_id", keep="last")
     combined.to_parquet(own_manifest_path, index=False)
     pipeline_logger.log_event(
-        pipeline_step="us_fill_gaps_stockanalysis", level="SUCCESS",
-        message=f"{len(combined):,} total stockanalysis.com transcripts, {combined.ticker.nunique()} tickers -> {own_manifest_path}",
+        pipeline_step="us_fill_gaps_sa", level="SUCCESS",
+        message=f"{len(combined):,} total SA transcripts, {combined.ticker.nunique()} tickers -> {own_manifest_path}",
         log_dir=manifest_dir)
 
 

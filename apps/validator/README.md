@@ -1,80 +1,80 @@
-# Validador Atómico de Divulgación de IA (`apps/validator`)
+# Atomic AI Disclosure Validator (`apps/validator`)
 
-Herramienta de validación humana atómica para auditar las extracciones de modelos de IA del proyecto (prefiltro, frames semánticos y actividades operacionales).
+Atomic human validation tool for auditing AI model extractions across the project (prefilter, semantic frames, and operational activities).
 
-Cada verificación está **aplanada en 1 hecho a la vez**: una única pregunta directa y objetiva contrastada contra el texto del párrafo (con las oraciones de evidencia resaltadas), respondida con 3 opciones simples:
-- **[Y] Sí / Yes**
+Each verification check is **flattened into 1 fact at a time**: a single direct, objective question evaluated against the paragraph text (with evidence sentences highlighted), answered using 3 simple choices:
+- **[Y] Yes**
 - **[N] No**
-- **[U] Incierto / Uncertain**
+- **[U] Uncertain**
 
 ---
 
-## 1. Puesta en Marcha
+## 1. Getting Started
 
 ```bash
-# Servir la interfaz web:
+# Serve the web interface:
 make validator
-# o bien:
+# or alternatively:
 cd apps/validator && python -m http.server 8765
 
-# Abrir en el navegador:
+# Open in browser:
 http://localhost:8765
 ```
 
-Para regenerar o aplanar la muestra de verificación:
+To regenerate or flatten the verification sample:
 ```bash
-# Aplanar a partir de un sample previo (rápido):
+# Flatten from an existing sample (fast):
 uv run --frozen --no-sync python apps/validator/build_sample.py --from-existing apps/validator/data.json
 
-# O muestrear desde cero recorriendo bronze y silver:
+# Or sample from scratch traversing bronze and silver layers:
 uv run --frozen --no-sync python apps/validator/build_sample.py --frames 300 --prefilter 300 --activities 120
 ```
 
 ---
 
-## 2. Ámbitos de Validación
+## 2. Validation Scopes
 
-En la barra superior podés elegir el **ámbito**:
+You can select the **scope** in the top navigation bar:
 
-1. **Prefilter** (Mención de IA y Relevancia Corporativa):
-   - Mención explícita de IA / Machine Learning / GenAI.
-   - Divulgación sustantiva sobre la propia empresa vs incidental / boilerplate.
-2. **Frames** (Frames Semánticos del Juez LLM):
-   - Existencia real del frame (no alucinación).
-   - Dimensión temporal (`realized`, `planned`, `expected`, `hypothetical`).
-   - Retórica promocional (hype corporativo sin sustancia vs factual).
-   - Especificidades identificadas (producto/sistema, proceso de negocio, proveedor/socio, métrica cuantificada, fecha/plazo).
-   - Validez de la evidencia textual atribuida.
-   - Párrafos negativos: si se omitió algún frame que debió extraerse.
-3. **Activities** (Actividades Operacionales de IA):
-   - Hecho principal afirmado (empresa despliega/desarrolla herramienta X).
-   - Origen de la tecnología de IA (**propia** sólo si la empresa la construye/es su producto; **de terceros** si nombra proveedor/herramienta externa; **no dice** si no se especifica).
-   - Acción y objeto tecnológico.
-   - Destinatario final y etapa de madurez / adopción.
-   - Entidades nombradas y roles (marca propia, proveedor externo, socio, etc.).
-   - Evidencia textual directa.
-   - Completitud del párrafo (si faltó alguna actividad que el texto sí describe).
-
----
-
-## 3. Atajos de Teclado (Ultra-rápido)
-
-- `Y` ó `1`: Marcar **Sí / Yes** (y avanza automáticamente al siguiente ítem).
-- `N` ó `2`: Marcar **No** (y avanza automáticamente al siguiente ítem).
-- `U` ó `3`: Marcar **Incierto / Uncertain** (y avanza automáticamente).
-- `←` ó `A`: Ítem anterior.
-- `→` ó `D`: Ítem siguiente.
-- `P`: Ir al primer ítem pendiente sin responder.
+1. **Prefilter** (AI Mention & Corporate Relevance):
+   - Explicit mention of AI / Machine Learning / GenAI.
+   - Substantive corporate disclosure regarding the firm itself vs. incidental / boilerplate.
+2. **Frames** (LLM Judge Semantic Frames):
+   - Genuine frame existence (verifying absence of hallucination).
+   - Temporal dimension (`realized`, `planned`, `expected`, `hypothetical`).
+   - Promotional rhetoric (corporate hype without substance vs. factual disclosure).
+   - Identified specificities (product/system, business process, vendor/partner, quantified metric, date/timeline).
+   - Validity of attributed textual evidence.
+   - Negative paragraphs: checking whether a relevant frame was missed.
+3. **Activities** (Operational AI Activities):
+   - Core asserted fact (firm develops/deploys tool X).
+   - Technology origin (**proprietary** only if the firm builds/sells it as its own product; **third-party** if an external vendor/tool is named; **unspecified** if not stated).
+   - Action and technological object.
+   - Target beneficiary and adoption/maturity stage.
+   - Named entities and roles (own brand, external vendor, partner, etc.).
+   - Direct textual evidence.
+   - Paragraph completeness (checking whether an activity described in the text was omitted).
 
 ---
 
-## 4. Persistencia y Exportación
+## 3. Keyboard Shortcuts (Ultra-fast)
 
-- Las respuestas se guardan continuamente en el `localStorage` del navegador.
-- **Exportar**: Genera un archivo JSON con todas las validaciones realizadas. Guardar en `apps/validator/annotations/<nombre>.json`.
-- **Importar**: Permite cargar o fusionar anotaciones desde otra máquina o sesión.
-- **Resumen**:
+- `Y` or `1`: Mark **Yes** (automatically advances to the next item).
+- `N` or `2`: Mark **No** (automatically advances to the next item).
+- `U` or `3`: Mark **Uncertain** (automatically advances).
+- `←` or `A`: Previous item.
+- `→` or `D`: Next item.
+- `P`: Jump to the first unanswered item.
+
+---
+
+## 4. Persistence and Export
+
+- Responses are continuously persisted in browser `localStorage`.
+- **Export**: Generates a JSON file with all recorded validations. Save to `apps/validator/annotations/<name>.json`.
+- **Import**: Load or merge annotations from another machine or session.
+- **Summary**:
   ```bash
   uv run --frozen --no-sync python apps/validator/summarize.py
   ```
-  Calcula métricas agregadas: matrices de confusión, precisión/recall (crudos y reponderados por estrato para el prefiltro), tasas de acuerdo, y métricas por categoría.
+  Computes aggregated metrics: confusion matrices, precision/recall (raw and stratum-reweighted for prefilter), agreement rates, and category-level breakdowns.

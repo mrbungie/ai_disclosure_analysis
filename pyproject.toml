@@ -3,7 +3,7 @@ name = "mib-tesis-ai-disclosure"
 version = "0.1.0"
 description = "SEC Corporate AI Disclosure NLP Pipeline"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "pandas>=2.0.0",
     "pyarrow>=14.0.0",
@@ -16,14 +16,14 @@ dependencies = [
     "yfinance>=1.7.0",
     "pyyaml>=6.0.2",
     "edgartools>=5.55.0",
-    "sf-hamilton>=1.89.0",
     "pymupdf>=1.28.2",
     "sentence-transformers>=6.0.1",
     "xlrd>=2.0.2",
+    "pydantic>=2.0.0",
     "pydantic-ai>=2.38.0",
-    "dspy-ai>=3.3.1",
     "polars>=1.44.2",
-    "duckdb>=1.5.5",
+    "scikit-learn>=1.4.0",
+    "huggingface-hub>=0.28.0",
     "gradio>=6.27.0",
     "plotly>=7.1.0",
 ]

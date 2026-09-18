@@ -2,7 +2,7 @@
 scripts/us/earnings_calls/03_fill_gaps_eq.py — fills the Hugging Face
 earnings-call dataset's coverage gaps (docs/problemas_academicos.md #5;
 see 01_fetch_transcripts.py's docstring for why this instrument matters)
-using the Equibles MCP server (https://mcp.equibles.com/mcp).
+using a remote MCP transcript service (EQ).
 
 WHY A SEPARATE MANIFEST FILE, NOT THE SAME ONE 01_fetch_transcripts.py
 WRITES. That script REBUILDS `filing_manifest_earnings_calls.parquet` from
@@ -18,10 +18,9 @@ manifests.py (bronze.filing_manifest) — neither of which can
 overwrite the other's file. Idempotent within itself too: re-running only
 fetches quarters not already in ITS OWN manifest.
 
-WHY MCP OVER HTTP, NOT AN SDK. Equibles exposes a remote MCP server
+WHY MCP OVER HTTP, NOT AN SDK. The service exposes a remote MCP server
 (streamable-HTTP transport, JSON-RPC 2.0, `POST /mcp`), authenticated by an
-API key (`EQUIBLES_API_KEY` env var — free key at
-https://equibles.com/dashboard/apikeys). No `mcp` Python package is
+API key (`EQ_API_KEY` env var). No `mcp` Python package is
 required: the transport is a handful of JSON-RPC calls, each answered as a
 single SSE `data:` frame (confirmed: no session negotiation, no streaming
 needed for this use case) — implemented here with nothing beyond the
@@ -30,16 +29,16 @@ standard library's `urllib`.
 WHAT "GAP" MEANS HERE. A ticker/fiscal-quarter pair in [2021, 2025] that
 appears in NEITHER the HF manifest NOR this script's own manifest. Firms
 skip quarters for real reasons (no call held, fiscal-year transition); this
-only fills quarters Equibles confirms have a transcript on file
+only fills quarters confirmed to have a transcript on file
 (`ListInvestorEvents`' Transcript column == "available"), never invents one.
 
 RESPONSE FORMAT. Both `ListInvestorEvents` and `GetEarningsCallTranscript`
-return Markdown text (a table, and a "**Speaker (Role)**\\n\\ntext" turn
+return Markdown text (a table, and a "**Speaker (Role)**\n\ntext" turn
 list respectively) inside the MCP tool result's `content[0].text` — not
 structured JSON. Parsed here with regex, not a JSON schema.
 
 Usage:
-    export EQUIBLES_API_KEY=eq_...
+    export EQ_API_KEY=eq_...
     uv run python scripts/us/earnings_calls/03_fill_gaps_eq.py
     uv run python scripts/us/earnings_calls/03_fill_gaps_eq.py --tickers DDOG,MRVL --dry-run
 """
@@ -63,16 +62,20 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
+
+from dotenv import load_dotenv
+load_dotenv(REPO_ROOT / ".env")
+
 import pipeline_logger  # noqa: E402
 
-MCP_URL = "https://mcp.equibles.com/mcp"
+MCP_URL = os.environ.get("EQ_MCP_URL", "")
 FROM_YEAR, TO_YEAR = 2021, 2026
 TURN_LIMIT = 200  # server max per GetEarningsCallTranscript call
 RATE_LIMIT_SECONDS = 0.5
 MAX_RETRIES = 4
 
 FORM_TYPE = "Earnings call transcript"
-SOURCE = "equibles:GetEarningsCallTranscript"
+SOURCE = "eq:GetEarningsCallTranscript"
 
 _SPEAKER_LINE = re.compile(r"^\*\*(.+?)\*\*\s*$")
 _TURNS_HEADER = re.compile(r"Turns:\s*\d+-\d+\s*of\s*(\d+)")
@@ -83,7 +86,7 @@ _EVENTS_ROW = re.compile(
 )
 
 
-class EquiblesError(RuntimeError):
+class TranscriptApiError(RuntimeError):
     pass
 
 
@@ -108,34 +111,34 @@ def _mcp_call(api_key: str, tool: str, arguments: dict, id_: int = 1) -> dict:
                 break
         except urllib.error.HTTPError as e:
             if e.code == 401:
-                raise EquiblesError(
-                    f"401 from Equibles — bad/missing EQUIBLES_API_KEY: {e.read().decode(errors='replace')}"
+                raise TranscriptApiError(
+                    f"401 from transcript service — bad/missing EQ_API_KEY: {e.read().decode(errors='replace')}"
                 ) from e
             if e.code in (429, 500, 502, 503, 504) and attempt < MAX_RETRIES - 1:
                 time.sleep(2 ** attempt)
                 last_err = e
                 continue
-            raise EquiblesError(f"HTTP {e.code}: {e.read().decode(errors='replace')}") from e
+            raise TranscriptApiError(f"HTTP {e.code}: {e.read().decode(errors='replace')}") from e
         except (urllib.error.URLError, TimeoutError) as e:
             if attempt < MAX_RETRIES - 1:
                 time.sleep(2 ** attempt)
                 last_err = e
                 continue
-            raise EquiblesError(f"network error after {MAX_RETRIES} attempts: {e}") from e
+            raise TranscriptApiError(f"network error after {MAX_RETRIES} attempts: {e}") from e
     else:
-        raise EquiblesError(f"exhausted retries: {last_err}")
+        raise TranscriptApiError(f"exhausted retries: {last_err}")
 
     # the server answers either one SSE `data:` frame or a plain JSON body
     line = next((l for l in raw.split("\n") if l.startswith("data:")), None)
     try:
         payload = json.loads(line[len("data:"):].strip() if line is not None else raw)
     except json.JSONDecodeError as e:
-        raise EquiblesError(f"unparseable response: {raw[:500]}") from e
+        raise TranscriptApiError(f"unparseable response: {raw[:500]}") from e
     if "error" in payload:
-        raise EquiblesError(f"{tool} error: {payload['error']}")
+        raise TranscriptApiError(f"{tool} error: {payload['error']}")
     result = payload["result"]
     if result.get("isError"):
-        raise EquiblesError(f"{tool} tool error: {result}")
+        raise TranscriptApiError(f"{tool} tool error: {result}")
     texts = [c["text"] for c in result.get("content", []) if c.get("type") == "text"]
     return {"text": "\n".join(texts)}
 
@@ -240,10 +243,12 @@ def main() -> None:
                         help="Cap how many tickers to process this run (politeness / testing).")
     args = parser.parse_args()
 
-    api_key = os.environ.get("EQUIBLES_API_KEY")
+    api_key = os.environ.get("EQ_API_KEY")
     if not api_key:
-        print("EQUIBLES_API_KEY not set. Get a free key at https://equibles.com/dashboard/apikeys "
-              "and `export EQUIBLES_API_KEY=eq_...` before running this script.")
+        print("EQ_API_KEY not set. Set EQ_API_KEY before running this script.")
+        return
+    if not MCP_URL:
+        print("EQ_MCP_URL not set. Set EQ_MCP_URL in environment or .env before running this script.")
         return
 
     config = yaml.safe_load((REPO_ROOT / "configs" / "us" / "config.yaml").read_text())
@@ -261,9 +266,9 @@ def main() -> None:
     cik_by_ticker = dict(zip(universe["ticker"], universe["cik"]))
 
     covered = existing_periods([hf_manifest_path, own_manifest_path])
-    pipeline_logger.log_event(pipeline_step="us_fill_gaps_equibles", level="INFO",
+    pipeline_logger.log_event(pipeline_step="us_fill_gaps_eq", level="INFO",
                               message=f"{len(covered):,} ticker-quarters already covered "
-                                      f"(HF + prior Equibles runs) across {FROM_YEAR}-{TO_YEAR}",
+                                      f"(HF + prior EQ runs) across {FROM_YEAR}-{TO_YEAR}",
                               log_dir=manifest_dir)
 
     existing_own = pd.read_parquet(own_manifest_path) if own_manifest_path.exists() else pd.DataFrame()
@@ -277,8 +282,8 @@ def main() -> None:
         norm = str(ticker).upper().strip().replace(".", "-")
         try:
             events = list_earnings_events(api_key, ticker)
-        except EquiblesError as e:
-            pipeline_logger.log_event(pipeline_step="us_fill_gaps_equibles", level="ERROR",
+        except TranscriptApiError as e:
+            pipeline_logger.log_event(pipeline_step="us_fill_gaps_eq", level="ERROR",
                                       message=f"{ticker}: {e}", log_dir=manifest_dir)
             continue
         time.sleep(RATE_LIMIT_SECONDS)
@@ -301,12 +306,12 @@ def main() -> None:
                 continue
             try:
                 payload = fetch_full_transcript(api_key, ticker, fy, fq)
-            except EquiblesError as e:
-                pipeline_logger.log_event(pipeline_step="us_fill_gaps_equibles", level="ERROR",
+            except TranscriptApiError as e:
+                pipeline_logger.log_event(pipeline_step="us_fill_gaps_eq", level="ERROR",
                                           message=f"{ticker} {fy}Q{fq}: {e}", log_dir=manifest_dir)
                 continue
             if not payload["structured_content"]:
-                pipeline_logger.log_event(pipeline_step="us_fill_gaps_equibles", level="WARNING",
+                pipeline_logger.log_event(pipeline_step="us_fill_gaps_eq", level="WARNING",
                                           message=f"{ticker} {fy}Q{fq}: event listed as available "
                                                   f"but 0 turns returned; skipped", log_dir=manifest_dir)
                 continue
@@ -325,12 +330,12 @@ def main() -> None:
                 "n_chars": len(payload["content"]), "created_at": datetime.now(timezone.utc),
                 "updated_at": datetime.now(timezone.utc),
             })
-            pipeline_logger.log_event(pipeline_step="us_fill_gaps_equibles", level="SUCCESS",
+            pipeline_logger.log_event(pipeline_step="us_fill_gaps_eq", level="SUCCESS",
                                       message=f"{ticker} FY{fy}Q{fq}: {len(payload['structured_content'])} turns",
                                       log_dir=manifest_dir)
 
     pipeline_logger.log_event(
-        pipeline_step="us_fill_gaps_equibles", level="INFO",
+        pipeline_step="us_fill_gaps_eq", level="INFO",
         message=f"{n_tickers_with_gaps} tickers had a fillable gap"
                 + (" (dry run, nothing fetched)" if args.dry_run else f"; {len(new_rows)} new transcripts fetched"),
         log_dir=manifest_dir)
@@ -342,8 +347,8 @@ def main() -> None:
     combined = combined.drop_duplicates("document_id", keep="last")
     combined.to_parquet(own_manifest_path, index=False)
     pipeline_logger.log_event(
-        pipeline_step="us_fill_gaps_equibles", level="SUCCESS",
-        message=f"{len(combined):,} total Equibles transcripts, {combined.ticker.nunique()} tickers -> {own_manifest_path}",
+        pipeline_step="us_fill_gaps_eq", level="SUCCESS",
+        message=f"{len(combined):,} total EQ transcripts, {combined.ticker.nunique()} tickers -> {own_manifest_path}",
         log_dir=manifest_dir)
 
 

@@ -46,8 +46,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "common"))
 import layers as L  # noqa: E402
 
-# every earnings-call source keeps its own manifest (Hugging Face, Equibles,
-# stockanalysis, the Equibles backfill): the ticker of a call can live in any of them
+# every earnings-call source keeps its own manifest (Hugging Face, EQ,
+# SA, the EQ backfill): the ticker of a call can live in any of them
 EARNINGS_CALLS_MANIFESTS = sorted((L.INTERIM / "manifests").glob("filing_manifest_earnings_calls*.parquet"))
 DEFAULT_DIR = REPO_ROOT / "data" / "interim" / "ai_classify"
 FRAME_GLOB = "ai_frames__session=*.parquet"
@@ -62,7 +62,7 @@ DEFAULT_CONCURRENCY = 6  # el spec pedía 32; medido en la práctica contra Open
 # Salida estructurada -- spec v2 §1.1
 # --------------------------------------------------------------------------
 
-Subject = Literal["firm", "partners", "customers", "industry", "regulators"]
+Subject = Literal["firm", "competitors", "customers", "partners", "regulators", "industry"]
 AIType = Literal["generative", "predictive_ml", "unspecified"]
 Temporal = Literal["realized", "forward", "hypothetical"]
 
@@ -158,8 +158,10 @@ Rules:
 - subject is whoever performs the action. "We face evolving AI regulation" is \
 subject=firm with risk_regulatory; "the EU AI Act requires providers to..." is \
 subject=regulators; customer or market demand for the firm's products is \
-subject=customers. partners = a named supplier, vendor, or joint-venture \
-partner acting on its own (e.g. "NVIDIA's CUDA platform").
+subject=customers; competitors = a peer, rival, or competing firm deploying AI \
+or exerting competitive pressure; partners = a named supplier, vendor, or joint-venture \
+partner acting on its own (e.g. "NVIDIA's CUDA platform"); industry = broad industry trends \
+or market-wide dynamics without a named actor.
 - A frame captures only what the text affirms; a negated statement ("we do not \
 use generative AI") earns no frame.
 - temporal tracks the state of the fact, for whichever subject: realized = \
