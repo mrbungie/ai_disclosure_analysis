@@ -6,7 +6,7 @@ from style import C, fig, save, results, read
 df = read(results("crash_archetypes", "call_archetype_full_battery_targets.csv"))
 
 col_vars = ["w_call", "w_expanding", "intensity_expanding", "has_posture", "w_voc", "w_gov"]
-col_labels = ["Call decoupling\nW_call", "Accumulated\ndecoupling W_exp", "Cumulative\nintensity D",
+col_labels = ["Decoupling W,\nthis call", "Decoupling W,\naccumulated", "Cumulative\nintensity D",
               "Discloses AI\n(has)", "Vocal vs.\nDefensive", "Governance vs.\nDefensive"]
 
 row_vars = ["beta_shift_delta", "car_m1_p1", "car_p2_p63", "ncskew_wk_post", "duvol_wk_post",
@@ -44,15 +44,14 @@ ax.axis("off")
 for g in sorted(set(row_groups)):
     rows = [i for i, gg in enumerate(row_groups) if gg == g]
     if g % 2 == 0:
-        ax.axhspan(rows[0] - 0.5, rows[-1] + 0.5, xmin=0, xmax=1, color="#F1ECE3", zorder=0, lw=0)
+        ax.axhspan(rows[0] - 0.5, rows[-1] + 0.5, xmin=0, xmax=1, color="#F1F2F4", zorder=0, lw=0)
     ax.text(LEFT + 0.02, (rows[0] + rows[-1]) / 2, group_names[g], ha="left", va="center",
-            fontsize=10.5, fontweight="semibold", color=C["ink_3"])
+            fontsize=14, fontweight="semibold", color=C["ink_3"])
 
 for ri, lab in enumerate(row_labels):
     ax.text(-0.55, ri, lab, ha="right", va="center", fontsize=14.5, color=C["ink"])
 for ci, lab in enumerate(col_labels):
-    lab = lab.replace("\nW_call", "  $W_{call}$").replace("decoupling W_exp", "decoupling $W_{exp}$").replace("intensity D", "intensity $D$")
-    ax.text(ci, -1.05, lab, ha="center", va="center", fontsize=13, color=C["ink_2"], linespacing=1.25)
+    ax.text(ci, -1.05, lab, ha="center", va="center", fontsize=14.5, color=C["ink_2"], linespacing=1.2)
 
 bmax = max(abs(float(r["beta_std"])) for k, r in cell.items() if r["bh"])
 for ri, t in enumerate(row_vars):
@@ -65,7 +64,7 @@ for ri, t in enumerate(row_vars):
             col = C["petrol"] if b > 0 else C["rust"]
             s = 180 + 900 * abs(b) / bmax
             ax.scatter([ci], [ri], s=s, color=col, zorder=4, linewidths=0)
-            ax.text(ci + 0.2, ri, f"{b:+.2f}", ha="left", va="center", fontsize=14,
+            ax.text(ci + 0.2, ri, f"{b:+.2f}", ha="left", va="center", fontsize=15,
                     fontweight="bold", color=col, zorder=5)
         elif p < 0.05:
             ax.scatter([ci], [ri], s=150, facecolor="none", edgecolor=C["slate"], linewidths=1.8, zorder=3)

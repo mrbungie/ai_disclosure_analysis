@@ -1,4 +1,5 @@
-"""Chart 5: activity volume growth (with 2026 projection) and grounding trend."""
+"""Chart 5: activity volume growth (with 2026 projection), firm-level grounding G,
+and the five evidence attributes G averages, 2021 vs 2025."""
 import sys
 
 from style import C, fig, save, results, read, gold, REPO
@@ -16,10 +17,8 @@ df = read(results("washing", "volume_vs_grounding.parquet")).set_index("year")
 _dp_all = L.read_gold("document", ("covariates", "disclosure_volume"))
 _dp = _dp_all[_dp_all["form"].isin(["10-K", "10-Q", "DEF 14A", "8-K"])].copy()
 _dp["year"] = _dp["fecha"].dt.year
-_dp["md"] = _dp["fecha"].dt.month * 100 + _dp["fecha"].dt.day
 hd_cutoff = _dp.loc[_dp["year"] == 2026, "fecha"].max()
 hd_cutoff_md = int(hd_cutoff.month * 100 + hd_cutoff.day)
-hd_cutoff_str = hd_cutoff.strftime("%-d %B")
 
 _ad = pd.read_parquet(gold("spines", "activity", "activity"),
                        columns=["accession_number", "text_hash", "activity_id"]).drop_duplicates()
@@ -33,83 +32,100 @@ n2026_ytd = float(df.loc[2026, "n_activities"])
 n2026_proj = n2026_ytd * hd_act_factor
 ratio_5y = df.loc[2025, "n_activities"] / df.loc[2021, "n_activities"]
 
-f = fig(1640, 560)
-axL = f.add_axes([0.045, 0.13, 0.42, 0.8])
-axR = f.add_axes([0.565, 0.13, 0.42, 0.8])
+# G and its five attributes, from the filing-based firm-year activity counts
+# that build_washing_score.py shrinks and averages into grounding_index.
+COMPONENTS = [
+    ("named_function", "Business function"),
+    ("deployed_or_scaled", "Deployed or scaled"),
+    ("named_product_or_process", "Named product or process"),
+    ("quantified_outcome", "Quantified outcome"),
+    ("third_party_named_provider", "Named provider"),
+]
+fy = L.read_gold("firm_year", ("covariates", "activities", ["n_activities"] + [c for c, _ in COMPONENTS]))
+fy_sum = fy.groupby("year")[["n_activities"] + [c for c, _ in COMPONENTS]].sum()
+comp_pct = fy_sum[[c for c, _ in COMPONENTS]].div(fy_sum["n_activities"], axis=0) * 100
+ws = L.read_gold("firm_year", ("covariates", "washing_score"))
+g_mean = ws[ws["w"].notna()].groupby("year")["grounding_index"].mean()
 
-# ---- Left panel: activity volume bars ----
+TITLE = dict(fontsize=21, color=C["ink_2"], fontweight="semibold", ha="left", va="bottom")
+
+f = fig(1720, 500)
+axL = f.add_axes([0.0, 0.1, 0.28, 0.76])
+axR = f.add_axes([0.47, 0.1, 0.26, 0.76])
+axM = f.add_axes([0.80, 0.1, 0.20, 0.76])
+
+# ---- Left: activity volume bars ----
 years = [2021, 2022, 2023, 2024, 2025]
 vals = [df.loc[y, "n_activities"] for y in years]
 xs = list(range(len(years)))
-axL.bar(xs, vals, width=0.62, color=C["petrol"], zorder=3)
+axL.bar(xs, vals, width=0.66, color=C["petrol"], zorder=3)
 for x, v in zip(xs, vals):
-    axL.annotate(f"{v:,.0f}", (x, v), xytext=(0, 8), textcoords="offset points",
-                 ha="center", fontsize=13, fontweight="bold", color=C["petrol_dark"])
+    axL.annotate(f"{v / 1000:.1f}k", (x, v), xytext=(0, 7), textcoords="offset points",
+                 ha="center", fontsize=18, fontweight="bold", color=C["petrol_dark"])
 
 x26 = len(years)
-axL.bar([x26], [n2026_ytd], width=0.62, color=C["petrol_light"], zorder=3)
-axL.bar([x26], [n2026_proj - n2026_ytd], bottom=[n2026_ytd], width=0.62,
+axL.bar([x26], [n2026_ytd], width=0.66, color=C["petrol_light"], zorder=3)
+axL.bar([x26], [n2026_proj - n2026_ytd], bottom=[n2026_ytd], width=0.66,
         facecolor="none", edgecolor=C["petrol_light"], hatch="////", lw=1.1, zorder=3)
-axL.annotate(f"{n2026_ytd:,.0f}", (x26, n2026_ytd / 2), ha="center", va="center",
-             fontsize=11.5, fontweight="bold", color="white")
-axL.annotate(f"{n2026_proj:,.0f}", (x26, n2026_proj), xytext=(0, 8), textcoords="offset points",
-             ha="center", fontsize=13, fontweight="bold", color=C["ink_2"])
-axL.annotate("2026 YTD", (x26, n2026_ytd), xytext=(0, -18), textcoords="offset points",
-             ha="center", fontsize=10.5, color="white")
-axL.annotate("projected", (x26, n2026_proj - (n2026_proj - n2026_ytd) / 2), xytext=(0, 0),
-             textcoords="offset points", ha="center", va="center", fontsize=10.5,
-             color=C["ink_3"], rotation=90)
+axL.annotate(f"{n2026_proj / 1000:.1f}k", (x26, n2026_proj), xytext=(0, 7), textcoords="offset points",
+             ha="center", fontsize=18, fontweight="bold", color=C["ink_3"])
+axL.annotate("YTD", (x26, n2026_ytd / 2), ha="center", va="center",
+             fontsize=16, fontweight="bold", color="white")
 
 axL.set_xticks(xs + [x26])
-axL.set_xticklabels([str(y) for y in years] + ["2026"], fontsize=13, color=C["ink_2"])
-axL.set_ylim(0, n2026_proj * 1.2)
+axL.set_xticklabels(["'21", "'22", "'23", "'24", "'25", "'26"], fontsize=18, color=C["ink_2"])
+axL.set_ylim(0, n2026_proj * 1.18)
 axL.set_yticks([])
 for s in ("left", "top", "right"):
     axL.spines[s].set_visible(False)
 axL.spines["bottom"].set_color(C["rule"])
 axL.tick_params(axis="x", length=0, pad=8)
-axL.text(0.0, 1.06, "Disclosed AI activities per year", transform=axL.transAxes,
-         fontsize=13.5, color=C["ink_3"], ha="left", va="bottom")
-axL.annotate(f"{ratio_5y:.1f}×", (1.3, vals[-1] * 0.62), ha="center", va="center",
-             fontsize=30, fontweight="bold", color=C["rust"])
-axL.annotate("2021 → 2025", (1.3, vals[-1] * 0.62), xytext=(0, -30),
-             textcoords="offset points", ha="center", va="center", fontsize=11.5, color=C["ink_3"])
+axL.text(0.0, 1.05, "Disclosed AI activities per year", transform=axL.transAxes, **TITLE)
+axL.annotate(f"{ratio_5y:.1f}×", (1.0, vals[-1] * 0.72), ha="center", va="center",
+             fontsize=40, fontweight="bold", color=C["rust"])
+axL.annotate("2021 → 2025", (1.0, vals[-1] * 0.72), xytext=(0, -34),
+             textcoords="offset points", ha="center", va="center", fontsize=17, color=C["ink_3"])
 
-# ---- Right panel: grounding trend lines ----
-series = [
-    ("Deployed or scaled", "deployed_share_pct", C["petrol"]),
-    ("Named product or process", "named_evidence_pct", C["rust"]),
-]
-yrs_all = list(df.index)
-yrs_solid = [y for y in yrs_all if y <= 2025]
-yrs_dot = [y for y in yrs_all if y >= 2025]
-
-for name, col, color in series:
-    v_solid = [df.loc[y, col] for y in yrs_solid]
-    v_dot = [df.loc[y, col] for y in yrs_dot]
-    axR.plot(yrs_solid, v_solid, color=color, lw=2.4, marker="o", markersize=5.5,
-             markerfacecolor=color, markeredgecolor=C["bg"], markeredgewidth=1.1, zorder=3)
-    axR.plot(yrs_dot, v_dot, color=color, lw=2.0, linestyle=(0, (2, 2)), zorder=3)
-    axR.plot([yrs_dot[-1]], [v_dot[-1]], marker="o", markersize=5.5, markerfacecolor=C["bg"],
-             markeredgecolor=color, markeredgewidth=1.6, zorder=4)
-    start_v = df.loc[2021, col]
-    end_v = df.loc[2025, col]
-    axR.annotate(f"{name}  {start_v:.0f}% → {end_v:.0f}%",
-                 (yrs_all[-1], end_v), xytext=(6, 0 if name == series[0][0] else 0),
-                 textcoords="offset points", ha="left", va="center",
-                 fontsize=12.5, fontweight="bold", color=color)
-
-axR.set_xlim(yrs_all[0] - 0.3, yrs_all[-1] + 2.4)
-axR.set_ylim(0, 100)
-axR.set_yticks([0, 25, 50, 75, 100])
-axR.set_yticklabels(["0", "25", "50", "75", "100%"], fontsize=12, color=C["ink_3"])
-axR.set_xticks(yrs_all)
-axR.set_xticklabels([str(y) for y in yrs_all], fontsize=13, color=C["ink_2"])
-axR.yaxis.grid(True, color=C["grid"], lw=1.0, zorder=0)
+# ---- Middle: mean firm-level G ----
+gy = list(g_mean.index)
+g_solid = [y for y in gy if y <= 2025]
+axM.plot(g_solid, [g_mean[y] for y in g_solid], color=C["rust"], lw=3.2, marker="o", markersize=8,
+         markeredgecolor=C["bg"], markeredgewidth=1.4, zorder=3)
+axM.plot([2025, 2026], [g_mean[2025], g_mean[2026]], color=C["rust"], lw=2.6, linestyle=(0, (2, 2)), zorder=3)
+axM.plot([2026], [g_mean[2026]], marker="o", markersize=8, markerfacecolor=C["bg"],
+         markeredgecolor=C["rust"], markeredgewidth=2.0, zorder=4)
+for y, va, dy in ((2021, "top", -16), (2025, "top", -16)):
+    axM.annotate(f"{g_mean[y]:.2f}", (y, g_mean[y]), xytext=(0, dy), textcoords="offset points",
+                 ha="center", va=va, fontsize=24, fontweight="bold", color=C["rust"])
+axM.set_ylim(0.25, 0.55)
+axM.set_yticks([0.3, 0.4, 0.5])
+axM.set_yticklabels(["0.30", "0.40", "0.50"], fontsize=18, color=C["ink_3"])
+axM.set_xlim(2020.6, 2026.4)
+axM.set_xticks([2021, 2023, 2025])
+axM.set_xticklabels(["'21", "'23", "'25"], fontsize=18, color=C["ink_2"])
+axM.yaxis.grid(True, color=C["grid"], lw=1.0, zorder=0)
 for s in ("left", "top", "right", "bottom"):
-    axR.spines[s].set_visible(False)
-axR.tick_params(axis="both", length=0, pad=8)
-axR.text(0.0, 1.06, "Grounding of disclosed AI activities", transform=axR.transAxes,
-         fontsize=13.5, color=C["ink_3"], ha="left", va="bottom")
+    axM.spines[s].set_visible(False)
+axM.tick_params(axis="both", length=0, pad=8)
+axM.text(0.0, 1.05, "Mean G per firm (0 to 1)", transform=axM.transAxes, **TITLE)
+
+# ---- Middle: independent grounding attributes (Thesis Fig. 13, right) ----
+lad = read(results("washing", "ladder_substance.parquet")).iloc[0]
+attrs = [("Business function", lad["p_func"]), ("Deployed or scaled", lad["p_stage"]),
+         ("Named product or process", lad["p_named"]), ("Quantified outcome", lad["p_metric"]),
+         ("Named external vendor", lad["p_vendor"])]
+ys = list(range(len(attrs)))[::-1]
+for y, (lab, p_) in zip(ys, attrs):
+    col = C["petrol"] if p_ >= 50 else C["rust"]
+    axR.barh([y], [p_], height=0.62, color=col, zorder=3)
+    axR.text(-3, y, lab, ha="right", va="center", fontsize=17, color=C["ink"])
+    axR.text(p_ + 2, y, f"{p_:.0f}%" if p_ >= 10 else f"{p_:.1f}%", ha="left", va="center", fontsize=18,
+             fontweight="bold", color=col)
+axR.set_xlim(0, 120)
+axR.set_ylim(-0.6, len(attrs) - 0.4)
+axR.set_xticks([]); axR.set_yticks([])
+for s_ in ("left", "top", "right", "bottom"):
+    axR.spines[s_].set_visible(False)
+axR.text(-0.62, 1.05, "% of activities with each piece of evidence", transform=axR.transAxes, **TITLE)
 
 save(f, "volume_grounding")

@@ -6,7 +6,7 @@
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
     <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
-    <dc:date>2026-09-27T16:46:46.016713</dc:date>
+    <dc:date>2026-09-28T13:30:15.253893</dc:date>
     <dc:format>image/svg+xml</dc:format>
     <dc:creator>
      <cc:Agent>
@@ -800,7 +800,7 @@ L 761.6425 77.571195
 L 761.6425 26.087273 
 L 228.83 26.087273 
 z
-" clip-path="url(#pad22f76b72)" style="fill: #d1d6da"/>
+" clip-path="url(#pb32e7f311f)" style="fill: #d2d6da"/>
    </g>
    <g id="patch_4">
     <path d="M 228.83 166.336578 
@@ -808,7 +808,7 @@ L 696.5633 166.336578
 L 696.5633 114.852656 
 L 228.83 114.852656 
 z
-" clip-path="url(#pad22f76b72)" style="fill: #a0abb0"/>
+" clip-path="url(#pb32e7f311f)" style="fill: #a4adb4"/>
    </g>
    <g id="patch_5">
     <path d="M 228.83 255.101961 
@@ -816,7 +816,7 @@ L 578.822597 255.101961
 L 578.822597 203.618039 
 L 228.83 203.618039 
 z
-" clip-path="url(#pad22f76b72)" style="fill: #6f7f85"/>
+" clip-path="url(#pb32e7f311f)" style="fill: #76838d"/>
    </g>
    <g id="patch_6">
     <path d="M 228.83 343.867344 
@@ -824,7 +824,7 @@ L 464.038489 343.867344
 L 464.038489 292.383422 
 L 228.83 292.383422 
 z
-" clip-path="url(#pad22f76b72)" style="fill: #3e535b"/>
+" clip-path="url(#pb32e7f311f)" style="fill: #495b67"/>
    </g>
    <g id="patch_7">
     <path d="M 228.83 432.632727 
@@ -832,7 +832,7 @@ L 280.308864 432.632727
 L 280.308864 381.148805 
 L 228.83 381.148805 
 z
-" clip-path="url(#pad22f76b72)" style="fill: #18323a"/>
+" clip-path="url(#pb32e7f311f)" style="fill: #263b4a"/>
    </g>
    <g id="text_6">
     <!-- 100.0% -->
@@ -1487,7 +1487,7 @@ z
    </g>
    <g id="text_14">
     <!-- 9.7% -->
-    <g style="fill: #b85f42" transform="translate(290.965114 413.074848) scale(0.17 -0.17)">
+    <g style="fill: #c9826b" transform="translate(290.965114 413.074848) scale(0.17 -0.17)">
      <defs>
       <path id="Inter-Bold-548" d="M 1988 -69 
 Q 1528 -69 1173 112 
@@ -1644,7 +1644,7 @@ z
   </g>
  </g>
  <defs>
-  <clipPath id="pad22f76b72">
+  <clipPath id="pb32e7f311f">
    <rect x="228.83" y="5.76" width="682" height="447.2"/>
   </clipPath>
  </defs>

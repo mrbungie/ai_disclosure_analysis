@@ -25,8 +25,8 @@ n_bh = int(sub["bh_survive"].sum())
 n_nom = int(sub["nominal"].sum())
 print(f"n={n} BH survivors={n_bh} nominal p<.05={n_nom}")
 
-f = fig(1400, 560)
-ax = f.add_axes([0.075, 0.14, 0.90, 0.80])
+f = fig(1250, 465)
+ax = f.add_axes([0.09, 0.15, 0.89, 0.8])
 
 ax.set_yscale("log")
 ranks_line = np.arange(1, n + 1)
@@ -44,24 +44,25 @@ ax.scatter(sub.loc[nominal_only, "rank"], sub.loc[nominal_only, "p"], s=60,
 ax.scatter(sub.loc[sub["bh_survive"], "rank"], sub.loc[sub["bh_survive"], "p"],
            s=110, color=C["petrol"], edgecolor=C["bg"], linewidths=1.2, zorder=5)
 
-for i, (_, r) in enumerate(sub[sub["bh_survive"]].iterrows()):
+# rank -> (dx, dy, ha): labels sit beside their point, clear of neighbours
+PLACE = {1: (12, 0, "left"), 2: (12, 0, "left"), 3: (12, -7, "left"),
+         4: (12, 7, "left"), 5: (0, -18, "center"), 6: (12, -2, "left")}
+for _, r in sub[sub["bh_survive"]].iterrows():
     lab = f"{TARGET_SHORT.get(r['target'], r['target'])} · {VAR_SHORT.get(r['variable'], r['variable'])}"
-    dy = 14 if i % 2 == 0 else 40
-    dx = -18 if i % 2 == 0 else 18
-    ha = "right" if i % 2 == 0 else "left"
+    dx, dy, ha = PLACE.get(int(r["rank"]), (12, 0, "left"))
     ax.annotate(lab, xy=(r["rank"], r["p"]), xytext=(dx, dy),
-                textcoords="offset points", ha=ha, fontsize=12,
+                textcoords="offset points", ha=ha, va="center", fontsize=13.5,
                 fontweight="semibold", color=C["petrol_dark"])
 
-ax.text(n * 0.60, 0.35, "Benjamini–Hochberg 5%", color=C["petrol"],
-        fontsize=13, fontweight="semibold", rotation=18)
-ax.text(n * 0.02, 0.062, "nominal p = 0.05", color=C["rust"], fontsize=13,
+ax.text(n * 0.62, 0.02, "Benjamini–Hochberg 5% threshold", color=C["petrol"],
+        fontsize=14, fontweight="semibold", va="top")
+ax.text(n * 0.02, 0.062, "nominal p = 0.05", color=C["rust"], fontsize=14,
         fontweight="semibold", va="bottom")
 
 ax.text(0.02, 0.96, "6 of 48 survive", transform=ax.transAxes, ha="left",
-        va="top", fontsize=19, fontweight="bold", color=C["petrol_dark"])
+        va="top", fontsize=20, fontweight="bold", color=C["petrol_dark"])
 ax.text(0.02, 0.87, f"{n_nom} nominally significant", transform=ax.transAxes,
-        ha="left", va="top", fontsize=14.5, color=C["ink_2"])
+        ha="left", va="top", fontsize=15, color=C["ink_2"])
 
 ax.set_xlim(0, n + 1)
 ax.set_ylim(1e-5, 1.3)
@@ -73,5 +74,6 @@ ax.set_ylabel("p-value (log scale)", fontsize=15, color=C["ink_2"])
 ax.grid(axis="y", color=C["grid"], lw=0.8, zorder=0)
 ax.spines["left"].set_visible(False)
 ax.tick_params(axis="y", length=0)
+ax.tick_params(labelsize=14)
 
 save(f, "bh_pvalues")

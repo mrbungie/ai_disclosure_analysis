@@ -36,7 +36,7 @@ colors = fit_pop["archetype"].map(ARCH).values
 tickers = fit_pop["ticker"].values
 archetype = fit_pop["archetype"].values
 
-f = fig(820, 800)
+f = fig(570, 555)
 ax = f.add_axes([0, 0, 1, 1])
 ax.set_xlim(-0.06, 1.06)
 ax.set_ylim(-0.19, 1.04)
@@ -68,7 +68,7 @@ ax.plot([mid_br_top[0], mid_br_bl[0]], [mid_br_top[1], mid_br_bl[1]],
         color=C["grid"], lw=1.1, linestyle=(0, (2, 3)), zorder=1)
 
 # Points
-ax.scatter(x, y, s=46, c=colors, alpha=0.75, linewidths=0.5,
+ax.scatter(x, y, s=30, c=colors, alpha=0.75, linewidths=0.5,
            edgecolors="white", zorder=3)
 
 # Vertex labels: name (semibold, archetype colour) over a one-line descriptor
@@ -76,8 +76,8 @@ def vertex_label(xy, name, desc, n, ha, below):
     x0, y0 = xy
     y_name, y_desc = (y0 - 0.075, y0 - 0.135) if below else (y0 + 0.125, y0 + 0.068)
     ax.text(x0, y_name, f"{name.replace(' Disclosers', '')}  ·  {n}", ha=ha, va="center",
-            fontsize=21, fontweight="semibold", color=ARCH[name], zorder=5)
-    ax.text(x0, y_desc, desc, ha=ha, va="center", fontsize=16, color=C["ink_3"], zorder=5)
+            fontsize=17, fontweight="semibold", color=ARCH[name], zorder=5)
+    ax.text(x0, y_desc, desc, ha=ha, va="center", fontsize=14, color=C["ink_3"], zorder=5)
 
 n_def = int((archetype == "Defensive Disclosers").sum())
 n_voc = int((archetype == "Vocal Substantives").sum())
@@ -90,7 +90,7 @@ vertex_label(BR, "Governance-Led Disclosers", "oversight & responsible use", n_g
 # Ticker labels for well-known firms
 labels = {
     "MSFT": (0, 10, "center"), "NVDA": (0, -12, "center"), "GOOGL": (10, 4, "left"),
-    "AMZN": (10, -4, "left"), "AAPL": (-10, 4, "right"), "C": (-10, -6, "right"),
+    "AMZN": (14, 14, "left"), "AAPL": (-10, 4, "right"), "C": (-10, -6, "right"),
     "JPM": (10, 8, "left"), "GS": (10, -8, "left"),
 }
 tmap = {t: (xi, yi) for t, xi, yi in zip(tickers, x, y)}
@@ -99,7 +99,7 @@ for t, (dx, dy, ha) in labels.items():
         continue
     px, py = tmap[t]
     ax.annotate(t, (px, py), xytext=(dx, dy), textcoords="offset points",
-                ha=ha, va="center", fontsize=16, fontweight="bold", color=C["ink"],
+                ha=ha, va="center", fontsize=14, fontweight="bold", color=C["ink"],
                 zorder=6,
                 arrowprops=dict(arrowstyle="-", color=C["ink_3"], lw=0.8,
                                  shrinkA=3, shrinkB=3) if (dx, dy) != (0, 0) else None)

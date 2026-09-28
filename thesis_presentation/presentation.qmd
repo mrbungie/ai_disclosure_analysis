@@ -1,5 +1,5 @@
 ---
-pagetitle: "AI Washing or Credible Disclosure? — Thesis defense"
+pagetitle: "AI Washing or Credible Disclosure? · Thesis defense"
 author: "Germán Oviedo"
 format:
   revealjs:
@@ -19,15 +19,13 @@ format:
     transition-speed: fast
     background-transition: fade
     embed-resources: true
-    footer: "Germán Oviedo &nbsp;·&nbsp; AI Washing or Credible Disclosure?"
     pdf-separate-fragments: false
     menu: false
 ---
 
-## {.cover background-color="#18323A"}
+## {.cover background-color="#263B4A"}
 
 ::: cover-wrap
-![](figures/cover_art.svg){.cover-art}
 
 ::: cover-kicker
 MBA in International Business &nbsp;·&nbsp; XXXVI edition &nbsp;·&nbsp; Final report
@@ -47,7 +45,6 @@ Patterns and Clusters in Corporate AI Disclosures
 ::: cover-meta
 <div><div class="k">Author</div><div class="v">Germán Oviedo</div></div>
 <div><div class="k">Discussant</div><div class="v">Prof. Francesco Venier</div></div>
-<div><div class="k">Evidence</div><div class="v">S&amp;P 500 · 2021–2026</div></div>
 :::
 :::
 
@@ -57,7 +54,7 @@ Good morning. The thesis asks one question: now that almost every large firm tal
 
 <!-- ============================ 1 · PROBLEM ============================ -->
 
-## As AI disclosure became ubiquitous, credibility — not presence — became the managerial problem
+## Once nearly every firm disclosed AI, the managerial problem shifted from presence to credibility
 
 ::: kicker
 The problem
@@ -78,9 +75,7 @@ S&P 500 firms mentioning AI in SEC filings
 :::
 
 ::: {.mt-l .small}
-- Investors must separate real adoption from promotional claims.
-- Managers must communicate AI without overstating its maturity.
-- Regulators now treat overstated AI capability as a misstatement: the SEC named **“AI washing”** in December 2023.
+When 93.5% of firms mention AI, **a mention alone says almost nothing.** What matters is *how* firms talk about it and what evidence backs it.
 :::
 :::
 
@@ -89,18 +84,19 @@ S&P 500 firms mentioning AI in SEC filings
 :::
 :::
 
-::: takeaway
-When 93.5% of firms mention AI, **a mention separates almost nobody.** The question becomes *how* firms disclose — and what evidence stands behind it.
+::: note-line
+S&amp;P 500, 499 firms fixed at 1 Jan 2021 · SEC filings 2021–2025, 2026 year to date · Thesis Fig. 3
 :::
 
 ::: notes
-- Diffusion: 34.3% of firms in 2021, 93.5% in 2025, 95.5% in 2026 YTD. A balanced cohort shows the same path, so this is adoption, not index churn.
+- Diffusion: 34.3% of firms in 2021, 93.5% in 2025, 95.5% in 2026 YTD. A balanced cohort shows the same path, which rules out index churn.
+- Investors must separate real adoption from promotional claims; managers must talk about AI without overstating its maturity.
 - Keyword counts and dictionary tone give the same weight to a risk disclaimer and to a documented deployment. That is the measurement gap the thesis addresses.
 :::
 
 <!-- ============================ 2 · RQs ============================ -->
 
-## Four research questions turn the credibility problem into an analytical research design
+## Four research questions structure the inquiry from disclosure patterns to economic relevance
 
 ::: kicker
 Research design
@@ -110,63 +106,57 @@ Research design
 ::: label
 Main research question
 :::
-<p class="serif" style="font-size:31px;line-height:1.3;color:#1C1F22">To what extent do public firms show <strong>strategic heterogeneity</strong> in their AI disclosures — and does separating <span class="petrol">disclosure volume</span>, <span class="petrol">communication posture</span> and <span class="teal">grounded operational substance</span> carry <span class="rust">incremental economic information</span>?</p>
+<p class="serif" style="font-size:30px;line-height:1.3;color:#1C1F22">To what extent do public firms exhibit <strong>strategic heterogeneity</strong> in their corporate AI disclosures, and does distinguishing <span class="petrol">disclosure volume</span>, <span class="petrol">communication posture</span> and <span class="teal">grounded operational substance</span> carry <span class="rust">incremental economic information</span>?</p>
 :::
 
-::: {.grid-4 .mt .rq}
+::: {.grid-4 .mt}
 ::: {.card .accent-petrol}
 ::: label
 RQ1 · Evolution
 :::
-#### How did AI disclosure diffuse — and did the evidence keep pace?
+#### How did AI disclosure spread, and did the evidence keep up?
 <p class="xsmall muted mt-s">Institutional isomorphism</p>
+<p class="small mt-s"><strong>Expected:</strong> AI talk spreads fast; concrete activities grow more slowly.</p>
 :::
 
 ::: {.card .accent-teal}
 ::: label
 RQ2 · Heterogeneity
 :::
-#### Do firms follow distinct, stable communication postures?
+#### Do firms talk about AI in distinct, stable ways?
 <p class="xsmall muted mt-s">Signalling · organizational configurations</p>
+<p class="small mt-s"><strong>Expected:</strong> stable styles that predict reported activity beyond volume.</p>
 :::
 
 ::: {.card .accent-ochre}
 ::: label
-RQ3 · Credibility
+RQ3 · Decoupling &amp; venue
 :::
-#### Does narrative run ahead of substance, and does it change with legal commitment?
+#### Does talk run ahead of evidence, and do calls differ from filings?
 <p class="xsmall muted mt-s">Decoupling · channel liability</p>
+<p class="small mt-s"><strong>Expected:</strong> unbacked promotion sits in calls; SEC scrutiny narrows the gap.</p>
 :::
 
 ::: {.card .accent-rust}
 ::: label
-RQ4 · Economic information
+RQ4 · Market relevance
 :::
-#### Do these distinctions carry information about risk, returns and fundamentals?
+#### Do markets price these differences?
 <p class="xsmall muted mt-s">Costly signalling</p>
+<p class="small mt-s"><strong>Expected:</strong> accumulated gaps, not one quarter's talk, show up in risk.</p>
 :::
-:::
-
-::: band
-<div>Map</div><div>Discover</div><div>Test</div><div>Explain</div>
-:::
-
-::: outputs
-<div><b>Output</b>Diffusion of volume, activity and grounding, 2021–2026</div>
-<div><b>Output</b>Communication archetypes and their activity portfolios</div>
-<div><b>Output</b>Decoupling index and call-vs-filing evidence gap</div>
-<div><b>Output</b>Multiple-testing-corrected market and operating associations</div>
 :::
 
 ::: notes
-- This is an analytical project: exploratory where the goal is pattern discovery (postures), hypothesis-guided where theory gives a prediction (decoupling, venue, pricing).
-- Each RQ builds on the previous one: map the phenomenon, discover structure, test credibility, then ask whether markets care.
-- The design also generates second-order questions, which I return to at the end.
+- Each RQ has a theoretical mechanism and an expected outcome, as in the thesis's research-question table.
+- RQ4 in full: markets price accumulated decoupling, cumulative disclosure intensity and a governance-weighted posture into systematic risk (beta), rather than reacting to single-quarter narrative volume.
+- The market regressions are exploratory diagnostics, not confirmatory tests.
+- The thesis closes with open questions on the final findings slide.
 :::
 
 <!-- ============================ 3 · METHOD ============================ -->
 
-## A reproducible NLP-to-finance pipeline converts 9.7M paragraphs into measures that answer the four questions
+## An analytical methodology turns 9.7M paragraphs into six measures to explore the four questions
 
 ::: kicker
 Methodology
@@ -177,18 +167,85 @@ Methodology
 :::
 
 ::: note-line
-<span class="legend-dot" style="background:#355F6B"></span>communication &nbsp;&nbsp;&nbsp; <span class="legend-dot" style="background:#008B7B"></span>disclosed activity &amp; evidence &nbsp;&nbsp;&nbsp; <span class="legend-dot" style="background:#B85F42"></span>decoupling &nbsp;·&nbsp; Code, prompts, datasets and models are public and version-pinned.
+S&amp;P 500, 499 firms · 10-K, 10-Q, 8-K, DEF 14A and earnings calls, 2021–2026 year to date · Thesis Fig. 1<br>
+<span class="legend-dot" style="background:#446582"></span>communication &nbsp;&nbsp;&nbsp; <span class="legend-dot" style="background:#67958A"></span>disclosed activity &amp; evidence &nbsp;&nbsp;&nbsp; <span class="legend-dot" style="background:#C9826B"></span>decoupling &nbsp;·&nbsp; Code, prompts, datasets and models are public and version-pinned.
 :::
 
 ::: notes
-- Two LLM passes: first, claims (“frames”) with seven communicative dimensions; second, when the firm itself acts, an action triple — verb, AI object, business function — plus stage, provenance and evidence.
+- Two LLM passes: first, claims ("frames") with seven communicative dimensions; second, when the text reports the firm itself doing something with AI, an action triple (verb, AI object, business function) plus stage, provenance and evidence.
 - D = AI frames per 1,000 words. P = seven-dimensional posture. A = activity count. G = share of five evidence attributes. S = log(1+A)×G. W = rank(D) − rank(S).
-- Details and validation in backup B2–B5.
+- Details and validation in annex A1–A4.
+:::
+
+<!-- ============================ 4a · NARRATIVE ============================ -->
+
+## AI talk grew 7.3× and turned toward risk and governance
+
+::: kicker
+RQ1 <span class="sep">/</span> <span class="muted">Narrative evolution</span>
+:::
+
+::: chart
+![](figures/narrative.svg){.chart}
+:::
+
+::: takeaway
+The typical firm now talks about AI mostly as a **risk**: the share of its AI frames that name one rose from **23% to 58%**, while realized claims fell from 74% to 55% and customer-facing ones from 35% to 11%. The turn starts in 2023, ahead of the SEC warning (A12).
+:::
+
+::: note-line
+Filings 2021–2025, 2026 year to date · Left: Thesis Fig. 3, Panel B<br>
+Right: the seven archetypal-analysis inputs by year. Per firm, share of its 10-K, 8-K and DEF 14A AI frames carrying each dimension (≥ 5 frames, shrunk), averaged across firms.
+:::
+
+::: notes
+- D is the mean firm-year rate of AI frames per 1,000 words: 0.017 in 2021, 0.125 in 2025.
+- 2021 → 2025: realized 74 → 55, risk 23 → 58, customer-facing 35 → 11, specificity 30 → 23, promotional 20 → 11, governance 6 → 16, hedging 1 → 4.
+- Firms entering the average: 66 in 2021, 329 in 2025. Much of the drift comes from new disclosers, who enter mostly as Defensive.
+- The archetypes are fitted once, on each firm's frames pooled over the whole panel; this chart shows the same inputs year by year. D is not an input.
+:::
+
+<!-- ============================ 6 · GROUNDING ============================ -->
+
+## Firms report many more AI activities, each backed by less evidence
+
+::: kicker
+RQ1 <span class="sep">/</span> <span class="muted">Evolution of evidence</span>
+:::
+
+::: chart
+![](figures/volume_grounding.svg){.chart}
+:::
+
+::: {.grid-3 .mt style="grid-template-columns:.28fr .45fr .27fr"}
+::: {.card .sand style="padding:18px 24px"}
+<p class="label">More activities</p>
+<p class="small">Firms report <strong>5.1×</strong> more AI activities in 2025 than in 2021.</p>
+:::
+::: {.card .sand style="padding:18px 24px"}
+<p class="label">Where evidence is missing</p>
+<p class="small">Most activities name a business function and are deployed. Few give a number for the result (<strong>13%</strong>) or name an outside vendor (<strong>3%</strong>).</p>
+:::
+::: {.card .sand style="padding:18px 24px"}
+<p class="label">Less evidence each</p>
+<p class="small"><span class="f">G</span> = share of the 5 items an activity names, per firm. It fell <strong>0.44 → 0.37</strong>, also in firms already there in 2021.</p>
+:::
+:::
+
+::: note-line
+Left: 2021–2025, 2026 YTD (hatched = projected), filings and calls · Middle: each attribute counted on its own, all 46,855 activities, pooled 2021–2026 YTD (Thesis Fig. 13, right) · Right: firm <i>G</i> from filings (Thesis Fig. 14)
+:::
+
+::: notes
+- Activities grew 5.1× from 2021 to 2025. Mean firm G fell from 0.44 to 0.37. In filings, the share naming a product or process fell from 55% to 43% (36% in 2026 YTD) and deployed or scaled from 80% to 73%. Quantified outcomes (7%) and named providers (5–6%) were rare from the start.
+- Pooling filings and calls over 2021–2026, 9.7% of activities name a function, are deployed and give a metric (calls carry more metrics, so this is above the 7% in filings).
+- Not a composition effect: grounding falls inside the fixed 2021 cohort too (0.44 → 0.39). Annex A11.
+- The decline is in documentary detail per activity; real execution may not have changed.
 :::
 
 <!-- ============================ 4 · POSTURES ============================ -->
 
-## AI disclosure converged in prevalence but separated into three reproducible communication postures
+## Almost every firm talks about AI, but in three distinct postures that also differ in what firms report doing
 
 ::: kicker
 RQ2 <span class="sep">/</span> <span class="muted">Heterogeneity</span>
@@ -196,31 +253,33 @@ RQ2 <span class="sep">/</span> <span class="muted">Heterogeneity</span>
 
 ::: row
 ::: {.chart style="width:760px;flex:none;margin-top:-20px"}
-![](figures/simplex.svg){.chart .h-740}
+![](figures/simplex.svg){.chart .h-700}
 :::
 
 ::: {.grow}
 ::: {.card .accent-petrol style="padding:20px 26px"}
 <p class="label">78 firms</p>
 <h4 class="petrol">Vocal Substantives</h4>
-<p class="small">Customer-facing <strong>+2.6 SD</strong>, specificity <strong>+2.8 SD</strong>, promotional <strong>+2.1 SD</strong>. Microsoft, NVIDIA, Alphabet, Amazon.</p>
+<p class="small">Customer-facing, specific and promotional. Microsoft, NVIDIA, Alphabet, Amazon.</p>
+<p class="small mt-s"><strong>2.02×</strong> the activities of Defensive firms at equal volume</p>
 :::
 
 ::: {.card .accent-ochre .mt-s style="padding:20px 26px"}
 <p class="label">91 firms</p>
 <h4 class="ochre">Governance-Led</h4>
-<p class="small">Governance <strong>+2.6 SD</strong>, realized claims <strong>+1.9 SD</strong>. Board oversight and responsible use — Citigroup, Apple, BlackRock.</p>
+<p class="small">Board oversight and responsible use; realized claims. Citigroup, Apple, BlackRock.</p>
+<p class="small mt-s"><strong>1.52×</strong> the activities of Defensive firms at equal volume</p>
 :::
 
 ::: {.card .accent-slate .mt-s style="padding:20px 26px"}
 <p class="label">282 firms</p>
 <h4 class="slate">Defensive</h4>
-<p class="small">Risk <strong>+1.3 SD</strong>, realization <strong>−1.6 SD</strong>. AI as a hazard in Item 1A — Goldman Sachs, J&amp;J.</p>
+<p class="small">AI as a risk in Item 1A; few realized claims. Goldman Sachs, J&amp;J.</p>
 :::
 
 ::: mt-s
-<span class="chip petrol">Disclosure volume excluded from the fit</span>
-<span class="chip teal">Only k = 3 stays above 0.60 Jaccard in both bootstraps</span>
+<span class="chip petrol">Volume and activities are not used to find the postures</span>
+<p class="xsmall muted mt-s">451 firms · 10-K, 8-K, DEF 14A · pooled 2021–2026 YTD · Thesis Fig. 5</p>
 :::
 :::
 :::
@@ -228,115 +287,96 @@ RQ2 <span class="sep">/</span> <span class="muted">Heterogeneity</span>
 ::: notes
 - Archetypal analysis writes every firm as a mix of three extreme profiles; the simplex shows those mixes. 47 firms with fewer than five AI frames are labelled No AI and not fitted.
 - Volume is deliberately not an input: how much a firm says and how it says it are different questions.
-- Stability: k = 2 is stable but erases governance; k = 4 collapses (a fourth archetype falls to 0.37 Jaccard). Backup B6.
+- Profiles (z-scores): Vocal customer-facing +2.6, specificity +2.8, promotional +2.1; Governance-Led governance +2.6, realized +1.9; Defensive risk +1.3, realized −1.6.
+- Activities never enter the fit. Negative binomial of activity counts on posture, controlling for log(1 + AI frames): Vocal 2.02× (95% CI 1.67–2.44), Governance-Led 1.52×. Raw Vocal gap is 7.9×. Median activities: Vocal 222, Governance-Led 39, Defensive 24. Quantified outcomes are scarce in every posture (11–16%).
+- Why three: k = 2 loses governance; k = 4 collapses (a fourth archetype falls to 0.37 Jaccard). Annex A5.
 - Posture is not capability: Apple is Governance-Led in EDGAR because its product marketing happens at keynotes.
 :::
 
-<!-- ============================ 5 · ACTIVITIES ============================ -->
+<!-- ============================ 4b · POSTURES OVER TIME AND BY SECTOR ============================ -->
 
-## The postures extend beyond language: independently extracted activities differ even at comparable disclosure intensity
+## New disclosers mostly enter as Defensive, and industry shapes which posture a firm takes
 
 ::: kicker
-RQ2 <span class="sep">/</span> <span class="muted">External coherence</span>
+RQ2 <span class="sep">/</span> <span class="muted">Postures over time and by sector</span>
 :::
 
 ::: row
-::: {.grow .chart}
-<p class="label">Disclosed AI activities vs. Defensive, at equal disclosure volume</p>
-![](figures/activity_ratio.svg){.chart}
+::: {.chart style="width:760px;flex:none"}
+<p class="label">Share of the index in each posture</p>
+![](figures/composition_annual.svg){.chart .h-520}
 :::
-
-::: {.chart style="width:620px;flex:none"}
-<p class="label">Customer-facing share of activities</p>
-![](figures/customer_share.svg){.chart}
+::: {.grow .chart}
+<p class="label">By sector: share vs. the index average (1.0× = average)</p>
+![](figures/sector_heatmap.svg){.chart .h-520}
 :::
 :::
 
 ::: takeaway
-Activities were **never an input** to the posture fit, yet Vocal Substantives report **2.02×** and Governance-Led **1.52×** the activities of Defensive firms at the same volume. Posture tells a reviewer *where to start* — quantified outcomes stay scarce in every group (11–16%).
+Defensive grew from **4% to 54%** of the index while Vocal stayed near **13–14%**: a risk warning is the cheapest first thing to write. Tech leans **Vocal (2.7×)**; banks and utilities lean **Governance-Led (1.7×)**.
+:::
+
+::: note-line
+Left: all index firms each year, 2021–2025, 2026 year to date · Right: pooled 2021–2026 year to date · Thesis Figs. 8 (Panel A) and 7
 :::
 
 ::: notes
-- Negative binomial of activity counts on archetype, controlling for log(1 + AI frames). Raw ratio for Vocal is 7.9×; volume explains much of it, 2.02× survives (95% CI 1.67–2.44).
-- Median activities per firm: Vocal 222, Governance-Led 39, Defensive 24.
-- This is the circularity check: backup B7.
+- Each year's label uses only the firm's own text from 2021 up to that year, never a later one. Shares are of the whole index, including firms with no AI.
+- Some Vocal firms also drift to Defensive year to year.
+- Where firms write matters: Defensive tracks the Item 1A risk section (r = 0.77); Governance tracks the proxy statement, DEF 14A (r = 0.72). A 10-K-only reading misses much of the governance evidence.
+- Heatmap: italic cells have fewer than 5 firms. Energy & Mining is 3.5× No AI: few firms there talk about AI at all.
+- Compare a firm with its sector peers before calling its posture unusual.
 :::
 
-<!-- ============================ 6 · GROUNDING ============================ -->
+<!-- ============================ 7a · DECOUPLING ============================ -->
 
-## The AI boom expanded disclosed activity without a matching improvement in documentary grounding
+## Some firms' talk runs ahead of their evidence, and the gap persists year to year
 
 ::: kicker
-RQ1 · RQ3 <span class="sep">/</span> <span class="muted">Evolution of evidence</span>
-:::
-
-::: chart
-![](figures/volume_grounding.svg){.chart .h-500}
-:::
-
-::: {.grid-3 .mt}
-::: {.card .sand style="padding:18px 24px"}
-<p class="label">Grounding</p>
-<p class="small"><span class="f">G</span> = share of five evidence attributes an activity names: function, deployed stage, product, metric, provider.</p>
-:::
-::: {.card .sand style="padding:18px 24px"}
-<p class="label">Disclosed substance</p>
-<p class="small"><span class="f">S = log(1 + A) × G</span> — activity volume weighted by how well it is documented.</p>
-:::
-::: {.card .sand style="padding:18px 24px"}
-<p class="label">Decoupling</p>
-<p class="small"><span class="f">W = rank(D) − rank(S)</span> — talk ahead of substance when positive; persistent year to year (ρ = 0.60).</p>
-:::
-:::
-
-::: notes
-- Activities grew 5.1× from 2021 to 2025; the share naming a product or process fell from 54% to 45% (40% in 2026 YTD); deployed or scaled fell from 79% to 72%.
-- Only 9.7% of all activities reach the top of the ladder: deployed, named, and quantified.
-- Not a composition effect: grounding falls inside the fixed 2021 cohort too (0.44 → 0.39). Backup B14.
-- What declines is documentary detail per activity, not necessarily real execution.
-:::
-
-<!-- ============================ 7 · VENUE ============================ -->
-
-## Disclosure credibility changes with commitment: calls and statutory filings portray the same firms differently
-
-::: kicker
-RQ3 <span class="sep">/</span> <span class="muted">Venue</span>
+RQ3 <span class="sep">/</span> <span class="muted">Decoupling</span>
 :::
 
 ::: row
-::: {.grow .chart}
-<p class="label">Earnings call minus statutory filing, same firm and fiscal year (pp, 95% CI)</p>
-![](figures/venue_gap.svg){.chart .h-620}
+::: {.chart style="width:700px;flex:none"}
+![](figures/w_scatter.svg){.chart}
 :::
 
-::: {style="width:520px;flex:none"}
-::: {.card .accent-petrol}
-<p class="label">Per 1,000 words, calls carry</p>
-<div class="num l">16.8×</div>
-<p class="num-cap">more promotional statements</p>
-<div class="num l mt">18.7×</div>
-<p class="num-cap">more quantified outcome claims</p>
+::: grow
+::: {.card .sand style="padding:18px 24px"}
+<p class="small"><span class="f">S</span> = activities weighted by their evidence <span class="f">G</span></p>
+<p class="small"><span class="f">W</span> = rank of talk <span class="f">D</span> − rank of evidence <span class="f">S</span>, within each year</p>
+<p class="small muted">W &gt; 0: talk ahead of evidence · W &lt; 0: quiet substance</p>
 :::
 
-::: {.takeaway style="font-size:23px"}
-Promotion is **not the opposite of evidence.** The activity mix barely moves; calls carry the proof, filings the caveats. A gap in *claimed scope* — not in detail — is the red flag.
+::: {.card .accent-ochre .mt-s}
+<div class="num s">ρ = 0.60</div>
+<p class="num-cap">a firm's <i>W</i> this year predicts next year's: a stable trait, not noise</p>
+:::
+
+::: {.card .sand .mt-s}
+<p class="small">High <i>W</i>: "The Company <strong>may use</strong> artificial intelligence…"<br>Low <i>W</i>: "Deploy AI… through our global <strong>Aon Business Services platform</strong>."</p>
 :::
 :::
+:::
+
+::: note-line
+One point per disclosing firm, ranked within 2025 · Thesis Fig. 20<br>
+<i>W</i> ranks firms against each other. A high <i>W</i> is a reason to check, not proof of overstatement.
 :::
 
 ::: notes
-- Design: firm × fiscal-year fixed effects, 790 balanced cells, 285 firms, at least three activities per channel; SE clustered by firm. The fixed effect holds the firm and the year constant.
-- Consistent with channel liability: statutory filings carry strict liability, calls a wider safe harbor.
-- The quantified-outcome premium in calls already existed in 2021 — an old managerial habit, not a GenAI effect. Backup B11.
+- S = log(1 + A) × G; W = rank(D) − rank(S), percentile ranks among disclosers each year, so W ∈ [−1, 1] with mean ~0.
+- Ranks, not z-scores: D has a very heavy tail, so z-scores would push Microsoft or NVIDIA into the "washing" tail.
+- Persistence: year-over-year ρ = 0.60; split-half ρ = 0.63. No association with market cap, beta or R&D intensity. Details in A7.
+- A gap fits several explanations: competition, filing conventions, disorganisation, or overstatement.
 :::
 
 <!-- ============================ 8 · MARKETS ============================ -->
 
-## Disclosure differences carry incremental economic information — but only for selected outcomes
+## Disclosure signals show selective associations with risk, returns and growth
 
 ::: kicker
-RQ4 <span class="sep">/</span> <span class="muted">Economic information</span>
+RQ4 <span class="sep">/</span> <span class="muted">Market relevance</span>
 :::
 
 ::: chart
@@ -345,7 +385,7 @@ RQ4 <span class="sep">/</span> <span class="muted">Economic information</span>
 
 ::: {.grid-3 .mt-s .tight}
 ::: small
-<span class="chip petrol">Accumulated, not episodic</span><br>Past decoupling and cumulative volume go with a more positive beta shift; a single call’s decoupling never does.
+<span class="chip petrol">Over time, not one call</span><br>Past decoupling and cumulative volume go with a more positive beta shift; single-call decoupling shows no robust association in this sample.
 :::
 ::: small
 <span class="chip ochre">Governance vs. Defensive</span><br>Lower beta shift, higher drift over the next quarter, slower revenue growth.
@@ -356,135 +396,222 @@ RQ4 <span class="sep">/</span> <span class="muted">Economic information</span>
 :::
 
 ::: note-line
-<span class="legend-dot" style="background:#355F6B;border-radius:50%"></span><span class="legend-dot" style="background:#B85F42;border-radius:50%"></span>survives BH-FDR 5% (6 of 48) &nbsp;&nbsp; <span class="legend-dot" style="border:2px solid #7A8891;border-radius:50%;background:none"></span>nominal p &lt; 0.05 only &nbsp;·&nbsp; 9,350 calls, 484 firms &nbsp;·&nbsp; sector and year FE, firm-clustered SE &nbsp;·&nbsp; **association, not causal effect**
+<span class="legend-dot" style="background:#446582;border-radius:50%"></span><span class="legend-dot" style="background:#C9826B;border-radius:50%"></span>survives BH-FDR 5% (6 of 48) &nbsp;&nbsp; <span class="legend-dot" style="border:2px solid #9385A6;border-radius:50%;background:none"></span>nominal p &lt; 0.05 only &nbsp;·&nbsp; calls 2021–2026; sample varies by outcome (beta shift: 9,350 calls, 484 firms) &nbsp;·&nbsp; sector &amp; year FE &nbsp;·&nbsp; **association, not cause** &nbsp;·&nbsp; Thesis Table 46
 :::
 
 ::: notes
-- Deliberately moderate claim: this does not say “the market detects AI washing”.
+- The claim is deliberately moderate: nothing here says "the market detects AI washing".
 - Standardized coefficients: W_exp +0.09 and D +0.07 on the beta shift; Governance −0.22 on the beta shift, +0.22 on drift, −0.20 on revenue growth.
-- All regressors are predetermined at the call date; lagged outcome controlled. Specification in B12, full battery in B13.
+- All regressors are predetermined at the call date; lagged outcome controlled. Specification in A10; the grid above shows all 48 tests.
 :::
 
 <!-- ============================ 9 · FRAMEWORK ============================ -->
 
-## The findings turn credibility assessment from a binary judgment into a structured verification process
+## [A four-step framework to prioritize and verify AI claims]{style="white-space:nowrap;"}
 
 ::: kicker
 Managerial application
 :::
 
-::: flow
-::: {.card .pre}
-<span class="n">0</span>
+::: {.grid-3 .tight style="margin:-10px 0 12px; font-size: 18px; line-height: 1.35;"}
+::: xsmall
+<span class="chip petrol" style="font-size:15px;padding:6px 12px;margin-bottom:5px">Due diligence</span><br>93% of firms mention AI in their filings; nobody can check every claim. This says which to check first, before you invest, lend or sign.
+:::
+::: xsmall
+<span class="chip rust" style="font-size:15px;padding:6px 12px;margin-bottom:5px">Credibility</span><br>Overstated AI is a misstatement for the SEC, and inflated claims cost trust with investors long before a letter arrives.
+:::
+::: xsmall
+<span class="chip ochre" style="font-size:15px;padding:6px 12px;margin-bottom:5px">Downstream</span><br>Disclosure gaps, intensity and posture show selective associations with risk, returns and growth. Use it at scale or on one company.
+:::
+:::
+
+::: {.flow style="grid-template-columns:repeat(4,1fr)"}
+::: {.card .accent-slate}
+<span class="n">1</span>
 <h4>Define</h4>
-<p class="small">Firm, period, channels and the decision at stake: a filing to sign, a position to take, a supplier to choose.</p>
+<p class="small">Start with the company: what role does AI play in its business, <strong>core or peripheral</strong>?</p>
+<p class="small mt-s">Then fix the channels to read and the decision on the table.</p>
 :::
 
 ::: {.card .accent-petrol}
-<span class="n">1</span>
+<span class="n">2</span>
 <h4>Diagnose</h4>
-<p class="small"><strong>Posture</strong> sets the peer set · <strong>grounding</strong> places the firm on <span class="f">D</span> × <span class="f">S</span> · <strong>venue</strong> checks call vs. 10-K.</p>
-
-::: {.quad .mt-s}
-<div class="inv"><div class="q-t">Investigate</div><div class="q-n">56</div><div class="q-d">high D · low S</div></div>
-<div class="val"><div class="q-t">Validate</div><div class="q-n">166</div><div class="q-d">high D · high S</div></div>
-<div class="dep"><div class="q-t">Deprioritize</div><div class="q-n">187</div><div class="q-d">low D · low S</div></div>
-<div class="exp"><div class="q-t">Explore</div><div class="q-n">56</div><div class="q-d">low D · high S</div></div>
-:::
-<p class="xsmall muted mt-s">S&amp;P 500 firms, 2026 screen</p>
+<p class="small">Three questions, in order:</p>
+<ul class="small">
+<li><strong>Posture:</strong> how does it talk about AI? (sets the peers)</li>
+<li><strong>Evidence:</strong> is there substance behind the talk?</li>
+<li><strong>Venue:</strong> are scope and evidence consistent across call and 10-K?</li>
+</ul>
+<p class="xsmall muted">NLP at scale, or by hand.</p>
 :::
 
 ::: {.card .accent-ochre}
-<span class="n" style="background:#B08D3E">2</span>
-<h4>Verify</h4>
-<p class="small">Rank material claims; claims naming <strong>no product, no provider and no metric</strong> go first. Persistent <span class="f">W</span> orders the queue.</p>
-<p class="small mt-s">Output: a <strong>claim register</strong> — claim, source, maturity, evidence, owner, next review.</p>
+<span class="n" style="background:#A69A59">3</span>
+<h4>Prioritize &amp; verify</h4>
+<p class="small">Start with the claims that <strong>matter most to the business</strong>. Look for:</p>
+<ul class="small" style="margin-top:4px">
+<li>deployed or just a pilot?</li>
+<li>named product? metric?</li>
+<li>in-house or vendor?</li>
+<li>same scope in call and 10-K?</li>
+</ul>
+<p class="small">Claims missing these go first.</p>
+<p class="xsmall muted">NLP at scale, or by hand.</p>
 :::
 
 ::: {.card .accent-rust}
-<span class="n" style="background:#B85F42">3</span>
-<h4>Act</h4>
-<p class="small"><strong>Issuer:</strong> narrow the claim, close the measurement gap, reconcile remarks with the 10-K.</p>
-<p class="small mt-s"><strong>Investor:</strong> credit, condition on milestones, or drop the assumption.</p>
+<span class="n" style="background:#C9826B">4</span>
+<h4>Act &amp; monitor</h4>
+<p class="small">Log each claim in a <strong>claim register</strong> (owner, review date). Then:</p>
+<ul class="small" style="margin-top:4px">
+<li><strong>Evidence not communicated:</strong> decide what to disclose.</li>
+<li><strong>Nothing behind it:</strong> why talk about AI at all? Narrow it, back to step 1.</li>
+<li><strong>Backed:</strong> keep it, review next cycle.</li>
+</ul>
 :::
 :::
 
-::: {.mt}
-<p class="label">Claim register · one illustrative row</p>
+::: {.card .sand .mt-s style="padding:14px 26px"}
+<p class="label" style="margin-bottom:4px">Beyond large listed firms</p>
 
-| Claim | Source | Diagnosis | Verification needed | Owner |
-|:--|:--|:--|:--|:--|
-| “AI automates claims processing end to end” | Q3 call | Named function; no product, provider or metric; absent from 10-K | Deployment scope, pilot results, human-review share | Head of Operations · before next 10-K |
-
-: {.register .compact}
+::: grid-3
+::: small
+**Private firms:** promises vs. board reports and contracts.
 :::
-
-::: note-line
-Proposed application built on the estimated constructs — **not yet validated** against real decisions. It diagnoses documentary distance, not fraud.
+::: small
+**Startups:** demo, pilot or paying customers?
+:::
+::: small
+**Everywhere:** is there proof? (S&amp;P 500 numbers don't carry over)
+:::
+:::
 :::
 
 ::: notes
-- 2026 screen of the index: 56 firms Investigate, 166 Validate, 56 Explore, 187 Deprioritize (incl. 21 non-disclosers).
-- Materiality comes from outside the framework and can reverse the order: a central claim in Deprioritize outranks a peripheral one in Investigate.
-- Same register works for issuers (before publishing) and for investors (before committing capital). Full version in B18.
+- Context: 93% of firms mention AI in their filings; nobody can verify every claim. Disclosure gaps, intensity and posture show selective associations with risk, returns and growth.
+- Same routine for issuers (before publishing a claim) and investors (before committing capital).
+- Why (thesis): with AI vocabulary everywhere, keyword screens no longer sort firms; ordering what to verify first is the scarce decision in disclosure review and due diligence. Before committing capital or approving a claim, the reader knows which uncertainty to resolve and what would resolve it. For issuers, promotional inflation costs credibility with investors long before a comment letter.
+- Materiality comes from outside the framework (the business or the investment thesis) and can reverse the order: a central claim in a Deprioritize firm outranks a peripheral one in Investigate.
+- Issuer side: where AI is a core differentiator, keep evidence dense and report milestones that can be falsified; where it is peripheral, resist promotional inflation. Reconcile call remarks with the signed 10-K before the call.
+- The thesis also gives a six-line checklist (posture, activity & maturity, grounding, provenance, cross-venue consistency, supervision & governance) for issuers and investors.
+- The 2026 screen of the index (Investigate 56, Validate 166, Explore 56, Deprioritize 187) is in A14; thesis cases in A15; examples per quadrant in A16.
+- Startup example from the thesis: "uses AI to automate claims processing end to end" turns out to be one pilot with one insurer, intake step only, human review of every output. Narrow the claim to that, and set the criteria for the next pilot in advance.
+:::
+
+<!-- ============================ 9b · SCREEN AND CASES ============================ -->
+
+## Applied at scale to the S&P 500 in 2026: the screen says where to look, the routine says what to do next
+
+::: kicker
+Managerial application <span class="sep">/</span> <span class="muted">The routine in practice</span>
+:::
+
+<p class="label">2026 screen · 465 index firms</p>
+
+::: {.quad style="grid-template-columns:repeat(4,1fr)"}
+<div class="inv"><div class="q-t">Investigate · 56</div><div class="q-d">much talk, little evidence</div></div>
+<div class="val"><div class="q-t">Validate · 166</div><div class="q-d">much talk, much evidence</div></div>
+<div class="dep"><div class="q-t">Deprioritize · 187</div><div class="q-d">little talk, little evidence</div></div>
+<div class="exp"><div class="q-t">Explore · 56</div><div class="q-d">little talk, much evidence</div></div>
+:::
+
+<p class="label mt">One firm per quadrant, through the four steps · 2026</p>
+
+| | 1 · Define | 2 · Diagnose | 3 · Prioritize &amp; verify | 4 · Act &amp; monitor |
+|:-----------|:-----------------|:-----------------|:---------------------|:---------------------|
+| **Microsoft**<br><span class="muted">Validate</span> | AI is **core**: products and cloud. | Vocal. Talk 100th pct, evidence 97th pct, <i>W</i> +0.03. | 277 activities, 132 with a number. Do customers use them, and do they bring in money? | **Documentary alignment is strong; verify adoption and economic contribution.** |
+| **Newell Brands**<br><span class="muted">Investigate</span> | AI is **peripheral**: housewares and pens. | Defensive. Talk 71st pct, evidence 39th pct, <i>W</i> +0.31. | 18 AI passages in the 10-K, half "we **may use** AI" risks. 11 of 13 activities name nothing. | **Little operational backing is disclosed; distinguish risk warnings from capability claims.** |
+| **Wells Fargo**<br><span class="muted">Explore</span> | AI is **supporting**: operations and service. | Governance-Led. Talk 30th pct, evidence 84th pct, <i>W</i> −0.54. | AI tools in check processing and customer service, but few metrics. | **Documented activity exceeds narrative intensity; verify results and decide what to disclose.** |
+| **ExxonMobil**<br><span class="muted">Deprioritize</span> | AI is **peripheral**: oil and gas. | Defensive. Talk 7th pct, evidence 12th pct, <i>W</i> −0.05. | Only 3 AI passages in the 10-K, but a call cites ~$750M saved with advanced modeling. | **A big number on a call:** ask for the backing. Materiality beats the queue. |
+
+: {.compact}
+
+::: note-line
+Screening applied to the sample; managerial responses are illustrative and their effectiveness remains untested.<br>
+2026 reporting season (year to date) · screen: median splits of <i>D</i> and <i>S</i> among 444 disclosers (Thesis Table 16) · percentiles within 2026 · more cases in A15, quadrant examples in A16.
+:::
+
+::: notes
+- Presentation tip: explain two contrasting cases orally (e.g. Microsoft for high-disclosure validation vs. ExxonMobil for materiality overriding the queue), keeping Newell and Wells Fargo as reference contrast on the slide.
+- Microsoft: 277 disclosed activities extracted in 2026 reporting (132 with quantitative metrics). Documentary alignment is strong; the routine targets business verification (adoption, revenue) rather than assuming economic validation.
+- Newell Brands: third in 2026 Investigate queue; distinguishing defensive risk boilerplate ("may use AI") from operational capability claims.
+- Wells Fargo: documented activities exceed narrative volume (persistent W −0.46); managerial task is verifying internal results and deciding strategically what to disclose vs. protect as confidential.
+- ExxonMobil: ~$750M opex savings cited in call remarks under "advanced modeling"; 10-K barely mentions AI. Materiality overrides the low-priority quadrant; the analyst must probe whether "advanced modeling" represents AI/ML or conventional reservoir engineering before accepting the claim.
+- Materiality from outside the framework can reverse the screening queue.
 :::
 
 <!-- ============================ 10 · ANSWER ============================ -->
 
-## AI disclosure is ubiquitous but not homogeneous — and richer measurement makes the next questions testable
+## AI talk spread faster than its evidence, firms exhibit distinct postures, and selected disclosure signals carry economic information
 
 ::: kicker
-Answer to the research question
+Findings &amp; synthesis
 :::
 
-::: {.card .sand style="padding:22px 30px"}
-<p class="serif" style="font-size:28px;line-height:1.3;color:#1C1F22"><strong>Yes, strongly heterogeneous.</strong> Three stable postures that track what firms report doing; narrative outgrew its evidence; venue changes the evidence, not the story. The economic information is <span class="rust">real but selective</span>: accumulated decoupling, cumulative volume and governance posture.</p>
-:::
-
-::: {.grid-3 .mt}
+::: {.grid-4 .mt-s}
 ::: {.card .accent-petrol}
 ::: label
-Empirical contribution
+RQ1 · Evolution
 :::
-- Three postures, sorted by sector and channel
-- Activity growth with thinning grounding
-- Call–filing evidence asymmetry
-- Market associations, BH-corrected
+<div class="num s">0.44 → 0.37</div>
+<p class="small"><strong>Evidence thinned as talk spread.</strong> AI reached 93% of firms and 7.3× more text, while average evidence per activity (<i>G</i>) fell.</p>
 :::
-
 ::: {.card .accent-teal}
 ::: label
-Managerial contribution
+RQ2 · Heterogeneity
 :::
-- Six constructs that separate talk from evidence
-- Diagnose → Verify → Act claim register
-- Same routine for issuers and investors
+<div class="num s">3 postures</div>
+<p class="small"><strong>Style predicts substance.</strong> At equal volume, Vocal firms report 2.02× the activities of Defensive ones; new disclosers enter as Defensive.</p>
 :::
-
+::: {.card .accent-ochre}
+::: label
+RQ3 · Decoupling
+:::
+<div class="num s">ρ = 0.60</div>
+<p class="small"><strong>The talk–evidence gap is a firm trait.</strong> A firm's <i>W</i> this year predicts next year's: a stable characteristic across reporting cycles.</p>
+:::
 ::: {.card .accent-rust}
 ::: label
-Research agenda
+RQ4 · Market relevance
 :::
-- Link disclosure to actual implementation
-- Sector × activity × grounding interactions
-- Posture transitions and future behavior
-- Human validation of the extraction
-- Does the framework improve decisions?
+<div class="num s">6 of 48</div>
+<p class="small"><strong>Accumulated, not one call.</strong> Past gaps and cumulative volume go with a higher beta shift; Governance-Led with lower beta shift and more drift.</p>
 :::
 :::
 
-::: note-line
-Documentary distance ≠ fraud, intent or technological maturity.
+::: {.grid-2 .mt}
+::: {.card .sand}
+::: label
+What the thesis adds
+:::
+- **A way to measure** talk and evidence separately, at scale
+- **A due-diligence framework** from the findings: which AI claims to check first, at scale or for one firm
+- **Open and reproducible:** public code, data and models, adaptable to new questions
+:::
+::: {.card .sand}
+::: label
+What comes next
+:::
+- Does it hold in longer periods and wider samples?
+- Does it work for private companies?
+- Does the framework help analysts decide better?
+- What do new analyses and crosstabs reveal across sectors and technologies?
+:::
 :::
 
 ::: notes
-- Contribution 1 and 2 are estimated; contribution 3 (the framework) is a proposed application.
-- Close: “The thesis does not tell you who is lying. It tells you where to look first, and what would settle the question.”
+- RQ1: 34% → 93% of firms, 2021 → 2025; D grew 7.3×; mean firm G fell from 0.44 to 0.37 (0.44 → 0.39 inside the fixed 2021 cohort).
+- RQ2: negative binomial of activities on posture controlling for log(1 + frames); new disclosers enter as Defensive (4% → 54% of the index).
+- RQ3: W persists year to year (ρ = 0.60 across consecutive reporting cycles). Decoupled firms remain decoupled; the one firm under direct SEC scrutiny narrowed its gap (A12). Cross-venue comparison moved to Annex A8–A9.
+- RQ4: all associations, not causal; Governance-Led also goes with slower revenue growth. Single-call W shows no robust association.
+- The measurement is estimated; the claim register is a proposed application, not yet tested against real decisions.
+- A gap can come from competition, filing conventions, overstatement or disorganisation; telling them apart needs internal evidence.
+- Close: "Public text can't tell you who is lying. What the thesis gives you is where to look first, and what would settle the question."
 :::
 
-<!-- ============================ BACKUP ============================ -->
+<!-- ============================ ANNEX ============================ -->
 
-## {#backup .divider background-color="#18323A"}
+## {#annex .divider background-color="#263B4A"}
 
 ::: divider-wrap
 ::: cover-kicker
@@ -492,65 +619,39 @@ Questions &amp; answers
 :::
 
 ::: divider-title
-Backup
+Annex
 :::
 
 ::: toc
-<a href="#/b1"><b>B1</b>RQ → construct → method → finding</a>
-<a href="#/b2"><b>B2</b>The six constructs</a>
-<a href="#/b3"><b>B3</b>Pipeline at a glance</a>
-<a href="#/b4"><b>B4</b>Extraction architecture</a>
-<a href="#/b5" class="key"><b>B5</b>Validation</a>
-<a href="#/b6"><b>B6</b>Why k = 3</a>
-<a href="#/b7" class="key"><b>B7</b>No circularity</a>
-<a href="#/b8"><b>B8</b>No temporal leakage</a>
-<a href="#/b9" class="key"><b>B9</b>What W measures</a>
-<a href="#/b10" class="key"><b>B10</b>Disclosure ≠ implementation</a>
-<a href="#/b11"><b>B11</b>Call vs. filing design</a>
-<a href="#/b12" class="key"><b>B12</b>Market specification</a>
-<a href="#/b13"><b>B13</b>Multiple testing</a>
-<a href="#/b14"><b>B14</b>Grounding within firms</a>
-<a href="#/b15"><b>B15</b>SEC scrutiny</a>
-<a href="#/b16"><b>B16</b>DeepSeek shock</a>
-<a href="#/b17"><b>B17</b>Sector differences</a>
-<a href="#/b18"><b>B18</b>Framework in full</a>
-<a href="#/b19"><b>B19</b>Second-order agenda</a>
+<a href="#/a1"><b>A1</b>The six constructs</a>
+<a href="#/a2"><b>A2</b>RQ → components → analysis → finding</a>
+<a href="#/a3"><b>A3</b>Extraction architecture</a>
+<a href="#/a4" class="key"><b>A4</b>Validation</a>
+<a href="#/a5"><b>A5</b>Why k = 3</a>
+<a href="#/a6" class="key"><b>A6</b>No circularity</a>
+<a href="#/a7" class="key"><b>A7</b>What W measures</a>
+<a href="#/a8" class="key"><b>A8</b>Calls vs. filings: results</a>
+<a href="#/a9"><b>A9</b>Call vs. filing design</a>
+<a href="#/a10" class="key"><b>A10</b>Market specification</a>
+<a href="#/a11"><b>A11</b>Grounding within firms</a>
+<a href="#/a12"><b>A12</b>SEC scrutiny</a>
+<a href="#/a13"><b>A13</b>DeepSeek shock</a>
+<a href="#/a14"><b>A14</b>Framework in full</a>
+<a href="#/a15"><b>A15</b>Worked cases</a>
+<a href="#/a16"><b>A16</b>Quadrant examples</a>
+<a href="#/supp"><b>S</b>Supplementary figures →</a>
 :::
 :::
 
-<!-- B1 -->
+<!-- A1 -->
 
-## Each research question maps to a distinct construct, method and empirical output {#b1}
+## Six measures keep talk and evidence apart {#a1}
 
 ::: kicker
-B1 <span class="sep">/</span> <span class="muted">Architecture</span>
+A1 <span class="sep">/</span> <span class="muted">Constructs</span>
 :::
 ::: back
-[↩ Backup index](#/backup)
-:::
-
-| | Theory | Construct | Method | Finding |
-|:--|:--|:--|:--|:--|
-| **RQ1** Evolution | Institutional isomorphism | *D*, *A*, *G* by year | Panel descriptives; fixed-cohort check | 34% → 93% of firms; activities 5.1×; grounding thins |
-| **RQ2** Heterogeneity | Signalling; configurations | *P* (7 dimensions) | Archetypal analysis, bootstrap stability, NB on activity | Three postures; 2.02× / 1.52× activity at equal volume |
-| **RQ3** Credibility | Decoupling; channel liability | *S*, *W*; venue gap | Rank gap; firm × year FE, calls vs. filings | *W* persists (ρ 0.60); calls carry more evidence, filings more caveats |
-| **RQ4** Economic information | Costly signalling; opacity | *W*~call~, *W*~exp~, *D*, *P* weights | ANCOVA on 9,350 calls, sector & year FE, BH-FDR | 6 of 48 survive: β shift, drift, revenue |
-
-: {.compact}
-
-::: note-line
-Exogenous events (SEC warning, DeepSeek) are treated as interrupted time series — B15, B16.
-:::
-
-<!-- B2 -->
-
-## Six constructs separate disclosure volume from posture, activity, evidence and decoupling {#b2}
-
-::: kicker
-B2 <span class="sep">/</span> <span class="muted">Constructs</span>
-:::
-::: back
-[↩ Backup index](#/backup)
+[↩ Annex index](#/annex)
 :::
 
 | | Construct | Definition | Reads as |
@@ -558,7 +659,7 @@ B2 <span class="sep">/</span> <span class="muted">Constructs</span>
 | <span class="tok sm c">D</span> | AI disclosure intensity | AI frames per 1,000 words | How much the firm talks about AI |
 | <span class="tok sm c">P</span> | Communication posture | Shares of claims that are promotional, hedged, risk, governance, realized, customer-facing, specific | *How* it talks |
 | <span class="tok sm a">A</span> | Disclosed AI activity | Count of action triples (verb · AI object · business function) | Breadth of reported execution |
-| <span class="tok sm a">G</span> | Activity grounding | Mean share of 5 attributes: function, deployed stage, named product, metric, provider — ∈ [0, 1] | How verifiable each activity is |
+| <span class="tok sm a">G</span> | Activity grounding | ⅕ Σ~k~ (activities naming *k* ÷ *A*) over 5 attributes *k*: function, deployed stage, named product, metric, provider. ∈ [0, 1]; shrunk when a firm has few activities | How verifiable each activity is |
 | <span class="tok sm a">S</span> | Disclosed substance | log(1 + *A*) × *G* | Grounded activity volume |
 | <span class="tok sm w">W</span> | Decoupling | rank(*D*) − rank(*S*) ∈ [−1, 1], ranks within year among disclosers | Talk ahead of substance (+) or quiet substance (−) |
 
@@ -568,87 +669,39 @@ B2 <span class="sep">/</span> <span class="muted">Constructs</span>
 Firm-year values are the median document rate; thin evidence is shrunk toward the sector-year prior (empirical Bayes).
 :::
 
-<!-- B3 -->
+<!-- A2 -->
 
-## Each pipeline stage feeds a construct, and each construct answers a research question {#b3}
-
-::: kicker
-B3 <span class="sep">/</span> <span class="muted">Pipeline at a glance</span>
-:::
-::: back
-[↩ Backup index](#/backup)
-:::
-
-::: pipe
-::: stage
-<div class="step">Corpus</div>
-<div class="big">59,820</div>
-<div class="what">10-K, 10-Q, DEF 14A, 8-K and earnings calls · S&amp;P 500 (499 firms), 2021–2026 · <strong>9.7M paragraphs</strong></div>
-:::
-::: stage
-<div class="step">Deduplicate</div>
-<div class="big">5.1M</div>
-<div class="what">unique paragraphs; boilerplate scored once, mapped back to every filing</div>
-:::
-::: stage
-<div class="step">Screen</div>
-<div class="big">38,440</div>
-<div class="what">AI candidates kept by a gradient-boosted filter tuned for recall (≈0.97)</div>
-:::
-::: stage
-<div class="step">Extract · LLM</div>
-<div class="big">46,855</div>
-<div class="what">operational AI activities in 471 firms, from 70,169 claims — each anchored to its sentence</div>
-:::
-::: {.stage .dark}
-<div class="step">Measure</div>
-<div class="big" style="letter-spacing:.02em;white-space:nowrap;font-size:48px"><i>D P A G S W</i></div>
-<div class="what">six constructs at the firm-year and call level</div>
-:::
-:::
-
-::: {.grid-4 .mt-l}
-::: card
-::: label
-RQ1 · Evolution
-:::
-<p class="small"><span class="tok sm c">D</span> <span class="tok sm a">A</span> <span class="tok sm a">G</span></p>
-<p class="small mt-s">Volume, activity and grounding tracked year by year</p>
-:::
-::: card
-::: label
-RQ2 · Heterogeneity
-:::
-<p class="small"><span class="tok sm c">P</span></p>
-<p class="small mt-s">Seven posture dimensions → archetypal analysis, <em>k</em> = 3</p>
-:::
-::: card
-::: label
-RQ3 · Credibility
-:::
-<p class="small"><span class="tok sm a">S</span> <span class="tok sm w">W</span></p>
-<p class="small mt-s">Talk-vs-substance gap; calls vs. filings within firm-year</p>
-:::
-::: card
-::: label
-RQ4 · Economic information
-:::
-<p class="small"><span class="tok sm w">W</span> <span class="tok sm c">D</span> <span class="tok sm c">P</span></p>
-<p class="small mt-s">9,350 earnings calls; ANCOVA with FE; BH-FDR correction</p>
-:::
-:::
-
-
-
-<!-- B4 -->
-
-## The extraction architecture reduces 9.7M paragraphs while preserving claim-level information {#b4}
+## Each research question: its sources, measures and analysis {#a2}
 
 ::: kicker
-B4 <span class="sep">/</span> <span class="muted">Pipeline detail</span>
+A2 <span class="sep">/</span> <span class="muted">Architecture</span>
 :::
 ::: back
-[↩ Backup index](#/backup)
+[↩ Annex index](#/annex)
+:::
+
+| | Sources | Components and how each is computed | Analysis that answers the RQ | Finding |
+|:-------------|:--------------------|:--------------------------|:--------------------|:---------------|
+| **RQ1** Evolution<br><span class="muted">Institutional isomorphism</span> | 10-K, 10-Q, 8-K, DEF 14A<br><span class="muted">+ earnings calls for the activity count</span> | *D* = AI frames per 1,000 words<br>*A* = count of action triples (verb · AI object · function)<br>*G* = ⅕ Σ~k~ (activities naming *k* ÷ *A*), 5 attributes | Yearly panel of *D*, *A*, *G*; fixed 2021 cohort to rule out composition | 34% → 93% of firms; activities 5.1×; *G* 0.44 → 0.37 |
+| **RQ2** Heterogeneity<br><span class="muted">Signalling; configurations</span> | 10-K, 8-K, DEF 14A for *P*<br><span class="muted">filings + calls for *A*; SIC codes</span> | *P* = 7 frame shares (promotional, hedging, risk, governance, realized, customer-facing, specific) | Archetypal analysis on *P*, *k* = 3 by bootstrap Jaccard; negative binomial of *A* on posture + log(1 + frames) | Three postures; 2.02× / 1.52× activity at equal volume |
+| **RQ3** Decoupling &amp; venue<br><span class="muted">Decoupling; channel liability</span> | Filings for *W*<br><span class="muted">calls vs. 10-K + 10-Q of the same fiscal year; SEC comment letters</span> | *S* = log(1 + *A*) × *G*<br>*W* = rank(*D*) − rank(*S*), within year | Persistence of *W*; venue gap *Y* = α~i,t~ + β·1[call], firm × year FE | *W* persists (ρ 0.60); calls carry more evidence, filings more caveats |
+| **RQ4** Market relevance<br><span class="muted">Costly signalling</span> | 9,350 earnings calls + prior filings<br><span class="muted">FactSet prices, returns, market cap, S&amp;P 500 TR, quarterly fundamentals</span> | *W*~call~ = *W* of the call; *W*~exp~ = mean of past call *W*; cumulative *D*; posture weights | Regression: predetermined regressors, lagged outcome, sector &amp; year FE; BH-FDR over 48 tests | 6 of 48 survive: beta shift, drift, revenue |
+
+: {.compact}
+
+::: note-line
+Validation: AI patents from Google Patents, OECD taxonomy (A4). SEC warning and DeepSeek: interrupted time series on filings and calls (A12, A13).
+:::
+
+<!-- A3 -->
+
+## From 9.7M paragraphs to 46,855 activities, each traceable to its sentence {#a3}
+
+::: kicker
+A3 <span class="sep">/</span> <span class="muted">Pipeline detail</span>
+:::
+::: back
+[↩ Annex index](#/annex)
 :::
 
 ::: row
@@ -657,7 +710,7 @@ B4 <span class="sep">/</span> <span class="muted">Pipeline detail</span>
 |:--|--:|:--|
 | Raw corpus | 9,714,405 | Paragraph segmentation of 59,820 documents |
 | Scorable | 8,891,944 | Prose only; tables, exhibits, graphics dropped |
-| Unique | 5,122,492 | BLAKE2b content hash — each text scored once |
+| Unique | 5,122,492 | BLAKE2b content hash; each text scored once |
 | AI candidates | 38,440 | GBDT, 39 features (bge-m3 anchor similarity, stems, entities, section), τ = 0.17 |
 | Texts with ≥1 claim | 31,550 | Zero-shot LLM → 70,169 frames, 7 dimensions + sentence anchor |
 | Texts with firm action | 28,229 | Second pass → 46,855 activities: triple, stage, provenance, evidence |
@@ -670,7 +723,7 @@ B4 <span class="sep">/</span> <span class="muted">Pipeline detail</span>
 <p class="label">Why this design</p>
 <ul class="small">
 <li>Recall-first screen: a missed AI paragraph is lost for good; a false positive only costs one LLM call.</li>
-<li>Deduplication stops boilerplate from being counted — or paid for — twice.</li>
+<li>Deduplication stops boilerplate from being counted, or paid for, twice.</li>
 <li>Every label keeps its sentence anchor, so any number traces back to text.</li>
 <li>Extraction model chosen on a 7-model benchmark: no field contradictions, ≈3 s per paragraph.</li>
 </ul>
@@ -678,15 +731,15 @@ B4 <span class="sep">/</span> <span class="muted">Pipeline detail</span>
 :::
 :::
 
-<!-- B5 -->
+<!-- A4 -->
 
-## Validation supports scalable measurement, while systematic human verification remains an important next step {#b5}
+## Automated checks support the measures; the human audit is still pending {#a4}
 
 ::: kicker
-B5 <span class="sep">/</span> <span class="muted">Validation</span>
+A4 <span class="sep">/</span> <span class="muted">Validation</span>
 :::
 ::: back
-[↩ Backup index](#/backup)
+[↩ Annex index](#/annex)
 :::
 
 ::: grid-3
@@ -709,18 +762,23 @@ B5 <span class="sep">/</span> <span class="muted">Validation</span>
 
 ::: {.card .accent-rust .mt}
 <p class="label">Limitation stated plainly</p>
-<p class="small">Accuracy labels come from a <strong>second, independent LLM</strong>, not from humans. A human validator is built (one factual question at a time, evidence highlighted) and stratified samples are drawn — 300 prefilter paragraphs; 120 paragraphs / 267 activities — but <strong>not yet reviewed</strong>. No human-audited error rate is claimed.</p>
+<p class="small">Accuracy labels come from a <strong>second, independent LLM</strong>, not from humans. A human validator is built (one factual question at a time, evidence highlighted) and stratified samples are drawn (300 prefilter paragraphs; 120 paragraphs with 267 activities), but they are <strong>not yet reviewed</strong>. No human-audited error rate is claimed.</p>
 :::
 
-<!-- B6 -->
+::: note-line
+Screen: held-out texts from forms not used in training · Patents: 2021–2023 filings, 343 firms · Thesis Table 37
+:::
 
-## Three archetypes provide the most reproducible representation of disclosure posture {#b6}
+
+<!-- A5 -->
+
+## Three postures is the most stable choice {#a5}
 
 ::: kicker
-B6 <span class="sep">/</span> <span class="muted">Choosing k</span>
+A5 <span class="sep">/</span> <span class="muted">Choosing k</span>
 :::
 ::: back
-[↩ Backup index](#/backup)
+[↩ Annex index](#/annex)
 :::
 
 ::: chart
@@ -729,41 +787,50 @@ B6 <span class="sep">/</span> <span class="muted">Choosing k</span>
 
 ::: {.grid-3 .mt}
 ::: small
-**k = 2** is stable but merges governance into promotion — it erases the difference between board oversight and a risk warning.
+**k = 2** is stable but merges governance into promotion, so board oversight and a risk warning look the same.
 :::
 ::: small
-**k = 4** fails: the fourth archetype falls to Jaccard 0.37 — a promotional-but-vague cluster does not exist as a style.
+**k = 4** fails: the fourth archetype falls to Jaccard 0.37. There is no stable promotional-but-vague style.
 :::
 ::: small
 **Out of sample:** a model frozen on 2021–2025 recovers the 2026 partition (ARI 0.63); K-means reproduces the same three groups.
 :::
 :::
 
-<!-- B7 -->
+::: note-line
+50 bootstrap replicates per k · Thesis Fig. 9
+:::
 
-## Posture is identified independently of both disclosure volume and operational activity {#b7}
+
+<!-- A6 -->
+
+## Postures come from how firms talk, not from volume or activities {#a6}
 
 ::: kicker
-B7 <span class="sep">/</span> <span class="muted">Circularity</span>
+A6 <span class="sep">/</span> <span class="muted">What the fit uses</span>
 :::
 ::: back
-[↩ Backup index](#/backup)
+[↩ Annex index](#/annex)
 :::
 
 ::: row
 ::: {.grow .chart}
-<p class="label">Archetype vertices — the only inputs are seven posture shares</p>
+<p class="label">Archetype vertices, fitted on seven posture shares only</p>
 ![](figures/archetype_vertices.svg){.chart}
+
+::: {.card .accent-petrol style="padding:14px 22px;margin-top:10px"}
+<p class="small"><strong>PCA of the seven inputs.</strong> PC1 (46%) sets promotional, specific, customer-facing and realized against risk: the Vocal–Defensive axis. PC2 (19%) is governance (+0.71), unrelated to risk (r = −0.02). Three components reach 78%, so posture is not one scale.</p>
+:::
 :::
 
 ::: {style="width:560px;flex:none"}
 ::: {.card .accent-teal}
 <p class="label">In the fit</p>
-<p class="small">Seven frame-level <span class="f">P</span> shares: promotional, hedging, risk, governance, realization, customer-facing, specificity.</p>
+<p class="small">Seven frame-level <span class="f">P</span> shares: promotional, hedging, risk, governance, realized, customer-facing, specificity.</p>
 :::
 ::: {.card .accent-rust .mt-s}
 <p class="label">Out of the fit</p>
-<p class="small"><span class="f">D</span> (volume) and <span class="f">A</span> (activities) — both measured separately and used only afterwards as coherence checks.</p>
+<p class="small"><span class="f">D</span> (volume) and <span class="f">A</span> (activities), both measured separately and used only afterwards as coherence checks.</p>
 :::
 ::: {.card .sand .mt-s}
 <p class="small">Raw activity gap Vocal vs. Defensive: <strong>7.9×</strong>. Holding volume fixed: <strong>2.02×</strong> (CI 1.67–2.44). Volume matters; posture still adds.</p>
@@ -771,107 +838,85 @@ B7 <span class="sep">/</span> <span class="muted">Circularity</span>
 :::
 :::
 
-<!-- B8 -->
-
-## Expanding estimation windows prevent future information from defining historical posture {#b8}
-
-::: kicker
-B8 <span class="sep">/</span> <span class="muted">Temporal leakage</span>
-:::
-::: back
-[↩ Backup index](#/backup)
+::: note-line
+Pooled 2021–2026 year to date · z-scores against the pooled mean · Thesis Fig. 6
 :::
 
-::: chart
-![](figures/composition_annual.svg){.chart .h-500}
-:::
 
-::: {.grid-2 .mt}
-::: small
-**Rule.** A firm's label in year *t* uses only its own text from 2021 up to *t* — one vector per firm per fit. No label ever uses a later year. Market regressors are joined as-of the call date.
-:::
-::: small
-**Reading.** New disclosers enter as Defensive (4% → 54% of the index), not as Vocal (14% → 13%): boilerplate is cheap on short notice, a Vocal claim is not.
-:::
-:::
+<!-- A7 -->
 
-<!-- B9 -->
-
-## W captures relative disclosure–substance decoupling rather than deception {#b9}
+## W ranks talk against evidence; it does not detect lying {#a7}
 
 ::: kicker
-B9 <span class="sep">/</span> <span class="muted">Construct validity</span>
+A7 <span class="sep">/</span> <span class="muted">What W measures</span>
 :::
 ::: back
-[↩ Backup index](#/backup)
+[↩ Annex index](#/annex)
+:::
+
+<p class="serif" style="font-size:40px;color:#1C1F22;margin:0 0 18px"><i>W</i> = rank(<i>D</i>) − rank(<i>S</i>), &nbsp; <i>S</i> = log(1 + <i>A</i>) × <i>G</i></p>
+
+::: grid-2
+::: small
+- **Relative, within year:** percentile ranks among disclosers, so the yearly mean is ~0 by design. It sorts firms; the market-wide decline shows in *G* instead.
+- **Ranks, not z-scores:** *D* has a far heavier tail, so z-scores would push Microsoft or NVIDIA into the "washing" tail.
+:::
+::: small
+- **Stable trait:** year-over-year ρ = 0.60; split-half ρ = 0.63; regression-residual version ρ = 0.81.
+- **Not size or risk:** no association with market cap, beta or R&D intensity.
+:::
+:::
+
+::: {.card .sand .mt}
+<p class="small">Explanations for a high <i>W</i> include competition, editorial convention and disorganisation, as well as overstatement. Telling them apart needs internal evidence.</p>
+:::
+
+<!-- A8 -->
+
+## Same firm, same year: calls promote more and also provide more documentary evidence than filings {#a8}
+
+::: kicker
+A8 <span class="sep">/</span> <span class="muted">Calls vs. filings</span>
+:::
+::: back
+[↩ Annex index](#/annex)
 :::
 
 ::: row
-::: {.chart style="width:700px;flex:none"}
-![](figures/w_scatter.svg){.chart}
+::: {.grow .chart}
+<p class="label">Earnings call minus statutory filing, same firm and fiscal year (pp, 95% CI)</p>
+![](figures/venue_gap.svg){.chart .h-620}
 :::
 
-::: grow
-<p class="serif" style="font-size:40px;color:#1C1F22;margin:0 0 18px"><i>W</i> = rank(<i>D</i>) − rank(<i>S</i>)</p>
-
-- **Relative, within year:** percentile ranks among disclosers, so the yearly mean is ~0 by design. It sorts firms; market-wide dilution is read from grounding (slide 6).
-- **Ranks, not z-scores:** *D* has a far heavier tail — z-scores would push Microsoft or NVIDIA into the “washing” tail.
-- **Stable trait:** year-over-year ρ = 0.60; split-half ρ = 0.63; regression-residual version ρ = 0.81.
-- **Not size or risk:** no association with market cap, beta or R&D intensity.
-
-::: {.card .sand .mt}
-<p class="small">High <i>W</i>: “The Company <strong>may use</strong> artificial intelligence…” (no system, stage or result). Low <i>W</i>: “Deploy AI… through our global <strong>Aon Business Services platform</strong>.” Explanations include competition, editorial convention, disorganisation — or overstatement.</p>
-:::
-:::
-:::
-
-<!-- B10 -->
-
-## Public disclosures reveal reported operational behavior — not independently verified implementation {#b10}
-
-::: kicker
-B10 <span class="sep">/</span> <span class="muted">What is observed</span>
-:::
-::: back
-[↩ Backup index](#/backup)
-:::
-
-::: chain
+::: {style="width:520px;flex:none"}
 ::: {.card .accent-petrol}
-<p class="label">Observed</p>
-<h4>Communication</h4>
-<p class="small">How the firm talks about AI: volume <span class="f">D</span> and posture <span class="f">P</span>.</p>
+<p class="label">Per 1,000 words, calls carry</p>
+<div class="num l">16.8×</div>
+<p class="num-cap">more promotional statements</p>
+<div class="num l mt">18.7×</div>
+<p class="num-cap">more quantified outcome claims</p>
 :::
-::: {.card .accent-teal}
-<p class="label">Observed</p>
-<h4>Disclosed activity</h4>
-<p class="small">What the firm says it does, and with what evidence: <span class="f">A</span>, <span class="f">G</span>, <span class="f">S</span>.</p>
+
+::: {.takeaway style="font-size:23px"}
+Calls carry the proof, filings the caveats. **The warning sign is a call claim the 10-K doesn't back.**
 :::
-::: {.card .ghost}
-<p class="label rust">Not observed</p>
-<h4>Actual implementation</h4>
-<p class="small">What was really built, adopted and paid off. Needs internal access, audits or usage data.</p>
 :::
 :::
 
-::: {.grid-2 .mt-l}
-::: small
-**What the thesis can claim:** documentary distance between the first two layers, its persistence, venue pattern and market associations.
-:::
-::: small
-**Partial external anchor:** disclosed activity orders firms like AI patents (B5) — but patents track capacity, not operational use.
-:::
+::: note-line
+790 firm-years (285 firms, ≥ 3 activities in each channel), pooled 2021–2026 year to date, firm × fiscal-year fixed effects, 95% CI · Thesis Fig. 22 · ratios per 1,000 words: Thesis Fig. 24
 :::
 
-<!-- B11 -->
 
-## Channel comparisons hold the firm and period constant to isolate disclosure-context differences {#b11}
+<!-- A9 -->
+
+## Calls vs. filings: same firm, same year {#a9}
 
 ::: kicker
-B11 <span class="sep">/</span> <span class="muted">Venue design</span>
+A9 <span class="sep">/</span> <span class="muted">Venue design</span>
 :::
 ::: back
-[↩ Backup index](#/backup)
+[↩ Annex index](#/annex)
 :::
 
 <p class="serif" style="font-size:36px;color:#1C1F22;margin:0 0 24px"><i>Y</i><sub>i,t,venue</sub> = α<sub>i,t</sub> + β · 1[venue = call] + ε<sub>i,t,venue</sub></p>
@@ -897,19 +942,19 @@ B11 <span class="sep">/</span> <span class="muted">Venue design</span>
 **By year:** the quantified-outcome premium in calls exists from 2021 and stays flat; the named-product gap opens with GenAI; governance caveats keep moving into filings.
 :::
 ::: small
-**Limit:** composition at venue level — it does not track whether a specific call claim reappears, softened, in the next filing.
+**Limit:** the comparison is at venue level. It does not track whether a specific call claim reappears, softened, in the next filing.
 :::
 :::
 
-<!-- B12 -->
+<!-- A10 -->
 
-## Market tests ask whether disclosure signals add information — not whether disclosure causes returns {#b12}
+## The market tests measure association, not cause {#a10}
 
 ::: kicker
-B12 <span class="sep">/</span> <span class="muted">Identification</span>
+A10 <span class="sep">/</span> <span class="muted">Identification</span>
 :::
 ::: back
-[↩ Backup index](#/backup)
+[↩ Annex index](#/annex)
 :::
 
 <p class="serif" style="font-size:34px;color:#1C1F22;margin:0 0 22px"><i>Y</i><sub>i,t</sub> = α + β · Disclosure<sub>i,t⁻</sub> + γ · <i>Y</i><sub>i,t⁻</sub> + δ · Controls<sub>i,t⁻</sub> + Sector<sub>i</sub> + Year<sub>t</sub> + ε<sub>i,t</sub></p>
@@ -942,34 +987,15 @@ B12 <span class="sep">/</span> <span class="muted">Identification</span>
 Predetermined regressors, lagged outcome, firm-clustered SE. Cross-sectional association: changing the wording would not mechanically change beta.
 :::
 
-<!-- B13 -->
+<!-- A11 -->
 
-## Multiple-testing correction leaves a narrower set of market associations than raw significance suggests {#b13}
-
-::: kicker
-B13 <span class="sep">/</span> <span class="muted">48 tests</span>
-:::
-::: back
-[↩ Backup index](#/backup)
-:::
-
-::: chart
-![](figures/bh_pvalues.svg){.chart .h-620}
-:::
-
-::: note-line
-Benjamini–Hochberg false-discovery control over the whole family — 8 outcomes × 6 disclosure variables — not outcome by outcome.
-:::
-
-<!-- B14 -->
-
-## The grounding decline persists beyond changes in the composition of firms and documents {#b14}
+## Evidence thins inside the same firms too, not only through new entrants {#a11}
 
 ::: kicker
-B14 <span class="sep">/</span> <span class="muted">Robustness</span>
+A11 <span class="sep">/</span> <span class="muted">Robustness</span>
 :::
 ::: back
-[↩ Backup index](#/backup)
+[↩ Annex index](#/annex)
 :::
 
 ::: row
@@ -979,20 +1005,25 @@ B14 <span class="sep">/</span> <span class="muted">Robustness</span>
 ::: {style="width:560px;flex:none"}
 - **Within firms:** the fixed 2021 cohort dilutes its own claims, 0.44 → 0.39.
 - **Entry:** from 2023, new disclosers enter at or below incumbents.
-- **Rollup:** activity- and firm-weighted versions agree — calls more grounded than filings under both.
-- **Ladder:** only 9.7% of activities are deployed, named *and* quantified.
+- **Rollup:** activity- and firm-weighted versions agree, and calls are more grounded than filings under both.
+- **Ladder:** pooling filings and calls, 2021–2026, only 9.7% of activities name a function, are deployed *and* give a metric.
 :::
 :::
 
-<!-- B15 -->
+::: note-line
+Firm-years with a <i>W</i> score, 2021–2026 year to date · fixed cohort = firms already scored in 2021
+:::
 
-## Risk and governance language accelerated before the SEC's AI-washing warning, not at it {#b15}
+
+<!-- A12 -->
+
+## Risk and governance talk rose before the SEC warning, not at it {#a12}
 
 ::: kicker
-B15 <span class="sep">/</span> <span class="muted">Regulatory scrutiny</span>
+A12 <span class="sep">/</span> <span class="muted">Regulatory scrutiny</span>
 :::
 ::: back
-[↩ Backup index](#/backup)
+[↩ Annex index](#/annex)
 :::
 
 ::: chart
@@ -1001,22 +1032,27 @@ B15 <span class="sep">/</span> <span class="muted">Regulatory scrutiny</span>
 
 ::: {.grid-2 .mt}
 ::: small
-**Sweep:** refitting the break month from 2023 to 2025, the best fit is early 2023 (governance Jan, risk Mar) — the step at December 2023 is indistinguishable from zero.
+**Sweep:** refitting the break month from 2023 to 2025, the best fit is early 2023 (governance Jan, risk Mar). The step at December 2023 is indistinguishable from zero.
 :::
 ::: small
 **Direct scrutiny is rare:** 8 AI-term comment-letter threads in the universe, 1 on operational claims (Welltower, 2025). Its next 10-K cut claim density and moved *W* from +0.14 to −0.13.
 :::
 :::
 
-<!-- B16 -->
+::: note-line
+Monthly AI frames per 1,000 words, all documents, from Jan 2021 (68 months) · break month tested from Jan 2023 to Jun 2025
+:::
 
-## The DeepSeek shock produced a two-month burst of open-source language in earnings calls, not a lasting shift {#b16}
+
+<!-- A13 -->
+
+## A two-month spike in open-source talk around DeepSeek, with no detectable lasting shift {#a13}
 
 ::: kicker
-B16 <span class="sep">/</span> <span class="muted">Technology shock</span>
+A13 <span class="sep">/</span> <span class="muted">Technology shock</span>
 :::
 ::: back
-[↩ Backup index](#/backup)
+[↩ Annex index](#/annex)
 :::
 
 ::: chart
@@ -1024,45 +1060,19 @@ B16 <span class="sep">/</span> <span class="muted">Technology shock</span>
 :::
 
 ::: note-line
+Earnings calls, Jan 2021–Aug 2026 · Thesis Fig. 19<br>
 Interrupted time series, 68 months of calls, season and composition controls, Jan–Feb 2025 as pulse terms. January ≈ 10× the prior monthly mean; lasting level change p = 0.78. Analysts named the model (AT&amp;T, Corning calls).
 :::
 
-<!-- B17 -->
+<!-- A14 -->
 
-## Sector differences show why credibility signals should be interpreted relative to operating context {#b17}
-
-::: kicker
-B17 <span class="sep">/</span> <span class="muted">Heterogeneity</span>
-:::
-::: back
-[↩ Backup index](#/backup)
-:::
-
-::: row
-::: {.chart style="width:1060px;flex:none"}
-![](figures/sector_heatmap.svg){.chart}
-:::
-::: grow
-- **Technology** sorts Vocal: capability and a commercial reason to market AI.
-- **Financials & Utilities** sort Governance-Led: model-risk and oversight regimes.
-- **Channels:** Defensive weight tracks Item 1A share (r = 0.77); Governance tracks DEF 14A (r = 0.72).
-- A 10-K-only reading misses much of the governance evidence.
-
-::: {.card .sand .mt}
-<p class="small">Judge a firm against its <strong>sector peers</strong> before calling any posture exceptional.</p>
-:::
-:::
-:::
-
-<!-- B18 -->
-
-## The framework translates empirical signals into verification priorities without claiming to score firm credibility {#b18}
+## The screen ranks what to check first; it does not score credibility {#a14}
 
 ::: kicker
-B18 <span class="sep">/</span> <span class="muted">Framework</span>
+A14 <span class="sep">/</span> <span class="muted">Framework</span>
 :::
 ::: back
-[↩ Backup index](#/backup)
+[↩ Annex index](#/annex)
 :::
 
 ::: row
@@ -1070,10 +1080,10 @@ B18 <span class="sep">/</span> <span class="muted">Framework</span>
 <p class="label">2026 screen · 465 index firms</p>
 
 ::: quad
-<div class="inv"><div class="q-t">Investigate</div><div class="q-n">56</div><div class="q-d">High <i>D</i>, low <i>S</i> · audit claims, reconcile call vs. 10-K</div></div>
-<div class="val"><div class="q-t">Validate</div><div class="q-n">166</div><div class="q-d">High <i>D</i>, high <i>S</i> · confirm evidence stays consistent</div></div>
+<div class="inv"><div class="q-t">Investigate</div><div class="q-n">56</div><div class="q-d">High <i>D</i>, low <i>S</i> · ask for proof; compare call and 10-K</div></div>
+<div class="val"><div class="q-t">Validate</div><div class="q-n">166</div><div class="q-d">High <i>D</i>, high <i>S</i> · check the proof still holds</div></div>
 <div class="dep"><div class="q-t">Deprioritize</div><div class="q-n">187</div><div class="q-d">Low <i>D</i>, low <i>S</i> · incl. 21 non-disclosers</div></div>
-<div class="exp"><div class="q-t">Explore</div><div class="q-n">56</div><div class="q-d">Low <i>D</i>, high <i>S</i> · catalogue quiet execution</div></div>
+<div class="exp"><div class="q-t">Explore</div><div class="q-n">56</div><div class="q-d">Low <i>D</i>, high <i>S</i> · find what they do but don't say</div></div>
 :::
 
 <p class="xsmall muted mt-s">Median splits among 444 disclosers; persistent <i>W</i> orders the queue inside a cell. Reconcile screen: 32 of 447 dual-channel issuers with promotional gap z &gt; 1.5.</p>
@@ -1082,11 +1092,11 @@ B18 <span class="sep">/</span> <span class="muted">Framework</span>
 ::: grow
 | Verification finds | Issuer | Investor |
 |:--|:--|:--|
-| Execution, evidence unorganised | Fix measurement & ownership | Ask for backing first |
-| Evidence, not communicated | Decide what to disclose | Look into it; don't assume mispricing |
-| Claim ahead of execution | Narrow the claim | Condition on milestones |
-| Execution, value unproven | Review cost & adoption | Separate capability from value |
-| Material, supported | Decide on the economics | Take into the thesis |
+| Real work, poor records | Write it down, name an owner | Ask for proof before believing it |
+| Proof exists, never said | Decide what to tell | Look into it; don't assume a bargain |
+| Claim bigger than reality | Say less | Wait for milestones |
+| Works, but no money yet | Check cost and usage | Don't pay for it yet |
+| Important and proven | Decide on the business case | Count it in the valuation |
 
 : {.compact}
 :::
@@ -1096,44 +1106,454 @@ B18 <span class="sep">/</span> <span class="muted">Framework</span>
 Empirically estimated: *D, P, A, G, S, W*. Proposed: the decision process around them. Materiality comes from outside and can reverse the queue.
 :::
 
-<!-- B19 -->
+<!-- A15 -->
 
-## The analytical architecture creates a second-order research agenda that this dissertation does not claim to resolve {#b19}
+## The same routine leads to different next steps, firm by firm {#a15}
 
 ::: kicker
-B19 <span class="sep">/</span> <span class="muted">Next questions</span>
+A15 <span class="sep">/</span> <span class="muted">Worked cases</span>
 :::
 ::: back
-[↩ Backup index](#/backup)
+[↩ Annex index](#/annex)
 :::
 
-::: grid-3
-::: {.card .accent-petrol}
-<h4>Actual implementation</h4>
-<p class="small">Link claims to hiring, cloud spend, product telemetry or audits — the unobserved third layer.</p>
+| Firm | Posture | Talk *D* | Evidence *S* | *W* | What to check next |
+|:-----------|:-----------|:------|:------|:----|:------------------------------------|
+| **Microsoft** 2024 | Vocal | 100th pct | 99th pct | +0.01 | Its talk matches its proof. Check that people use the products and that they make money. |
+| **JPMorgan** 2024 | Governance-Led | 29th pct | 64th pct | −0.34 | Does more than it says. Ask: is it hiding it on purpose, or just not telling? |
+| **Goldman Sachs** 2024 | Defensive | 59th pct | 68th pct | −0.08 | Talks about AI mostly as a risk. Ask: is any of it actually running? |
+| **Apple** 2024 | Governance-Led | 94th pct | 79th pct | +0.15 | Talks a lot about AI privacy and rules, shows little use. Ask: where is AI actually used? |
+| **Welltower** 2025 | Defensive | 59th pct | 44th pct | +0.14 | Said more on the call than in the 10-K, and the SEC asked. Make the two say the same. |
+
+: {.compact}
+
+<p class="label mt">More examples, 2025 · three situations</p>
+
+| Situation | Firms · talk pct / evidence pct / *W* | What to check next |
+|:----------|:------------------------------------------|:------------------------------|
+| **Talk ahead** | Newell Brands 76 / 11 / +0.65 · Gartner 90 / 31 / +0.59 · IFF 82 / 24 / +0.58 | Ask for the proof: which product, which result? |
+| **Aligned** | NVIDIA 100 / 100 / 0.00 · Amazon 99 / 99 / 0.00 · Centene 77 / 77 / 0.00 | Proof matches the talk. Keep checking it each year. |
+| **Evidence ahead** | CVS 54 / 88 / −0.34 · Aon 55 / 87 / −0.33 · JPMorgan 52 / 83 / −0.31 | Ask what they do but don't say, and why. |
+
+: {.compact}
+
+::: note-line
+Top: the five thesis cases (2024; Welltower 2025). Bottom: 2025 percentiles among disclosers; talk-ahead, evidence-ahead, Amazon and Centene cases from Thesis Fig. 21.<br>
+Percentiles within year across the index. A negative <i>W</i> places a firm against peers; it does not prove hidden capability. A positive one is a reason to check, not proof of overstatement.
 :::
-::: {.card .accent-teal}
-<h4>Sector × W, activity × grounding</h4>
-<p class="small">Where does decoupling concentrate, and which activity types lose evidence fastest?</p>
+
+<!-- A16 -->
+
+## Each screen quadrant, with real firms from 2026 {#a16}
+
+::: kicker
+A16 <span class="sep">/</span> <span class="muted">Quadrant examples</span>
 :::
-::: {.card .accent-ochre}
-<h4>Posture transitions</h4>
-<p class="small">Do firms moving Defensive → Vocal later ground their claims — or get scrutinised?</p>
+::: back
+[↩ Annex index](#/annex)
 :::
+
+::: grid-2
 ::: {.card .accent-rust}
-<h4>Human validation</h4>
-<p class="small">Run the built validator on the drawn samples to bound the extraction error rate.</p>
+<p class="label">Investigate · 56 firms · lots of talk, little evidence</p>
+<p class="small"><strong>First in line:</strong> KLA, Fox, Newell Brands</p>
+<p class="small"><strong>Familiar names:</strong> Procter &amp; Gamble, Verizon</p>
+<p class="xsmall muted mt-s">Ask for proof, and check the call says the same as the 10-K.</p>
+:::
+::: {.card .accent-petrol}
+<p class="label">Validate · 166 firms · lots of talk, lots of evidence</p>
+<p class="small"><strong>First in line:</strong> Gartner, Lam Research, Cintas</p>
+<p class="small"><strong>Familiar names:</strong> Microsoft, NVIDIA, Alphabet, Amazon, Apple, JPMorgan</p>
+<p class="xsmall muted mt-s">Proof is there. Check it still holds next year.</p>
 :::
 ::: {.card .accent-slate}
-<h4>Decision utility</h4>
-<p class="small">Do analysts using a claim register reach better-calibrated judgments than those reading raw filings?</p>
+<p class="label">Deprioritize · 187 firms · little talk, little evidence</p>
+<p class="small"><strong>First in line:</strong> Skyworks, Crown Castle, International Paper</p>
+<p class="small"><strong>Familiar names:</strong> ExxonMobil, Johnson &amp; Johnson, Netflix, McDonald's</p>
+<p class="xsmall muted mt-s">Little to check, unless AI matters a lot to your decision.</p>
 :::
-::: {.card .accent-petrol}
-<h4>Beyond the S&amp;P 500</h4>
-<p class="small">Longer panels, broader universes, and private / early-stage settings with milestone-based evidence.</p>
+::: {.card .accent-teal}
+<p class="label">Explore · 56 firms · little talk, lots of evidence</p>
+<p class="small"><strong>First in line:</strong> American Electric Power, Wells Fargo, Regions Financial</p>
+<p class="small"><strong>Familiar names:</strong> Visa, Coca-Cola, Citigroup, AT&amp;T</p>
+<p class="xsmall muted mt-s">They do more than they say. Find out what.</p>
 :::
 :::
 
 ::: note-line
-Stated as questions the measurement makes testable — not as results.
+Quadrants split at the 2026 median of <i>D</i> and <i>S</i> among disclosers; Deprioritize includes 21 non-disclosers. "First in line" = highest persistent <i>W</i> (Explore: most negative), the thesis's order for the queue.
 :::
+
+<!-- ============================ SUPPLEMENTARY ============================ -->
+
+## {#supp .divider background-color="#263B4A"}
+
+::: divider-wrap
+::: cover-kicker
+Thesis figures not shown above
+:::
+
+::: divider-title
+Supplementary
+:::
+
+::: toc
+<a href="#/s1"><b>S1</b>Sample</a>
+<a href="#/s2"><b>S2</b>Posture inputs</a>
+<a href="#/s3"><b>S3</b>Posture transitions</a>
+<a href="#/s4"><b>S4</b>Activities by sector</a>
+<a href="#/s5"><b>S5</b>Activities by posture</a>
+<a href="#/s6"><b>S6</b>Activity mix</a>
+<a href="#/s7"><b>S7</b>Grounding ladder</a>
+<a href="#/s8"><b>S8</b>Provenance</a>
+<a href="#/s9"><b>S9</b>Ecosystems</a>
+<a href="#/s10"><b>S10</b>Providers</a>
+<a href="#/s11"><b>S11</b>SEC case</a>
+<a href="#/s12"><b>S12</b>W examples</a>
+<a href="#/s13"><b>S13</b>Venue by year</a>
+<a href="#/s14"><b>S14</b>Promotion and evidence</a>
+<a href="#/s15"><b>S15</b>Activities vs. Defensive</a>
+<a href="#/s16"><b>S16</b>Market tests: all 48</a>
+<a href="#/s17"><b>S17</b>Credibility checklist</a>
+:::
+:::
+
+<!-- S1 -->
+
+## Industrial distribution of the S&P 500 study universe (fixed at 2021-01-01, N=499) across three classification tiers {#s1}
+
+::: kicker
+S1 <span class="sep">/</span> <span class="muted">Thesis Figure 2</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+::: chart
+![](figures/thesis/fig-sic-distribution.png){.chart .h-620}
+:::
+
+::: note-line
+Panel A: broad SIC divisions. Panel B: two-digit SIC major groups (top 12 plus remaining). Panel C: 11 aggregated economic sectors.
+:::
+
+<!-- S2 -->
+
+## Distribution of Seven AI Disclosure Posture Dimensions and Disclosure Intensity Across the S&P 500, pooled 2021–2026 YTD {#s2}
+
+::: kicker
+S2 <span class="sep">/</span> <span class="muted">Thesis Figure 4</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+::: chart
+![](figures/thesis/fig-strategy-dimensions-dist.png){.chart .h-620}
+:::
+
+::: note-line
+White circles denote medians; petrol bars interquartile ranges; grey whiskers the 5th–95th percentile. All measures are scaled from 0 to 1.
+:::
+
+<!-- S3 -->
+
+## AI disclosure diffuses primarily through defensive reporting: annual composition and firm-level transitions, 2021–2026 YTD {#s3}
+
+::: kicker
+S3 <span class="sep">/</span> <span class="muted">Thesis Figure 8</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+::: chart
+![](figures/thesis/fig-archetype-composition-annual.png){.chart .h-620}
+:::
+
+::: note-line
+Each firm-year's archetype label comes from a fit on that firm's own text accumulated up to that year. Panels B-D show, for each year-to-year transition, the share of an origin archetype's firms classified into the named destination the following year, on a shared 0-60% axis.
+:::
+
+<!-- S4 -->
+
+## Sectoral business purpose and operational action of disclosed AI activity, pooled 2021–2026 YTD {#s4}
+
+::: kicker
+S4 <span class="sep">/</span> <span class="muted">Thesis Figure 10</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+::: chart
+![](figures/thesis/fig-sector-purpose-action.png){.chart .h-620}
+:::
+
+::: note-line
+Panel A: each sector's row sums to 100%, ordered by Sell share descending. Panel B: each cell is a sector's share of that action type minus the pooled share across sectors (red = above, blue = below); labeled only where the gap is at least 3 points.
+:::
+
+<!-- S5 -->
+
+## Archetypes differ most in activity volume and customer orientation: profile by archetype, pooled 2021–2026 YTD {#s5}
+
+::: kicker
+S5 <span class="sep">/</span> <span class="muted">Thesis Figure 11</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+::: chart
+![](figures/thesis/fig-archetype-activity-heatmap.png){.chart .h-620}
+:::
+
+::: note-line
+Top panel: median disclosed AI activities per firm relative to the full universe. Bottom panel: raw rates by archetype, with shading indicating percentage-point deviation from the pooled benchmark.
+:::
+
+<!-- S6 -->
+
+## Mix of disclosed corporate AI activities by disclosure archetype, pooled 2021–2026 YTD {#s6}
+
+::: kicker
+S6 <span class="sep">/</span> <span class="muted">Thesis Figure 12</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+::: chart
+![](figures/thesis/fig-archetype-activity-mix.png){.chart .h-620}
+:::
+
+::: note-line
+100% stacked horizontal bars: share of each archetype's disclosed AI activities across six business roles (Sell, Operate, Build, Enable, Control, Serve).
+:::
+
+<!-- S7 -->
+
+## Decomposing AI activity grounding across all disclosed AI activities, pooled 2021–2026 YTD {#s7}
+
+::: kicker
+S7 <span class="sep">/</span> <span class="muted">Thesis Figure 13</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+::: chart
+![](figures/thesis/fig-ladder-substance.png){.chart .h-620}
+:::
+
+::: note-line
+Left: cumulative nested progression of evidence requirements. Right: independent grounding attribute frequencies.
+:::
+
+<!-- S8 -->
+
+## Corporate branding versus external-vendor attribution in disclosed AI activities, pooled 2021–2026 YTD {#s8}
+
+::: kicker
+S8 <span class="sep">/</span> <span class="muted">Thesis Figure 15</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+::: chart
+![](figures/thesis/fig-tech-provenance.png){.chart .h-620}
+:::
+
+::: note-line
+Indicator shares overlap across statements and do not sum to 100. External sources combine named vendors/foundation models, commercial partners, or declared third-party origin, identified via entity tagging and vendor lexicon matching.
+:::
+
+<!-- S9 -->
+
+## Named technology ecosystems in AI disclosure across S&P 500 firms, 2021–2026 YTD {#s9}
+
+::: kicker
+S9 <span class="sep">/</span> <span class="muted">Thesis Figure 16</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+::: chart
+![](figures/thesis/fig-vendor-ecosystems.png){.chart .h-620}
+:::
+
+::: note-line
+Panel A tracks the share of AI-disclosing documents naming each ecosystem's stack, with 2026 as a dotted, year-to-date segment; Panel B breaks the same rate down by archetype. The denominator is the 8,452 documents with an AI frame; rates are independent presence indicators, so the four series do not sum to 100.
+:::
+
+<!-- S10 -->
+
+## Provider families most cited in AI disclosure, by ecosystem and stack role, pooled 2021–2026 YTD {#s10}
+
+::: kicker
+S10 <span class="sep">/</span> <span class="muted">Thesis Figure 17</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+::: chart
+![](figures/thesis/fig-vendor-providers.png){.chart .h-620}
+:::
+
+::: note-line
+Bars: share of AI-disclosing firms naming each family, colored by ecosystem, with its stack role beside the name (M model, C cloud, S semiconductor, E enterprise software). The 15 most-named of 49 families in the corpus (full list, Thesis Appendix B.6); a firm's own products are excluded. Only disclosures containing sections identified as AI-related are included.
+:::
+
+<!-- S11 -->
+
+## Welltower's annual-report AI disclosure around the SEC comment letter of 2025-04-28, against the mean of three matched real-estate peers {#s11}
+
+::: kicker
+S11 <span class="sep">/</span> <span class="muted">Thesis Figure 18</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+::: chart
+![](figures/thesis/fig-sec-welltower.png){.chart .h-620}
+:::
+
+::: note-line
+k = −1 is the FY2024 10-K the letter reviewed; k = 0 is the first 10-K filed after the letter. Panel A: AI claim density; Panel B: realized-integration claims, the dimension the staff asked about.
+:::
+
+<!-- S12 -->
+
+## Disclosure intensity and disclosed substance for selected firms, with the gap between them, end of 2025 {#s12}
+
+::: kicker
+S12 <span class="sep">/</span> <span class="muted">Thesis Figure 21</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+::: chart
+![](figures/thesis/fig-ds-dumbbell.png){.chart .h-620}
+:::
+
+::: note-line
+Each line joins a firm's percentile ranks of disclosure intensity (D) and disclosed substance (S); the gap between the two endpoints is W. Cases show the three largest positive, negative, and near-zero gaps among firms in the upper half of D in 2025.
+:::
+
+<!-- S13 -->
+
+## Call-minus-filing gap by fiscal year on three evidentiary dimensions, 2021–2026 YTD {#s13}
+
+::: kicker
+S13 <span class="sep">/</span> <span class="muted">Thesis Figure 23</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+::: chart
+![](figures/thesis/fig-venue-gap-by-year.png){.chart .h-620}
+:::
+
+::: note-line
+Each point: mean call-minus-filing gap across that year's firm × fiscal-year cells, with the 95% CI from a one-sample t-test. 2026 is still open at the 2026-09-03 cut-off and is seasonally corrected (Thesis Appendix A.3); the hollow marker is the uncorrected value. Cells per year: 2021: 57, 2022: 56, 2023: 103, 2024: 152, 2025: 228, 2026: 194.
+:::
+
+<!-- S14 -->
+
+## Calls amplify both promotion and quantified evidence: call-to-filing amplification ratios per 1,000 words, pooled 2021–2026 YTD {#s14}
+
+::: kicker
+S14 <span class="sep">/</span> <span class="muted">Thesis Figure 24</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+::: chart
+![](figures/thesis/fig-promotion-and-evidence.png){.chart .h-620}
+:::
+
+::: note-line
+Relative amplification in quantified evidence exceeds that of promotional claims.
+:::
+
+<!-- S15 -->
+
+## At equal disclosure volume, Vocal and Governance-Led firms report more activities; Vocal is most customer-facing {#s15}
+
+::: kicker
+S15 <span class="sep">/</span> <span class="muted">Activities vs. Defensive</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+::: row
+::: {.grow .chart}
+<p class="label">Disclosed AI activities vs. Defensive, at equal disclosure volume</p>
+![](figures/activity_ratio.svg){.chart}
+:::
+::: {.chart style="width:620px;flex:none"}
+<p class="label">Customer-facing share of activities</p>
+![](figures/customer_share.svg){.chart}
+:::
+:::
+
+::: note-line
+Pooled 2021–2026 year to date, 451 active index firms · Thesis Table 40<br>
+Left: negative binomial of activity counts on posture, controlling for log(1 + AI frames), 95% CI; Defensive = 1. Right: share of each posture's activities aimed at customers; dashed line = pooled share.
+:::
+
+<!-- S16 -->
+
+## All 48 market tests: few clear the multiple-testing threshold {#s16}
+
+::: kicker
+S16 <span class="sep">/</span> <span class="muted">Market tests</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+::: chart
+![](figures/bh_pvalues.svg){.chart .h-620}
+:::
+
+::: note-line
+9,350 earnings calls by 484 firms, 2021–2026 · Thesis Table 46<br>
+Benjamini–Hochberg false-discovery control over the whole family of 8 outcomes × 6 disclosure variables, not outcome by outcome.
+:::
+
+<!-- S17 -->
+
+## The thesis checklist: the same six questions for an issuer writing and an investor reading {#s17}
+
+::: kicker
+S17 <span class="sep">/</span> <span class="muted">Credibility checklist</span>
+:::
+::: back
+[↩ Supplementary index](#/supp)
+:::
+
+| | Issuer | Investor |
+|:-------------|:-------------------------|:-------------------------|
+| **0. Posture** | Know which posture your writing resembles; calibrate the rest to it. | Posture says how a firm writes, not whether it is backed. |
+| **1. Activity &amp; maturity** | Separate pilots from deployed systems; name the function. | Discount vague "exploring"; check it reached production. |
+| **2. Evidence** | Name products and tools; give metrics (cost, speed, revenue). | Look for metrics you could check; buzzwords need more checking. |
+| **3. Provenance** | Say if it is built in-house, licensed, or co-developed. | Check vendor dependence; unstated origin sits in the weakest claims. |
+| **4. Calls vs. 10-K** | Reconcile call remarks with the signed 10-K. | Question claims with less evidence in the 10-K than on the call. |
+| **5. Oversight** | Board and audit oversight of AI risk in the proxy; named owners. | Are owners, controls and scope clearly identified? |
+
+: {.compact}
+
+::: note-line
+Shortened from Thesis Table 20, the AI Disclosure Credibility Checklist (issuer guidance and investor read). Each line pairs a question with the action it implies.
+:::
+

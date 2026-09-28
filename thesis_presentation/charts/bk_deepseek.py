@@ -16,8 +16,8 @@ for c in ["rate_per_1k", "trend", "trend_low", "trend_high", "counterfactual"]:
 
 brk = pd.Timestamp("2025-01-01")
 
-f = fig(1600, 500)
-ax = f.add_axes([0.06, 0.15, 0.90, 0.76])
+f = fig(1290, 420)
+ax = f.add_axes([0.08, 0.12, 0.9, 0.8])
 
 ax.plot(ds["x"], ds["rate_per_1k"], "o", ms=4.5, color=C["rule"], alpha=0.65, zorder=2)
 
@@ -41,25 +41,25 @@ ev_row = ds[ds["month"] == "2025-01"].iloc[0]
 fb_row = ds[ds["month"] == "2025-02"].iloc[0]
 
 ax.annotate("DeepSeek-R1 · 20 Jan 2025", xy=(brk, ev_row["rate_per_1k"]),
-            xytext=(14, 18), textcoords="offset points", fontsize=13,
+            xytext=(14, 18), textcoords="offset points", fontsize=14,
             fontweight="semibold", color=C["ink"],
             arrowprops=dict(arrowstyle="->", color=C["ink_2"], lw=1.0,
                              shrinkA=0, shrinkB=5))
 
 ax.annotate("two-month pulse", xy=(fb_row["x"], fb_row["rate_per_1k"]),
-            xytext=(60, 6), textcoords="offset points", fontsize=13,
+            xytext=(60, 6), textcoords="offset points", fontsize=14,
             color=C["rust"], fontweight="semibold",
             arrowprops=dict(arrowstyle="->", color=C["rust"], lw=1.0,
                              shrinkA=0, shrinkB=5))
 
 late_post = post.iloc[len(post) // 2]
 ax.annotate("no lasting level shift", xy=(late_post["x"], late_post["trend"]),
-            xytext=(0, -34), textcoords="offset points", fontsize=13,
+            xytext=(0, -64), textcoords="offset points", fontsize=14,
             color=C["rust"], fontweight="semibold", ha="center",
             arrowprops=dict(arrowstyle="->", color=C["rust"], lw=1.0,
                              shrinkA=0, shrinkB=5))
 
-ax.set_ylabel("Open-source AI mentions / 100k words (calls)", fontsize=14.5,
+ax.set_ylabel("Open-source AI mentions\nper 100k call words", fontsize=14,
               color=C["ink_2"])
 ax.xaxis.set_major_locator(mdates.YearLocator())
 ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
@@ -67,5 +67,6 @@ ax.margins(x=0.015)
 ax.grid(axis="y", color=C["grid"], lw=0.9, zorder=0)
 ax.spines["left"].set_visible(False)
 ax.tick_params(axis="y", length=0)
+ax.tick_params(labelsize=14)
 
 save(f, "deepseek")

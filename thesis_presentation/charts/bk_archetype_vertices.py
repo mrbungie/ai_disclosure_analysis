@@ -10,7 +10,7 @@ FEATURES = ["promotional_posture", "hedging_posture", "risk_orientation",
             "governance_orientation", "temporal_posture", "ai_positioning",
             "specificity"]
 COL_LABELS = ["Promotional", "Hedging", "Risk", "Governance",
-              "Claim\nrealization", "Customer-\nfacing", "Specificity"]
+              "Realized", "Customer-\nfacing", "Specificity"]
 ARCHETYPES = ["Vocal Substantives", "Governance-Led Disclosers", "Defensive Disclosers"]
 
 vert = read(results("posture", "archetype_vertices.parquet"))
@@ -20,7 +20,7 @@ mat = vert.pivot(index="archetype", columns="feature", values="value").reindex(
 cmap = LinearSegmentedColormap.from_list("div", [C["rust"], C["bg"], C["petrol"]])
 vmax = 3.0
 
-f = fig(1100, 520)
+f = fig(880, 420)
 ax = f.add_axes([0.20, 0.14, 0.78, 0.72])
 ax.set_xlim(-0.5, len(FEATURES) - 0.5)
 ax.set_ylim(-0.5, len(ARCHETYPES) - 0.5)
@@ -49,7 +49,7 @@ for j, arche in enumerate(ARCHETYPES):
     ax.text(-0.72, j, ARCH_SHORT[arche], ha="right", va="center", fontsize=15.5,
             color=ARCH[arche], fontweight="semibold")
 
-f.text(0.20, 0.035, "z-scores vs. pooled mean", fontsize=13, color=C["ink_3"],
+f.text(0.20, 0.02, "z-scores vs. pooled mean", fontsize=13.5, color=C["ink_3"],
        style="italic")
 
 save(f, "archetype_vertices")

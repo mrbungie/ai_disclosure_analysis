@@ -13,8 +13,8 @@ sec_date = pd.Timestamp("2023-12-01")
 
 SERIES = [("Risk frames", C["petrol"]), ("Governance frames", C["ochre"])]
 
-f = fig(1300, 520)
-ax = f.add_axes([0.07, 0.15, 0.88, 0.76])
+f = fig(1200, 400)
+ax = f.add_axes([0.08, 0.12, 0.9, 0.76])
 
 for name, color in SERIES:
     s = df[df["outcome"] == name].sort_values("x")
@@ -24,17 +24,18 @@ for name, color in SERIES:
                linewidths=1.2, zorder=4)
     ax.annotate(f"{name}\nbest fit {best['event']}", xy=(best["x"], best["r2"]),
                 xytext=(0, 14), textcoords="offset points", ha="center",
-                fontsize=13, fontweight="semibold", color=color)
+                fontsize=14, fontweight="semibold", color=color)
 
 ax.axvline(sec_date, color=C["rust"], ls=(0, (1, 2)), lw=1.6, zorder=2)
 ax.annotate("SEC warning (Dec 2023)", xy=(sec_date, ax.get_ylim()[0]),
-            xytext=(8, 10), textcoords="offset points", fontsize=13,
+            xytext=(8, 10), textcoords="offset points", fontsize=14,
             color=C["rust"], fontweight="semibold")
 
 ax.set_ylabel("Model fit (R²)", fontsize=15, color=C["ink_2"])
 ax.grid(axis="y", color=C["grid"], lw=0.9, zorder=0)
 ax.spines["left"].set_visible(False)
 ax.tick_params(axis="y", length=0)
+ax.tick_params(labelsize=14)
 ax.margins(x=0.03)
 
 save(f, "its_sweep")

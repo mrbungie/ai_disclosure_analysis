@@ -29,23 +29,24 @@ import layers as L  # noqa: E402
 for _f in (DECK / "assets" / "fonts").glob("*.ttf"):
     fm.fontManager.addfont(str(_f))
 
-# Palette: the thesis MIB palette, re-tuned for projection on ivory.
+# Palette: the thesis MIB base palette (ink, terracotta, eucalyptus, violet-grey,
+# ochre, deep) as main accents on white; the thesis chart colours (sage, greys) as secondary.
 C = {
-    "bg": "#FAF8F4",
+    "bg": "#FFFFFF",
     "ink": "#1C1F22",
     "ink_2": "#454E54",
     "ink_3": "#73828C",
-    "grid": "#E4E1DA",
+    "grid": "#E6E8EB",
     "rule": "#A5AFB6",
-    "petrol": "#355F6B",
-    "petrol_dark": "#18323A",
-    "petrol_light": "#7AA2AE",
-    "rust": "#B85F42",
+    "petrol": "#446582",
+    "petrol_dark": "#263B4A",
+    "petrol_light": "#7D97AC",
+    "rust": "#C9826B",
     "rust_light": "#E2B4A4",
-    "teal": "#008B7B",
+    "teal": "#67958A",
     "sage": "#8EA7A3",
-    "ochre": "#B08D3E",
-    "slate": "#7A8891",
+    "ochre": "#B69A59",
+    "slate": "#9385A6",
     "mist": "#D5D9DD",
 }
 # One colour per archetype, used identically on every slide.

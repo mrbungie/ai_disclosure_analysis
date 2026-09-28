@@ -23,13 +23,13 @@ for (name, ratio, ci), y in zip(rows, ys):
         ax.plot([ratio], [y], marker="o", markersize=15, color=color, zorder=3)
         ax.annotate(f"{ratio:.2f}×", (ci[1], y), xytext=(16, 0), textcoords="offset points",
                     ha="left", va="center", fontsize=24, fontweight="bold", color=color, zorder=4)
-        ax.annotate(f"[{ci[0]:.2f}–{ci[1]:.2f}]", (ci[1], y), xytext=(16, -22),
-                    textcoords="offset points", ha="left", va="center", fontsize=12, color=C["ink_3"])
+        ax.annotate(f"[{ci[0]:.2f}–{ci[1]:.2f}]", (ci[1], y), xytext=(16, -26),
+                    textcoords="offset points", ha="left", va="center", fontsize=16, color=C["ink_3"])
     else:
         ax.plot([ratio], [y], marker="o", markersize=15, markerfacecolor="none",
                  markeredgecolor=color, markeredgewidth=2.2, zorder=3)
         ax.annotate("reference", (ratio, y), xytext=(16, 0), textcoords="offset points",
-                    ha="left", va="center", fontsize=15, color=C["ink_3"])
+                    ha="left", va="center", fontsize=17, color=C["ink_3"])
     ax.annotate(label, (0.8, y), xytext=(-10, 0), textcoords="offset points",
                 ha="right", va="center", fontsize=17, fontweight="semibold", color=color)
 
@@ -40,8 +40,8 @@ for s in ("left", "top", "right"):
     ax.spines[s].set_visible(False)
 ax.spines["bottom"].set_color(C["rule"])
 ax.set_xticks([1.0, 1.5, 2.0, 2.5])
-ax.tick_params(axis="x", length=0, pad=10)
+ax.tick_params(axis="x", length=0, pad=10, labelsize=17)
 ax.set_xlabel("Disclosed AI activities relative to Defensive, holding disclosure volume fixed",
-              fontsize=14, color=C["ink_2"], labelpad=14)
+              fontsize=17, color=C["ink_2"], labelpad=14)
 
 save(f, "activity_ratio")

@@ -76,11 +76,11 @@ ax.axhline(sep1_y, color=C["grid"], lw=1.0, xmin=-0.55, xmax=1.0, clip_on=False,
 ax.axhline(sep2_y, color=C["grid"], lw=1.0, xmin=-0.55, xmax=1.0, clip_on=False, zorder=0)
 
 ax.text(-0.02, ys[0] + 0.62, "EVIDENCE", transform=ax.get_yaxis_transform(),
-        ha="right", va="center", fontsize=12.5, fontweight="bold", color=C["ink_3"])
+        ha="right", va="center", fontsize=15, fontweight="bold", color=C["ink_3"])
 ax.text(-0.02, ys[4] + 0.55, "ACTIVITY MIX", transform=ax.get_yaxis_transform(),
-        ha="right", va="center", fontsize=12.5, fontweight="bold", color=C["ink_3"])
+        ha="right", va="center", fontsize=15, fontweight="bold", color=C["ink_3"])
 ax.text(-0.02, ys[7] + 0.55, "CAVEATS", transform=ax.get_yaxis_transform(),
-        ha="right", va="center", fontsize=12.5, fontweight="bold", color=C["ink_3"])
+        ha="right", va="center", fontsize=15, fontweight="bold", color=C["ink_3"])
 
 ax.set_xlim(-17, 13)
 ax.set_ylim(-1.1, ys[0] + 0.9)

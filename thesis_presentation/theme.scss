@@ -10,21 +10,21 @@
 @font-face { font-family: "Source Serif Display"; font-weight: 600; font-style: normal; src: url("../../../../../assets/fonts/SourceSerif4Display-Semibold.ttf") format("truetype"); }
 @font-face { font-family: "Source Serif Display"; font-weight: 600; font-style: italic; src: url("../../../../../assets/fonts/SourceSerif4Display-SemiboldIt.ttf") format("truetype"); }
 
-$bg: #FAF8F4;
+$bg: #FFFFFF;
 $paper: #FFFFFF;
-$sand: #F1ECE3;
-$line: #E4DED3;
+$sand: #F1F2F4;
+$line: #E3E6E9;
 $ink: #1C1F22;
 $ink-2: #454E54;
 $ink-3: #73828C;
-$petrol: #355F6B;
-$petrol-dark: #18323A;
-$petrol-light: #7AA2AE;
-$rust: #B85F42;
+$petrol: #446582;
+$petrol-dark: #263B4A;
+$petrol-light: #7D97AC;
+$rust: #C9826B;
 $rust-light: #E2B4A4;
-$teal: #008B7B;
-$ochre: #B08D3E;
-$slate: #7A8891;
+$teal: #67958A;
+$ochre: #B69A59;
+$slate: #9385A6;
 $sage: #8EA7A3;
 
 $sans: "Inter", "Helvetica Neue", Arial, sans-serif;
@@ -50,6 +50,9 @@ $selection-bg: $rust-light;
 .reveal .slides { text-align: left; }
 .reveal .slides section.slide,
 .reveal .slides > section { padding: 64px 100px 0 100px !important; box-sizing: border-box; height: 100%; }
+/* print-pdf wraps each slide in .pdf-page, so the rule above no longer matches */
+html.print-pdf .reveal .slides .pdf-page > section.slide { padding: 64px 100px 0 100px !important; box-sizing: border-box !important; height: 1080px !important; }
+html.print-pdf .reveal .slides .pdf-page > section.cover, html.print-pdf .reveal .slides .pdf-page > section.divider { padding: 0 !important; }
 
 /* ---------- titles ---------- */
 .reveal h2 {
@@ -107,7 +110,7 @@ $selection-bg: $rust-light;
 /* ---------- cards ---------- */
 .reveal .card {
   background: $paper; border: 1px solid $line; border-radius: 16px;
-  padding: 26px 28px; box-shadow: 0 1px 2px rgba(24,50,58,.04), 0 10px 28px rgba(24,50,58,.06);
+  padding: 26px 28px; box-shadow: 0 1px 2px rgba(38,59,74,.04), 0 10px 28px rgba(38,59,74,.06);
 }
 .reveal .card p { margin: 0; }
 .reveal .card .label { margin-bottom: 10px; }
@@ -141,10 +144,10 @@ $selection-bg: $rust-light;
   display: inline-block; font: 600 17px/1 $sans; letter-spacing: .02em;
   padding: 9px 14px; border-radius: 999px; background: $sand; color: $ink-2; margin: 0 8px 8px 0;
 }
-.reveal .chip.petrol { background: rgba(53,95,107,.12); color: $petrol; }
-.reveal .chip.rust { background: rgba(184,95,66,.12); color: $rust; }
-.reveal .chip.teal { background: rgba(0,139,123,.12); color: $teal; }
-.reveal .chip.ochre { background: rgba(176,141,62,.14); color: #8A6C28; }
+.reveal .chip.petrol { background: rgba(68,101,130,.12); color: $petrol; }
+.reveal .chip.rust { background: rgba(201,130,107,.12); color: $rust; }
+.reveal .chip.teal { background: rgba(103,149,138,.12); color: $teal; }
+.reveal .chip.ochre { background: rgba(182,154,89,.16); color: #8C7438; }
 
 /* construct tokens */
 .reveal .tok {
@@ -158,7 +161,7 @@ $selection-bg: $rust-light;
 .reveal .pipe { display: flex; align-items: stretch; gap: 0; }
 .reveal .pipe .stage {
   flex: 1 1 0; position: relative; background: $paper; border: 1px solid $line; border-radius: 16px;
-  padding: 22px 22px 20px 22px; margin-right: 38px; box-shadow: 0 10px 28px rgba(24,50,58,.06);
+  padding: 22px 22px 20px 22px; margin-right: 38px; box-shadow: 0 10px 28px rgba(38,59,74,.06);
 }
 .reveal .pipe .stage:last-child { margin-right: 0; }
 .reveal .pipe .stage:not(:last-child)::after {
@@ -179,8 +182,8 @@ $selection-bg: $rust-light;
   position: relative; text-align: center; padding: 16px 0; border-radius: 12px;
   font: 600 22px/1 $sans; letter-spacing: .14em; text-transform: uppercase; color: #fff; background: $petrol;
 }
-.reveal .band > div:nth-child(2) { background: #2E7A7A; }
-.reveal .band > div:nth-child(3) { background: #9C7A3A; }
+.reveal .band > div:nth-child(2) { background: #67958A; }
+.reveal .band > div:nth-child(3) { background: #B69A59; }
 .reveal .band > div:nth-child(4) { background: $rust; }
 .reveal .band > div:not(:last-child)::after {
   content: "→"; position: absolute; right: -24px; top: 50%; transform: translateY(-50%);
@@ -204,9 +207,9 @@ $selection-bg: $rust-light;
 .reveal .quad .q-t { font: 600 16px/1 $sans; letter-spacing: .14em; text-transform: uppercase; }
 .reveal .quad .q-n { font: 600 34px/1.1 $serif; color: $ink; margin-top: 8px; }
 .reveal .quad .q-d { font: 400 16px/1.35 $sans; color: $ink-3; margin-top: 4px; }
-.reveal .quad .inv { background: rgba(184,95,66,.13); } .reveal .quad .inv .q-t { color: $rust; }
-.reveal .quad .val { background: rgba(53,95,107,.12); } .reveal .quad .val .q-t { color: $petrol; }
-.reveal .quad .exp { background: rgba(0,139,123,.10); } .reveal .quad .exp .q-t { color: $teal; }
+.reveal .quad .inv { background: rgba(201,130,107,.13); } .reveal .quad .inv .q-t { color: $rust; }
+.reveal .quad .val { background: rgba(68,101,130,.12); } .reveal .quad .val .q-t { color: $petrol; }
+.reveal .quad .exp { background: rgba(103,149,138,.10); } .reveal .quad .exp .q-t { color: $teal; }
 .reveal .quad .dep .q-t { color: $ink-3; }
 
 /* flow steps (framework) */
@@ -274,7 +277,7 @@ section.cover ~ .footer, .reveal.has-dark-background .footer { color: rgba(255,2
   .note-line, .src, .divider-title, .back) > p { color: inherit; font: inherit; letter-spacing: inherit; margin: 0; }
 .reveal .toc > p, .reveal .cover-meta > p { display: contents; }
 .reveal .slides table { font-size: 23px !important; }
-.reveal .slides table th { font-size: 15px !important; }
+.reveal .slides table th { font-size: 17px !important; }
 .reveal .slides table td { font-size: 21px !important; }
 .reveal .slides table.compact td, .reveal .slides .compact td { font-size: 20px !important; padding: 11px 14px !important; }
 .reveal .small { font-size: 23px; }
@@ -288,7 +291,9 @@ section.cover ~ .footer, .reveal.has-dark-background .footer { color: rgba(255,2
 .reveal .outputs > div b { display: block; font: 600 15px/1 $sans; letter-spacing: .14em; text-transform: uppercase; color: $ink-2; margin-bottom: 8px; }
 .reveal img.h-460 { max-height: 460px; width: auto; }
 .reveal img.h-500 { max-height: 500px; width: auto; }
+.reveal img.h-520 { max-height: 520px; width: auto; }
 .reveal img.h-540 { max-height: 540px; width: auto; }
+.reveal img.h-560 { max-height: 560px; width: auto; }
 .reveal img.h-580 { max-height: 580px; width: auto; }
 .reveal img.h-620 { max-height: 620px; width: auto; }
 .reveal .register { width: 100%; }
@@ -299,7 +304,9 @@ section.cover ~ .footer, .reveal.has-dark-background .footer { color: rgba(255,2
 .reveal .pipe + .grid-4 { margin-top: 56px; }
 .reveal .pipe + .grid-4 .card { padding: 26px 28px; }
 .reveal .legend-dot { display: inline-block; width: 18px; height: 18px; border-radius: 5px; vertical-align: -2px; margin-right: 8px; }
+.reveal img.h-700 { max-height: 700px; width: auto; margin: 0 auto; }
 .reveal img.h-740 { max-height: 740px; width: auto; margin: 0 auto; }
+.reveal img.h-760 { max-height: 760px; width: auto; margin: 0 auto; }
 .reveal .tight .small { font-size: 20px; line-height: 1.35; }
 .reveal .tight .chip { margin-bottom: 6px; }
 .reveal .tight + .note-line { margin-top: 14px; padding-top: 10px; }

@@ -24,10 +24,10 @@ for x, v, c in zip(xs, vals, colors):
 ax.set_xlim(-0.6, 2.6)
 ax.axhline(pooled, color=C["ink_3"], lw=1.3, linestyle=(0, (4, 3)), zorder=2)
 ax.annotate(f"pooled {pooled:.1f}%", (2.6, pooled), xytext=(-6, 8), textcoords="offset points",
-            ha="right", va="bottom", fontsize=13, color=C["ink_3"])
+            ha="right", va="bottom", fontsize=18, color=C["ink_3"])
 
 ax.set_xticks(list(xs))
-ax.set_xticklabels([ARCH_SHORT[n] for n in order], fontsize=15, color=C["ink_2"])
+ax.set_xticklabels([ARCH_SHORT[n] for n in order], fontsize=19, color=C["ink_2"])
 ax.set_ylim(0, max(vals) * 1.28)
 ax.set_yticks([])
 for s in ("left", "top", "right"):

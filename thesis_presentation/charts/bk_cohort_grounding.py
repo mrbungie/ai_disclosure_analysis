@@ -34,7 +34,7 @@ ax.annotate("New filers,\nfirst year", xy=(last_new["year"], last_new["new_filer
             fontweight="semibold", color=C["rust"], va="center")
 
 ax.annotate("YTD", xy=(last_fixed["year"], last_fixed["fixed_cohort_grounding"]),
-            xytext=(0, 16), textcoords="offset points", fontsize=12, ha="center",
+            xytext=(0, 16), textcoords="offset points", fontsize=13.5, ha="center",
             color=C["ink_3"], style="italic")
 
 ax.set_xlim(2020.6, 2027.6)

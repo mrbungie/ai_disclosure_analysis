@@ -15,7 +15,7 @@ dotted_vals = [s[y] for y in dotted_years]
 
 # GenAI boom shading 2023-2024
 ax.axvspan(2022.5, 2024.5, color=C["rust_light"], alpha=0.25, lw=0, zorder=0)
-ax.text(2023.5, 97.5, "GENAI BOOM", ha="center", va="top", fontsize=13,
+ax.text(2023.5, 97.5, "GENAI BOOM", ha="center", va="top", fontsize=18,
         fontweight="bold", color=C["rust"], alpha=0.9, zorder=3)
 
 # Area fill under solid segment
@@ -41,13 +41,16 @@ for y in years:
         ax.annotate(f"{v:.1f}%", (y, v), xytext=(-2, 16), textcoords="offset points",
                     ha="center", fontsize=21, fontweight="bold", color=C["petrol_dark"])
     elif y == 2026:
-        ax.annotate(f"{v:.1f}%", (y, v), xytext=(4, 12), textcoords="offset points",
-                    ha="left", fontsize=15, fontweight="bold", color=C["ink_2"])
-        ax.annotate("2026 YTD", (y, v), xytext=(4, -18), textcoords="offset points",
-                    ha="left", fontsize=13, color=C["ink_3"])
+        ax.annotate(f"{v:.1f}%", (y, v), xytext=(0, 14), textcoords="offset points",
+                    ha="center", fontsize=19, fontweight="bold", color=C["ink_2"])
+        ax.annotate("2026 YTD", (y, v), xytext=(0, -14), textcoords="offset points",
+                    ha="center", va="top", fontsize=18, color=C["ink_3"])
+    elif y in (2023, 2024):
+        ax.annotate(f"{v:.1f}%", (y, v), xytext=(-10, 6), textcoords="offset points",
+                    ha="right", fontsize=18, color=C["ink_2"])
     else:
         ax.annotate(f"{v:.1f}%", (y, v), xytext=(0, 18), textcoords="offset points",
-                    ha="center", fontsize=14, color=C["ink_2"])
+                    ha="center", fontsize=18, color=C["ink_2"])
 
 ax.set_ylim(0, 100)
 ax.set_xlim(2020.6, 2026.5)
@@ -58,6 +61,6 @@ ax.set_xticklabels([str(y) for y in years])
 ax.yaxis.grid(True, color=C["grid"], lw=1.0, zorder=0)
 ax.spines["left"].set_visible(False)
 ax.spines["bottom"].set_visible(False)
-ax.tick_params(axis="both", length=0)
+ax.tick_params(axis="both", length=0, labelsize=18)
 
 save(f, "diffusion")

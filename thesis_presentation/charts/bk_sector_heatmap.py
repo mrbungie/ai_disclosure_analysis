@@ -20,8 +20,8 @@ log_ratio = np.log2(np.clip(rel.values, 0.2, 5.0))
 
 n_rows, n_cols = rel.shape
 
-f = fig(1100, 640)
-ax = f.add_axes([0.24, 0.14, 0.74, 0.78])
+f = fig(660, 450)
+ax = f.add_axes([0.30, 0.02, 0.69, 0.88])
 ax.set_xlim(-0.5, n_cols - 0.5)
 ax.set_ylim(-0.5, n_rows - 0.5)
 ax.invert_yaxis()
@@ -42,21 +42,17 @@ for i in range(n_rows):
         txt_color = "white" if abs(log_ratio[i, j]) > 0.75 else C["ink"]
         style = "italic" if small_n else "normal"
         alpha = 0.75 if small_n else 1.0
-        ax.text(j, i - 0.14, f"{val:.1f}×", ha="center", va="center",
-                fontsize=14.5, fontweight="semibold", color=txt_color,
+        ax.text(j, i, f"{val:.1f}×", ha="center", va="center",
+                fontsize=15, fontweight="semibold", color=txt_color,
                 style=style, alpha=alpha, zorder=3)
-        ax.text(j, i + 0.22, f"(n={n_f})", ha="center", va="center",
-                fontsize=10.5, color=txt_color, style=style, alpha=alpha * 0.9,
-                zorder=3)
 
 for j, a in enumerate(ARCHS):
-    ax.text(j, -0.72, ARCH_SHORT[a], ha="center", va="bottom", fontsize=14,
-            fontweight="semibold", color=ARCH[a])
+    ax.text(j, -0.62, ARCH_SHORT[a].replace("Vocal Substantives", "Vocal"), ha="center", va="bottom", fontsize=14.5,
+            fontweight="semibold", color=C["ink_3"] if a == "No AI" else ARCH[a])
 
 for i, sec in enumerate(rel.index):
-    ax.text(-0.72, i, sec, ha="right", va="center", fontsize=13.5, color=C["ink"])
+    ax.text(-0.58, i, sec, ha="right", va="center", fontsize=14, color=C["ink"])
 
-f.text(0.24, 0.035, "observed ÷ expected share; n = firms", fontsize=12.5,
-       color=C["ink_3"], style="italic")
+
 
 save(f, "sector_heatmap")
